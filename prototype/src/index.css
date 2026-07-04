@@ -526,3 +526,309 @@ body {
 [data-look="neo"] .nav-item.active { border: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent); }
 [data-look="neo"] .pbar > i { background: var(--accent); }
 [data-look="neo"] .check.on { box-shadow: 2px 2px 0 var(--hard); }
+
+/* ============================================================
+   FLOW CONCEPT — one continuous cinematic scroll.
+   --amb is the ambient hue, driven by the focused show; being a
+   registered property it TRANSITIONS, so the whole scene's light
+   sweeps smoothly from one show's palette to the next.
+   ============================================================ */
+
+@property --amb { syntax: "<number>"; inherits: true; initial-value: 220; }
+
+[data-concept="flow"] #root { background: #08090d; }
+
+.flow {
+  position: relative;
+  /* Flow is its own scroller: the window never scrolls, which keeps the
+     animated ambient + fixed chrome off the root-scroller compositing path.
+     NOTE: --amb is animated from JS (rAF) — a CSS transition on a registered
+     custom property breaks Chromium's compositing of this subtree. */
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  /* Flow is dark-first: pin the component tokens so any theme works */
+  --text: #eef1f7; --text-dim: #a6b0c6; --text-mute: #69748f;
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-2: rgba(255, 255, 255, 0.1);
+  --surface-3: rgba(255, 255, 255, 0.16);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  --scrim: rgba(4, 6, 10, 0.72);
+  color: var(--text);
+  color-scheme: dark;
+}
+.flow-head, .flow-sec, .flow-foot { position: relative; z-index: 1; }
+
+.flow-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(56% 42% at 18% 4%, hsl(var(--amb) 62% 34% / 0.5) 0%, transparent 62%),
+    radial-gradient(48% 52% at 86% 20%, hsl(calc(var(--amb) + 46) 70% 28% / 0.42) 0%, transparent 64%),
+    radial-gradient(72% 58% at 50% 108%, hsl(calc(var(--amb) - 28) 58% 22% / 0.5) 0%, transparent 62%),
+    #08090d;
+}
+
+/* ---- Header ---- */
+.flow-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: clamp(18px, 3vw, 34px) clamp(20px, 5vw, 64px) 0;
+}
+.flow-mark { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 15px; letter-spacing: -0.01em; }
+.flow-mark em { font-style: normal; color: hsl(var(--amb) 85% 74%); }
+.flow-mark-ico {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px;
+  background: hsl(var(--amb) 80% 64% / 0.9); color: #0b0d12;
+  box-shadow: 0 6px 18px -6px hsl(var(--amb) 80% 60% / 0.7);
+}
+.flow-search {
+  display: flex; align-items: center; gap: 9px;
+  height: 40px; padding: 0 16px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  color: var(--text-mute); width: min(300px, 46vw);
+}
+.flow-search input { background: transparent; border: none; outline: none; color: var(--text); font-size: 14px; width: 100%; }
+
+/* ---- Sections ---- */
+.flow-sec {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: clamp(22px, 3.5vw, 44px) clamp(20px, 5vw, 64px);
+  scroll-margin-top: 10px;
+}
+.flow-h1 {
+  font-size: clamp(28px, 4.4vw, 46px);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  margin: 0 0 6px;
+}
+.flow-h1 span { display: block; font-size: 0.48em; font-weight: 600; letter-spacing: 0; color: var(--text-dim); margin-top: 10px; }
+.flow-sechead h2 { font-size: clamp(20px, 2.4vw, 26px); font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+.flow-sechead p { color: var(--text-mute); font-size: 13.5px; margin: 4px 0 0; }
+.flow-eyebrow {
+  font-size: 12px; font-weight: 750; letter-spacing: 0.09em; text-transform: uppercase;
+  color: hsl(var(--amb) 85% 74%);
+}
+.flow-sep { opacity: 0.4; margin: 0 2px; }
+
+/* ---- Hero deck ---- */
+.flow-rail {
+  display: flex;
+  gap: clamp(14px, 2vw, 24px);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 26px 8px 14px;
+  margin: 0 -8px;
+}
+.flow-epcard {
+  scroll-snap-align: center;
+  flex: 0 0 auto;
+  width: min(620px, 86vw);
+  display: flex;
+  gap: clamp(14px, 2vw, 22px);
+  padding: clamp(14px, 2vw, 20px);
+  border-radius: 26px;
+  background: rgba(10, 12, 18, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: scale(0.94);
+  opacity: 0.6;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.45s ease, box-shadow 0.45s ease;
+  cursor: pointer;
+}
+.flow-epcard.is-focus {
+  transform: scale(1);
+  opacity: 1;
+  box-shadow: 0 34px 90px -30px hsl(var(--amb) 70% 45% / 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.flow-epart {
+  width: clamp(96px, 12vw, 132px);
+  aspect-ratio: 2 / 3;
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 8px;
+}
+.flow-epbody { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 5px; }
+.flow-epbody h3 { font-size: clamp(19px, 2.6vw, 27px); font-weight: 800; letter-spacing: -0.015em; margin: 0; line-height: 1.1; }
+.flow-show { color: var(--text-dim); font-weight: 600; font-size: 14px; }
+.flow-track { height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.13); overflow: hidden; margin-top: 8px; }
+.flow-track > i {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, hsl(var(--amb) 85% 66%), hsl(calc(var(--amb) + 40) 85% 60%));
+}
+.flow-epacts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.flow-cta {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px; border-radius: 999px; border: none; cursor: pointer;
+  font-size: 13.5px; font-weight: 750;
+  background: hsl(var(--amb) 85% 66%); color: #10131c;
+  box-shadow: 0 8px 22px -8px hsl(var(--amb) 85% 60% / 0.8);
+  transition: transform 0.15s ease, background 0.3s ease, box-shadow 0.3s ease;
+}
+.flow-cta:hover { transform: translateY(-1px); }
+.flow-cta:active { transform: translateY(1px); }
+.flow-cta.is-done { background: rgba(255, 255, 255, 0.14); color: var(--text); box-shadow: none; }
+.flow-ghost {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px; border-radius: 999px; cursor: pointer;
+  font-size: 13.5px; font-weight: 650;
+  background: rgba(255, 255, 255, 0.08); color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: background 0.2s ease;
+}
+.flow-ghost:hover { background: rgba(255, 255, 255, 0.14); }
+.flow-dots { display: flex; gap: 7px; justify-content: center; margin-top: 4px; }
+.flow-dots i {
+  width: 6px; height: 6px; border-radius: 999px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.2); transition: all 0.3s ease;
+}
+.flow-dots i.on { background: hsl(var(--amb) 85% 70%); width: 20px; }
+
+/* ---- Shelves ---- */
+.flow-shelf { display: flex; gap: var(--gap); overflow-x: auto; padding: 18px 8px 8px; margin: 0 -8px; }
+
+/* ---- Premieres timeline ---- */
+.flow-line { display: flex; gap: clamp(20px, 3vw, 36px); overflow-x: auto; padding: 24px 8px 8px; margin: 0 -8px; }
+.flow-stop { flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
+.flow-date { font-size: 12.5px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: hsl(var(--amb) 85% 74%); }
+.flow-stopdot {
+  position: relative;
+  width: 9px; height: 9px; border-radius: 999px;
+  background: hsl(var(--amb) 85% 66%);
+  box-shadow: 0 0 0 4px hsl(var(--amb) 85% 66% / 0.16);
+}
+.flow-stopdot::after {
+  content: "";
+  position: absolute;
+  left: 15px; top: 4px;
+  width: 340px; height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02));
+}
+.flow-stopcard {
+  display: flex; align-items: center; gap: 12px;
+  width: 240px; padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.flow-stop:hover .flow-stopcard { background: rgba(255, 255, 255, 0.1); transform: translateY(-3px); }
+.flow-stopart { width: 42px; height: 60px; border-radius: 8px; flex: 0 0 auto; }
+.flow-stopname { font-weight: 750; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-stopmeta { color: var(--text-mute); font-size: 12px; margin-top: 2px; }
+
+/* ---- Footer / stats ---- */
+.flow-foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px;
+  max-width: 1240px; margin: 0 auto;
+  padding: 8px clamp(20px, 5vw, 64px) 130px;
+}
+.flow-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.flow-stat {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px; font-weight: 600; color: var(--text-dim);
+}
+
+/* ---- Dock ---- */
+.flow-dock {
+  position: fixed;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex; align-items: center; gap: 4px;
+  padding: 7px;
+  border-radius: 999px;
+  background: rgba(8, 10, 15, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.flow-dockbtn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px; border-radius: 999px; border: none;
+  background: transparent; color: var(--text-dim);
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.flow-dockbtn:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+.flow-dockbtn.on { background: hsl(var(--amb) 80% 66% / 0.2); color: hsl(var(--amb) 90% 80%); padding: 11px 16px; }
+.flow-docklabel { display: none; }
+.flow-dockbtn.on .flow-docklabel { display: inline; }
+.flow-dockdiv { width: 1px; height: 22px; background: rgba(255, 255, 255, 0.14); margin: 0 4px; }
+
+/* ---- Takeover (full-screen show detail) ---- */
+.flow-take {
+  position: fixed; inset: 0; z-index: 70;
+  animation: flow-takein 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #eef1f7;
+  /* portaled outside .flow — pin the same dark-first tokens */
+  --text: #eef1f7; --text-dim: #a6b0c6; --text-mute: #69748f;
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-2: rgba(255, 255, 255, 0.1);
+  --surface-3: rgba(255, 255, 255, 0.16);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.24);
+  color-scheme: dark;
+}
+@keyframes flow-takein {
+  from { opacity: 0; transform: scale(1.015); }
+  to { opacity: 1; transform: none; }
+}
+.flow-take-bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(90% 64% at 50% 0%, hsl(var(--amb) 58% 30% / 0.6) 0%, transparent 72%),
+    rgba(5, 7, 11, 0.96);
+}
+.flow-x {
+  position: fixed; top: 18px; right: 18px; z-index: 2;
+  display: grid; place-items: center;
+  width: 42px; height: 42px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08); color: #fff; cursor: pointer;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+}
+.flow-x:hover { background: rgba(255, 255, 255, 0.16); }
+.flow-take-scroll {
+  position: relative; height: 100%; overflow-y: auto;
+  max-width: 980px; margin: 0 auto;
+  padding: clamp(26px, 7vh, 70px) clamp(20px, 5vw, 64px) 90px;
+}
+.flow-take-hero { display: flex; align-items: flex-end; gap: clamp(18px, 3vw, 36px); flex-wrap: wrap; margin-bottom: 26px; }
+.flow-take-art {
+  width: clamp(116px, 17vw, 185px); aspect-ratio: 2 / 3;
+  border-radius: 18px; position: relative; overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 34px 80px -22px rgba(0, 0, 0, 0.85);
+}
+.flow-take-info { flex: 1; min-width: min(320px, 100%); }
+.flow-take-info h2 {
+  font-size: clamp(30px, 5vw, 52px); font-weight: 850; letter-spacing: -0.025em;
+  line-height: 1.04; margin: 8px 0 10px;
+}
+.flow-take-info p { color: #b6bfd2; line-height: 1.6; font-size: 14.5px; max-width: 62ch; margin: 0 0 14px; }
+.flow-take-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.flow-rate { gap: 4px; }
+.flow-rate .star { color: rgba(255, 255, 255, 0.28); }
+.flow-rate .star.on { color: hsl(var(--amb) 88% 70%); }
+.flow-take-eps { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.flow-take-eps .segmented { margin-bottom: 10px; }

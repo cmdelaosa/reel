@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
+export type ConceptName = "app" | "flow";
 export type LookName = "classic" | "glass" | "fable" | "neo";
 export type ThemeName = "dark" | "oled" | "light";
 export type AccentName = "coral" | "violet" | "emerald" | "amber";
@@ -7,6 +8,7 @@ export type RadiusName = "sharp" | "rounded" | "soft";
 export type DensityName = "comfortable" | "compact";
 
 export interface Settings {
+  concept: ConceptName;
   look: LookName;
   theme: ThemeName;
   accent: AccentName;
@@ -15,6 +17,7 @@ export interface Settings {
 }
 
 const DEFAULTS: Settings = {
+  concept: "app",
   look: "glass",
   theme: "dark",
   accent: "coral",
@@ -34,6 +37,7 @@ function load(): Settings {
 
 function apply(s: Settings) {
   const el = document.documentElement;
+  el.dataset.concept = s.concept;
   el.dataset.look = s.look;
   el.dataset.theme = s.theme;
   el.dataset.accent = s.accent;

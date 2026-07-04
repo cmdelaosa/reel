@@ -5,7 +5,8 @@ import {
 } from "lucide-react";
 import { UICtx, Logo } from "./components";
 import { Home, Library, Discover, ComingSoon, Profile, DetailSheet } from "./screens";
-import { useTheme, LookName, ThemeName, AccentName, RadiusName, DensityName } from "./theme";
+import { useTheme, ConceptName, LookName, ThemeName, AccentName, RadiusName, DensityName } from "./theme";
+import Flow from "./flow";
 
 type Route = "home" | "library" | "discover" | "soon" | "profile";
 
@@ -22,6 +23,9 @@ export default function App() {
   const [detail, setDetail] = useState<string | null>(null);
   const [lab, setLab] = useState(false);
   const [notif, setNotif] = useState(false);
+  const { settings } = useTheme();
+
+  if (settings.concept === "flow") return <Flow />;
 
   return (
     <UICtx.Provider value={{ open: setDetail }}>
@@ -192,6 +196,15 @@ function DesignLab({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col gap-7">
+          <Row label="Concept">
+            <Seg<ConceptName> value={settings.concept} onPick={(v) => set("concept", v)}
+              options={[{ v: "app", label: "Classic app" }, { v: "flow", label: "Flow" }]} />
+            <p className="dim" style={{ fontSize: 12.5, lineHeight: 1.5, margin: 0 }}>
+              Flow (experimental): the whole app as one cinematic scroll — the ambient light follows
+              the show in focus. Exit anytime from the dock.
+            </p>
+          </Row>
+
           <Row label="Look">
             <Seg<LookName> value={settings.look} onPick={(v) => set("look", v)}
               options={looks.map((l) => ({ v: l.v, label: l.label }))} />
