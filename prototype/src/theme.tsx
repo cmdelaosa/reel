@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-export type ConceptName = "app" | "flow";
+export type ConceptName = "app" | "marquee";
 export type LookName = "classic" | "glass" | "fable" | "neo";
 export type ThemeName = "dark" | "oled" | "light";
 export type AccentName = "coral" | "violet" | "emerald" | "amber";
@@ -30,7 +30,12 @@ const KEY = "tvt.design";
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+    if (raw) {
+      const s = { ...DEFAULTS, ...JSON.parse(raw) };
+      // migrate the retired "flow" concept to its successor
+      if ((s.concept as string) === "flow") s.concept = "marquee";
+      return s;
+    }
   } catch {}
   return DEFAULTS;
 }

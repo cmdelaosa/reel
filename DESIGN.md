@@ -28,7 +28,7 @@ authoritative plan; update it as decisions change.
 | Auth | **Email magic link + Google** now; **Apple** at iOS publish | Apple required by App Store once Google login ships |
 | Sign-up | **Invite-only** during private phase | Invite codes / email allowlist |
 | Notifications | **Email + in-app bell (inbox) with per-type prefs** now; **real push with native** | iOS web push is unreliable; push waits for native |
-| UI | **NativeWind (Tailwind)**, "familiar but yours" design | Keep TV Time's good UX patterns, own visual identity. Visual direction chosen in prototype: **"Aurora Glass"** look (pronounced glassmorphism — frosted translucent panels over accent-tinted ambient light), default theme dark |
+| UI | **NativeWind (Tailwind)**, "familiar but yours" design | Keep TV Time's good UX patterns, own visual identity. Visual direction chosen in prototype: **"Aurora Glass"** look (glassmorphism — frosted translucent panels over accent-tinted ambient light), default theme dark. Two shell concepts in the prototype's design lab: **Classic** (sidebar) and **Marquee** (top tabs, bento home, ⌘K palette, mobile dock) — candidate under evaluation |
 | Distribution | **Web URL first**; native via **EAS** later | Zero store cost/friction to start |
 | Budget | **Free tiers + ~$12/yr domain** | Apple $99/yr + Google $25 deferred to native publish |
 | TV Time import | **Your data via seed script day one**; **in-app zip importer before inviting friends** | Friends self-onboard from their own exports |
