@@ -1,20 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, Bell, CalendarClock, Check, ChevronRight, Clapperboard, Clock, Compass,
-  Eye, Flame, LayoutGrid, Play, Plus, Search, Share2, Sliders, Star,
-  Trophy, Tv, User, Users,
+  ArrowRight, Bell, CalendarClock, Check, ChevronDown, ChevronRight, Clapperboard, Clock,
+  Compass, Eye, Flame, LayoutGrid, Play, Plus, Search, Share2, Sliders, Star,
+  Tv, User, Users,
 } from "lucide-react";
-import { Title, TITLES, GENRES, inStatus } from "./data";
-import { Poster, NetworkLogo, QuickAdd, UICtx, useUI, posterBg } from "./components";
+import { Title, TITLES, GENRES, inStatus, scheduledEpisodes } from "./data";
+import { Poster, Stars, NetworkLogo, QuickAdd, UICtx, useUI, posterBg } from "./components";
 import { DetailSheet } from "./screens";
 import { NotifPanel, DesignLab } from "./overlays";
-import { useTheme } from "./theme";
 
 /* ============================================================
-   MARQUEE — a second full shell for the app. Same features as
-   the classic shell, different architecture: tab navigation up
-   top (floating dock on mobile), a bento-grid home, editorial
-   numbered sections, and a real ⌘K command palette.
+   MARQUEE — a second full shell. Top tab navigation (floating
+   dock on mobile), bento home, ⌘K command palette. Same feature
+   set as the classic shell, different architecture.
    ============================================================ */
 
 type Tab = "tonight" | "shows" | "explore" | "calendar" | "you";
@@ -86,7 +84,7 @@ export default function Marquee() {
 
         {/* ---- Content ---- */}
         <main className="mq-main">
-          {tab === "tonight" && <Tonight onExplore={() => setTab("explore")} />}
+          {tab === "tonight" && <Tonight go={setTab} />}
           {tab === "shows" && <Shows />}
           {tab === "explore" && <Explore onSearch={() => setPalette(true)} />}
           {tab === "calendar" && <CalendarTab />}
@@ -143,7 +141,7 @@ function Palette({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string
   };
 
   const statusLabel: Record<string, string> = {
-    watching: "Watching", watchlist: "Watchlist", upcoming: "Coming soon", finished: "Finished",
+    watching: "Watching", caughtup: "Caught up", watchlist: "Watchlist", upcoming: "Coming soon", finished: "Finished",
   };
 
   return (
@@ -192,9 +190,9 @@ function Palette({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string
 }
 
 /* ============================================================
-   01 · TONIGHT — bento home
+   TONIGHT — bento home
    ============================================================ */
-function Tonight({ onExplore }: { onExplore: () => void }) {
+function Tonight({ go }: { go: (t: Tab) => void }) {
   const { open } = useUI();
   const watching = inStatus("watching");
   const fresh = watching.filter((t) => t.next?.air.includes("New") || t.next?.air.includes("aired"));
@@ -211,11 +209,13 @@ function Tonight({ onExplore }: { onExplore: () => void }) {
   ];
 
   const heroProgress = hero.seenEps && hero.totalEps ? Math.round((hero.seenEps / hero.totalEps) * 100) : 0;
+  const seeAll = (t: Tab) => (
+    <button className="btn btn-ghost btn-sm" onClick={() => go(t)}>See all <ChevronRight size={14} /></button>
+  );
 
   return (
     <div className="screen mq-page">
       <MqHeader
-        index="01"
         title="Tonight"
         sub={`Saturday, July 4 — ${fresh.length} new episodes waiting, ${soon.length} premieres on the way.`}
       />
@@ -257,7 +257,7 @@ function Tonight({ onExplore }: { onExplore: () => void }) {
       </div>
 
       {/* Continue watching */}
-      <MqSection index="02" title="Continue watching" sub="Pick up where you left off">
+      <MqSection title="Continue watching" sub="Pick up where you left off">
         <div className="rail no-scrollbar">
           {rest.map((t) => (
             <div key={t.id} style={{ width: "var(--rail-pw)" }} className="flex flex-col gap-2">
@@ -273,19 +273,16 @@ function Tonight({ onExplore }: { onExplore: () => void }) {
 
       {/* Fresh + premieres, side by side on desktop */}
       <div className="mq-cols">
-        <MqSection index="03" title="Fresh episodes" sub="Just aired from shows you follow">
+        <MqSection title="Fresh episodes" sub="Just aired from shows you follow" action={seeAll("shows")}>
           <div className="flex flex-col gap-3">
             {fresh.map((t) => <MqFreshRow key={t.id} t={t} />)}
           </div>
         </MqSection>
 
-        <MqSection index="04" title="Premieres soon" sub="Dated for July & August">
+        <MqSection title="Premieres soon" sub="Dated for July & August" action={seeAll("calendar")}>
           <div className="flex flex-col gap-3">
             {soon.map((t) => <MqSoonRow key={t.id} t={t} />)}
           </div>
-          <button className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start" }} onClick={onExplore}>
-            Browse everything coming <ChevronRight size={14} />
-          </button>
         </MqSection>
       </div>
     </div>
@@ -323,9 +320,7 @@ function MqSoonRow({ t }: { t: Title }) {
   const date = t.premiereLabel?.split("·").pop()?.trim() ?? "TBA";
   return (
     <div className="card mq-row" onClick={() => open(t.id)}>
-      <div className="mq-date">
-        <span className="mq-date-d">{date}</span>
-      </div>
+      <div className="mq-date"><span className="mq-date-d">{date}</span></div>
       <div className="flex-1 min-w-0">
         <div className="mq-row-title truncate">{t.title}</div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>{t.premiereLabel} · {t.network}</div>
@@ -341,18 +336,19 @@ function MqSoonRow({ t }: { t: Title }) {
 }
 
 /* ============================================================
-   02 · SHOWS — the library
+   SHOWS — the library
    ============================================================ */
 const SHOW_FILTERS: { key: string; label: string; match: (t: Title) => boolean }[] = [
-  { key: "all", label: "All", match: () => true },
   { key: "watching", label: "Watching", match: (t) => t.status === "watching" },
+  { key: "caughtup", label: "Caught up", match: (t) => t.status === "caughtup" },
   { key: "watchlist", label: "Watchlist", match: (t) => t.status === "watchlist" },
   { key: "upcoming", label: "Upcoming", match: (t) => t.status === "upcoming" },
   { key: "finished", label: "Finished", match: (t) => t.status === "finished" },
+  { key: "all", label: "All", match: () => true },
 ];
 
 function Shows() {
-  const [f, setF] = useState("all");
+  const [f, setF] = useState("watching");
   const [sort, setSort] = useState<"az" | "rating">("az");
   const filter = SHOW_FILTERS.find((x) => x.key === f)!;
   const items = [...TITLES.filter(filter.match)].sort((a, b) =>
@@ -361,12 +357,17 @@ function Shows() {
 
   return (
     <div className="screen mq-page">
-      <MqHeader index="02" title="Shows" sub={`${TITLES.length} titles tracked across every status.`} />
+      <MqHeader title="Shows" sub={`${TITLES.length} titles tracked across every status.`} />
 
       <div className="mq-toolbar">
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ flex: 1 }}>
           {SHOW_FILTERS.map((x) => (
-            <button key={x.key} className={`chip ${f === x.key ? "chip-active" : ""}`} onClick={() => setF(x.key)}>
+            <button
+              key={x.key}
+              className={`chip ${f === x.key ? "chip-active" : ""}`}
+              style={x.key === "all" ? { marginLeft: "auto" } : undefined}
+              onClick={() => setF(x.key)}
+            >
               {x.label}
               <span className="mute" style={{ fontWeight: 700 }}>{TITLES.filter(x.match).length}</span>
             </button>
@@ -381,15 +382,28 @@ function Shows() {
         </div>
       </div>
 
+      {f === "caughtup" && (
+        <p className="dim" style={{ fontSize: 13.5, margin: "-8px 0 0" }}>
+          Watched everything that's aired — just waiting on the next season.
+        </p>
+      )}
+
       <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))", gap: "var(--gap)" }}>
-        {items.map((t) => <Poster key={t.id} t={t} />)}
+        {items.map((t) => (
+          <div key={t.id} className="flex flex-col gap-1.5">
+            <Poster t={t} />
+            {t.status === "caughtup" && t.waitingFor && (
+              <div className="mute" style={{ fontSize: 11.5, paddingLeft: 2 }}>⏳ {t.waitingFor}</div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
 /* ============================================================
-   03 · EXPLORE — discover
+   EXPLORE — discover
    ============================================================ */
 function Explore({ onSearch }: { onSearch: () => void }) {
   const [genre, setGenre] = useState<string | null>(null);
@@ -406,7 +420,7 @@ function Explore({ onSearch }: { onSearch: () => void }) {
 
   return (
     <div className="screen mq-page">
-      <MqHeader index="03" title="Explore" sub="Trending, hand-picked collections, and everything worth adding." />
+      <MqHeader title="Explore" sub="Trending, hand-picked collections, and everything worth adding." />
 
       <button className="card mq-searchrow" onClick={onSearch}>
         <Search size={18} className="mute" />
@@ -421,18 +435,18 @@ function Explore({ onSearch }: { onSearch: () => void }) {
         ))}
       </div>
 
-      <MqSection index="04" title="Trending this week" sub="What everyone's watching">
+      <MqSection title="Trending this week" sub="What everyone's watching">
         <div className="rail no-scrollbar">
           {trending.map((t, i) => (
             <div key={t.id} style={{ width: "var(--rail-pw)" }} className="relative">
               <div className="mq-rank">{i + 1}</div>
-              <Poster t={t} />
+              <Poster t={t} showNetwork={false} />
             </div>
           ))}
         </div>
       </MqSection>
 
-      <MqSection index="05" title="Collections" sub="Hand-picked by theme">
+      <MqSection title="Collections" sub="Hand-picked by theme">
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))" }}>
           {collections.map((c) => (
             <div key={c.name} className="poster" style={{ aspectRatio: "16/9", background: `linear-gradient(140deg, hsl(${c.hue} 55% 32%), hsl(${(c.hue + 40) % 360} 60% 16%))` }}>
@@ -446,7 +460,7 @@ function Explore({ onSearch }: { onSearch: () => void }) {
         </div>
       </MqSection>
 
-      <MqSection index="06" title={genre ? `Popular in ${genre}` : "Popular right now"} sub="Tap ＋ to add to your library">
+      <MqSection title={genre ? `Popular in ${genre}` : "Popular right now"} sub="Tap ＋ to add to your library">
         <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))", gap: "var(--gap)" }}>
           {filtered.map((t) => (
             <div key={t.id} className="flex flex-col gap-2">
@@ -461,7 +475,7 @@ function Explore({ onSearch }: { onSearch: () => void }) {
 }
 
 /* ============================================================
-   04 · CALENDAR — coming soon
+   CALENDAR — my shows' upcoming episodes + premieres
    ============================================================ */
 type Bucket = "month" | "later" | "tba";
 function bucketOf(t: Title): Bucket {
@@ -472,11 +486,100 @@ function bucketOf(t: Title): Bucket {
 }
 
 function CalendarTab() {
-  const [view, setView] = useState<"all" | "returning" | "new">("all");
-  const all = inStatus("upcoming");
-  const items = all.filter((t) => {
-    if (view === "returning") return /Season/.test(t.premiereLabel ?? "");
-    if (view === "new") return !/Season/.test(t.premiereLabel ?? "");
+  const [view, setView] = useState<"shows" | "premieres">("shows");
+
+  return (
+    <div className="screen mq-page">
+      <MqHeader
+        title="Calendar"
+        sub="Upcoming episodes of the shows you follow, plus premieres you can track."
+      />
+
+      <div className="segmented" style={{ alignSelf: "flex-start" }}>
+        <div className={`seg ${view === "shows" ? "seg-active" : ""}`} onClick={() => setView("shows")}>My shows</div>
+        <div className={`seg ${view === "premieres" ? "seg-active" : ""}`} onClick={() => setView("premieres")}>Premieres</div>
+      </div>
+
+      {view === "shows" ? <MyShowsCalendar /> : <PremieresCalendar />}
+    </div>
+  );
+}
+
+function MyShowsCalendar() {
+  const followed = useMemo(() => [...inStatus("watching"), ...inStatus("caughtup")], []);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const allOpen = followed.every((t) => open[t.id]);
+
+  const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
+  const setAll = (v: boolean) => setOpen(Object.fromEntries(followed.map((t) => [t.id, v])));
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="mute" style={{ fontSize: 13 }}>{followed.length} shows you're following</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => setAll(!allOpen)}>
+          {allOpen ? "Collapse all" : "Expand all"}
+        </button>
+      </div>
+      {followed.map((t) => (
+        <MyShowRow key={t.id} t={t} open={!!open[t.id]} onToggle={() => toggle(t.id)} />
+      ))}
+    </div>
+  );
+}
+
+function MyShowRow({ t, open, onToggle }: { t: Title; open: boolean; onToggle: () => void }) {
+  const eps = useMemo(() => scheduledEpisodes(t), [t]);
+  const summary = eps.length
+    ? `${eps.length} upcoming · next ${eps[0].date}`
+    : t.waitingFor
+      ? `Caught up · ${t.waitingFor}`
+      : "No episodes scheduled";
+
+  return (
+    <div className="card mq-show">
+      <button className="mq-show-head" onClick={onToggle}>
+        <div className="mq-show-art" style={{ background: posterBg(t.title) }}><div className="poster-sheen" /></div>
+        <div className="flex-1 min-w-0" style={{ textAlign: "left" }}>
+          <div className="flex items-center gap-2">
+            <span className="mq-row-title truncate" style={{ marginTop: 0 }}>{t.title}</span>
+            <NetworkLogo network={t.network} />
+          </div>
+          <div className="dim truncate" style={{ fontSize: 12.5, marginTop: 2 }}>{summary}</div>
+        </div>
+        {eps.length > 0 && <span className="mq-show-count">{eps.length}</span>}
+        <ChevronDown size={18} className="mute" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .2s ease", flex: "0 0 auto" }} />
+      </button>
+
+      {open && (
+        <div className="mq-eps">
+          {eps.length === 0 && (
+            <div className="mq-ep" style={{ cursor: "default" }}>
+              <div className="mq-ep-date mute">—</div>
+              <div className="flex-1" style={{ fontSize: 13.5 }}>
+                {t.waitingFor ? `New season not dated yet — ${t.waitingFor}` : "Nothing scheduled right now."}
+              </div>
+            </div>
+          )}
+          {eps.map((e) => (
+            <div key={`${e.s}-${e.e}`} className="mq-ep">
+              <div className={`mq-ep-date ${e.soon ? "soon" : ""}`}>{e.date}</div>
+              <div className="mute" style={{ width: 46, flex: "0 0 auto", fontSize: 12.5 }}>S{e.s}·E{e.e}</div>
+              <div className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 600 }}>{e.title}</div>
+              {e.soon && <span className="badge badge-accent">Soon</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PremieresCalendar() {
+  const [v, setV] = useState<"all" | "returning" | "new">("all");
+  const items = inStatus("upcoming").filter((t) => {
+    if (v === "returning") return /Season/.test(t.premiereLabel ?? "");
+    if (v === "new") return !/Season/.test(t.premiereLabel ?? "");
     return true;
   });
 
@@ -487,17 +590,11 @@ function CalendarTab() {
   ];
 
   return (
-    <div className="screen mq-page">
-      <MqHeader
-        index="04"
-        title="Calendar"
-        sub="Premieres, new seasons, and announced shows. Track anything to get a heads-up the moment it's dated."
-      />
-
+    <div className="flex flex-col gap-6">
       <div className="segmented" style={{ alignSelf: "flex-start" }}>
-        {(["all", "returning", "new"] as const).map((v) => (
-          <div key={v} className={`seg ${view === v ? "seg-active" : ""}`} onClick={() => setView(v)}>
-            {v === "all" ? "Everything" : v === "returning" ? "Returning series" : "New & announced"}
+        {(["all", "returning", "new"] as const).map((x) => (
+          <div key={x} className={`seg ${v === x ? "seg-active" : ""}`} onClick={() => setV(x)}>
+            {x === "all" ? "Everything" : x === "returning" ? "Returning series" : "New & announced"}
           </div>
         ))}
       </div>
@@ -559,11 +656,13 @@ function MqUpcomingRow({ t, announced }: { t: Title; announced: boolean }) {
 }
 
 /* ============================================================
-   05 · YOU — profile
+   YOU — profile + all ratings
    ============================================================ */
 function You() {
-  const favs = TITLES.filter((t) => (t.myScore ?? 0) >= 9).slice(0, 6);
-  const badges = ["Marathoner", "Night Owl", "Completionist", "Early Bird", "Critic", "Explorer"];
+  const rated = useMemo(
+    () => TITLES.filter((t) => (t.myScore ?? 0) > 0).sort((a, b) => (b.myScore ?? 0) - (a.myScore ?? 0)),
+    []
+  );
   const stats = [
     { icon: Eye, label: "Episodes watched", value: "9,196" },
     { icon: Clock, label: "Time spent", value: "77 days" },
@@ -601,22 +700,26 @@ function You() {
         ))}
       </div>
 
-      <MqSection index="06" title="Badges" sub="Milestones you've unlocked">
-        <div className="flex flex-wrap gap-3">
-          {badges.map((b) => (
-            <div key={b} className="card px-4 py-3 flex items-center gap-2.5">
-              <Trophy size={17} style={{ color: "var(--accent)" }} />
-              <span style={{ fontWeight: 650, fontSize: 14 }}>{b}</span>
-            </div>
-          ))}
+      <MqSection title="Your ratings" sub={`Every show you've scored — ${rated.length} in total`}>
+        <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+          {rated.map((t) => <MqRatingRow key={t.id} t={t} />)}
         </div>
       </MqSection>
+    </div>
+  );
+}
 
-      <MqSection index="07" title="Favorites" sub="Your 9+ rated titles">
-        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))", gap: "var(--gap)" }}>
-          {favs.map((t) => <Poster key={t.id} t={t} />)}
-        </div>
-      </MqSection>
+function MqRatingRow({ t }: { t: Title }) {
+  const { open } = useUI();
+  return (
+    <div className="card mq-row" onClick={() => open(t.id)}>
+      <div className="mq-row-art" style={{ background: posterBg(t.title) }}><div className="poster-sheen" /></div>
+      <div className="flex-1 min-w-0">
+        <div className="mq-row-title truncate" style={{ marginTop: 0 }}>{t.title}</div>
+        <div className="dim truncate" style={{ fontSize: 12.5 }}>{t.year} · {t.genres[0]}</div>
+        <div style={{ marginTop: 4 }}><Stars score={t.myScore} size={13} /></div>
+      </div>
+      <div className="mq-score">{t.myScore}<span>/10</span></div>
     </div>
   );
 }
@@ -624,27 +727,24 @@ function You() {
 /* ============================================================
    Shared editorial pieces
    ============================================================ */
-function MqHeader({ index, title, sub }: { index: string; title: string; sub: string }) {
+function MqHeader({ title, sub }: { title: string; sub: string }) {
   return (
     <header className="mq-header">
-      <div className="mq-index">{index}</div>
-      <div>
-        <h1 className="mq-h1">{title}</h1>
-        <p className="dim mq-sub">{sub}</p>
-      </div>
+      <h1 className="mq-h1">{title}</h1>
+      <p className="dim mq-sub">{sub}</p>
     </header>
   );
 }
 
-function MqSection({ index, title, sub, children }: { index: string; title: string; sub?: string; children: React.ReactNode }) {
+function MqSection({ title, sub, action, children }: { title: string; sub?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-4">
       <div className="mq-sechead">
-        <span className="mq-index sm">{index}</span>
         <div>
           <h2 className="section-title">{title}</h2>
           {sub && <p className="mute" style={{ fontSize: 13 }}>{sub}</p>}
         </div>
+        {action}
       </div>
       {children}
     </section>

@@ -37,37 +37,90 @@ export function posterBg(title: string): string {
   return `linear-gradient(155deg, hsl(${h} 46% 30%), hsl(${h2} 58% 15%))`;
 }
 
-/* ---- Brand logo lozenges (offline-safe stand-ins for real network logos) ---- */
-const NETS: Record<string, { label: string; bg: string; fg: string }> = {
-  "Netflix":     { label: "N",      bg: "#E50914", fg: "#ffffff" },
-  "Apple TV+":   { label: "tv", bg: "#000000", fg: "#ffffff" },
-  "HBO":         { label: "HBO",    bg: "#000000", fg: "#ffffff" },
-  "FX":          { label: "FX",     bg: "#000000", fg: "#ffffff" },
-  "Disney+":     { label: "D+",     bg: "#0c3fc4", fg: "#ffffff" },
-  "Prime Video": { label: "prime",  bg: "#00A8E1", fg: "#ffffff" },
-  "AMC":         { label: "AMC",    bg: "#000000", fg: "#ffffff" },
-};
-
-export function NetworkLogo({ network, size = 11 }: { network: string; size?: number }) {
-  const n = NETS[network] ?? { label: network.slice(0, 2).toUpperCase(), bg: "#2b3242", fg: "#e9edf5" };
+/* ---- Network brand marks ----
+   Crisp inline-SVG / styled renditions in each brand's own colours — sharper
+   and more "official"-looking than bitmap logos, and fully offline-safe. */
+function NetTile({ title, bg, pad = 7, size, children }: {
+  title: string; bg: string; pad?: number; size: number; children: React.ReactNode;
+}) {
+  const h = size + 10;
   return (
     <span
-      title={network}
+      title={title}
       style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        height: size + 10, minWidth: size + 10, padding: "0 7px",
-        borderRadius: 6, background: n.bg, color: n.fg,
-        fontSize: size, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1,
-        boxShadow: "0 1px 5px rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.08)",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 3,
+        height: h, minWidth: h, padding: `0 ${pad}px`, borderRadius: 6,
+        background: bg, boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+        border: "1px solid rgba(255,255,255,0.09)", overflow: "hidden", flex: "0 0 auto",
       }}
     >
-      {n.label}
+      {children}
     </span>
   );
 }
 
+function Wordmark({ text, size, color = "#fff", weight = 800 }: { text: string; size: number; color?: string; weight?: number }) {
+  return (
+    <span style={{ fontSize: size, fontWeight: weight, color, letterSpacing: "-0.03em", lineHeight: 1, whiteSpace: "nowrap" }}>
+      {text}
+    </span>
+  );
+}
+
+export function NetworkLogo({ network, size = 11 }: { network: string; size?: number }) {
+  switch (network) {
+    case "Netflix":
+      return (
+        <NetTile title="Netflix" bg="#141414" pad={6} size={size}>
+          <svg height={size + 2} viewBox="0 0 16 22" style={{ display: "block" }} aria-hidden>
+            <polygon points="0,0 4,0 16,22 12,22" fill="#E50914" />
+            <rect x="0" y="0" width="4" height="22" fill="#E50914" />
+            <rect x="12" y="0" width="4" height="22" fill="#E50914" />
+          </svg>
+        </NetTile>
+      );
+    case "Apple TV+":
+      return (
+        <NetTile title="Apple TV+" bg="#000" pad={7} size={size}>
+          <svg height={size + 3} viewBox="0 0 14 16" style={{ display: "block" }} aria-hidden>
+            <path d="M11.4 11.7c-.3.7-.7 1.3-1.2 1.8-.5.5-1 .6-1.6.4-.6-.2-1-.2-1.6 0-.6.2-1.1.1-1.6-.4C3.7 12.4 3 10 3.6 7.9 4 6.6 5 5.9 6 5.9c.6 0 1.1.4 1.6.4.5 0 1-.5 1.8-.4.6 0 1.4.3 1.9 1-.9.6-1.3 1.8-.5 2.8.3.4.7.7 1.1.9-.1.4-.3.7-.5 1.1z" fill="#fff" />
+            <path d="M8.3 5.1c-.1-1 .7-1.9 1.6-2 .1.9-.6 1.9-1.6 2z" fill="#fff" />
+          </svg>
+          <Wordmark text="tv+" size={size} weight={600} />
+        </NetTile>
+      );
+    case "HBO":
+      return <NetTile title="HBO" bg="#000" size={size}><Wordmark text="HBO" size={size} /></NetTile>;
+    case "FX":
+      return <NetTile title="FX" bg="#000" pad={8} size={size}><Wordmark text="FX" size={size + 1} /></NetTile>;
+    case "AMC":
+      return <NetTile title="AMC" bg="#000" size={size}><Wordmark text="AMC" size={size - 0.5} /></NetTile>;
+    case "Disney+":
+      return (
+        <NetTile title="Disney+" bg="linear-gradient(180deg,#1f3bce,#0a1a6b)" size={size}>
+          <span style={{ fontSize: size, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1, fontStyle: "italic" }}>
+            Disney<span style={{ fontStyle: "normal", verticalAlign: "top", fontSize: size * 0.8 }}>+</span>
+          </span>
+        </NetTile>
+      );
+    case "Prime Video":
+      return (
+        <NetTile title="Prime Video" bg="#1b2733" size={size}>
+          <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", lineHeight: 1 }}>
+            <Wordmark text="prime" size={size} />
+            <svg width={size * 2.6} height={size * 0.5} viewBox="0 0 26 5" style={{ marginTop: 1, display: "block" }} aria-hidden>
+              <path d="M1 1 C 9 5.5, 17 5.5, 25 1" fill="none" stroke="#00A8E1" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </span>
+        </NetTile>
+      );
+    default:
+      return <NetTile title={network} bg="#2b3242" size={size}><Wordmark text={network.slice(0, 2).toUpperCase()} size={size} color="#e9edf5" /></NetTile>;
+  }
+}
+
 /* ---- Poster tile (overlaid title, TV-Time-like) ---- */
-export function Poster({ t, subtitle }: { t: Title; subtitle?: string }) {
+export function Poster({ t, subtitle, showNetwork = true }: { t: Title; subtitle?: string; showNetwork?: boolean }) {
   const { open } = useUI();
   const progress = t.seenEps && t.totalEps ? Math.round((t.seenEps / t.totalEps) * 100) : 0;
   const showProgress = t.status === "watching" && progress > 0 && progress < 100;
@@ -76,7 +129,7 @@ export function Poster({ t, subtitle }: { t: Title; subtitle?: string }) {
     <div className="poster" style={{ background: posterBg(t.title) }} onClick={() => open(t.id)}>
       <div className="poster-sheen" />
       <div className="poster-top">
-        <NetworkLogo network={t.network} />
+        {showNetwork ? <NetworkLogo network={t.network} /> : <span />}
         {t.tmdb > 0 && (
           <span className="badge badge-glass">
             <Star size={11} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />

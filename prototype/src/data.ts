@@ -1,5 +1,5 @@
 export type Kind = "tv" | "movie";
-export type Status = "watching" | "watchlist" | "upcoming" | "finished";
+export type Status = "watching" | "caughtup" | "watchlist" | "upcoming" | "finished";
 
 export interface NextEp {
   s: number;
@@ -26,6 +26,8 @@ export interface Title {
   // upcoming / announced
   premiere?: string; // "2026-08-14" | "TBA 2026" | "Announced"
   premiereLabel?: string;
+  // caught up — fully watched, waiting on the next season
+  waitingFor?: string; // "Season 3 — expected 2027"
   // finished / movie
   runtime?: string;
 }
@@ -76,6 +78,32 @@ export const TITLES: Title[] = [
     network: "Prime Video", tmdb: 8.3, myScore: 8, status: "watching", seenEps: 5, totalEps: 8,
     next: { s: 1, e: 6, title: "The Trap", air: "Up next" },
     synopsis: "Two hundred years after the apocalypse, the gentle denizens of a vault must contend with the wasteland.",
+  },
+
+  // ---------- CAUGHT UP (watched all aired, waiting on more seasons) ----------
+  {
+    id: "silo", title: "Silo", kind: "tv", year: "2023", genres: ["Sci-Fi", "Thriller", "Drama"],
+    network: "Apple TV+", tmdb: 8.0, myScore: 8, status: "caughtup", seenEps: 20, totalEps: 20,
+    waitingFor: "Season 3 — expected 2027",
+    synopsis: "Ten thousand people live in a giant underground silo, bound by rules they believe protect them.",
+  },
+  {
+    id: "the-white-lotus", title: "The White Lotus", kind: "tv", year: "2021", genres: ["Drama", "Comedy"],
+    network: "HBO", tmdb: 8.0, myScore: 9, status: "caughtup", seenEps: 21, totalEps: 21,
+    waitingFor: "Season 4 — filming",
+    synopsis: "The exploits of the guests and staff at an exclusive tropical resort unravel across a single week.",
+  },
+  {
+    id: "the-mandalorian", title: "The Mandalorian", kind: "tv", year: "2019", genres: ["Sci-Fi", "Fantasy"],
+    network: "Disney+", tmdb: 8.2, myScore: 8, status: "caughtup", seenEps: 24, totalEps: 24,
+    waitingFor: "Season 4 — in production",
+    synopsis: "A lone bounty hunter travels the outer reaches of the galaxy, far from the authority of the New Republic.",
+  },
+  {
+    id: "the-diplomat-cu", title: "Yellowjackets", kind: "tv", year: "2021", genres: ["Drama", "Thriller"],
+    network: "Netflix", tmdb: 7.9, myScore: 8, status: "caughtup", seenEps: 19, totalEps: 19,
+    waitingFor: "Season 4 — announced",
+    synopsis: "A team of teenage soccer players survive a plane crash in the wilderness — and the women they become.",
   },
 
   // ---------- WATCHLIST ----------
@@ -179,6 +207,34 @@ export function fakeEpisodes(t: Title) {
         idx,
       });
     }
+  }
+  return rows;
+}
+
+/* Upcoming episodes for a followed show, for the Calendar "My shows" view.
+   Dates are synthesized weekly from the app's "today" (Sat, Jul 4 2026). */
+const CAL_BASE = new Date(2026, 6, 4);
+const EP_NAMES = ["The Long Now", "Bright Hours", "Cauterize", "In Absentia", "The Cut",
+  "Undertow", "Static", "Ghost Light", "Half Bloom", "The Signal"];
+
+export interface UpcomingEp { s: number; e: number; title: string; date: string; soon: boolean; }
+
+export function scheduledEpisodes(t: Title): UpcomingEp[] {
+  if (t.status !== "watching" || !t.next) return [];
+  const remaining = Math.max(1, Math.min(5, (t.totalEps ?? 8) - (t.seenEps ?? 0)));
+  const startOffset = 3 + (hueOf(t.title) % 6);
+  const rows: UpcomingEp[] = [];
+  for (let i = 0; i < remaining; i++) {
+    const d = new Date(CAL_BASE);
+    d.setDate(d.getDate() + startOffset + i * 7);
+    const e = t.next.e + i;
+    rows.push({
+      s: t.next.s,
+      e,
+      title: EP_NAMES[(e + i) % EP_NAMES.length],
+      date: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+      soon: i === 0,
+    });
   }
   return rows;
 }
