@@ -81,12 +81,11 @@ export function NetworkLogo({ network, size = 11 }: { network: string; size?: nu
       );
     case "Apple TV+":
       return (
-        <NetTile title="Apple TV+" bg="#000" pad={7} size={size}>
-          <svg height={size + 3} viewBox="0 0 14 16" style={{ display: "block" }} aria-hidden>
+        <NetTile title="Apple TV+" bg="#000" pad={5} size={size}>
+          <svg height={size + 4} viewBox="0 0 14 16" style={{ display: "block" }} aria-hidden>
             <path d="M11.4 11.7c-.3.7-.7 1.3-1.2 1.8-.5.5-1 .6-1.6.4-.6-.2-1-.2-1.6 0-.6.2-1.1.1-1.6-.4C3.7 12.4 3 10 3.6 7.9 4 6.6 5 5.9 6 5.9c.6 0 1.1.4 1.6.4.5 0 1-.5 1.8-.4.6 0 1.4.3 1.9 1-.9.6-1.3 1.8-.5 2.8.3.4.7.7 1.1.9-.1.4-.3.7-.5 1.1z" fill="#fff" />
             <path d="M8.3 5.1c-.1-1 .7-1.9 1.6-2 .1.9-.6 1.9-1.6 2z" fill="#fff" />
           </svg>
-          <Wordmark text="tv+" size={size} weight={600} />
         </NetTile>
       );
     case "HBO":
@@ -97,10 +96,8 @@ export function NetworkLogo({ network, size = 11 }: { network: string; size?: nu
       return <NetTile title="AMC" bg="#000" size={size}><Wordmark text="AMC" size={size - 0.5} /></NetTile>;
     case "Disney+":
       return (
-        <NetTile title="Disney+" bg="linear-gradient(180deg,#1f3bce,#0a1a6b)" size={size}>
-          <span style={{ fontSize: size, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1, fontStyle: "italic" }}>
-            Disney<span style={{ fontStyle: "normal", verticalAlign: "top", fontSize: size * 0.8 }}>+</span>
-          </span>
+        <NetTile title="Disney+" bg="linear-gradient(160deg,#0f1b52,#0a1236)" size={size}>
+          <Wordmark text="Disney+" size={size} weight={700} />
         </NetTile>
       );
     case "Prime Video":
