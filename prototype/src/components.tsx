@@ -81,20 +81,28 @@ export function NetworkLogo({ network, size = 11 }: { network: string; size?: nu
         </NetTile>
       );
     case "Apple TV+":
-      /* Official app icon — self-contained dark tile with the tv mark */
+      /* Official app icon (self-contained dark tile). The layout box is the
+         same height as the wordmark tiles so it aligns with the other marks;
+         the larger square overflows it, centred, so the inner tv mark reads at
+         the same vertical centre instead of sitting lower. */
       return (
-        <img
-          src="/logos/apple-tv.svg"
-          alt="Apple TV+"
+        <span
           title="Apple TV+"
           style={{
-            /* square app icon: needs to run larger than the wordmark tiles
-               for the inner tv mark to read at the same visual weight */
-            height: size + 21, width: size + 21, display: "block", flex: "0 0 auto",
-            borderRadius: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-            border: "1px solid rgba(255,255,255,0.09)",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            height: size + 10, width: size + 21, flex: "0 0 auto", verticalAlign: "middle",
           }}
-        />
+        >
+          <img
+            src="/logos/apple-tv.svg"
+            alt="Apple TV+"
+            style={{
+              height: size + 21, width: size + 21, display: "block",
+              borderRadius: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+              border: "1px solid rgba(255,255,255,0.09)",
+            }}
+          />
+        </span>
       );
     case "HBO":
       return <NetTile title="HBO" bg="#000" size={size}><Wordmark text="HBO" size={size} /></NetTile>;
