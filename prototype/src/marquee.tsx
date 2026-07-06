@@ -520,7 +520,7 @@ function CalendarTab() {
   ];
 
   return (
-    <div className="screen mq-page">
+    <div className="screen mq-page cal-page">
       <MqHeader
         title="Calendar"
         sub="Every upcoming episode from the shows you follow — plus the premieres you're tracking."
@@ -772,6 +772,7 @@ type RateSort = "new" | "old" | "best" | "worst";
 const RATE_PAGE = 21; // 7 full rows of 3
 
 function You() {
+  const wl = useWatchlist();
   const [sort, setSort] = useState<RateSort>("new");
   const [page, setPage] = useState(0);
 
@@ -799,7 +800,7 @@ function You() {
     { icon: Eye, label: "Episodes watched", value: "9,196" },
     { icon: Clock, label: "Time spent", value: "77 days" },
     { icon: Tv, label: "Shows followed", value: "326" },
-    { icon: CalendarClock, label: "Tracking soon", value: "7" },
+    { icon: CalendarClock, label: "Premieres tracked", value: String(wl.inStatus("upcoming").length) },
     { icon: Users, label: "Friends", value: "6" },
     { icon: Star, label: "Avg. rating", value: "8.4" },
   ];

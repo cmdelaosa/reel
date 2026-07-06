@@ -727,6 +727,9 @@ body {
   padding-top: 6px; font-size: 13px; font-weight: 600; color: var(--text-dim);
 }
 
+/* Calendar reads best as a centered column, not full desktop width */
+.cal-page > * { width: 100%; max-width: 780px; margin-inline: auto; }
+
 /* ---- Calendar · TV-Time-style episode feed ---- */
 .cal-feed { display: flex; flex-direction: column; }
 .cal-sentinel { text-align: center; font-size: 12px; color: var(--text-mute); padding: 10px 0; }
