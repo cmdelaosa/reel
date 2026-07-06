@@ -38,8 +38,9 @@ export function posterBg(title: string): string {
 }
 
 /* ---- Network brand marks ----
-   Crisp inline-SVG / styled renditions in each brand's own colours — sharper
-   and more "official"-looking than bitmap logos, and fully offline-safe. */
+   Netflix / Apple TV+ / Disney+ use the official vector logos (Wikimedia
+   Commons SVGs served from /public/logos). The rest are styled wordmark
+   stand-ins until real provider art arrives via TMDB. */
 function NetTile({ title, bg, pad = 7, size, children }: {
   title: string; bg: string; pad?: number; size: number; children: React.ReactNode;
 }) {
@@ -71,29 +72,27 @@ export function NetworkLogo({ network, size = 11 }: { network: string; size?: nu
   switch (network) {
     case "Netflix":
       return (
-        <NetTile title="Netflix" bg="#000" pad={7} size={size}>
-          <svg height={size + 5} viewBox="0 0 20 24" style={{ display: "block" }} aria-hidden>
-            <defs>
-              <linearGradient id="nflx-n" x1="0" y1="0" x2="0.45" y2="1">
-                <stop offset="0" stopColor="#B1060F" />
-                <stop offset="0.5" stopColor="#E50914" />
-                <stop offset="1" stopColor="#B1060F" />
-              </linearGradient>
-            </defs>
-            <rect x="0" y="0" width="5.4" height="24" fill="#E50914" />
-            <rect x="14.6" y="0" width="5.4" height="24" fill="#E50914" />
-            <polygon points="0,0 5.4,0 20,24 14.6,24" fill="url(#nflx-n)" />
-          </svg>
+        <NetTile title="Netflix" bg="#000" pad={8} size={size}>
+          <img
+            src="/logos/netflix-n.svg"
+            alt="Netflix"
+            style={{ height: size + 6, display: "block" }}
+          />
         </NetTile>
       );
     case "Apple TV+":
+      /* Official app icon — self-contained dark tile with the tv mark */
       return (
-        <NetTile title="Apple TV+" bg="#000" pad={4} size={size}>
-          <svg height={size + 8} viewBox="0 0 14 16" style={{ display: "block" }} aria-hidden>
-            <path d="M11.4 11.7c-.3.7-.7 1.3-1.2 1.8-.5.5-1 .6-1.6.4-.6-.2-1-.2-1.6 0-.6.2-1.1.1-1.6-.4C3.7 12.4 3 10 3.6 7.9 4 6.6 5 5.9 6 5.9c.6 0 1.1.4 1.6.4.5 0 1-.5 1.8-.4.6 0 1.4.3 1.9 1-.9.6-1.3 1.8-.5 2.8.3.4.7.7 1.1.9-.1.4-.3.7-.5 1.1z" fill="#fff" />
-            <path d="M8.3 5.1c-.1-1 .7-1.9 1.6-2 .1.9-.6 1.9-1.6 2z" fill="#fff" />
-          </svg>
-        </NetTile>
+        <img
+          src="/logos/apple-tv.svg"
+          alt="Apple TV+"
+          title="Apple TV+"
+          style={{
+            height: size + 10, width: size + 10, display: "block", flex: "0 0 auto",
+            borderRadius: 6, boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+            border: "1px solid rgba(255,255,255,0.09)",
+          }}
+        />
       );
     case "HBO":
       return <NetTile title="HBO" bg="#000" size={size}><Wordmark text="HBO" size={size} /></NetTile>;
@@ -103,8 +102,12 @@ export function NetworkLogo({ network, size = 11 }: { network: string; size?: nu
       return <NetTile title="AMC" bg="#000" size={size}><Wordmark text="AMC" size={size - 0.5} /></NetTile>;
     case "Disney+":
       return (
-        <NetTile title="Disney+" bg="linear-gradient(150deg,#0a2a46,#17b8c9)" size={size}>
-          <Wordmark text="Disney+" size={size} weight={700} />
+        <NetTile title="Disney+" bg="linear-gradient(150deg,#0a2a46,#17b8c9)" pad={6} size={size}>
+          <img
+            src="/logos/disney-plus.svg"
+            alt="Disney+"
+            style={{ height: size + 5, display: "block", filter: "brightness(0) invert(1)" }}
+          />
         </NetTile>
       );
     case "Prime Video":
