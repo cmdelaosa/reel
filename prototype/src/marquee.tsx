@@ -24,7 +24,7 @@ type Tab = "tonight" | "shows" | "explore" | "calendar" | "you";
 
 const TABS: { key: Tab; label: string; icon: any }[] = [
   { key: "tonight", label: "Tonight", icon: Clapperboard },
-  { key: "shows", label: "Shows", icon: LayoutGrid },
+  { key: "shows", label: "My Shows", icon: LayoutGrid },
   { key: "explore", label: "Explore", icon: Compass },
   { key: "calendar", label: "Calendar", icon: CalendarClock },
   { key: "you", label: "You", icon: User },
@@ -376,7 +376,7 @@ function Shows() {
 
   return (
     <div className="screen mq-page">
-      <MqHeader title="Shows" sub={`${library.length} shows in your watchlist.`} />
+      <MqHeader title="My Shows" sub={`${library.length} shows in your watchlist.`} />
 
       <div className="mq-toolbar">
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ flex: 1 }}>
