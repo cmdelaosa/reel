@@ -261,7 +261,7 @@ function Tonight({ go }: { go: (t: Tab) => void }) {
 
       {/* Continue watching */}
       <MqSection title="Continue watching" sub="Pick up where you left off">
-        <div className="rail no-scrollbar">
+        <Rail>
           {rest.map((t) => (
             <div key={t.id} style={{ width: "var(--rail-pw)" }} className="flex flex-col gap-2">
               <Poster t={t} subtitle={t.next ? `S${t.next.s} · E${t.next.e}` : undefined} />
@@ -271,7 +271,7 @@ function Tonight({ go }: { go: (t: Tab) => void }) {
               </div>
             </div>
           ))}
-        </div>
+        </Rail>
       </MqSection>
 
       {/* Fresh + premieres, side by side on desktop */}
@@ -446,14 +446,14 @@ function Explore({ onSearch }: { onSearch: () => void }) {
       </div>
 
       <MqSection title="Trending this week" sub="What everyone's watching">
-        <div className="rail no-scrollbar">
+        <Rail>
           {trending.map((t, i) => (
             <div key={t.id} style={{ width: "var(--rail-pw)" }} className="relative">
               <div className="mq-rank">{i + 1}</div>
               <Poster t={t} showNetwork={false} />
             </div>
           ))}
-        </div>
+        </Rail>
       </MqSection>
 
       <MqSection title="Collections" sub="Hand-picked by theme">
@@ -758,7 +758,7 @@ function MqUpcomingRow({ t, announced }: { t: Title; announced: boolean }) {
    YOU — profile + all ratings
    ============================================================ */
 type RateSort = "new" | "old" | "best" | "worst";
-const RATE_PAGE = 21; // 7 full rows of 3
+const RATE_PAGE = 15; // 5 full rows of 3
 
 function You() {
   const wl = useWatchlist();
@@ -888,6 +888,48 @@ function MqRatingRow({ t }: { t: Title }) {
 /* ============================================================
    Shared editorial pieces
    ============================================================ */
+
+/* Horizontal carousel with edge arrows that appear only when there's room to
+   scroll that way. Reused for every horizontal rail. */
+function Rail({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [canL, setCanL] = useState(false);
+  const [canR, setCanR] = useState(false);
+
+  const update = () => {
+    const el = ref.current;
+    if (!el) return;
+    setCanL(el.scrollLeft > 4);
+    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(update); // re-measure after every render (content/size changes)
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    return () => { ro.disconnect(); window.removeEventListener("resize", update); };
+  }, []);
+
+  const nudge = (dir: number) => ref.current?.scrollBy({ left: dir * ref.current.clientWidth * 0.8, behavior: "smooth" });
+
+  return (
+    <div className="rail-wrap">
+      <button className={`rail-arrow left ${canL ? "" : "hide"}`} onClick={() => nudge(-1)} aria-label="Scroll left">
+        <ChevronLeft size={20} />
+      </button>
+      <div className="rail no-scrollbar" ref={ref} onScroll={update}>
+        {children}
+      </div>
+      <button className={`rail-arrow right ${canR ? "" : "hide"}`} onClick={() => nudge(1)} aria-label="Scroll right">
+        <ChevronRight size={20} />
+      </button>
+    </div>
+  );
+}
+
 function MqHeader({ title, sub }: { title: string; sub: string }) {
   return (
     <header className="mq-header">

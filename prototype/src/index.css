@@ -244,6 +244,26 @@ body {
 .rail { display: flex; gap: var(--gap); overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px; }
 .rail > * { scroll-snap-align: start; flex: 0 0 auto; }
 
+/* Rail with edge scroll arrows */
+.rail-wrap { position: relative; }
+.rail-arrow {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 6;
+  display: grid; place-items: center;
+  width: 40px; height: 40px; border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 76%, transparent);
+  border: 1px solid var(--border-strong); color: var(--text);
+  cursor: pointer; box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  transition: opacity 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+.rail-arrow:hover { background: var(--surface-3); }
+.rail-arrow:active { transform: translateY(-50%) scale(0.92); }
+.rail-arrow.left { left: 4px; }
+.rail-arrow.right { right: 4px; }
+.rail-arrow.hide { opacity: 0; pointer-events: none; }
+/* On touch devices swiping is natural — hide the arrows */
+@media (hover: none) { .rail-arrow { display: none; } }
+
 /* Star rating */
 .stars { display: inline-flex; gap: 2px; }
 .star { cursor: pointer; color: var(--text-mute); transition: color .12s ease, transform .12s ease; }
