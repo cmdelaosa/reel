@@ -340,7 +340,8 @@ export interface FeedEp {
   e: number;
   name: string;
   time: number;      // local timestamp
-  premiere: boolean; // season / series premiere (E01)
+  premiere: boolean; // season premiere (E01)
+  finale: boolean;   // season finale (last episode of the season)
 }
 
 export function episodeFeed(followed: Title[], weeksBack: number, weeksFwd: number): FeedEp[] {
@@ -349,13 +350,18 @@ export function episodeFeed(followed: Title[], weeksBack: number, weeksFwd: numb
     const slot = airSlot(t.id);
     if (t.status === "watching" && t.next) {
       const anchor = nextWeekday(slot.day, slot.hour, slot.min); // the "next" episode airs here
+      const len = 8 + (rawHash(t.id + "len") % 5);               // season length 8–12
+      const base = (t.next.s - 1) * len + (t.next.e - 1);        // absolute index of "next"
       for (let k = -weeksBack; k <= weeksFwd; k++) {
-        const e = t.next.e + k;
-        if (e < 1) continue;
+        const abs = base + k;
+        if (abs < 0) continue;
+        const s = Math.floor(abs / len) + 1;
+        const e = (abs % len) + 1;
         const d = new Date(anchor.getTime() + k * 7 * 86400000);
         eps.push({
-          key: `${t.id}-${t.next.s}-${e}`, titleId: t.id, show: t.title, network: t.network,
-          s: t.next.s, e, name: EP_NAMES[(e - 1) % EP_NAMES.length], time: d.getTime(), premiere: e === 1,
+          key: `${t.id}-${s}-${e}`, titleId: t.id, show: t.title, network: t.network,
+          s, e, name: EP_NAMES[abs % EP_NAMES.length], time: d.getTime(),
+          premiere: e === 1, finale: e === len,
         });
       }
     } else if (t.status === "upcoming" && /^\d{4}-\d{2}-\d{2}$/.test(t.premiere ?? "")) {
@@ -365,7 +371,7 @@ export function episodeFeed(followed: Title[], weeksBack: number, weeksFwd: numb
       eps.push({
         key: `${t.id}-prem`, titleId: t.id, show: t.title, network: t.network,
         s: season, e: 1, name: season > 1 ? "Season premiere" : "Series premiere",
-        time: d.getTime(), premiere: true,
+        time: d.getTime(), premiere: true, finale: false,
       });
     }
   }

@@ -549,11 +549,6 @@ function MyShowsFeed() {
   const prevH = useRef(0);
 
   const eps = useMemo(() => episodeFeed(wl.followed, weeksBack, 12), [wl.followed, weeksBack]);
-  const latestKey = useMemo(() => {
-    let best: FeedEp | undefined;
-    for (const e of eps) if (e.time < CAL_NOW && (!best || e.time > best.time)) best = e;
-    return best?.key;
-  }, [eps]);
 
   // group into per-day buckets (offset <= 6) plus a single "Later" bucket
   const { days, later } = useMemo(() => {
@@ -625,7 +620,7 @@ function MyShowsFeed() {
         <div key={off} ref={off === 0 ? todayRef : undefined} className="cal-day">
           <div className="cal-daysep"><span>{dayLabel(off, list[0].time)}</span></div>
           {list.map((ep) => (
-            <CalEpRow key={ep.key} ep={ep} latestKey={latestKey} seen={isSeen(ep)} onToggle={() => toggleSeen(ep)} />
+            <CalEpRow key={ep.key} ep={ep} seen={isSeen(ep)} onToggle={() => toggleSeen(ep)} />
           ))}
         </div>
       ))}
@@ -634,7 +629,7 @@ function MyShowsFeed() {
         <div className="cal-day">
           <div className="cal-daysep"><span>Later</span></div>
           {later.map((ep) => (
-            <CalEpRow key={ep.key} ep={ep} latestKey={latestKey} later seen={isSeen(ep)} onToggle={() => toggleSeen(ep)} />
+            <CalEpRow key={ep.key} ep={ep} later seen={isSeen(ep)} onToggle={() => toggleSeen(ep)} />
           ))}
         </div>
       )}
@@ -642,20 +637,13 @@ function MyShowsFeed() {
   );
 }
 
-function CalEpRow({ ep, latestKey, later = false, seen, onToggle }: {
-  ep: FeedEp; latestKey?: string; later?: boolean; seen: boolean; onToggle: () => void;
+function CalEpRow({ ep, later = false, seen, onToggle }: {
+  ep: FeedEp; later?: boolean; seen: boolean; onToggle: () => void;
 }) {
   const { open } = useUI();
   const past = ep.time < CAL_NOW;
   const days = dayOffset(ep.time);
-
-  const badge = () => {
-    if (ep.key === latestKey) return <span className="badge badge-soft">Latest</span>;
-    if (ep.premiere) return <span className="badge badge-soft">Premiere</span>;
-    if (past && CAL_NOW - ep.time < 3 * MS_DAY) return <span className="badge badge-accent">New</span>;
-    if (past) return <span className="badge badge-aired">Aired</span>;
-    return null;
-  };
+  const tag = ep.premiere ? (ep.s === 1 ? "Series premiere" : "Season premiere") : ep.finale ? "Season finale" : null;
 
   return (
     <div className="cal-ep" onClick={() => open(ep.titleId)}>
@@ -664,7 +652,7 @@ function CalEpRow({ ep, latestKey, later = false, seen, onToggle }: {
         <span className="cal-showpill">{ep.show}<ChevronRight size={12} /></span>
         <div className="cal-ep-se">
           S{pad2(ep.s)} · E{pad2(ep.e)}
-          {ep.premiere && !past && <span className="badge badge-soft" style={{ marginLeft: 8 }}>Premiere</span>}
+          {tag && <span className="badge badge-soft" style={{ marginLeft: 8 }}>{tag}</span>}
         </div>
         <div className="cal-ep-name mute">{ep.name}</div>
       </div>
@@ -675,12 +663,13 @@ function CalEpRow({ ep, latestKey, later = false, seen, onToggle }: {
             <div className="cal-when mute">{fmtShort(ep.time)} · {fmtTime(ep.time)}</div>
           </>
         ) : past ? (
-          <div className="cal-past" onClick={(e) => e.stopPropagation()}>
-            {badge()}
-            <button className={`check ${seen ? "on" : ""}`} onClick={onToggle} title={seen ? "Watched" : "Mark watched"}>
-              <Check size={15} strokeWidth={3} />
-            </button>
-          </div>
+          <button
+            className={`check ${seen ? "on" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            title={seen ? "Watched" : "Mark watched"}
+          >
+            <Check size={15} strokeWidth={3} />
+          </button>
         ) : (
           <>
             <div className="cal-time">{fmtTime(ep.time)}</div>
@@ -800,7 +789,7 @@ function You() {
     { icon: Eye, label: "Episodes watched", value: "9,196" },
     { icon: Clock, label: "Time spent", value: "77 days" },
     { icon: Tv, label: "Shows followed", value: "326" },
-    { icon: CalendarClock, label: "Premieres tracked", value: String(wl.inStatus("upcoming").length) },
+    { icon: CalendarClock, label: "Coming soon", value: String(wl.inStatus("upcoming").length) },
     { icon: Users, label: "Friends", value: "6" },
     { icon: Star, label: "Avg. rating", value: "8.4" },
   ];
