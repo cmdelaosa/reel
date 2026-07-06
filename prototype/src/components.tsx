@@ -71,18 +71,25 @@ export function NetworkLogo({ network, size = 11 }: { network: string; size?: nu
   switch (network) {
     case "Netflix":
       return (
-        <NetTile title="Netflix" bg="#141414" pad={6} size={size}>
-          <svg height={size + 2} viewBox="0 0 16 22" style={{ display: "block" }} aria-hidden>
-            <polygon points="0,0 4,0 16,22 12,22" fill="#E50914" />
-            <rect x="0" y="0" width="4" height="22" fill="#E50914" />
-            <rect x="12" y="0" width="4" height="22" fill="#E50914" />
+        <NetTile title="Netflix" bg="#000" pad={7} size={size}>
+          <svg height={size + 5} viewBox="0 0 20 24" style={{ display: "block" }} aria-hidden>
+            <defs>
+              <linearGradient id="nflx-n" x1="0" y1="0" x2="0.45" y2="1">
+                <stop offset="0" stopColor="#B1060F" />
+                <stop offset="0.5" stopColor="#E50914" />
+                <stop offset="1" stopColor="#B1060F" />
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="5.4" height="24" fill="#E50914" />
+            <rect x="14.6" y="0" width="5.4" height="24" fill="#E50914" />
+            <polygon points="0,0 5.4,0 20,24 14.6,24" fill="url(#nflx-n)" />
           </svg>
         </NetTile>
       );
     case "Apple TV+":
       return (
-        <NetTile title="Apple TV+" bg="#000" pad={5} size={size}>
-          <svg height={size + 4} viewBox="0 0 14 16" style={{ display: "block" }} aria-hidden>
+        <NetTile title="Apple TV+" bg="#000" pad={4} size={size}>
+          <svg height={size + 8} viewBox="0 0 14 16" style={{ display: "block" }} aria-hidden>
             <path d="M11.4 11.7c-.3.7-.7 1.3-1.2 1.8-.5.5-1 .6-1.6.4-.6-.2-1-.2-1.6 0-.6.2-1.1.1-1.6-.4C3.7 12.4 3 10 3.6 7.9 4 6.6 5 5.9 6 5.9c.6 0 1.1.4 1.6.4.5 0 1-.5 1.8-.4.6 0 1.4.3 1.9 1-.9.6-1.3 1.8-.5 2.8.3.4.7.7 1.1.9-.1.4-.3.7-.5 1.1z" fill="#fff" />
             <path d="M8.3 5.1c-.1-1 .7-1.9 1.6-2 .1.9-.6 1.9-1.6 2z" fill="#fff" />
           </svg>
@@ -96,7 +103,7 @@ export function NetworkLogo({ network, size = 11 }: { network: string; size?: nu
       return <NetTile title="AMC" bg="#000" size={size}><Wordmark text="AMC" size={size - 0.5} /></NetTile>;
     case "Disney+":
       return (
-        <NetTile title="Disney+" bg="linear-gradient(160deg,#0f1b52,#0a1236)" size={size}>
+        <NetTile title="Disney+" bg="linear-gradient(150deg,#0a2a46,#17b8c9)" size={size}>
           <Wordmark text="Disney+" size={size} weight={700} />
         </NetTile>
       );
