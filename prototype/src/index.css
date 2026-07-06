@@ -750,10 +750,21 @@ body {
 /* Calendar reads best as a centered column, not full desktop width */
 .cal-page > * { width: 100%; max-width: 780px; margin-inline: auto; }
 
+/* View switcher pinned under the top bar — always reachable while scrolling */
+.cal-tabsbar {
+  position: sticky; top: 66px; z-index: 30;
+  display: flex; justify-content: center;
+  margin-top: calc(-1 * clamp(20px, 3.5vw, 36px));
+  padding: 12px 0;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+}
+.cal-tabsbar .segmented { width: auto; }
+
 /* ---- Calendar · TV-Time-style episode feed ---- */
 .cal-feed { display: flex; flex-direction: column; }
 .cal-sentinel { text-align: center; font-size: 12px; color: var(--text-mute); padding: 10px 0; }
-.cal-day { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 76px; }
+.cal-day { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 148px; }
 .cal-daysep { display: flex; justify-content: center; margin: 16px 0 6px; }
 .cal-daysep span {
   font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;

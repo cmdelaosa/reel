@@ -479,7 +479,7 @@ function Explore({ onSearch }: { onSearch: () => void }) {
               <div key={t.id} className="flex flex-col gap-2">
                 <Poster t={t} />
                 <button
-                  className={`btn btn-sm ${wl.isFollowed(t.id) ? "btn-outline" : "btn-accent"}`}
+                  className={`btn btn-sm ${wl.isFollowed(t.id) ? "btn-accent" : "btn-outline"}`}
                   onClick={(e) => { e.stopPropagation(); wl.toggle(t.id); }}
                 >
                   {wl.isFollowed(t.id) ? <><Check size={15} />Added</> : <><Plus size={15} />Add</>}
@@ -521,15 +521,13 @@ function CalendarTab() {
 
   return (
     <div className="screen mq-page cal-page">
-      <MqHeader
-        title="Calendar"
-        sub="Every upcoming episode from the shows you follow — plus the premieres you're tracking."
-      />
-
-      <div className="segmented" style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
-        {tabs.map(([v, label]) => (
-          <div key={v} className={`seg ${view === v ? "seg-active" : ""}`} onClick={() => setView(v)}>{label}</div>
-        ))}
+      {/* Always-visible view switcher — sticks right under the top bar. */}
+      <div className="cal-tabsbar">
+        <div className="segmented" style={{ flexWrap: "wrap" }}>
+          {tabs.map(([v, label]) => (
+            <div key={v} className={`seg ${view === v ? "seg-active" : ""}`} onClick={() => setView(v)}>{label}</div>
+          ))}
+        </div>
       </div>
 
       {view === "shows" ? <MyShowsFeed /> : <PremieresList kind={view} />}
