@@ -41,6 +41,38 @@ export function hueOf(s: string): number {
 
 export const GENRES = ["Drama", "Comedy", "Sci-Fi", "Thriller", "Crime", "Fantasy", "Animation", "Documentary"];
 
+/* More finished shows the user has already rated — enough to paginate the
+   ratings view. */
+const RATED_EXTRA: Title[] = [
+  { id: "got", title: "Game of Thrones", year: "2011", genres: ["Fantasy", "Drama"], network: "HBO", tmdb: 9.2, myScore: 9 },
+  { id: "sopranos", title: "The Sopranos", year: "1999", genres: ["Crime", "Drama"], network: "HBO", tmdb: 9.2, myScore: 10 },
+  { id: "mad-men", title: "Mad Men", year: "2007", genres: ["Drama"], network: "AMC", tmdb: 8.7, myScore: 9 },
+  { id: "better-call-saul", title: "Better Call Saul", year: "2015", genres: ["Crime", "Drama"], network: "AMC", tmdb: 9.0, myScore: 10 },
+  { id: "fargo", title: "Fargo", year: "2014", genres: ["Crime", "Drama"], network: "FX", tmdb: 8.9, myScore: 9 },
+  { id: "true-detective", title: "True Detective", year: "2014", genres: ["Crime", "Thriller"], network: "HBO", tmdb: 8.9, myScore: 8 },
+  { id: "stranger-things", title: "Stranger Things", year: "2016", genres: ["Sci-Fi", "Fantasy"], network: "Netflix", tmdb: 8.7, myScore: 8 },
+  { id: "the-crown", title: "The Crown", year: "2016", genres: ["Drama"], network: "Netflix", tmdb: 8.6, myScore: 8 },
+  { id: "peaky-blinders", title: "Peaky Blinders", year: "2013", genres: ["Crime", "Drama"], network: "BBC", tmdb: 8.8, myScore: 9 },
+  { id: "ozark", title: "Ozark", year: "2017", genres: ["Crime", "Thriller"], network: "Netflix", tmdb: 8.5, myScore: 8 },
+  { id: "succession", title: "Succession", year: "2018", genres: ["Drama"], network: "HBO", tmdb: 8.9, myScore: 10 },
+  { id: "barry", title: "Barry", year: "2018", genres: ["Comedy", "Crime"], network: "HBO", tmdb: 8.4, myScore: 8 },
+  { id: "watchmen", title: "Watchmen", year: "2019", genres: ["Sci-Fi", "Drama"], network: "HBO", tmdb: 8.2, myScore: 8 },
+  { id: "mindhunter", title: "Mindhunter", year: "2017", genres: ["Crime", "Thriller"], network: "Netflix", tmdb: 8.6, myScore: 9 },
+  { id: "band-of-brothers", title: "Band of Brothers", year: "2001", genres: ["Drama"], network: "HBO", tmdb: 9.4, myScore: 10 },
+  { id: "black-mirror", title: "Black Mirror", year: "2011", genres: ["Sci-Fi", "Thriller"], network: "Netflix", tmdb: 8.7, myScore: 8 },
+  { id: "westworld", title: "Westworld", year: "2016", genres: ["Sci-Fi", "Drama"], network: "HBO", tmdb: 8.5, myScore: 7 },
+  { id: "the-boys", title: "The Boys", year: "2019", genres: ["Sci-Fi", "Comedy"], network: "Prime Video", tmdb: 8.6, myScore: 8 },
+  { id: "ted-lasso", title: "Ted Lasso", year: "2020", genres: ["Comedy", "Drama"], network: "Apple TV+", tmdb: 8.8, myScore: 9 },
+  { id: "squid-game", title: "Squid Game", year: "2021", genres: ["Thriller", "Drama"], network: "Netflix", tmdb: 8.0, myScore: 7 },
+  { id: "sherlock", title: "Sherlock", year: "2010", genres: ["Crime", "Drama"], network: "BBC", tmdb: 9.1, myScore: 9 },
+  { id: "hill-house", title: "The Haunting of Hill House", year: "2018", genres: ["Drama", "Thriller"], network: "Netflix", tmdb: 8.6, myScore: 8 },
+  { id: "twin-peaks", title: "Twin Peaks", year: "1990", genres: ["Drama", "Thriller"], network: "ABC", tmdb: 8.8, myScore: 9 },
+  { id: "six-feet-under", title: "Six Feet Under", year: "2001", genres: ["Drama"], network: "HBO", tmdb: 8.7, myScore: 8 },
+].map((r) => ({
+  ...r, kind: "tv" as const, status: "finished" as const, seenEps: 30, totalEps: 30,
+  synopsis: `${r.title} — a landmark ${r.genres[0].toLowerCase()} series you rated highly.`,
+}));
+
 export const TITLES: Title[] = [
   // ---------- WATCHING (TV) ----------
   {
@@ -181,10 +213,26 @@ export const TITLES: Title[] = [
     network: "HBO", tmdb: 8.6, myScore: 9, status: "finished", seenEps: 60, totalEps: 60,
     synopsis: "The Baltimore drug scene seen through the eyes of law enforcement and the dealers they pursue.",
   },
+
+  ...RATED_EXTRA,
 ];
 
 export const byId = (id: string) => TITLES.find((t) => t.id === id);
 export const inStatus = (s: Status) => TITLES.filter((t) => t.status === s);
+
+/* Deterministic "rated on" timestamp per title, for new/old sorting. */
+function rawHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = s.charCodeAt(i) + ((h << 5) - h);
+  return Math.abs(h);
+}
+const RATE_BASE = new Date(2026, 6, 4).getTime();
+export function ratedAtOf(id: string): number {
+  return RATE_BASE - (4 + (rawHash(id + "rated") % 940)) * 86400000;
+}
+export function ratedAtLabel(id: string): string {
+  return new Date(ratedAtOf(id)).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
 
 /* Fake seasons/episode list for the detail view */
 export function fakeEpisodes(t: Title) {

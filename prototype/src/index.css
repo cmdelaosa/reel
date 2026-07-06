@@ -717,6 +717,16 @@ body {
 }
 .mq-score span { font-size: 12px; font-weight: 600; color: var(--text-mute); }
 
+/* ---- Ratings toolbar + pagination ---- */
+.mq-rate-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.mq-pager {
+  display: flex; align-items: center; justify-content: center; gap: 16px;
+  padding-top: 6px; font-size: 13px; font-weight: 600; color: var(--text-dim);
+}
+
 /* ---- Floating dock (mobile) ---- */
 .mq-dock {
   position: fixed; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%;

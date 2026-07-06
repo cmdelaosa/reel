@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, Bell, CalendarClock, Check, ChevronDown, ChevronRight, Clapperboard, Clock,
-  Compass, Eye, Flame, LayoutGrid, Play, Plus, Search, Share2, Sliders, Star,
+  ArrowRight, Bell, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard,
+  Clock, Compass, Eye, Flame, LayoutGrid, Play, Plus, Search, Share2, Sliders, Star,
   Tv, User, Users,
 } from "lucide-react";
-import { Title, TITLES, GENRES, inStatus, scheduledEpisodes } from "./data";
+import { Title, TITLES, GENRES, inStatus, scheduledEpisodes, ratedAtOf, ratedAtLabel } from "./data";
 import { Poster, Stars, NetworkLogo, QuickAdd, UICtx, useUI, posterBg } from "./components";
 import { DetailSheet } from "./screens";
 import { NotifPanel, DesignLab } from "./overlays";
@@ -370,7 +370,6 @@ function Shows() {
             <button
               key={x.key}
               className={`chip ${f === x.key ? "chip-active" : ""}`}
-              style={x.key === "all" ? { marginLeft: "auto" } : undefined}
               onClick={() => setF(x.key)}
             >
               {x.label}
@@ -663,11 +662,33 @@ function MqUpcomingRow({ t, announced }: { t: Title; announced: boolean }) {
 /* ============================================================
    YOU — profile + all ratings
    ============================================================ */
+type RateSort = "new" | "old" | "best" | "worst";
+const RATE_PAGE = 20;
+
 function You() {
-  const rated = useMemo(
-    () => TITLES.filter((t) => (t.myScore ?? 0) > 0).sort((a, b) => (b.myScore ?? 0) - (a.myScore ?? 0)),
-    []
-  );
+  const [sort, setSort] = useState<RateSort>("new");
+  const [page, setPage] = useState(0);
+
+  const rated = useMemo(() => {
+    const byNew = (a: Title, b: Title) => ratedAtOf(b.id) - ratedAtOf(a.id);
+    return TITLES.filter((t) => (t.myScore ?? 0) > 0).sort((a, b) => {
+      if (sort === "new") return byNew(a, b);
+      if (sort === "old") return -byNew(a, b);
+      if (sort === "best") return (b.myScore! - a.myScore!) || byNew(a, b);
+      return (a.myScore! - b.myScore!) || byNew(a, b); // worst
+    });
+  }, [sort]);
+
+  const pageCount = Math.max(1, Math.ceil(rated.length / RATE_PAGE));
+  const clamped = Math.min(page, pageCount - 1);
+  const start = clamped * RATE_PAGE;
+  const shown = rated.slice(start, start + RATE_PAGE);
+
+  const sorts: { v: RateSort; label: string }[] = [
+    { v: "new", label: "Newest" }, { v: "old", label: "Oldest" },
+    { v: "best", label: "Best rated" }, { v: "worst", label: "Worst rated" },
+  ];
+
   const stats = [
     { icon: Eye, label: "Episodes watched", value: "9,196" },
     { icon: Clock, label: "Time spent", value: "77 days" },
@@ -705,10 +726,49 @@ function You() {
         ))}
       </div>
 
-      <MqSection title="Your ratings" sub={`Every show you've scored — ${rated.length} in total`}>
-        <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-          {rated.map((t) => <MqRatingRow key={t.id} t={t} />)}
+      <MqSection title="Your ratings" sub={`${rated.length} shows scored`}>
+        <div className="mq-rate-toolbar">
+          <div className="segmented" style={{ flexWrap: "wrap" }}>
+            {sorts.map((s) => (
+              <div
+                key={s.v}
+                className={`seg ${sort === s.v ? "seg-active" : ""}`}
+                onClick={() => { setSort(s.v); setPage(0); }}
+              >
+                {s.label}
+              </div>
+            ))}
+          </div>
+          <span className="mute" style={{ fontSize: 12.5 }}>
+            {start + 1}–{Math.min(start + RATE_PAGE, rated.length)} of {rated.length}
+          </span>
         </div>
+
+        <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+          {shown.map((t) => <MqRatingRow key={t.id} t={t} />)}
+        </div>
+
+        {pageCount > 1 && (
+          <div className="mq-pager">
+            <button
+              className="btn btn-ghost btn-sm"
+              disabled={clamped === 0}
+              style={{ opacity: clamped === 0 ? 0.4 : 1, pointerEvents: clamped === 0 ? "none" : "auto" }}
+              onClick={() => setPage(clamped - 1)}
+            >
+              <ChevronLeft size={15} />Prev
+            </button>
+            <span>Page {clamped + 1} of {pageCount}</span>
+            <button
+              className="btn btn-ghost btn-sm"
+              disabled={clamped === pageCount - 1}
+              style={{ opacity: clamped === pageCount - 1 ? 0.4 : 1, pointerEvents: clamped === pageCount - 1 ? "none" : "auto" }}
+              onClick={() => setPage(clamped + 1)}
+            >
+              Next<ChevronRight size={15} />
+            </button>
+          </div>
+        )}
       </MqSection>
     </div>
   );
@@ -721,7 +781,7 @@ function MqRatingRow({ t }: { t: Title }) {
       <div className="mq-row-art" style={{ background: posterBg(t.title) }}><div className="poster-sheen" /></div>
       <div className="flex-1 min-w-0">
         <div className="mq-row-title truncate" style={{ marginTop: 0 }}>{t.title}</div>
-        <div className="dim truncate" style={{ fontSize: 12.5 }}>{t.year} · {t.genres[0]}</div>
+        <div className="dim truncate" style={{ fontSize: 12.5 }}>{t.year} · {t.genres[0]} · rated {ratedAtLabel(t.id)}</div>
         <div style={{ marginTop: 4 }}><Stars score={t.myScore} size={13} /></div>
       </div>
       <div className="mq-score">{t.myScore}<span>/10</span></div>
