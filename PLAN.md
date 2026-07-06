@@ -54,7 +54,7 @@ Tick a box **in the same commit** that completes it.
 
 - [x] **P0-C1** `docs: add architecture and phase plans` (this commit)
 - [x] **P0-C2** `chore: scaffold app/ workspace (Vite+React+TS+Router+Query+Zod, lint, vitest)`
-- [ ] **P0-C3** `feat(app): port design tokens, glass look and base UI kit from prototype`
+- [x] **P0-C3** `feat(app): port design tokens, glass look and base UI kit from prototype`
 - [ ] **P0-C4** `chore: init supabase project (config, local dev, env plumbing, CI)`
 - [ ] **P0-C5** `feat(db): profiles + invites schema, RLS, signup trigger`
 - [ ] **P0-C6** `feat(db): titles/seasons/episodes metadata cache schema + RLS`

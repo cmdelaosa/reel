@@ -1,3 +1,6 @@
-// Placeholder — design-system pieces (Poster, Stars, Rail, sheets…) are ported
-// from the prototype in P0-C3. Kept so the directory is tracked and importable.
-export {};
+export { Logo } from "@/ui/Logo";
+export { NetworkLogo } from "@/ui/NetworkLogo";
+export { Poster } from "@/ui/Poster";
+export { Rail } from "@/ui/Rail";
+export { Stars } from "@/ui/Stars";
+export { hueOf, posterBg } from "@/ui/posterBg";

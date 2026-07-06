@@ -12,6 +12,7 @@
     "check": "tsc --noEmit && eslint src && vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
     "@supabase/supabase-js": "^2.110.0",
     "@tanstack/react-query": "^5.101.2",
     "lucide-react": "^1.23.0",
