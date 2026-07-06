@@ -88,8 +88,10 @@ export function NetworkLogo({ network, size = 11 }: { network: string; size?: nu
           alt="Apple TV+"
           title="Apple TV+"
           style={{
-            height: size + 10, width: size + 10, display: "block", flex: "0 0 auto",
-            borderRadius: 6, boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+            /* square app icon: needs to run larger than the wordmark tiles
+               for the inner tv mark to read at the same visual weight */
+            height: size + 21, width: size + 21, display: "block", flex: "0 0 auto",
+            borderRadius: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
             border: "1px solid rgba(255,255,255,0.09)",
           }}
         />
