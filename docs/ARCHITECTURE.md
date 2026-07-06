@@ -7,8 +7,8 @@ repeating decisions. If something here conflicts with code, this doc wins until 
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Client | **Vite + React 18 + TypeScript (strict)**, React Router, TanStack Query, Zod | Evolved from the prototype (same rendering model, CSS carries over). Native app deferred to Phase 6. |
-| Styling | Plain CSS with **design tokens as CSS variables** + Tailwind utilities | Port `prototype/src/index.css` glass look. `data-theme` / `data-accent` on `<html>`. |
+| Client | **Vite + React 19 + TypeScript (strict)**, React Router, TanStack Query, Zod | Latest stable majors at scaffold time (P0-C2: Vite 8, Router 8, Zod 4); the frozen prototype keeps its own older pins. Native app deferred to Phase 6. |
+| Styling | Plain CSS with **design tokens as CSS variables** + Tailwind 4 utilities | Port `prototype/src/index.css` glass look (plain CSS — Tailwind-version-independent). `data-theme` / `data-accent` on `<html>`. Tailwind 4 is CSS-first: `@import "tailwindcss"` + `@theme`, `@tailwindcss/vite` plugin, no tailwind.config/postcss. |
 | Backend | **Supabase** — Postgres, Auth, RLS, Edge Functions, Storage, Realtime | Free tier. All authorization in RLS; client talks to Postgres directly via supabase-js. |
 | Metadata | **TMDB** via an Edge Function proxy | API key never reaches the client. Responses upserted into our cache tables. |
 | Email | **Resend** from scheduled Edge Functions | Alerts + magic links (magic links are Supabase-native). |

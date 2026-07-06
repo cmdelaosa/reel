@@ -7,6 +7,13 @@
       "runtimeArgs": ["--prefix", "/Users/cmo/Projects/tvtime/prototype", "run", "dev"],
       "port": 4321,
       "autoPort": true
+    },
+    {
+      "name": "app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/cmo/Projects/tvtime/app", "run", "dev"],
+      "port": 4321,
+      "autoPort": true
     }
   ]
 }

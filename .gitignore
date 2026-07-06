@@ -2,3 +2,11 @@ node_modules/
 dist/
 .DS_Store
 .claude/settings.local.json
+
+# app/ (Vite) artifacts
+app/dist/
+app/coverage/
+app/.env.local
+app/.env*.local
+app/*.log
+app/.vite/

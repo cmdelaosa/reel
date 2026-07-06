@@ -22,9 +22,10 @@ The commit that adds PLAN.md, docs/ARCHITECTURE.md, docs/phases/*, and updates D
 ## P0-C2 `chore: scaffold app/ workspace (Vite+React+TS+Router+Query+Zod, lint, vitest)`
 
 **Steps**
-1. `npm create vite@latest app -- --template react-ts` (align Vite/React versions with `prototype/package.json`).
-2. Add deps: `react-router-dom`, `@tanstack/react-query`, `zod`, `@supabase/supabase-js`, `lucide-react`.
-   Dev deps: `vitest`, `@testing-library/react`, `eslint` (+ typescript/react plugins), `prettier`, `tailwindcss postcss autoprefixer` (same setup as prototype).
+1. `npm create vite@latest app -- --template react-ts` (**latest stable majors** across the board —
+   decided over prototype-pinning; the frozen prototype keeps its own package.json).
+2. Add deps: `react-router` (v7+ package name), `@tanstack/react-query`, `zod`, `@supabase/supabase-js`, `lucide-react`.
+   Dev deps: `vitest`, `@testing-library/react`, `eslint` (+ typescript/react plugins), `prettier`, `tailwindcss` v4 + `@tailwindcss/vite` (CSS-first config — no tailwind.config.js/postcss).
 3. `tsconfig`: `"strict": true`, path alias `@/* → src/*`.
 4. Scripts in `app/package.json`: `dev`, `build`, `check` = `tsc --noEmit && eslint src && vitest run`.
 5. Skeleton dirs per ARCHITECTURE repo layout (`lib/ domain/ ui/ features/ styles/`) with `.gitkeep` or placeholder index files.

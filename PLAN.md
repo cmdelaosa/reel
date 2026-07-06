@@ -53,7 +53,7 @@ Tick a box **in the same commit** that completes it.
 ### Phase 0 — Foundations ([docs/phases/PHASE-0.md](docs/phases/PHASE-0.md))
 
 - [x] **P0-C1** `docs: add architecture and phase plans` (this commit)
-- [ ] **P0-C2** `chore: scaffold app/ workspace (Vite+React+TS+Router+Query+Zod, lint, vitest)`
+- [x] **P0-C2** `chore: scaffold app/ workspace (Vite+React+TS+Router+Query+Zod, lint, vitest)`
 - [ ] **P0-C3** `feat(app): port design tokens, glass look and base UI kit from prototype`
 - [ ] **P0-C4** `chore: init supabase project (config, local dev, env plumbing, CI)`
 - [ ] **P0-C5** `feat(db): profiles + invites schema, RLS, signup trigger`
