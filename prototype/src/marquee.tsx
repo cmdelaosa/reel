@@ -320,16 +320,21 @@ function MqSoonRow({ t }: { t: Title }) {
   const date = t.premiereLabel?.split("·").pop()?.trim() ?? "TBA";
   return (
     <div className="card mq-row" onClick={() => open(t.id)}>
-      <div className="mq-date"><span className="mq-date-d">{date}</span></div>
+      <div className="mq-row-art" style={{ background: posterBg(t.title) }}><div className="poster-sheen" /></div>
       <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="badge badge-accent">{date}</span>
+          <NetworkLogo network={t.network} />
+        </div>
         <div className="mq-row-title truncate">{t.title}</div>
-        <div className="dim truncate" style={{ fontSize: 12.5 }}>{t.premiereLabel} · {t.network}</div>
+        <div className="dim truncate" style={{ fontSize: 12.5 }}>{t.premiereLabel}</div>
       </div>
       <button
-        className={`btn btn-sm ${notify ? "btn-accent" : "btn-outline"}`}
+        className={`check ${notify ? "on" : ""}`}
         onClick={(e) => { e.stopPropagation(); setNotify((v) => !v); }}
+        title={notify ? "Tracking" : "Notify me"}
       >
-        <Bell size={14} />{notify ? "Tracking" : "Notify"}
+        <Bell size={15} strokeWidth={2.5} />
       </button>
     </div>
   );
