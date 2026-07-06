@@ -479,10 +479,10 @@ function Explore({ onSearch }: { onSearch: () => void }) {
               <div key={t.id} className="flex flex-col gap-2">
                 <Poster t={t} />
                 <button
-                  className={`btn btn-sm ${wl.isFollowed(t.id) ? "btn-accent" : "btn-outline"}`}
+                  className={`btn btn-sm ${wl.isFollowed(t.id) ? "btn-outline" : "btn-accent"}`}
                   onClick={(e) => { e.stopPropagation(); wl.toggle(t.id); }}
                 >
-                  {wl.isFollowed(t.id) ? <><Check size={15} />Following</> : <><Plus size={15} />Follow</>}
+                  {wl.isFollowed(t.id) ? <><Check size={15} />Added</> : <><Plus size={15} />Add</>}
                 </button>
               </div>
             ))}
