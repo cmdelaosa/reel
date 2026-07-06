@@ -18,7 +18,19 @@ interface WatchlistCtx {
   inStatus: (s: Status) => Title[];          // followed shows in a given status
 }
 
-const Ctx = createContext<WatchlistCtx>(null as unknown as WatchlistCtx);
+/* Safe fallback so consumers work even outside a provider (e.g. the classic shell). */
+const DEFAULT_CTX: WatchlistCtx = {
+  isFollowed: (id) => INITIAL_FOLLOWED.includes(id),
+  follow: () => {},
+  unfollow: () => {},
+  toggle: () => {},
+  count: INITIAL_FOLLOWED.length,
+  followed: ALL_TITLES.filter((t) => INITIAL_FOLLOWED.includes(t.id)),
+  discover: ALL_TITLES.filter((t) => !INITIAL_FOLLOWED.includes(t.id)),
+  inStatus: (s) => ALL_TITLES.filter((t) => INITIAL_FOLLOWED.includes(t.id) && t.status === s),
+};
+
+const Ctx = createContext<WatchlistCtx>(DEFAULT_CTX);
 export const useWatchlist = () => useContext(Ctx);
 
 export function WatchlistProvider({ children }: { children: React.ReactNode }) {

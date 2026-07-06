@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { Title, Status, TITLES, GENRES, byId, inStatus, fakeEpisodes } from "./data";
 import { Poster, Stars, useUI, posterBg, QuickAdd, NetworkLogo } from "./components";
+import { useWatchlist } from "./watchlist";
 
 /* ============================= HOME ============================= */
 export function Home() {
@@ -406,6 +407,7 @@ function Section({ title, sub, children, accentIcon }: { title: string; sub?: st
 /* ============================= DETAIL SHEET ============================= */
 export function DetailSheet({ id, onClose }: { id: string; onClose: () => void }) {
   const t = byId(id);
+  const wl = useWatchlist();
   const [rating, setRating] = useState(t?.myScore ?? 0);
   const eps = useMemo(() => (t ? fakeEpisodes(t) : []), [t]);
   const [checks, setChecks] = useState<Record<number, boolean>>(() => {
@@ -414,11 +416,26 @@ export function DetailSheet({ id, onClose }: { id: string; onClose: () => void }
     return o;
   });
   const [season, setSeason] = useState(1);
+  const [pending, setPending] = useState<number | null>(null); // episode awaiting "mark up to here" confirmation
   if (!t) return null;
 
   const seasons = Array.from(new Set(eps.map((e) => e.s)));
   const isTV = t.kind === "tv";
   const isUpcoming = t.status === "upcoming";
+  const added = wl.isFollowed(t.id);
+
+  const onEpClick = (idx: number) => {
+    if (checks[idx]) { setChecks((c) => ({ ...c, [idx]: false })); return; } // unmark
+    // marking as seen: if earlier episodes are still unseen, ask first
+    if (eps.some((x) => x.idx < idx && !checks[x.idx])) setPending(idx);
+    else setChecks((c) => ({ ...c, [idx]: true }));
+  };
+  const markUpTo = (idx: number) => {
+    setChecks((c) => { const n = { ...c }; eps.forEach((x) => { if (x.idx <= idx) n[x.idx] = true; }); return n; });
+    setPending(null);
+  };
+  const pendingEp = pending != null ? eps.find((x) => x.idx === pending) : undefined;
+  const pendingCount = pending != null ? eps.filter((x) => x.idx <= pending && !checks[x.idx]).length : 0;
 
   return (
     <>
@@ -456,45 +473,46 @@ export function DetailSheet({ id, onClose }: { id: string; onClose: () => void }
         <div className="overflow-y-auto p-6 flex flex-col gap-6">
           {/* Actions */}
           <div className="flex items-center gap-2.5 flex-wrap">
-            {isUpcoming ? (
-              <>
-                <button className="btn btn-accent"><Bell size={16} />Notify me when it airs</button>
-                <button className="btn btn-outline"><Plus size={16} />Watchlist</button>
-              </>
-            ) : (
-              <>
-                <button className="btn btn-accent">
-                  {t.status === "finished" ? <><Check size={16} />Watched</> : <><Eye size={16} />Mark up to here</>}
-                </button>
-                <button className="btn btn-outline"><Heart size={16} />Favorite</button>
-              </>
-            )}
-            <button className="btn btn-ghost btn-icon"><Share2 size={16} /></button>
+            <button
+              className={`btn ${added ? "btn-outline" : "btn-accent"}`}
+              onClick={() => wl.toggle(t.id)}
+            >
+              {added ? <><Check size={16} />Remove</> : <><Plus size={16} />Add</>}
+            </button>
           </div>
 
-          {/* Rating */}
-          {!isUpcoming && (
-            <div className="flex items-center justify-between card p-4">
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14.5 }}>Your rating</div>
-                <div className="mute" style={{ fontSize: 12.5 }}>{rating ? `${rating}/10` : "Not rated yet"}</div>
-              </div>
-              <div className="flex items-center gap-1" onMouseLeave={() => setRating(t.myScore ?? 0)}>
-                {[2, 4, 6, 8, 10].map((v) => (
-                  <Star
-                    key={v}
-                    size={26}
-                    className="star"
-                    style={{ color: v <= rating ? "var(--accent)" : "var(--text-mute)" }}
-                    fill={v <= rating ? "currentColor" : "none"}
-                    strokeWidth={v <= rating ? 0 : 1.6}
-                    onMouseEnter={() => setRating(v)}
-                    onClick={() => setRating(v)}
-                  />
-                ))}
+          {/* Ratings — yours + the community score from TMDB */}
+          <div className="card p-4 flex items-stretch gap-4">
+            <div className="flex-1">
+              <div className="eyebrow" style={{ marginBottom: 7 }}>Your rating</div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1" onMouseLeave={() => setRating(t.myScore ?? 0)}>
+                  {[2, 4, 6, 8, 10].map((v) => (
+                    <Star
+                      key={v}
+                      size={24}
+                      className="star"
+                      style={{ color: v <= rating ? "var(--accent)" : "var(--text-mute)" }}
+                      fill={v <= rating ? "currentColor" : "none"}
+                      strokeWidth={v <= rating ? 0 : 1.6}
+                      onMouseEnter={() => setRating(v)}
+                      onClick={() => setRating(v)}
+                    />
+                  ))}
+                </div>
+                <span style={{ fontWeight: 800, fontSize: 15 }}>{rating ? `${rating}/10` : "—"}</span>
               </div>
             </div>
-          )}
+            <div style={{ width: 1, background: "var(--border)", flex: "0 0 auto" }} />
+            <div style={{ textAlign: "center", minWidth: 92 }}>
+              <div className="eyebrow" style={{ marginBottom: 7 }}>TMDB</div>
+              <div className="flex items-center justify-center gap-1.5">
+                <Star size={18} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                <span style={{ fontWeight: 850, fontSize: 19 }}>{t.tmdb > 0 ? t.tmdb.toFixed(1) : "—"}</span>
+              </div>
+              <div className="mute" style={{ fontSize: 11 }}>community</div>
+            </div>
+          </div>
 
           {/* Synopsis */}
           <p className="dim" style={{ fontSize: 14.5, lineHeight: 1.6 }}>{t.synopsis}</p>
@@ -522,7 +540,7 @@ export function DetailSheet({ id, onClose }: { id: string; onClose: () => void }
               </div>
               <div className="flex flex-col">
                 {eps.filter((e) => e.s === season).map((e) => (
-                  <div key={e.idx} className="ep-row" onClick={() => setChecks((c) => ({ ...c, [e.idx]: !c[e.idx] }))}>
+                  <div key={e.idx} className="ep-row" onClick={() => onEpClick(e.idx)}>
                     <div className={`check ${checks[e.idx] ? "on" : ""}`}><Check size={15} strokeWidth={3} /></div>
                     <div className="mute" style={{ fontSize: 13, width: 42, flex: "0 0 auto" }}>E{e.e}</div>
                     <div className="flex-1 min-w-0">
@@ -548,6 +566,34 @@ export function DetailSheet({ id, onClose }: { id: string; onClose: () => void }
           )}
         </div>
       </div>
+
+      {/* "Mark all up to here" confirmation */}
+      {pendingEp && (
+        <>
+          <div className="backdrop" style={{ zIndex: 80 }} onClick={() => setPending(null)} />
+          <div
+            className="sheet-center fixed card flex flex-col"
+            style={{ zIndex: 81, left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(400px, 92vw)", padding: 22, gap: 6, borderRadius: "var(--r-lg)" }}
+          >
+            <div style={{ fontWeight: 800, fontSize: 16 }}>Mark earlier episodes as seen?</div>
+            <p className="dim" style={{ fontSize: 14, lineHeight: 1.55, margin: "2px 0 14px" }}>
+              You still have {pendingCount} unwatched {pendingCount === 1 ? "episode" : "episodes"} up to
+              {" "}S{pendingEp.s} · E{pendingEp.e}. Mark them all as seen?
+            </p>
+            <div className="flex items-center gap-2.5">
+              <button className="btn btn-accent flex-1" onClick={() => markUpTo(pending!)}>
+                <Check size={16} />Mark all {pendingCount}
+              </button>
+              <button
+                className="btn btn-outline flex-1"
+                onClick={() => { setChecks((c) => ({ ...c, [pending!]: true })); setPending(null); }}
+              >
+                Only this one
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }
