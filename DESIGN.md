@@ -3,7 +3,11 @@
 A personal TV-show and movie tracker to replace TV Time (which is shutting down), for
 the author and later a small circle of friends. Web-first, with native iOS/Android to
 follow. This document is the outcome of a structured design interview and is the
-authoritative plan; update it as decisions change.
+authoritative record of **product decisions**; update it as decisions change.
+
+> **Execution:** the build itself is planned commit-by-commit in [PLAN.md](PLAN.md)
+> (status table) + [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) + `docs/phases/PHASE-N.md`.
+> The Roadmap section below is superseded by those files.
 
 ## Product vision
 
@@ -19,29 +23,30 @@ authoritative plan; update it as decisions change.
 |---|---|---|
 | Ambition | Private now → small-public later | Design clean, don't over-engineer |
 | Metadata source | **TMDB** | Free, TV + movies. Remap TV Time's TVDB IDs → TMDB on import |
-| Platform strategy | **One Expo / React Native codebase** → web + iOS + Android | |
-| Web vs native | **Web via React Native Web**, ship web first, native later | App-like product, RN Web is a fine fit |
+| Platform strategy | **Web app first (Vite + React, evolved from the prototype)**; native route decided in Phase 6 (Capacitor wrap vs Expo rebuild spike) | *Changed 2026-07:* the validated UI already exists in web React (glass look relies on CSS `backdrop-filter`, poor fit for RN); reuse beats the single-codebase promise while native is deferred anyway. Pure `domain/` logic layer keeps the Expo option open |
+| Web vs native | **Ship web first**, native later (see above) | App-like product; add-to-home-screen in the meantime |
 | Backend | **Supabase** (Postgres + Auth + Realtime + Storage) | Relational data; generous free tier |
-| Social | **Light social** (friends + activity feed) | Modeled from day one, shipped Phase 3 |
+| Social | **Light social** (friends + activity feed) | Modeled from day one, shipped Phase 4 of PLAN.md. Full concept validated in the prototype: friend profiles (stats, match %, watching-now, follows, top ratings) + friend-powered Explore |
 | Content scope | **TV shows only for now** | Movies **deferred** to a later phase; model kept movie-ready (movie = ~1-episode case) |
 | Offline | **Online-first + optimistic UI** | TanStack Query; revisit true offline later |
 | Auth | **Email magic link + Google** now; **Apple** at iOS publish | Apple required by App Store once Google login ships |
 | Sign-up | **Invite-only** during private phase | Invite codes / email allowlist |
 | Notifications | **Email + in-app bell (inbox) with per-type prefs** now; **real push with native** | iOS web push is unreliable; push waits for native |
-| UI | **NativeWind (Tailwind)**, "familiar but yours" design | Keep TV Time's good UX patterns, own visual identity. Visual direction chosen in prototype: **"Aurora Glass"** look (glassmorphism — frosted translucent panels over accent-tinted ambient light), default theme dark. Two shell concepts in the prototype's design lab: **Classic** (sidebar) and **Marquee** (top tabs, bento home, ⌘K palette, mobile dock) — candidate under evaluation |
-| Distribution | **Web URL first**; native via **EAS** later | Zero store cost/friction to start |
+| UI | CSS design tokens + Tailwind utilities, "familiar but yours" design | Keep TV Time's good UX patterns, own visual identity. **Shipping: "Aurora Glass" look on the "Marquee" shell** (top tabs, ⌘K palette, mobile dock) — chosen after prototyping both against Classic (sidebar). Classic shell + Design Lab remain prototype-only |
+| Distribution | **Web URL first**; native later (route per Phase 6 spike) | Zero store cost/friction to start |
 | Budget | **Free tiers + ~$12/yr domain** | Apple $99/yr + Google $25 deferred to native publish |
 | TV Time import | **Your data via seed script day one**; **in-app zip importer before inviting friends** | Friends self-onboard from their own exports |
 | FilmAffinity / IMDb | **Later-phase import spike** | FA has no API → scrape logged-in votes → fuzzy-match to TMDB. IMDb = clean CSV export. TV ratings first; movie ratings when movies land |
 
 ## Tech stack
 
-- **Client:** Expo (React Native + React Native Web), TypeScript, NativeWind, TanStack Query, Zod.
+- **Client:** Vite + React + TypeScript, React Router, TanStack Query, Zod; design tokens as CSS
+  variables (glass look), Tailwind utilities. (Expo/NativeWind plan superseded — see Platform strategy.)
 - **Backend:** Supabase — Postgres, Auth (magic link + Google OAuth), Row-Level Security, Edge Functions (scheduled jobs), Storage.
 - **Metadata:** TMDB API (search, details, season/episode lists), with a local cache of the minimal fields we need.
 - **Email:** a transactional provider (e.g. Resend) driven from a Supabase scheduled Edge Function.
-- **Builds (later):** EAS Build for iOS/Android; TestFlight + Play internal testing before store release.
-- **Repo:** single repo — `app/` (Expo), `supabase/` (migrations, edge functions, seed), `scripts/` (import/migration).
+- **Builds (later):** native route (Capacitor vs Expo) decided by Phase 6 spike; TestFlight + Play internal testing before store release.
+- **Repo:** single repo — `app/` (web client), `supabase/` (migrations, edge functions, seed), `scripts/` (import/migration), `prototype/` (frozen design reference), `docs/` (plan).
 
 ## Data model (sketch — to be refined in Phase 0)
 
@@ -59,6 +64,8 @@ authoritative plan; update it as decisions change.
 Principle: **the user owns their data** — easy full export is a design goal (we are, after all, replacing a service that shut down).
 
 ## Roadmap
+
+> **Superseded:** kept for historical context. The live plan is [PLAN.md](PLAN.md).
 
 ### Phase 0 — Foundations
 Repo scaffold (Expo + NativeWind + TS + TanStack Query). Supabase project: schema + RLS +
