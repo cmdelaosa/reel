@@ -747,6 +747,47 @@ body {
   padding-top: 6px; font-size: 13px; font-weight: 600; color: var(--text-dim);
 }
 
+/* ---- Friends — avatars, stacks, profile sheet ---- */
+.fr-avatar {
+  display: inline-grid; place-items: center; flex: 0 0 auto;
+  border-radius: 999px; color: #fff; font-weight: 800;
+  letter-spacing: .02em; user-select: none;
+  text-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.fr-ring { box-shadow: 0 0 0 2px var(--surface); }
+.fr-stack { display: inline-flex; align-items: center; }
+.fr-stack .fr-avatar + .fr-avatar, .fr-stack .fr-more { margin-left: -7px; }
+.fr-more { background: var(--surface-3); color: var(--text-dim); }
+.fr-fansrow { display: flex; align-items: center; gap: 8px; padding: 0 2px; }
+.fr-matchbar {
+  height: 7px; border-radius: 999px; overflow: hidden; background: var(--surface-3);
+}
+.fr-matchbar i {
+  display: block; height: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+.fr-grid {
+  display: grid; gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+}
+.fr-mini {
+  position: relative; aspect-ratio: 2/3; border-radius: var(--r-md);
+  overflow: hidden; cursor: pointer; display: flex; align-items: flex-end;
+  border: 1px solid transparent; transition: transform .15s ease, border-color .15s ease;
+}
+.fr-mini:hover { transform: translateY(-2px); }
+.fr-mini.fr-common { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.fr-mini-name {
+  width: 100%; padding: 18px 8px 7px; font-size: 11px; font-weight: 700; line-height: 1.2;
+  color: #fff; background: linear-gradient(180deg, transparent, rgba(0,0,0,.72));
+}
+.fr-activity {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: var(--r-md);
+}
+.fr-activity:hover { background: var(--surface-2); }
+.fr-activity + .fr-activity { margin-top: 2px; }
+
 /* Calendar reads best as a centered column, not full desktop width */
 .cal-page > * { width: 100%; max-width: 780px; margin-inline: auto; }
 

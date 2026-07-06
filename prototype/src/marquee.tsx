@@ -4,11 +4,15 @@ import {
   Clock, Compass, Eye, Flame, LayoutGrid, Play, Plus, Search, Share2, Sliders, Star,
   Tv, User, Users,
 } from "lucide-react";
-import { Title, TITLES, GENRES, inStatus, ratedAtOf, ratedAtLabel, episodeFeed, FeedEp, CAL_TODAY, CAL_NOW } from "./data";
+import { Title, TITLES, GENRES, byId, inStatus, ratedAtOf, ratedAtLabel, episodeFeed, FeedEp, CAL_TODAY, CAL_NOW } from "./data";
 import { Poster, Stars, NetworkLogo, UICtx, useUI, posterBg } from "./components";
 import { DetailSheet } from "./screens";
 import { NotifPanel, DesignLab } from "./overlays";
 import { WatchlistProvider, useWatchlist } from "./watchlist";
+import {
+  FRIENDS, FRIEND_ACTIVITY, friendById, popularWithFriends, bestRatedByFriends,
+  FriendAvatar, FriendStack, FriendSheet, FriendCtx, useFriends,
+} from "./friends";
 
 /* ============================================================
    MARQUEE — a second full shell. Top tab navigation (floating
@@ -29,6 +33,7 @@ const TABS: { key: Tab; label: string; icon: any }[] = [
 export default function Marquee() {
   const [tab, setTab] = useState<Tab>("tonight");
   const [detail, setDetail] = useState<string | null>(null);
+  const [friend, setFriend] = useState<string | null>(null);
   const [notif, setNotif] = useState(false);
   const [lab, setLab] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -48,6 +53,7 @@ export default function Marquee() {
   return (
     <WatchlistProvider>
     <UICtx.Provider value={{ open: setDetail }}>
+    <FriendCtx.Provider value={{ openFriend: setFriend }}>
       <div className="mq">
         {/* ---- Top bar ---- */}
         <header className="mq-top">
@@ -106,9 +112,12 @@ export default function Marquee() {
         {/* ---- Overlays (same feature set as the classic shell) ---- */}
         {palette && <Palette onClose={() => setPalette(false)} onOpen={(id) => { setPalette(false); setDetail(id); }} />}
         {notif && <NotifPanel onClose={() => setNotif(false)} />}
+        {friend && <FriendSheet id={friend} onClose={() => setFriend(null)} />}
+        {/* Show detail renders after the friend sheet so it stacks on top */}
         {detail && <DetailSheet id={detail} onClose={() => setDetail(null)} />}
         {lab && <DesignLab onClose={() => setLab(false)} />}
       </div>
+    </FriendCtx.Provider>
     </UICtx.Provider>
     </WatchlistProvider>
   );
@@ -454,6 +463,34 @@ function Explore({ onSearch }: { onSearch: () => void }) {
             </div>
           ))}
         </Rail>
+      </MqSection>
+
+      <MqSection title="Popular with friends" sub="What your circle is following right now">
+        <Rail>
+          {popularWithFriends().slice(0, 10).map(({ t, fans }) => (
+            <div key={t.id} style={{ width: "var(--rail-pw)" }} className="flex flex-col gap-2">
+              <Poster t={t} showNetwork={false} />
+              <div className="fr-fansrow">
+                <FriendStack fans={fans} size={22} />
+                <span className="mute" style={{ fontSize: 12 }}>{fans.length} friends</span>
+              </div>
+            </div>
+          ))}
+        </Rail>
+      </MqSection>
+
+      <MqSection title="Best rated by friends" sub="Highest averages from people you know">
+        <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+          {bestRatedByFriends().slice(0, 6).map(({ t, avg, raters }) => (
+            <FriendRatedRow key={t.id} t={t} avg={avg} raters={raters} />
+          ))}
+        </div>
+      </MqSection>
+
+      <MqSection title="Friend activity" sub="What they've been up to">
+        <div className="card p-2 flex flex-col">
+          {FRIEND_ACTIVITY.map((a, i) => <ActivityRow key={i} a={a} />)}
+        </div>
       </MqSection>
 
       <MqSection title="Collections" sub="Hand-picked by theme">
@@ -820,6 +857,12 @@ function You() {
         ))}
       </div>
 
+      <MqSection title="Friends" sub="Tap a friend to see their profile">
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+          {FRIENDS.map((f) => <FriendCard key={f.id} f={f} />)}
+        </div>
+      </MqSection>
+
       <MqSection title="Your ratings" sub={`${rated.length} shows scored`}>
         <div className="mq-rate-toolbar">
           <div className="segmented" style={{ flexWrap: "wrap" }}>
@@ -879,6 +922,68 @@ function MqRatingRow({ t }: { t: Title }) {
         <div style={{ marginTop: 4 }}><Stars score={t.myScore} size={13} /></div>
       </div>
       <div className="mq-score">{t.myScore}<span>/10</span></div>
+    </div>
+  );
+}
+
+/* Friend card in your profile — opens their profile sheet */
+function FriendCard({ f }: { f: (typeof FRIENDS)[number] }) {
+  const { openFriend } = useFriends();
+  const now = byId(f.watchingNow[0]?.id);
+  return (
+    <div className="card mq-row" onClick={() => openFriend(f.id)}>
+      <FriendAvatar f={f} size={44} />
+      <div className="flex-1 min-w-0">
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{f.name}</div>
+        <div className="dim truncate" style={{ fontSize: 12.5 }}>
+          {now ? <>Watching <b style={{ fontWeight: 650 }}>{now.title}</b></> : f.handle}
+        </div>
+      </div>
+      <ChevronRight size={16} className="mute" />
+    </div>
+  );
+}
+
+/* Explore — a show ranked by your friends' average score */
+function FriendRatedRow({ t, avg, raters }: { t: Title; avg: number; raters: (typeof FRIENDS)[number][] }) {
+  const { open } = useUI();
+  return (
+    <div className="card mq-row" onClick={() => open(t.id)}>
+      <div className="mq-row-art" style={{ background: posterBg(t.title) }}><div className="poster-sheen" /></div>
+      <div className="flex-1 min-w-0">
+        <div className="mq-row-title truncate" style={{ marginTop: 0 }}>{t.title}</div>
+        <div className="dim truncate" style={{ fontSize: 12.5 }}>{t.year} · {t.genres[0]}</div>
+        <div style={{ marginTop: 5 }}><FriendStack fans={raters} size={20} /></div>
+      </div>
+      <div className="mq-score">{avg.toFixed(1)}<span>/10</span></div>
+    </div>
+  );
+}
+
+/* Explore — one line of the friend activity feed */
+function ActivityRow({ a }: { a: (typeof FRIEND_ACTIVITY)[number] }) {
+  const { open } = useUI();
+  const { openFriend } = useFriends();
+  const f = friendById(a.friendId);
+  const t = byId(a.titleId);
+  if (!f || !t) return null;
+  return (
+    <div className="fr-activity">
+      <span onClick={() => openFriend(f.id)} style={{ cursor: "pointer", display: "inline-flex" }}>
+        <FriendAvatar f={f} size={30} />
+      </span>
+      <div className="flex-1 min-w-0" style={{ fontSize: 13.5 }}>
+        <b style={{ fontWeight: 700, cursor: "pointer" }} onClick={() => openFriend(f.id)}>{f.name.split(" ")[0]}</b>
+        {" "}{a.verb}{" "}
+        <b style={{ fontWeight: 700, cursor: "pointer" }} onClick={() => open(t.id)}>{t.title}</b>
+        {a.score != null && (
+          <span className="badge badge-soft" style={{ marginLeft: 8, fontWeight: 800 }}>
+            <Star size={10} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+            {a.score}
+          </span>
+        )}
+      </div>
+      <span className="mute" style={{ fontSize: 12, flex: "0 0 auto" }}>{a.when}</span>
     </div>
   );
 }
