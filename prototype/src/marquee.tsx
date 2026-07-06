@@ -663,7 +663,7 @@ function MqUpcomingRow({ t, announced }: { t: Title; announced: boolean }) {
    YOU — profile + all ratings
    ============================================================ */
 type RateSort = "new" | "old" | "best" | "worst";
-const RATE_PAGE = 20;
+const RATE_PAGE = 21; // 7 full rows of 3
 
 function You() {
   const [sort, setSort] = useState<RateSort>("new");
