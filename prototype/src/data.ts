@@ -28,6 +28,8 @@ export interface Title {
   premiereLabel?: string;
   // caught up — fully watched, waiting on the next season
   waitingFor?: string; // "Season 3 — expected 2027"
+  // watchlist model — false only for the Discover pool you don't follow yet
+  followed?: boolean;
   // finished / movie
   runtime?: string;
 }
@@ -217,7 +219,26 @@ export const TITLES: Title[] = [
   ...RATED_EXTRA,
 ];
 
-export const byId = (id: string) => TITLES.find((t) => t.id === id);
+/* Discover pool — shows you don't follow (aren't in your watchlist) yet.
+   Following one from Explore adds it to your library. */
+export const DISCOVER: Title[] = [
+  { id: "d-pachinko", title: "Pachinko", year: "2022", genres: ["Drama"], network: "Apple TV+", tmdb: 8.4, status: "watchlist", synopsis: "A sweeping saga chronicling four generations of a Korean immigrant family." },
+  { id: "d-the-penguin", title: "The Penguin", year: "2024", genres: ["Crime", "Drama"], network: "HBO", tmdb: 8.6, status: "watchlist", synopsis: "Oswald Cobb makes his violent play for control of Gotham's criminal underworld." },
+  { id: "d-shrinking", title: "Shrinking", year: "2023", genres: ["Comedy", "Drama"], network: "Apple TV+", tmdb: 8.2, status: "watchlist", synopsis: "A grieving therapist starts breaking the rules and telling clients exactly what he thinks." },
+  { id: "d-dark-matter", title: "Dark Matter", year: "2024", genres: ["Sci-Fi", "Thriller"], network: "Apple TV+", tmdb: 7.9, status: "watchlist", synopsis: "A physicist is abducted into an alternate version of his own life." },
+  { id: "d-ripley", title: "Ripley", year: "2024", genres: ["Thriller", "Crime"], network: "Netflix", tmdb: 8.0, status: "watchlist", synopsis: "A grifter in 1960s New York is hired to bring a wayward heir home from Italy." },
+  { id: "d-the-diplomat2", title: "3 Body Problem", year: "2024", genres: ["Sci-Fi", "Drama"], network: "Netflix", tmdb: 7.6, status: "watchlist", synopsis: "A decision made in 1960s China echoes across space and time to a group of scientists today." },
+  { id: "d-hacks", title: "Hacks", year: "2021", genres: ["Comedy", "Drama"], network: "HBO", tmdb: 8.3, status: "watchlist", synopsis: "A legendary Las Vegas comedian and a young writer forge a prickly creative partnership." },
+  { id: "d-fallout2", title: "Poker Face", year: "2023", genres: ["Crime", "Comedy"], network: "Prime Video", tmdb: 8.0, status: "watchlist", synopsis: "A woman with an unerring knack for spotting lies solves a murder in every town she passes through." },
+  { id: "d-gen-v", title: "Gen V", year: "2023", genres: ["Sci-Fi", "Comedy"], network: "Prime Video", tmdb: 7.8, status: "watchlist", synopsis: "At America's only college for young superheroes, ambition and hormones run wild." },
+].map((d) => ({ ...d, status: d.status as Status, kind: "tv" as const, followed: false }));
+
+export const ALL_TITLES: Title[] = [...TITLES, ...DISCOVER];
+
+/* Ids you follow at start = your whole existing library. */
+export const INITIAL_FOLLOWED: string[] = TITLES.map((t) => t.id);
+
+export const byId = (id: string) => ALL_TITLES.find((t) => t.id === id);
 export const inStatus = (s: Status) => TITLES.filter((t) => t.status === s);
 
 /* Deterministic "rated on" timestamp per title, for new/old sorting. */
@@ -285,4 +306,68 @@ export function scheduledEpisodes(t: Title): UpcomingEp[] {
     });
   }
   return rows;
+}
+
+/* ============================================================
+   Episode feed — a flat, chronological stream of episodes for the shows you
+   follow (past + future), for the TV-Time-style Calendar. Each episode gets a
+   real local Date so times render in the viewer's timezone.
+   "now" is pinned to the app's demo clock: Sat Jul 4 2026, 12:00 local.
+   ============================================================ */
+export const CAL_TODAY = new Date(2026, 6, 4);
+export const CAL_NOW = new Date(2026, 6, 4, 12, 0).getTime();
+
+function airSlot(id: string) {
+  return {
+    day: rawHash(id + "d") % 7,               // weekday it airs
+    hour: 6 + (rawHash(id + "h") % 15),       // 06:00–20:00
+    min: (rawHash(id + "m") % 4) * 15,        // :00 / :15 / :30 / :45
+  };
+}
+
+function nextWeekday(wd: number, h: number, mi: number): Date {
+  const d = new Date(CAL_TODAY.getFullYear(), CAL_TODAY.getMonth(), CAL_TODAY.getDate(), h, mi);
+  d.setDate(d.getDate() + ((wd - d.getDay() + 7) % 7));
+  return d;
+}
+
+export interface FeedEp {
+  key: string;
+  titleId: string;
+  show: string;
+  network: string;
+  s: number;
+  e: number;
+  name: string;
+  time: number;      // local timestamp
+  premiere: boolean; // season / series premiere (E01)
+}
+
+export function episodeFeed(followed: Title[], weeksBack: number, weeksFwd: number): FeedEp[] {
+  const eps: FeedEp[] = [];
+  for (const t of followed) {
+    const slot = airSlot(t.id);
+    if (t.status === "watching" && t.next) {
+      const anchor = nextWeekday(slot.day, slot.hour, slot.min); // the "next" episode airs here
+      for (let k = -weeksBack; k <= weeksFwd; k++) {
+        const e = t.next.e + k;
+        if (e < 1) continue;
+        const d = new Date(anchor.getTime() + k * 7 * 86400000);
+        eps.push({
+          key: `${t.id}-${t.next.s}-${e}`, titleId: t.id, show: t.title, network: t.network,
+          s: t.next.s, e, name: EP_NAMES[(e - 1) % EP_NAMES.length], time: d.getTime(), premiere: e === 1,
+        });
+      }
+    } else if (t.status === "upcoming" && /^\d{4}-\d{2}-\d{2}$/.test(t.premiere ?? "")) {
+      const [y, m, dd] = (t.premiere as string).split("-").map(Number);
+      const d = new Date(y, m - 1, dd, slot.hour, slot.min);
+      const season = Number((t.premiereLabel?.match(/Season (\d+)/) ?? [])[1] ?? 1);
+      eps.push({
+        key: `${t.id}-prem`, titleId: t.id, show: t.title, network: t.network,
+        s: season, e: 1, name: season > 1 ? "Season premiere" : "Series premiere",
+        time: d.getTime(), premiere: true,
+      });
+    }
+  }
+  return eps.sort((a, b) => a.time - b.time);
 }

@@ -727,6 +727,52 @@ body {
   padding-top: 6px; font-size: 13px; font-weight: 600; color: var(--text-dim);
 }
 
+/* ---- Calendar · TV-Time-style episode feed ---- */
+.cal-feed { display: flex; flex-direction: column; }
+.cal-sentinel { text-align: center; font-size: 12px; color: var(--text-mute); padding: 10px 0; }
+.cal-day { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 76px; }
+.cal-daysep { display: flex; justify-content: center; margin: 16px 0 6px; }
+.cal-daysep span {
+  font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-dim); background: var(--surface-2);
+  border: 1px solid var(--border); padding: 5px 14px; border-radius: 999px;
+}
+.cal-ep {
+  display: flex; align-items: center; gap: 14px; padding: 12px;
+  border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border);
+  box-shadow: var(--shadow); cursor: pointer; transition: border-color 0.15s ease;
+}
+.cal-ep:hover { border-color: var(--border-strong); }
+[data-look="glass"] .cal-ep {
+  -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
+}
+.cal-ep-art {
+  width: 54px; height: 80px; flex: 0 0 auto; border-radius: var(--r-sm);
+  position: relative; overflow: hidden; border: 1px solid var(--border);
+}
+.cal-ep-main { flex: 1; min-width: 0; }
+.cal-showpill {
+  display: inline-flex; align-items: center; gap: 2px; max-width: 100%;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--text-dim); border: 1px solid var(--border-strong); border-radius: 999px;
+  padding: 3px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cal-ep-se { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; margin-top: 6px; }
+.cal-ep-name { font-size: 13px; margin-top: 1px; }
+.cal-ep-right {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end;
+  gap: 4px; text-align: right;
+}
+.cal-time { font-size: 13.5px; font-weight: 750; }
+.cal-days { font-size: 24px; font-weight: 850; line-height: 1; color: var(--text); }
+.cal-days span {
+  display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-mute);
+}
+.cal-when { font-size: 11.5px; }
+.cal-past { display: flex; align-items: center; gap: 10px; }
+.badge-aired { background: color-mix(in srgb, #35d39a 22%, transparent); color: #46d69f; }
+
 /* ---- Floating dock (mobile) ---- */
 .mq-dock {
   position: fixed; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%;

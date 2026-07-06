@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, Bell, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Clapperboard,
+  ArrowRight, Bell, CalendarClock, Check, ChevronLeft, ChevronRight, Clapperboard,
   Clock, Compass, Eye, Flame, LayoutGrid, Play, Plus, Search, Share2, Sliders, Star,
   Tv, User, Users,
 } from "lucide-react";
-import { Title, TITLES, GENRES, inStatus, scheduledEpisodes, ratedAtOf, ratedAtLabel } from "./data";
-import { Poster, Stars, NetworkLogo, QuickAdd, UICtx, useUI, posterBg } from "./components";
+import { Title, TITLES, GENRES, inStatus, ratedAtOf, ratedAtLabel, episodeFeed, FeedEp, CAL_TODAY, CAL_NOW } from "./data";
+import { Poster, Stars, NetworkLogo, UICtx, useUI, posterBg } from "./components";
 import { DetailSheet } from "./screens";
 import { NotifPanel, DesignLab } from "./overlays";
+import { WatchlistProvider, useWatchlist } from "./watchlist";
 
 /* ============================================================
    MARQUEE — a second full shell. Top tab navigation (floating
@@ -45,6 +46,7 @@ export default function Marquee() {
   }, []);
 
   return (
+    <WatchlistProvider>
     <UICtx.Provider value={{ open: setDetail }}>
       <div className="mq">
         {/* ---- Top bar ---- */}
@@ -108,6 +110,7 @@ export default function Marquee() {
         {lab && <DesignLab onClose={() => setLab(false)} />}
       </div>
     </UICtx.Provider>
+    </WatchlistProvider>
   );
 }
 
@@ -353,16 +356,18 @@ const SHOW_FILTERS: { key: string; label: string; match: (t: Title) => boolean }
 ];
 
 function Shows() {
+  const wl = useWatchlist();
   const [f, setF] = useState("watching");
   const [sort, setSort] = useState<"az" | "rating">("az");
   const filter = SHOW_FILTERS.find((x) => x.key === f)!;
-  const items = [...TITLES.filter(filter.match)].sort((a, b) =>
+  const library = wl.followed; // your watchlist
+  const items = [...library.filter(filter.match)].sort((a, b) =>
     sort === "az" ? a.title.localeCompare(b.title) : b.tmdb - a.tmdb
   );
 
   return (
     <div className="screen mq-page">
-      <MqHeader title="Shows" sub={`${TITLES.length} titles tracked across every status.`} />
+      <MqHeader title="Shows" sub={`${library.length} shows in your watchlist.`} />
 
       <div className="mq-toolbar">
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ flex: 1 }}>
@@ -373,7 +378,7 @@ function Shows() {
               onClick={() => setF(x.key)}
             >
               {x.label}
-              <span className="mute" style={{ fontWeight: 700 }}>{TITLES.filter(x.match).length}</span>
+              <span className="mute" style={{ fontWeight: 700 }}>{library.filter(x.match).length}</span>
             </button>
           ))}
         </div>
@@ -410,8 +415,9 @@ function Shows() {
    EXPLORE — discover
    ============================================================ */
 function Explore({ onSearch }: { onSearch: () => void }) {
+  const wl = useWatchlist();
   const [genre, setGenre] = useState<string | null>(null);
-  const pool = TITLES.filter((t) => t.status !== "watching");
+  const pool = wl.discover; // shows you don't follow yet
   const filtered = genre ? pool.filter((t) => t.genres.includes(genre)) : pool;
   const trending = [...TITLES].sort((a, b) => b.tmdb - a.tmdb).slice(0, 8);
 
@@ -464,15 +470,24 @@ function Explore({ onSearch }: { onSearch: () => void }) {
         </div>
       </MqSection>
 
-      <MqSection title={genre ? `Popular in ${genre}` : "Popular right now"} sub="Tap ＋ to add to your library">
-        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))", gap: "var(--gap)" }}>
-          {filtered.map((t) => (
-            <div key={t.id} className="flex flex-col gap-2">
-              <Poster t={t} />
-              <QuickAdd label={t.status === "upcoming" ? "Notify" : "Add"} icon={t.status === "upcoming" ? "bell" : "plus"} />
-            </div>
-          ))}
-        </div>
+      <MqSection title={genre ? `Popular in ${genre}` : "Not in your watchlist"} sub="Follow a show to add it to your library and calendar">
+        {filtered.length === 0 ? (
+          <p className="dim" style={{ fontSize: 14 }}>You're already following everything here. 🎉</p>
+        ) : (
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))", gap: "var(--gap)" }}>
+            {filtered.map((t) => (
+              <div key={t.id} className="flex flex-col gap-2">
+                <Poster t={t} />
+                <button
+                  className={`btn btn-sm ${wl.isFollowed(t.id) ? "btn-accent" : "btn-outline"}`}
+                  onClick={(e) => { e.stopPropagation(); wl.toggle(t.id); }}
+                >
+                  {wl.isFollowed(t.id) ? <><Check size={15} />Following</> : <><Plus size={15} />Follow</>}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </MqSection>
     </div>
   );
@@ -489,89 +504,137 @@ function bucketOf(t: Title): Bucket {
   return "tba";
 }
 
+const MS_DAY = 86400000;
+const TODAY_START = (() => { const d = new Date(CAL_TODAY); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+const dayOffset = (ts: number) => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return Math.round((d.getTime() - TODAY_START) / MS_DAY); };
+const fmtTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const fmtWeekday = (ts: number) => new Date(ts).toLocaleDateString("en-US", { weekday: "long" });
+const fmtFullDate = (ts: number) => new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const fmtShort = (ts: number) => new Date(ts).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
 function CalendarTab() {
-  const [view, setView] = useState<"shows" | "premieres">("shows");
+  const [view, setView] = useState<"shows" | "returning" | "new">("shows");
+  const tabs: [typeof view, string][] = [
+    ["shows", "My shows"], ["returning", "Returning series"], ["new", "New & announced"],
+  ];
 
   return (
     <div className="screen mq-page">
       <MqHeader
         title="Calendar"
-        sub="Upcoming episodes of the shows you follow, plus premieres you can track."
+        sub="Every upcoming episode from the shows you follow — plus the premieres you're tracking."
       />
 
-      <div className="segmented" style={{ alignSelf: "flex-start" }}>
-        <div className={`seg ${view === "shows" ? "seg-active" : ""}`} onClick={() => setView("shows")}>My shows</div>
-        <div className={`seg ${view === "premieres" ? "seg-active" : ""}`} onClick={() => setView("premieres")}>Premieres</div>
+      <div className="segmented" style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
+        {tabs.map(([v, label]) => (
+          <div key={v} className={`seg ${view === v ? "seg-active" : ""}`} onClick={() => setView(v)}>{label}</div>
+        ))}
       </div>
 
-      {view === "shows" ? <MyShowsCalendar /> : <PremieresCalendar />}
+      {view === "shows" ? <MyShowsFeed /> : <PremieresList kind={view} />}
     </div>
   );
 }
 
-function MyShowsCalendar() {
-  const followed = useMemo(() => [...inStatus("watching"), ...inStatus("caughtup")], []);
-  const [open, setOpen] = useState<Record<string, boolean>>({});
-  const allOpen = followed.every((t) => open[t.id]);
+/* TV-Time-style chronological feed: history above, today, then the week and
+   "Later". Scrolling up lazily loads more past weeks. */
+function MyShowsFeed() {
+  const wl = useWatchlist();
+  const [weeksBack, setWeeksBack] = useState(3);
+  const [toggled, setToggled] = useState<Set<string>>(new Set());
 
-  const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
-  const setAll = (v: boolean) => setOpen(Object.fromEntries(followed.map((t) => [t.id, v])));
+  const topRef = useRef<HTMLDivElement | null>(null);
+  const todayRef = useRef<HTMLDivElement | null>(null);
+  const prevH = useRef(0);
+
+  const eps = useMemo(() => episodeFeed(wl.followed, weeksBack, 12), [wl.followed, weeksBack]);
+  const latestKey = useMemo(() => {
+    let best: FeedEp | undefined;
+    for (const e of eps) if (e.time < CAL_NOW && (!best || e.time > best.time)) best = e;
+    return best?.key;
+  }, [eps]);
+
+  // group into per-day buckets (offset <= 6) plus a single "Later" bucket
+  const { days, later } = useMemo(() => {
+    const map = new Map<number, FeedEp[]>();
+    const later: FeedEp[] = [];
+    for (const ep of eps) {
+      const off = dayOffset(ep.time);
+      if (off >= 7) { later.push(ep); continue; }
+      (map.get(off) ?? map.set(off, []).get(off)!).push(ep);
+    }
+    const days = [...map.entries()].sort((a, b) => a[0] - b[0]);
+    return { days, later };
+  }, [eps]);
+
+  // lazy history: an observer near the top pulls in earlier weeks
+  useEffect(() => {
+    const el = topRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((ents) => {
+      if (ents[0].isIntersecting && weeksBack < 60) {
+        prevH.current = document.documentElement.scrollHeight;
+        setWeeksBack((w) => w + 3);
+      }
+    }, { rootMargin: "300px 0px 0px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [weeksBack]);
+
+  // keep the viewport steady when earlier weeks are prepended
+  useLayoutEffect(() => {
+    if (prevH.current) {
+      const delta = document.documentElement.scrollHeight - prevH.current;
+      if (delta > 0) window.scrollBy(0, delta);
+      prevH.current = 0;
+    }
+  }, [weeksBack]);
+
+  // land on "Today" on first render
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      todayRef.current?.scrollIntoView({ block: "start" });
+      window.scrollBy(0, -76);
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const isSeen = (ep: FeedEp) => !toggled.has(ep.key);
+  const toggleSeen = (ep: FeedEp) =>
+    setToggled((s) => { const n = new Set(s); n.has(ep.key) ? n.delete(ep.key) : n.add(ep.key); return n; });
+
+  const dayLabel = (off: number, ts: number) => {
+    if (off === 0) return "Today";
+    if (off === 1) return "Tomorrow";
+    if (off > 1) return fmtWeekday(ts);
+    return fmtFullDate(ts).toUpperCase();
+  };
+
+  if (wl.followed.length === 0) {
+    return <p className="dim">You're not following any shows yet.</p>;
+  }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="mute" style={{ fontSize: 13 }}>{followed.length} shows you're following</span>
-        <button className="btn btn-ghost btn-sm" onClick={() => setAll(!allOpen)}>
-          {allOpen ? "Collapse all" : "Expand all"}
-        </button>
+    <div className="cal-feed">
+      <div ref={topRef} className="cal-sentinel">
+        {weeksBack < 60 ? "Loading earlier episodes…" : "That's the start of your history."}
       </div>
-      {followed.map((t) => (
-        <MyShowRow key={t.id} t={t} open={!!open[t.id]} onToggle={() => toggle(t.id)} />
-      ))}
-    </div>
-  );
-}
 
-function MyShowRow({ t, open, onToggle }: { t: Title; open: boolean; onToggle: () => void }) {
-  const eps = useMemo(() => scheduledEpisodes(t), [t]);
-  const summary = eps.length
-    ? `${eps.length} upcoming · next ${eps[0].date}`
-    : t.waitingFor
-      ? `Caught up · ${t.waitingFor}`
-      : "No episodes scheduled";
-
-  return (
-    <div className="card mq-show">
-      <button className="mq-show-head" onClick={onToggle}>
-        <div className="mq-show-art" style={{ background: posterBg(t.title) }}><div className="poster-sheen" /></div>
-        <div className="flex-1 min-w-0" style={{ textAlign: "left" }}>
-          <div className="flex items-center gap-2">
-            <span className="mq-row-title truncate" style={{ marginTop: 0 }}>{t.title}</span>
-            <NetworkLogo network={t.network} />
-          </div>
-          <div className="dim truncate" style={{ fontSize: 12.5, marginTop: 2 }}>{summary}</div>
+      {days.map(([off, list]) => (
+        <div key={off} ref={off === 0 ? todayRef : undefined} className="cal-day">
+          <div className="cal-daysep"><span>{dayLabel(off, list[0].time)}</span></div>
+          {list.map((ep) => (
+            <CalEpRow key={ep.key} ep={ep} latestKey={latestKey} seen={isSeen(ep)} onToggle={() => toggleSeen(ep)} />
+          ))}
         </div>
-        {eps.length > 0 && <span className="mq-show-count">{eps.length}</span>}
-        <ChevronDown size={18} className="mute" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .2s ease", flex: "0 0 auto" }} />
-      </button>
+      ))}
 
-      {open && (
-        <div className="mq-eps">
-          {eps.length === 0 && (
-            <div className="mq-ep" style={{ cursor: "default" }}>
-              <div className="mq-ep-date mute">—</div>
-              <div className="flex-1" style={{ fontSize: 13.5 }}>
-                {t.waitingFor ? `New season not dated yet — ${t.waitingFor}` : "Nothing scheduled right now."}
-              </div>
-            </div>
-          )}
-          {eps.map((e) => (
-            <div key={`${e.s}-${e.e}`} className="mq-ep">
-              <div className={`mq-ep-date ${e.soon ? "soon" : ""}`}>{e.date}</div>
-              <div className="mute" style={{ width: 46, flex: "0 0 auto", fontSize: 12.5 }}>S{e.s}·E{e.e}</div>
-              <div className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 600 }}>{e.title}</div>
-              {e.soon && <span className="badge badge-accent">Soon</span>}
-            </div>
+      {later.length > 0 && (
+        <div className="cal-day">
+          <div className="cal-daysep"><span>Later</span></div>
+          {later.map((ep) => (
+            <CalEpRow key={ep.key} ep={ep} latestKey={latestKey} later seen={isSeen(ep)} onToggle={() => toggleSeen(ep)} />
           ))}
         </div>
       )}
@@ -579,30 +642,78 @@ function MyShowRow({ t, open, onToggle }: { t: Title; open: boolean; onToggle: (
   );
 }
 
-function PremieresCalendar() {
-  const [v, setV] = useState<"all" | "returning" | "new">("all");
-  const items = inStatus("upcoming").filter((t) => {
-    if (v === "returning") return /Season/.test(t.premiereLabel ?? "");
-    if (v === "new") return !/Season/.test(t.premiereLabel ?? "");
-    return true;
-  });
+function CalEpRow({ ep, latestKey, later = false, seen, onToggle }: {
+  ep: FeedEp; latestKey?: string; later?: boolean; seen: boolean; onToggle: () => void;
+}) {
+  const { open } = useUI();
+  const past = ep.time < CAL_NOW;
+  const days = dayOffset(ep.time);
+
+  const badge = () => {
+    if (ep.key === latestKey) return <span className="badge badge-soft">Latest</span>;
+    if (ep.premiere) return <span className="badge badge-soft">Premiere</span>;
+    if (past && CAL_NOW - ep.time < 3 * MS_DAY) return <span className="badge badge-accent">New</span>;
+    if (past) return <span className="badge badge-aired">Aired</span>;
+    return null;
+  };
+
+  return (
+    <div className="cal-ep" onClick={() => open(ep.titleId)}>
+      <div className="cal-ep-art" style={{ background: posterBg(ep.show) }}><div className="poster-sheen" /></div>
+      <div className="cal-ep-main">
+        <span className="cal-showpill">{ep.show}<ChevronRight size={12} /></span>
+        <div className="cal-ep-se">
+          S{pad2(ep.s)} · E{pad2(ep.e)}
+          {ep.premiere && !past && <span className="badge badge-soft" style={{ marginLeft: 8 }}>Premiere</span>}
+        </div>
+        <div className="cal-ep-name mute">{ep.name}</div>
+      </div>
+      <div className="cal-ep-right">
+        {later ? (
+          <>
+            <div className="cal-days">{days}<span>days</span></div>
+            <div className="cal-when mute">{fmtShort(ep.time)} · {fmtTime(ep.time)}</div>
+          </>
+        ) : past ? (
+          <div className="cal-past" onClick={(e) => e.stopPropagation()}>
+            {badge()}
+            <button className={`check ${seen ? "on" : ""}`} onClick={onToggle} title={seen ? "Watched" : "Mark watched"}>
+              <Check size={15} strokeWidth={3} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="cal-time">{fmtTime(ep.time)}</div>
+            <NetworkLogo network={ep.network} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PremieresList({ kind }: { kind: "returning" | "new" }) {
+  const wl = useWatchlist();
+  const items = wl.inStatus("upcoming").filter((t) =>
+    kind === "returning" ? /Season/.test(t.premiereLabel ?? "") : !/Season/.test(t.premiereLabel ?? "")
+  );
 
   const groups: { key: Bucket; title: string; sub: string }[] = [
     { key: "month", title: "This month", sub: "July 2026" },
     { key: "later", title: "Later in 2026", sub: "Dated premieres" },
-    { key: "tba", title: "Announced · no date yet", sub: "Track it now, we'll tell you when it's set" },
+    { key: "tba", title: "Announced · no date yet", sub: "We'll tell you the moment it's dated" },
   ];
+
+  if (items.length === 0) {
+    return (
+      <p className="dim" style={{ fontSize: 14 }}>
+        Nothing {kind === "returning" ? "returning" : "new"} from the shows you follow right now.
+      </p>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="segmented" style={{ alignSelf: "flex-start" }}>
-        {(["all", "returning", "new"] as const).map((x) => (
-          <div key={x} className={`seg ${v === x ? "seg-active" : ""}`} onClick={() => setV(x)}>
-            {x === "all" ? "Everything" : x === "returning" ? "Returning series" : "New & announced"}
-          </div>
-        ))}
-      </div>
-
       {groups.map((g) => {
         const rows = items.filter((t) => bucketOf(t) === g.key);
         if (!rows.length) return null;
@@ -638,17 +749,12 @@ function MqUpcomingRow({ t, announced }: { t: Title; announced: boolean }) {
         <div className="mq-row-title truncate" style={{ fontSize: 16 }}>{t.title}</div>
         <div className="dim truncate" style={{ fontSize: 13 }}>{t.premiereLabel} · {t.genres.slice(0, 2).join(", ")}</div>
       </div>
-      <div className="hidden sm:flex items-center gap-2">
-        <button
-          className={`btn btn-sm ${notify ? "btn-accent" : "btn-outline"}`}
-          onClick={(e) => { e.stopPropagation(); setNotify((v) => !v); }}
-        >
-          <Bell size={15} />{notify ? "Tracking" : "Notify me"}
-        </button>
-        <button className="btn btn-ghost btn-sm" onClick={(e) => e.stopPropagation()}>
-          <Plus size={15} />Watchlist
-        </button>
-      </div>
+      <button
+        className={`btn btn-sm hidden sm:inline-flex ${notify ? "btn-accent" : "btn-outline"}`}
+        onClick={(e) => { e.stopPropagation(); setNotify((v) => !v); }}
+      >
+        <Bell size={15} />{notify ? "Tracking" : "Notify me"}
+      </button>
       <button
         className={`sm:hidden check ${notify ? "on" : ""}`}
         onClick={(e) => { e.stopPropagation(); setNotify((v) => !v); }}
