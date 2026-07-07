@@ -1,8 +1,11 @@
-import { Check, RotateCcw, Sparkles, X } from "lucide-react";
+import { Bell, Check, Mail, RotateCcw, Sparkles, X } from "lucide-react";
 import {
   useSettings, setSetting, resetSettings,
   type AccentName, type DensityName, type ThemeName,
 } from "@/lib/settings";
+import {
+  NOTIFICATION_TYPES, prefFor, useNotificationPrefs, useSetPref,
+} from "@/lib/notificationPrefs";
 
 /* Settings sheet — the prototype's DesignLab stripped to production scope:
    theme (system/dark/oled/light), accent, density. Look/concept/radius were
@@ -39,6 +42,45 @@ const ACCENTS: { v: AccentName; c: string }[] = [
   { v: "emerald", c: "#35d39a" },
   { v: "amber", c: "#fbbf3c" },
 ];
+
+function Toggle({ on, onClick, icon: Icon, label }: { on: boolean; onClick: () => void; icon: typeof Bell; label: string }) {
+  return (
+    <button
+      className={`chip ${on ? "chip-active" : ""}`}
+      onClick={onClick}
+      aria-pressed={on}
+      title={`${label}: ${on ? "on" : "off"}`}
+    >
+      <Icon size={13} />{label}
+    </button>
+  );
+}
+
+function NotificationsSection() {
+  const { data: prefs } = useNotificationPrefs();
+  const setPref = useSetPref();
+  return (
+    <Row label="Notifications">
+      <div className="flex flex-col gap-3">
+        {NOTIFICATION_TYPES.map((t) => {
+          const p = prefFor(prefs, t.type);
+          return (
+            <div key={t.type} className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div style={{ fontSize: 13.5, fontWeight: 650 }}>{t.label}</div>
+                <div className="mute truncate" style={{ fontSize: 12 }}>{t.sub}</div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Toggle on={p.inapp} icon={Bell} label="App" onClick={() => setPref.mutate({ type: t.type, pref: { ...p, inapp: !p.inapp } })} />
+                <Toggle on={p.email} icon={Mail} label="Email" onClick={() => setPref.mutate({ type: t.type, pref: { ...p, email: !p.email } })} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Row>
+  );
+}
 
 export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const settings = useSettings();
@@ -101,6 +143,8 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
               ]}
             />
           </Row>
+
+          <NotificationsSection />
 
           <div className="card p-4 flex flex-col gap-2" style={{ background: "var(--surface-2)" }}>
             <div style={{ fontWeight: 700, fontSize: 13.5 }}>Live preview</div>

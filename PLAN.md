@@ -116,7 +116,7 @@ Tick a box **in the same commit** that completes it.
 
 - [x] **P3-C1** `feat(notifications): in-app inbox + bell + read state`
 - [ ] **P3-C2** `feat(edge): new-episode alert job → inbox rows + Resend email`
-- [ ] **P3-C3** `feat(notifications): preferences UI (per-type in-app/email toggles)`
+- [x] **P3-C3** `feat(notifications): preferences UI (per-type in-app/email toggles)`
 - [ ] **P3-C4** `feat(import): in-app TV Time zip importer (upload → job → report)`
 - [ ] **P3-C5** `feat(invites): create/share invite codes UI`
 - [ ] **P3-C6** `feat(export): download-my-data (JSON + CSV)`
