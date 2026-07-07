@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
-import { ChevronLeft, ChevronRight, Share2 } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Clock, Eye, Share2, Star, Tv, Users } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
+import { useUserStats, timeSpentLabel } from "@/lib/stats";
 import { tmdbImg } from "@/lib/tmdb";
 import { Stars } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
@@ -45,6 +46,7 @@ function RatingRow({ r, onOpen }: { r: RatedRow; onOpen: () => void }) {
 export default function YouPage() {
   const { profile } = useAuth();
   const { data: ratings = [] } = useMyRatings();
+  const { data: stats } = useUserStats();
   const [sort, setSort] = useState<RateSort>("new");
   const [page, setPage] = useState(0);
   const [, setSearchParams] = useSearchParams();
@@ -104,7 +106,24 @@ export default function YouPage() {
         </div>
       </div>
 
-      {/* Stats grid lands in P2-C9 */}
+      {stats && (
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+          {[
+            { icon: Eye, label: "Episodes watched", value: stats.episodes_watched.toLocaleString() },
+            { icon: Clock, label: "Time spent", value: timeSpentLabel(stats.minutes_watched) },
+            { icon: Tv, label: "Shows followed", value: String(stats.shows_followed) },
+            { icon: CalendarClock, label: "Coming soon", value: String(stats.coming_soon) },
+            { icon: Users, label: "Friends", value: String(stats.friends) },
+            { icon: Star, label: "Avg. rating", value: stats.avg_rating != null ? stats.avg_rating.toFixed(1) : "—" },
+          ].map((s) => (
+            <div key={s.label} className="card p-4 flex flex-col gap-1">
+              <s.icon size={18} style={{ color: "var(--accent)" }} />
+              <div style={{ fontSize: 22, fontWeight: 800 }} className="mt-1">{s.value}</div>
+              <div className="mute" style={{ fontSize: 12 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <section className="flex flex-col gap-4">
         <div className="mq-sechead">
