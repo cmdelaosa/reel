@@ -150,10 +150,18 @@ Grants deterministic: owner CRUD to authenticated, `grant all` to service_role
 ## P0-C8 `feat(db): friendships, notifications, prefs, import_jobs schema + RLS`
 
 Migration `0004_social_system.sql` per ARCHITECTURE → Social & system.
-- Friendships policies: participants read; insert by `requested_by = auth.uid()` with status
-  `pending`; update (accept) only by the *other* participant; delete by either.
-- Helper `is_friend(u1 uuid, u2 uuid) returns boolean` security definer (accepted row, either order).
-- Notifications/prefs/import_jobs: owner-only. Import jobs insert-own, update via service role.
+- Friendships: canonical `a < b` + `requested_by in (a,b)` checks. Policies —
+  participants read; insert by `requested_by = auth.uid()` status `pending`;
+  update gated `using(pending, participant, requested_by <> auth.uid())` +
+  `with check(accepted, …)` so only the *other* participant accepts and the
+  requester cannot self-accept; delete by either. Index `friendships(b)` (pk
+  covers `a=me`).
+- Helper `is_friend(u1, u2)` security definer via `least/greatest` (accepted, either order).
+- notifications: owner select/update/delete; **no self-insert** (service role
+  inserts system notifications). notification_prefs: owner `for all`.
+  import_jobs: owner select/insert; **no owner update/delete** (the worker
+  advances status via service role). Deterministic grants; `grant all` to
+  service_role on all four.
 
 **Acceptance criteria**: reset green; the friendship state machine enforced by policies
 (A requests → B accepts; A cannot self-accept).
