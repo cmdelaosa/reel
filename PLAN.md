@@ -93,7 +93,7 @@ Tick a box **in the same commit** that completes it.
 
 ### Phase 1 — Auth + shell ([docs/phases/PHASE-1.md](docs/phases/PHASE-1.md))
 
-- [ ] **P1-C1** `feat(auth): supabase auth client, session store, magic-link + Google sign-in screen`
+- [x] **P1-C1** `feat(auth): supabase auth client, session store, magic-link + Google sign-in screen`
 - [ ] **P1-C2** `feat(auth): invite-code gate on first sign-in`
 - [ ] **P1-C3** `feat(app): marquee shell — top tabs, routes, mobile dock, settings sheet`
 - [ ] **P1-C4** `feat(app): onboarding — display name, handle, avatar upload`

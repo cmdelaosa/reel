@@ -16,7 +16,14 @@ Prototype references: `prototype/src/marquee.tsx` (shell), `prototype/src/theme.
 2. Routes: `/login` (public) — glass card, email field → `signInWithOtp`, divider, Google button
    → `signInWithOAuth`. Confirmation state ("Check your inbox"). Errors inline.
 3. Route guard: everything except `/login` requires a session (redirect keeps `from` location).
-4. Local dev: document in the phase file that magic links appear in `supabase status`'s Inbucket URL.
+4. Local dev: magic-link emails never leave the machine — they land in the local
+   mail catcher (Mailpit, formerly Inbucket) at the `MAILPIT_URL`/`INBUCKET_URL`
+   printed by `supabase status` (default http://127.0.0.1:54324). Open the
+   message and click the link, or grab it via the API:
+   `curl -s http://127.0.0.1:54324/api/v1/messages`. The app dev server must run
+   on an allow-listed port (4321, or 4322 via the `app-auth` launch config) so
+   the link can redirect back — see `[auth] additional_redirect_urls` in
+   `supabase/config.toml`.
 5. Enable Google provider in Supabase dashboard (human step — leave a `TODO(human)` checklist in the commit body).
 
 **Acceptance criteria**: full magic-link roundtrip works locally (Inbucket); Google works once

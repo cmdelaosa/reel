@@ -47,6 +47,22 @@ export const episodeRowSchema = z.object({
 });
 export type EpisodeRow = z.infer<typeof episodeRowSchema>;
 
+export const profileRowSchema = z.object({
+  id: z.string().uuid(),
+  handle: z.string(),
+  display_name: z.string(),
+  avatar_url: z.string().nullable(),
+  bio: z.string().nullable(),
+  country: z.string().nullable(),
+  is_private: z.boolean(),
+  created_at: z.string(),
+});
+export type ProfileRow = z.infer<typeof profileRowSchema>;
+
+/** Placeholder handles come from the signup trigger ('user_' + 16 hex);
+ *  onboarding (P1-C4) replaces them and this returns false. */
+export const isPlaceholderHandle = (handle: string) => /^user_[0-9a-f]{16}$/.test(handle);
+
 export const searchResponseSchema = z.object({ results: z.array(titleRowSchema) });
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
 
