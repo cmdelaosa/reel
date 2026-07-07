@@ -97,7 +97,9 @@ since the schema is kept movie-ready from the start.
 
 ## Open items (decide during build)
 
-- App name + domain (needed before Phase 1 web deploy).
+- ~~App name + domain~~ → **resolved (P1 grill)**: name stays **Reel**; private
+  beta ships on a free `*.vercel.app` subdomain (exact URL fixed at first deploy —
+  a custom domain later only adds an entry to the Supabase auth allowlist).
 - Exact set of notification types and their default on/off.
 - FilmAffinity scrape feasibility (auth, pagination, HTML stability) — validate in a Phase 3 spike.
 - Whether a small folders/collections feature (TV Time "folders") is worth carrying over.
