@@ -101,7 +101,7 @@ Tick a box **in the same commit** that completes it.
 
 ### Phase 2 — Core library loop ([docs/phases/PHASE-2.md](docs/phases/PHASE-2.md))
 
-- [ ] **P2-C1** `feat(search): ⌘K palette searching TMDB via edge proxy`
+- [x] **P2-C1** `feat(search): ⌘K palette searching TMDB via edge proxy`
 - [ ] **P2-C2** `feat(library): follow/unfollow (Add) + watchlist model + Shows grid with status buckets`
 - [ ] **P2-C3** `feat(detail): show detail sheet — TMDB data, seasons/episodes, both ratings`
 - [ ] **P2-C4** `feat(watch): mark episode watched (optimistic), mark-up-to-here confirm, undo`

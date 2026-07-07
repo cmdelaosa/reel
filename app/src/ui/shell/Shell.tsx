@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, Outlet, useNavigate, useSearchParams } from "react-router";
 import {
   Bell, CalendarClock, Clapperboard, Compass, LayoutGrid, Play, Search, Sliders, User,
 } from "lucide-react";
@@ -21,8 +21,19 @@ const TABS = [
 export function Shell() {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  /** Open the detail sheet for a TMDB id via the global ?title= param (P2-C3). */
+  const openTitle = (tmdbId: number) => {
+    setPaletteOpen(false);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("title", String(tmdbId));
+      return next;
+    });
+  };
 
   /* ⌘K / Ctrl-K opens the palette from anywhere */
   useEffect(() => {
@@ -97,7 +108,7 @@ export function Shell() {
       </nav>
 
       {/* ---- Overlays ---- */}
-      {paletteOpen && <Palette onClose={() => setPaletteOpen(false)} />}
+      {paletteOpen && <Palette onClose={() => setPaletteOpen(false)} onOpen={openTitle} />}
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
     </div>
   );
