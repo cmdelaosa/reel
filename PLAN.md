@@ -108,7 +108,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P2-C5** `feat(ratings): rate shows; ratings list in You (sort + 15/page)`
 - [x] **P2-C6** `feat(upnext): up-next derivation + Tonight tab (fresh episodes, premieres, continue rail)`
 - [x] **P2-C7** `feat(calendar): chronological my-shows feed with lazy history + returning/new views`
-- [ ] **P2-C8** `feat(edge): scheduled episode-refresh job (air dates, new seasons)`
+- [x] **P2-C8** `feat(edge): scheduled episode-refresh job (air dates, new seasons)`
 - [ ] **P2-C9** `feat(you): profile stats (episodes, time, shows, coming soon, avg rating)`
 - [ ] **P2-C10** `feat(notify): per-title "Notify me" flag` → **Dogfood milestone**
 
