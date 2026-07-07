@@ -63,6 +63,27 @@ export type ProfileRow = z.infer<typeof profileRowSchema>;
  *  onboarding (P1-C4) replaces them and this returns false. */
 export const isPlaceholderHandle = (handle: string) => /^user_[0-9a-f]{16}$/.test(handle);
 
+/** Row shape of rpc_library_rollup — the followed library + status inputs. */
+export const libraryRowSchema = z.object({
+  title_id: z.string().uuid(),
+  tmdb_id: z.number().int(),
+  name: z.string(),
+  poster_path: z.string().nullable(),
+  first_air_date: z.string().nullable(),
+  tmdb_status: z.string().nullable(),
+  genres: z.array(z.string()),
+  network: z.string().nullable(),
+  vote_average: z.number().nullable(),
+  favorite: z.boolean(),
+  notify: z.boolean(),
+  added_at: z.string(),
+  aired_count: z.number().int(),
+  watched_count: z.number().int(),
+  last_watched_at: z.string().nullable(),
+  next_air_datetime: z.string().nullable(),
+});
+export type LibraryRow = z.infer<typeof libraryRowSchema>;
+
 export const searchResponseSchema = z.object({ results: z.array(titleRowSchema) });
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
 
