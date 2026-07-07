@@ -8,6 +8,7 @@ import { FriendStack } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 import { FriendActivityCard } from "@/features/explore/FriendActivityCard";
 import { DiscoverSections } from "@/features/explore/DiscoverSections";
+import { CollectionsSection } from "@/features/explore/CollectionsSection";
 
 /* Explore — friend-powered sections. They only appear once you have ≥2 friends
    (no sad empties on day one). Trending/collections land in Phase 5. */
@@ -91,6 +92,8 @@ export default function ExplorePage() {
           </div>
         </section>
       )}
+
+      <CollectionsSection />
 
       <FriendActivityCard enabled={hasFriends} />
     </div>

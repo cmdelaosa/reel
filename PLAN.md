@@ -131,7 +131,7 @@ Tick a box **in the same commit** that completes it.
 ### Phase 5 — Explore + polish ([docs/phases/PHASE-5.md](docs/phases/PHASE-5.md))
 
 - [x] **P5-C1** `feat(explore): trending via TMDB, genre chips, discover grid with Add`
-- [ ] **P5-C2** `feat(explore): curated collections`
+- [x] **P5-C2** `feat(explore): curated collections`
 - [ ] **P5-C3** `feat(ui): rails with edge arrows, network logos, empty states, skeletons`
 - [ ] **P5-C4** `fix(ui): error boundaries, retry states, offline toast`
 - [ ] **P5-C5** `feat(a11y): keyboard nav, focus traps in sheets, reduced-motion`

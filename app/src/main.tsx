@@ -12,6 +12,7 @@ import { RequireOnboarded } from "@/features/auth/RequireOnboarded";
 import WelcomePage from "@/features/auth/WelcomePage";
 import CalendarPage from "@/features/calendar/CalendarPage";
 import ExplorePage from "@/features/explore/ExplorePage";
+import CollectionPage from "@/features/explore/CollectionPage";
 import ExportPage from "@/features/export/ExportPage";
 import ImportPage from "@/features/import/ImportPage";
 import KitPage from "@/features/kit/KitPage";
@@ -61,6 +62,7 @@ const router = createBrowserRouter([
       { path: "tonight", element: <TonightPage /> },
       { path: "shows", element: <ShowsPage /> },
       { path: "explore", element: <ExplorePage /> },
+      { path: "collection/:slug", element: <CollectionPage /> },
       { path: "calendar", element: <CalendarPage /> },
       { path: "you", element: <YouPage /> },
       { path: "import", element: <ImportPage /> },
