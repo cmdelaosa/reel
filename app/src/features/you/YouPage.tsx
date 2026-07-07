@@ -5,6 +5,7 @@ import { useAuth } from "@/features/auth/AuthProvider";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
 import { useUserStats, timeSpentLabel } from "@/lib/stats";
 import { InvitesCard } from "@/features/you/InvitesCard";
+import { FriendsSection } from "@/features/social/FriendsSection";
 import { tmdbImg } from "@/lib/tmdb";
 import { Stars } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
@@ -125,6 +126,8 @@ export default function YouPage() {
           ))}
         </div>
       )}
+
+      <FriendsSection />
 
       <InvitesCard />
 
