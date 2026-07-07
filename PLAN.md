@@ -135,7 +135,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P5-C3** `feat(ui): rails with edge arrows, network logos, empty states, skeletons`
 - [x] **P5-C4** `fix(ui): error boundaries, retry states, offline toast`
 - [x] **P5-C5** `feat(a11y): keyboard nav, focus traps in sheets, reduced-motion`
-- [ ] **P5-C6** `test(e2e): playwright smoke — login, add show, mark watched, calendar`
+- [x] **P5-C6** `test(e2e): playwright smoke — login, add show, mark watched, calendar`
 
 ### Phase 6 — Native + public ([docs/phases/PHASE-6.md](docs/phases/PHASE-6.md))
 

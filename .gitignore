@@ -10,3 +10,9 @@ app/.env.local
 app/.env*.local
 app/*.log
 app/.vite/
+
+# Playwright
+app/test-results/
+app/playwright-report/
+app/blob-report/
+app/.playwright/
