@@ -27,7 +27,13 @@ export default function InvitePage() {
   const { data: invited } = useInvited();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(() => {
+    try {
+      return sessionStorage.getItem("reel.invite") ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,8 +54,13 @@ export default function InvitePage() {
       );
       return;
     }
+    try {
+      sessionStorage.removeItem("reel.invite");
+    } catch {
+      /* ignore */
+    }
     if (session) queryClient.setQueryData(invitedQueryKey(session.user.id), true);
-    navigate("/", { replace: true }); // → onboarding once P1-C4 lands
+    navigate("/", { replace: true }); // → onboarding (RequireOnboarded) or the app
   };
 
   return (

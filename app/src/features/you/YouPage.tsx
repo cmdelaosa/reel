@@ -4,6 +4,7 @@ import { CalendarClock, ChevronLeft, ChevronRight, Clock, Eye, Share2, Star, Tv,
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
 import { useUserStats, timeSpentLabel } from "@/lib/stats";
+import { InvitesCard } from "@/features/you/InvitesCard";
 import { tmdbImg } from "@/lib/tmdb";
 import { Stars } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
@@ -124,6 +125,8 @@ export default function YouPage() {
           ))}
         </div>
       )}
+
+      <InvitesCard />
 
       <section className="flex flex-col gap-4">
         <div className="mq-sechead">

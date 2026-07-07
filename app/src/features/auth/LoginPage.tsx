@@ -31,6 +31,17 @@ function GoogleMark() {
 export default function LoginPage() {
   const { session } = useAuth();
   const location = useLocation();
+
+  // Stash an invite code from the share link so the /invite gate can prefill
+  // it after the auth redirect (which drops the query string).
+  const inviteParam = new URLSearchParams(location.search).get("invite");
+  if (inviteParam) {
+    try {
+      sessionStorage.setItem("reel.invite", inviteParam);
+    } catch {
+      /* storage unavailable */
+    }
+  }
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
