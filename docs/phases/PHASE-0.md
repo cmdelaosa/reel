@@ -133,10 +133,15 @@ Migration `0002_metadata.sql` per ARCHITECTURE → Metadata cache. Include:
 
 ## P0-C7 `feat(db): library_entries, watch_events, ratings schema + RLS`
 
-Migration `0003_userdata.sql` per ARCHITECTURE → User data. Owner-only policies
-(`using (user_id = auth.uid()) with check (user_id = auth.uid())`) for all four verbs.
-Indexes: `watch_events(user_id, episode_id)`, `library_entries(user_id) where followed`,
-`ratings(user_id, created_at desc)`.
+Migration `0003_userdata.sql` per ARCHITECTURE → User data. Owner-only via one
+`for all` policy per table (`using (user_id = auth.uid()) with check (user_id =
+auth.uid())`). user_id → `profiles(id)` on delete cascade.
+Indexes: `watch_events(user_id, episode_id)` is already the UNIQUE index (not
+duplicated); added `library_entries(user_id) where followed` (partial),
+`ratings(user_id, created_at desc)`, plus FK indexes `library_entries(title_id)`,
+`watch_events(episode_id)`, `ratings(title_id)` (cascades + friend joins).
+Grants deterministic: owner CRUD to authenticated, `grant all` to service_role
+(the P0-C10 importer writes these).
 
 **Acceptance criteria**: reset green; cross-user select returns 0 rows under impersonation.
 
