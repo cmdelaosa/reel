@@ -1,0 +1,132 @@
+// alerts — scheduled edge function (P3-C2), runs daily after episode-refresh.
+//
+// For every episode of a followed show that aired in the last 24h and hasn't
+// been notified to that follower yet: insert one `notifications` inbox row
+// (respecting notification_prefs.inapp, default on) and record it in
+// `notifications_sent` so repeated runs are idempotent. Users whose
+// notification_prefs.email is on for `new_episode` get ONE digest email per run
+// via Resend (skipped with a log if RESEND_API_KEY is absent).
+//
+// AUTH: headless — requires the service-role bearer.
+// SCHEDULE: pg_cron daily (a bit after episode-refresh), same pattern as that
+// function's header.
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// deno-lint-ignore no-explicit-any
+type Any = any;
+
+interface Pending {
+  user_id: string;
+  episode_id: string;
+  title_id: string;
+  tmdb_id: number;
+  show_name: string;
+  season_number: number;
+  episode_number: number;
+  episode_name: string | null;
+}
+
+const EMAIL_FROM = "Reel <onboarding@resend.dev>"; // replace with a verified sender once a domain is set
+
+function digestHtml(rows: Pending[]): string {
+  const items = rows
+    .map(
+      (r) =>
+        `<li><strong>${r.show_name}</strong> — S${r.season_number} · E${r.episode_number}${r.episode_name ? ` “${r.episode_name}”` : ""}</li>`,
+    )
+    .join("");
+  return `<p>New episodes from shows you follow:</p><ul>${items}</ul><p>— Reel</p>`;
+}
+
+function digestText(rows: Pending[]): string {
+  const items = rows
+    .map((r) => `• ${r.show_name} — S${r.season_number}E${r.episode_number}${r.episode_name ? ` "${r.episode_name}"` : ""}`)
+    .join("\n");
+  return `New episodes from shows you follow:\n${items}\n\n— Reel`;
+}
+
+Deno.serve(async (req) => {
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  if ((req.headers.get("Authorization") ?? "") !== `Bearer ${serviceKey}`) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
+  }
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
+  const resendKey = Deno.env.get("RESEND_API_KEY");
+
+  const { data: pending, error } = await admin.rpc("pending_new_episode_alerts");
+  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  const rows = (pending ?? []) as Pending[];
+
+  const report = { pending: rows.length, inappInserted: 0, emailsSent: 0, emailSkipped: 0, users: 0 };
+  if (rows.length === 0) return new Response(JSON.stringify(report), { headers: { "content-type": "application/json" } });
+
+  const userIds = [...new Set(rows.map((r) => r.user_id))];
+  report.users = userIds.length;
+
+  // prefs for new_episode (absent row → inapp on, email off)
+  const { data: prefRows } = await admin
+    .from("notification_prefs")
+    .select("user_id, inapp, email")
+    .eq("type", "new_episode")
+    .in("user_id", userIds);
+  const prefs = new Map((prefRows ?? []).map((p: Any) => [p.user_id, p]));
+  const inappOn = (uid: string) => prefs.get(uid)?.inapp ?? true;
+  const emailOn = (uid: string) => prefs.get(uid)?.email ?? false;
+
+  // in-app rows + dedupe ledger (always record, so we don't re-alert)
+  const notifRows = rows
+    .filter((r) => inappOn(r.user_id))
+    .map((r) => ({
+      user_id: r.user_id,
+      type: "new_episode",
+      payload: {
+        tmdb_id: r.tmdb_id,
+        show_name: r.show_name,
+        season_number: r.season_number,
+        episode_number: r.episode_number,
+        episode_name: r.episode_name,
+      },
+    }));
+  if (notifRows.length) {
+    const { error: ne } = await admin.from("notifications").insert(notifRows);
+    if (ne) return new Response(JSON.stringify({ error: ne.message }), { status: 500 });
+    report.inappInserted = notifRows.length;
+  }
+
+  const { error: se } = await admin
+    .from("notifications_sent")
+    .insert(rows.map((r) => ({ user_id: r.user_id, episode_id: r.episode_id })));
+  if (se) return new Response(JSON.stringify({ error: se.message }), { status: 500 });
+
+  // one digest email per user who opted in
+  const emailUsers = userIds.filter(emailOn);
+  if (emailUsers.length > 0) {
+    if (!resendKey) {
+      report.emailSkipped = emailUsers.length; // coded; pending RESEND_API_KEY
+    } else {
+      // resolve emails from auth.users
+      const { data: authList } = await admin.auth.admin.listUsers();
+      const emailById = new Map((authList?.users ?? []).map((u: Any) => [u.id, u.email]));
+      for (const uid of emailUsers) {
+        const to = emailById.get(uid);
+        if (!to) continue;
+        const mine = rows.filter((r) => r.user_id === uid);
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${resendKey}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            from: EMAIL_FROM,
+            to,
+            subject: `${mine.length} new ${mine.length === 1 ? "episode" : "episodes"} from your shows`,
+            html: digestHtml(mine),
+            text: digestText(mine),
+          }),
+        });
+        if (res.ok) report.emailsSent++;
+      }
+    }
+  }
+
+  return new Response(JSON.stringify(report), { headers: { "content-type": "application/json" } });
+});
