@@ -95,7 +95,7 @@ Tick a box **in the same commit** that completes it.
 
 - [x] **P1-C1** `feat(auth): supabase auth client, session store, magic-link + Google sign-in screen`
 - [x] **P1-C2** `feat(auth): invite-code gate on first sign-in`
-- [ ] **P1-C3** `feat(app): marquee shell — top tabs, routes, mobile dock, settings sheet`
+- [x] **P1-C3** `feat(app): marquee shell — top tabs, routes, mobile dock, settings sheet`
 - [ ] **P1-C4** `feat(app): onboarding — display name, handle, avatar upload`
 - [ ] **P1-C5** `chore: deploy web app (Vercel) + auth redirect config` → **login on prod URL**
 
@@ -147,4 +147,5 @@ Outline only — see the phase file. Specced when Phase 5 ships.
 - **No rewatch tracking** in v1 (`watch_events` unique per user+episode; column reserved).
 - **Episode-level ratings** exist in schema; UI ships show-level only until after Phase 5.
 - The classic (sidebar) shell and the Design Lab are **prototype-only** — production ships the
-  Marquee shell with the glass look, plus light/dark + accent in Settings.
+  Marquee shell with the glass look, plus theme (system/dark/OLED/light), accent and density
+  in Settings (P1 grill decision; radius stays prototype-only).

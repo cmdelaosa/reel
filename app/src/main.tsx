@@ -1,17 +1,22 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { RouterProvider } from "react-router/dom";
-import App from "@/App";
 import { AuthProvider } from "@/features/auth/AuthProvider";
 import InvitePage from "@/features/auth/InvitePage";
 import LoginPage from "@/features/auth/LoginPage";
 import { RequireAuth } from "@/features/auth/RequireAuth";
 import { RequireInvited } from "@/features/auth/RequireInvited";
+import CalendarPage from "@/features/calendar/CalendarPage";
+import ExplorePage from "@/features/explore/ExplorePage";
 import KitPage from "@/features/kit/KitPage";
+import ShowsPage from "@/features/shows/ShowsPage";
+import TonightPage from "@/features/tonight/TonightPage";
+import YouPage from "@/features/you/YouPage";
+import { Shell } from "@/ui/shell/Shell";
 import "@/styles/index.css";
-import "@/lib/settings"; // applies persisted theme/accent to <html> on boot
+import "@/lib/settings"; // applies persisted theme/accent/density to <html> on boot
 
 const queryClient = new QueryClient();
 
@@ -31,10 +36,18 @@ const router = createBrowserRouter([
     element: (
       <RequireAuth>
         <RequireInvited>
-          <App />
+          <Shell />
         </RequireInvited>
       </RequireAuth>
     ),
+    children: [
+      { index: true, element: <Navigate to="/tonight" replace /> },
+      { path: "tonight", element: <TonightPage /> },
+      { path: "shows", element: <ShowsPage /> },
+      { path: "explore", element: <ExplorePage /> },
+      { path: "calendar", element: <CalendarPage /> },
+      { path: "you", element: <YouPage /> },
+    ],
   },
 ]);
 

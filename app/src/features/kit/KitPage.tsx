@@ -25,7 +25,7 @@ const FIXTURES: TitleCard[] = [
   { id: "unknown-net", name: "Local Heroes", year: "2025", genres: ["Documentary"], network: "Canal 9", voteAverage: 0 },
 ];
 
-const THEMES: ThemeName[] = ["dark", "oled", "light"];
+const THEMES: ThemeName[] = ["system", "dark", "oled", "light"];
 const ACCENTS: AccentName[] = ["coral", "violet", "emerald", "amber"];
 const NETWORKS = ["Netflix", "Apple TV+", "HBO", "FX", "AMC", "Disney+", "Prime Video", "Canal 9"];
 
