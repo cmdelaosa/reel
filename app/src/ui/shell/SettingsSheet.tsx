@@ -1,4 +1,5 @@
-import { Bell, Check, Mail, RotateCcw, Sparkles, X } from "lucide-react";
+import { useNavigate } from "react-router";
+import { Bell, Check, Download, Mail, RotateCcw, Sparkles, Upload, X } from "lucide-react";
 import {
   useSettings, setSetting, resetSettings,
   type AccentName, type DensityName, type ThemeName,
@@ -84,6 +85,8 @@ function NotificationsSection() {
 
 export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const settings = useSettings();
+  const navigate = useNavigate();
+  const go = (path: string) => { onClose(); navigate(path); };
 
   return (
     <>
@@ -145,6 +148,17 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           </Row>
 
           <NotificationsSection />
+
+          <Row label="Your data">
+            <div className="flex flex-col gap-2">
+              <button className="btn btn-ghost" style={{ justifyContent: "flex-start" }} onClick={() => go("/import")}>
+                <Upload size={16} />Import from TV Time
+              </button>
+              <button className="btn btn-ghost" style={{ justifyContent: "flex-start" }} onClick={() => go("/export")}>
+                <Download size={16} />Export my data
+              </button>
+            </div>
+          </Row>
 
           <div className="card p-4 flex flex-col gap-2" style={{ background: "var(--surface-2)" }}>
             <div style={{ fontWeight: 700, fontSize: 13.5 }}>Live preview</div>

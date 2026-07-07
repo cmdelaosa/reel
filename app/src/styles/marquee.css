@@ -185,6 +185,10 @@
 /* Fade-in for screens */
 .screen { animation: fade .25s ease; }
 
+/* Spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.9s linear infinite; }
+
 /* ============================================================
    MARQUEE SHELL — top tab navigation (floating dock on mobile),
    bento home, editorial numbered sections, ⌘K command palette.
