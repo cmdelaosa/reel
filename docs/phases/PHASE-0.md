@@ -215,12 +215,24 @@ severance` → 1 result with genres mapped from ids and a row in `titles`;
 
 **Verification**: run dry-run + real against local `supabase start`, paste the summary in the commit body.
 
-**Implementation notes**: `scripts/tvtime-import/` written (csv.ts reader +
-index.ts: env/args, TVDB→TMDB `/find`, metadata upsert mirroring the proxy
-shape, watch-state reconstruction = explicit seen ∪ everything ≤ latest-seen,
-ratings union/dedupe newest-wins, report + `--dry-run`). Typechecks clean.
-**NOT run end-to-end** — pending the author's export zip and `TMDB_API_KEY`.
-The `COLUMNS` map in index.ts is a best guess at the export's headers;
-`requireColumns` validates them at startup and fails loudly with the actual
-headers if they differ (correct the map, re-run). Needs `TARGET_USER_ID`
-(a `profiles.id`) in the env.
+**Implementation notes**: after inspecting the real export, watch state is
+reconstructed from `user_tv_show_data.csv` `nb_episodes_seen` (the first N
+episodes in air order, specials/season-0 excluded) — the per-show counts sum to
+9196, matching `user_statistics`. Ratings are **skipped by design**: the export's
+only ratings are a handful of episode votes with an undecodable score, and v1
+ships show-level ratings. `scripts/tvtime-import/` = csv.ts (reader +
+`requireColumns` header validation) + index.ts (env/args, TVDB→TMDB `/find`,
+metadata upsert mirroring the proxy shape, library_entries + watch_events,
+report + `--dry-run`).
+
+**Verified** against local `supabase start` (author user as `TARGET_USER_ID`):
+- Dry run: 355 shows (310 followed) → 350 matched, **306 followed** (≥300 ✓),
+  5 unmatched, 0 errors.
+- Real run: **8557 watch_events**, 350 titles, 306 followed library_entries,
+  9268 episodes cached. Spot-checks vs TV Time: Twin Peaks 44/44, Severance
+  17/17, Fargo 49/49, The Last of Us 15/15 exact; Breaking Bad 62 (TV Time's 68
+  counts specials, correctly excluded). The ~9196→8557 gap is exactly those
+  specials + 5 unmatched shows.
+
+Hosted seeding is a later step (needs `supabase link` + the hosted service-role
+key); this verifies the importer against local.

@@ -89,7 +89,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P0-C7** `feat(db): library_entries, watch_events, ratings schema + RLS`
 - [x] **P0-C8** `feat(db): friendships, notifications, prefs, import_jobs schema + RLS`
 - [x] **P0-C9** `feat(edge): tmdb proxy function with metadata upsert + typed client`
-- [ ] **P0-C10** `feat(scripts): TV Time zip seed importer (author data, TVDB→TMDB)`
+- [x] **P0-C10** `feat(scripts): TV Time zip seed importer (author data, TVDB→TMDB)`
 
 ### Phase 1 — Auth + shell ([docs/phases/PHASE-1.md](docs/phases/PHASE-1.md))
 
