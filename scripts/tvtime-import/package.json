@@ -1,0 +1,19 @@
+{
+  "name": "tvtime-import",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "One-off importer: TV Time GDPR export → Supabase seed (P0-C10).",
+  "scripts": {
+    "start": "tsx index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^6.0.3",
+    "@types/node": "^26.1.0"
+  }
+}

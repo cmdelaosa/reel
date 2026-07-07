@@ -213,3 +213,13 @@ verification (search returns rows + they land in `titles`) is pending the
   watched state against TV Time.
 
 **Verification**: run dry-run + real against local `supabase start`, paste the summary in the commit body.
+
+**Implementation notes**: `scripts/tvtime-import/` written (csv.ts reader +
+index.ts: env/args, TVDB→TMDB `/find`, metadata upsert mirroring the proxy
+shape, watch-state reconstruction = explicit seen ∪ everything ≤ latest-seen,
+ratings union/dedupe newest-wins, report + `--dry-run`). Typechecks clean.
+**NOT run end-to-end** — pending the author's export zip and `TMDB_API_KEY`.
+The `COLUMNS` map in index.ts is a best guess at the export's headers;
+`requireColumns` validates them at startup and fails loudly with the actual
+headers if they differ (correct the map, re-run). Needs `TARGET_USER_ID`
+(a `profiles.id`) in the env.
