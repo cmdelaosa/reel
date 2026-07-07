@@ -105,7 +105,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P2-C2** `feat(library): follow/unfollow (Add) + watchlist model + Shows grid with status buckets`
 - [x] **P2-C3** `feat(detail): show detail sheet — TMDB data, seasons/episodes, both ratings`
 - [x] **P2-C4** `feat(watch): mark episode watched (optimistic), mark-up-to-here confirm, undo`
-- [ ] **P2-C5** `feat(ratings): rate shows; ratings list in You (sort + 15/page)`
+- [x] **P2-C5** `feat(ratings): rate shows; ratings list in You (sort + 15/page)`
 - [ ] **P2-C6** `feat(upnext): up-next derivation + Tonight tab (fresh episodes, premieres, continue rail)`
 - [ ] **P2-C7** `feat(calendar): chronological my-shows feed with lazy history + returning/new views`
 - [ ] **P2-C8** `feat(edge): scheduled episode-refresh job (air dates, new seasons)`

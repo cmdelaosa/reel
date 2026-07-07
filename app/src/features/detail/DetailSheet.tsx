@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Plus, Star, X } from "lucide-react";
 import { tmdbImg } from "@/lib/tmdb";
 import { useLibrary, useFollow, useUnfollow } from "@/lib/library";
+import { useMyRating, useRateTitle } from "@/lib/ratings";
 import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useUndoMarks } from "@/lib/watch";
 import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
 import { NetworkLogo } from "@/ui";
@@ -31,7 +32,6 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const follow = useFollow();
   const unfollow = useUnfollow();
   const [season, setSeason] = useState<number | null>(null);
-  const [rating, setRating] = useState(0);
 
   const title = data?.title;
   const regularSeasons = (data?.seasons ?? []).filter((s: SeasonRow) => s.number > 0);
@@ -41,6 +41,9 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const { data: allEpisodes = [] } = useTitleEpisodes(title?.id ?? null);
 
   const titleId = title?.id ?? "";
+  const { data: myRating } = useMyRating(title?.id ?? null);
+  const rateTitle = useRateTitle(titleId);
+  const rating = myRating ?? 0;
   const markWatched = useMarkWatched(titleId);
   const unmarkWatched = useUnmarkWatched(titleId);
   const markUpTo = useMarkUpTo(titleId);
@@ -182,7 +185,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                           style={{ color: v <= rating ? "var(--accent)" : "var(--text-mute)" }}
                           fill={v <= rating ? "currentColor" : "none"}
                           strokeWidth={v <= rating ? 0 : 1.6}
-                          onClick={() => setRating(v)}
+                          onClick={() => rateTitle.mutate(v)}
                         />
                       ))}
                     </div>
