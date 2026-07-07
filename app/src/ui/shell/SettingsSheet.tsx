@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Bell, Check, Download, Mail, RotateCcw, Sparkles, Upload, X } from "lucide-react";
+import { useFocusTrap } from "@/ui/useFocusTrap";
 import {
   useSettings, setSetting, resetSettings,
   type AccentName, type DensityName, type ThemeName,
@@ -86,12 +88,24 @@ function NotificationsSection() {
 export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const settings = useSettings();
   const navigate = useNavigate();
+  const trapRef = useFocusTrap<HTMLDivElement>();
   const go = (path: string) => { onClose(); navigate(path); };
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
 
   return (
     <>
       <div className="backdrop" onClick={onClose} />
       <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        tabIndex={-1}
         className="sheet fixed z-[70] card flex flex-col"
         style={{ right: 0, top: 0, height: "100vh", width: "min(380px, 92vw)", borderRadius: 0, borderLeft: "1px solid var(--border)" }}
       >

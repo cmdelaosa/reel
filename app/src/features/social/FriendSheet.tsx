@@ -8,6 +8,7 @@ import { hueOf, posterBg } from "@/ui/posterBg";
 import { tmdbImg } from "@/lib/tmdb";
 import { NetworkLogo, Stars } from "@/ui";
 import { FriendAvatar } from "@/ui/FriendAvatar";
+import { useFocusTrap } from "@/ui/useFocusTrap";
 
 /* Friend profile sheet — port of prototype friends.tsx FriendSheet on live
    data (rpc_friend_snapshot). Opened via ?friend=<profile_id>; the show detail
@@ -42,6 +43,7 @@ function MiniArt({ poster, name, className = "mq-row-art", style }: { poster: st
 
 export function FriendSheet({ friendId, onClose }: { friendId: string; onClose: () => void }) {
   const [, setSearchParams] = useSearchParams();
+  const trapRef = useFocusTrap<HTMLDivElement>();
   const { data, isPending } = useQuery({
     queryKey: ["friendSnapshot", friendId],
     queryFn: async (): Promise<Snapshot | null> => {
@@ -72,6 +74,11 @@ export function FriendSheet({ friendId, onClose }: { friendId: string; onClose: 
     <>
       <div className="backdrop" onClick={onClose} />
       <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={s ? `${s.profile.display_name}'s profile` : "Friend profile"}
+        tabIndex={-1}
         className="sheet-center fixed z-[68] card overflow-hidden flex flex-col"
         style={{ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(680px, 94vw)", maxHeight: "90vh", borderRadius: "var(--r-xl)" }}
       >

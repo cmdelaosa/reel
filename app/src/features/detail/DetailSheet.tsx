@@ -7,6 +7,7 @@ import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useUndoMarks } from "@/l
 import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
+import { useFocusTrap } from "@/ui/useFocusTrap";
 import { useTitle, useSeasonEpisodes, useWatched, useTitleEpisodes } from "@/features/detail/data";
 
 /* Show detail sheet — port of prototype screens.tsx DetailSheet on live data.
@@ -27,6 +28,7 @@ function Skeleton() {
 }
 
 export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () => void }) {
+  const trapRef = useFocusTrap<HTMLDivElement>();
   const { data, isPending } = useTitle(tmdbId);
   const { data: library = [] } = useLibrary();
   const follow = useFollow();
@@ -115,6 +117,11 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
     <>
       <div className="backdrop" onClick={onClose} />
       <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title ? `${title.name} details` : "Show details"}
+        tabIndex={-1}
         className="sheet-center fixed z-[70] card overflow-hidden flex flex-col"
         style={{
           left: "50%", top: "50%", transform: "translate(-50%,-50%)",

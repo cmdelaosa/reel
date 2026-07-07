@@ -14,7 +14,21 @@ export function Poster({ t, subtitle, showNetwork = true, onClick }: {
   const showProgress = progress > 0 && progress < 100;
 
   return (
-    <div className="poster" style={{ background: posterBg(t.name) }} onClick={onClick}>
+    <div
+      className="poster"
+      style={{ background: posterBg(t.name) }}
+      onClick={onClick}
+      {...(onClick
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-label": `${t.name} — open details`,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); }
+            },
+          }
+        : {})}
+    >
       {t.posterPath && <img className="poster-img" src={t.posterPath} alt="" loading="lazy" />}
       <div className="poster-sheen" />
       <div className="poster-top">
