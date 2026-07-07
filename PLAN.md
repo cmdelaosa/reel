@@ -85,7 +85,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P0-C3** `feat(app): port design tokens, glass look and base UI kit from prototype`
 - [x] **P0-C4** `chore: init supabase project (config, local dev, env plumbing, CI)`
 - [x] **P0-C5** `feat(db): profiles + invites schema, RLS, signup trigger`
-- [ ] **P0-C6** `feat(db): titles/seasons/episodes metadata cache schema + RLS`
+- [x] **P0-C6** `feat(db): titles/seasons/episodes metadata cache schema + RLS`
 - [ ] **P0-C7** `feat(db): library_entries, watch_events, ratings schema + RLS`
 - [ ] **P0-C8** `feat(db): friendships, notifications, prefs, import_jobs schema + RLS`
 - [ ] **P0-C9** `feat(edge): tmdb proxy function with metadata upsert + typed client`

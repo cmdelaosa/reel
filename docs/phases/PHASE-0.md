@@ -118,8 +118,14 @@ users cannot mint codes; cross-user profile writes hit 0 rows; anon is blocked.
 ## P0-C6 `feat(db): titles/seasons/episodes metadata cache schema + RLS`
 
 Migration `0002_metadata.sql` per ARCHITECTURE → Metadata cache. Include:
-- Indexes: `titles(tmdb_id)`, `episodes(title_id, air_datetime)`, `episodes(title_id, season_number, episode_number)`.
-- RLS: `select` to `authenticated`; no insert/update/delete policies (service role bypasses).
+- Indexes: `titles(tmdb_id)` and `episodes(title_id, season_number, episode_number)`
+  are already provided by their UNIQUE constraints — not duplicated. Added:
+  `episodes(title_id, air_datetime)` (calendar/up-next) and `episodes(season_id)`
+  (unindexed FK → slow cascades + season joins).
+- RLS: `select` to `authenticated`; no insert/update/delete policies. Grants are
+  deterministic (`revoke all from anon, authenticated` → `grant select` to
+  authenticated, `grant all` to `service_role`) so Edge-Function upserts work on
+  local and hosted regardless of the "auto-expose new tables" flag.
 
 **Acceptance criteria**: reset green; anon select blocked, authenticated select allowed (test with Studio's role impersonation).
 
