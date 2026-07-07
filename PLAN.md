@@ -126,7 +126,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P4-C1** `feat(social): friendships — request, accept, remove; friends section in You`
 - [x] **P4-C2** `feat(social): friend profile sheet (stats, match %, watching now, follows, top ratings)`
 - [x] **P4-C3** `feat(social): explore sections — popular with friends, best rated by friends (RPCs)`
-- [ ] **P4-C4** `feat(social): activity feed (rated/finished/added/started) in Explore`
+- [x] **P4-C4** `feat(social): activity feed (rated/finished/added/started) in Explore`
 
 ### Phase 5 — Explore + polish ([docs/phases/PHASE-5.md](docs/phases/PHASE-5.md))
 
