@@ -5,8 +5,10 @@ import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import App from "@/App";
 import { AuthProvider } from "@/features/auth/AuthProvider";
+import InvitePage from "@/features/auth/InvitePage";
 import LoginPage from "@/features/auth/LoginPage";
 import { RequireAuth } from "@/features/auth/RequireAuth";
+import { RequireInvited } from "@/features/auth/RequireInvited";
 import KitPage from "@/features/kit/KitPage";
 import "@/styles/index.css";
 import "@/lib/settings"; // applies persisted theme/accent to <html> on boot
@@ -17,10 +19,20 @@ const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/kit", element: <KitPage /> }, // living style guide — public, static
   {
+    path: "/invite",
+    element: (
+      <RequireAuth>
+        <InvitePage />
+      </RequireAuth>
+    ),
+  },
+  {
     path: "/",
     element: (
       <RequireAuth>
-        <App />
+        <RequireInvited>
+          <App />
+        </RequireInvited>
       </RequireAuth>
     ),
   },
