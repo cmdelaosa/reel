@@ -78,13 +78,38 @@ The commit that adds PLAN.md, docs/ARCHITECTURE.md, docs/phases/*, and updates D
 
 **References**: ARCHITECTURE → Identity & access.
 
-**Steps**
-1. Migration `0001_profiles_invites.sql`: `citext` extension; `profiles`, `invites` exactly per ARCHITECTURE; RLS enable; policies: profiles owner read/write own row (friend/public read arrives Phase 4); invites: `select` where `used_by is null or used_by = auth.uid()` for authenticated, insert by owner, redeem via RPC only.
-2. Trigger function `handle_new_user()` security definer: inserts profile with `handle = 'user_' || left(id::text, 8)`, `display_name = coalesce(raw_user_meta->>'name', 'New user')`.
-3. Functions: `is_invited(uid uuid) returns boolean` (exists in invites.used_by), `redeem_invite(p_code text)` RPC: validates unused + unexpired, sets `used_by = auth.uid()`; raises on failure.
-4. Seed file `supabase/seed/dev.sql`: 3 invite codes for local dev.
+**Steps** (decisions from the P0-C5 grill folded in — deviations from the
+original spec noted inline):
+1. Migration `0001_profiles_invites.sql`: `citext` extension (in `extensions`
+   schema); `profiles`, `invites` per ARCHITECTURE, plus a DB-level CHECK
+   `handle ~ '^[a-z0-9_.]{3,24}$'` (defence in depth). RLS enable. Grants are
+   **deterministic**: `revoke all … from anon, authenticated` then
+   `grant`-specific, so the migration behaves the same regardless of the
+   deprecated "auto-expose new tables" flag (removed 2026-10-30). Policies:
+   - profiles: owner read + owner update; **no insert policy** (the trigger
+     creates the row), no delete (cascades from `auth.users`). Friend/public
+     read arrives Phase 4.
+   - invites: `select` where `created_by = auth.uid() or used_by = auth.uid()`
+     (⚠ tighter than the original `used_by is null or …`, which leaked all
+     unused codes to every authenticated user); `insert` only when
+     `created_by = auth.uid() AND is_invited(auth.uid())` (only invited users
+     mint codes); redeem via RPC only (no update/delete grant).
+2. Trigger function `handle_new_user()` security definer (`search_path=''`):
+   inserts profile with `handle = 'user_' || left(replace(id::text,'-',''),16)`
+   (16 hex → collision-proof, ≤24 chars; was `left(id::text,8)`),
+   `display_name = coalesce(raw_user_meta_data->>'name', 'New user')`.
+3. Functions (security definer, `search_path=''`): `is_invited(uid uuid)
+   returns boolean` (exists in `invites.used_by`); `redeem_invite(p_code text)`
+   RPC: **rejects if the caller is already invited** (one gate per user), then
+   atomically claims an unused + unexpired code (single `update … where used_by
+   is null` → second redemption is a no-match); raises on failure.
+4. Seed file `supabase/seed/dev.sql`: 3 open invite codes for local dev
+   (`config.toml` `[db.seed]` points at `./seed/dev.sql`).
 
-**Acceptance criteria**: `supabase db reset` green; creating a user in local Studio auto-creates a profile; redeeming a code twice fails.
+**Acceptance criteria**: `supabase db reset` green; creating a user (auth admin
+API) auto-creates a profile; redeeming a code twice fails; a second user cannot
+redeem a used code; an already-invited user cannot redeem again; non-invited
+users cannot mint codes; cross-user profile writes hit 0 rows; anon is blocked.
 
 **Verification**: `supabase db reset`, then SQL in Studio: create test user via auth admin, check profile row, call `redeem_invite`.
 
