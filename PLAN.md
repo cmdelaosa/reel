@@ -119,7 +119,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P3-C3** `feat(notifications): preferences UI (per-type in-app/email toggles)`
 - [x] **P3-C4** `feat(import): in-app TV Time zip importer (upload → job → report)`
 - [x] **P3-C5** `feat(invites): create/share invite codes UI`
-- [ ] **P3-C6** `feat(export): download-my-data (JSON + CSV)`
+- [x] **P3-C6** `feat(export): download-my-data (JSON + CSV)`
 
 ### Phase 4 — Social ([docs/phases/PHASE-4.md](docs/phases/PHASE-4.md))
 
