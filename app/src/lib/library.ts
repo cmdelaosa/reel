@@ -107,6 +107,32 @@ export function useFollow() {
   });
 }
 
+/** Toggle the per-title "Notify me" flag — optimistic against the library. */
+export function useToggleNotify() {
+  const queryClient = useQueryClient();
+  const { session } = useAuth();
+  return useMutation({
+    mutationFn: async ({ titleId, notify }: { titleId: string; notify: boolean }) => {
+      const { error } = await supabase
+        .from("library_entries")
+        .update({ notify })
+        .eq("user_id", session!.user.id)
+        .eq("title_id", titleId);
+      if (error) throw error;
+    },
+    onMutate: async ({ titleId, notify }) => {
+      await queryClient.cancelQueries({ queryKey: qk.library });
+      const prev = queryClient.getQueryData<LibraryShow[]>(qk.library);
+      queryClient.setQueryData<LibraryShow[]>(qk.library, (old = []) =>
+        old.map((r) => (r.title_id === titleId ? { ...r, notify } : r)),
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => queryClient.setQueryData(qk.library, ctx?.prev),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: qk.library }),
+  });
+}
+
 export function useUnfollow() {
   const queryClient = useQueryClient();
   const { session } = useAuth();

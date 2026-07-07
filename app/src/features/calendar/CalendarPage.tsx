@@ -4,7 +4,7 @@ import { Bell, Check, ChevronRight } from "lucide-react";
 import { dayLabel, dayOffset, episodeBadge, groupFeed } from "@/domain/calendar";
 import { premiereMs } from "@/domain/tonight";
 import { useCalendarFeed, type FeedRow } from "@/lib/calendar";
-import { useLibrary, type LibraryShow } from "@/lib/library";
+import { useLibrary, useToggleNotify, type LibraryShow } from "@/lib/library";
 import { useMarkWatched, useUnmarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { NetworkLogo } from "@/ui";
@@ -249,8 +249,8 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
 
 function UpcomingRow({ s, announced }: { s: LibraryShow; announced: boolean }) {
   const open = useOpenTitle();
-  // Notify placeholder — persisted flag lands in P2-C10.
-  const [notify, setNotify] = useState(s.notify);
+  const toggleNotify = useToggleNotify();
+  const notify = s.notify; // persisted flag (optimistic via the library cache)
   const at = premiereMs(s);
   const art = tmdbImg(s.poster_path, "w92");
 
@@ -272,7 +272,7 @@ function UpcomingRow({ s, announced }: { s: LibraryShow; announced: boolean }) {
       </div>
       <button
         className={`btn btn-sm ${notify ? "btn-accent" : "btn-outline"}`}
-        onClick={(e) => { e.stopPropagation(); setNotify((v) => !v); }}
+        onClick={(e) => { e.stopPropagation(); toggleNotify.mutate({ titleId: s.title_id, notify: !notify }); }}
       >
         <Bell size={15} />{notify ? "Tracking" : "Notify me"}
       </button>
