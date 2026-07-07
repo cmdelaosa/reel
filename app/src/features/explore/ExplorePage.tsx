@@ -7,6 +7,7 @@ import { NetworkLogo, Poster, Rail } from "@/ui";
 import { FriendStack } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 import { FriendActivityCard } from "@/features/explore/FriendActivityCard";
+import { DiscoverSections } from "@/features/explore/DiscoverSections";
 
 /* Explore — friend-powered sections. They only appear once you have ≥2 friends
    (no sad empties on day one). Trending/collections land in Phase 5. */
@@ -43,13 +44,8 @@ export default function ExplorePage() {
         <kbd className="mq-kbd" style={{ marginLeft: "auto" }}>⌘K</kbd>
       </button>
 
-      {!hasFriends && (
-        <div className="card" style={{ padding: "28px 24px" }}>
-          <p className="dim" style={{ margin: 0, fontSize: 14 }}>
-            Add a couple of friends (in <b>You</b>) to unlock friend-powered picks. Trending & collections arrive soon.
-          </p>
-        </div>
-      )}
+      <DiscoverSections />
+
 
       {hasFriends && popular.length > 0 && (
         <section className="flex flex-col gap-4">

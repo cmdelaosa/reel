@@ -1,6 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { getTrending } from "@/lib/tmdb";
+import type { TitleRow } from "@/lib/schemas";
+
+export function useTrending() {
+  return useQuery({
+    queryKey: ["trending"],
+    staleTime: 6 * 60 * 60 * 1000,
+    queryFn: (): Promise<TitleRow[]> => getTrending(),
+  });
+}
 
 /* Friend-powered Explore data (P4-C3) + activity feed (P4-C4). */
 

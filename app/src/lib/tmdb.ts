@@ -42,6 +42,11 @@ export async function searchShows(q: string): Promise<TitleRow[]> {
   return searchResponseSchema.parse(json).results;
 }
 
+export async function getTrending(): Promise<TitleRow[]> {
+  const json = await call(`/trending`);
+  return searchResponseSchema.parse(json).results;
+}
+
 export async function getTitle(tmdbId: number): Promise<TitleResponse> {
   const json = await call(`/title/${tmdbId}`);
   return titleResponseSchema.parse(json);

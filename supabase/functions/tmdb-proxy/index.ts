@@ -155,6 +155,34 @@ Deno.serve(async (req) => {
       return json({ results: results.map((r) => byTmdb.get(r.id)).filter(Boolean) });
     }
 
+    // GET /trending  (TMDB /trending/tv/week, cached 24h in trending_cache)
+    if (path === "/trending") {
+      const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { data: fresh } = await admin
+        .from("trending_cache")
+        .select("tmdb_id, rank")
+        .gte("cached_at", dayAgo)
+        .order("rank");
+      let ranked: { tmdb_id: number; rank: number }[] = fresh ?? [];
+      if (ranked.length === 0) {
+        const data = await fetchTmdb(apiKey, `/trending/tv/week`);
+        const results: Any[] = (data.results ?? []).slice(0, 20);
+        if (results.length) {
+          await upsertReturning(admin, "titles", results.map(searchRow), "tmdb_id");
+          await admin.from("trending_cache").delete().gte("rank", 0);
+          ranked = results.map((r, i) => ({ tmdb_id: r.id as number, rank: i + 1 }));
+          await admin.from("trending_cache").insert(ranked);
+        }
+      }
+      if (ranked.length === 0) return json({ results: [] });
+      const { data: rows } = await admin
+        .from("titles")
+        .select("*")
+        .in("tmdb_id", ranked.map((r) => r.tmdb_id));
+      const byTmdb = new Map((rows ?? []).map((r: Any) => [r.tmdb_id, r]));
+      return json({ results: ranked.map((r) => byTmdb.get(r.tmdb_id)).filter(Boolean) });
+    }
+
     // GET /title/:id
     const mTitle = path.match(/^\/title\/(\d+)$/);
     if (mTitle) {

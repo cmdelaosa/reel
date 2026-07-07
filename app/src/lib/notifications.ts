@@ -43,7 +43,9 @@ export function useNotificationsRealtime() {
 
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase.channel(`notifications:${userId}`);
+    // Unique channel name per mount so HMR / StrictMode re-mounts never collide
+    // with a still-subscribed channel of the same topic.
+    const channel = supabase.channel(`notifications:${userId}:${Math.random().toString(36).slice(2)}`);
     channel
       .on(
         "postgres_changes",
