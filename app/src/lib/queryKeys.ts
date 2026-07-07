@@ -9,6 +9,7 @@ export const qk = {
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   library: ["library"] as const,
   watched: (titleId: string) => ["watched", titleId] as const,
+  titleEpisodes: (titleId: string) => ["titleEpisodes", titleId] as const,
   myRating: (titleId: string) => ["myRating", titleId] as const,
   upNext: ["upNext"] as const,
   calendarFeed: (fromIso: string, toIso: string) => ["calendarFeed", fromIso, toIso] as const,

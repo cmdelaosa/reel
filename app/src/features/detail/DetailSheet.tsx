@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { Check, Plus, Star, X } from "lucide-react";
 import { tmdbImg } from "@/lib/tmdb";
 import { useLibrary, useFollow, useUnfollow } from "@/lib/library";
-import type { SeasonRow } from "@/lib/schemas";
+import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useUndoMarks } from "@/lib/watch";
+import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
-import { useTitle, useSeasonEpisodes, useWatched } from "@/features/detail/data";
+import { useTitle, useSeasonEpisodes, useWatched, useTitleEpisodes } from "@/features/detail/data";
 
 /* Show detail sheet — port of prototype screens.tsx DetailSheet on live data.
    Opened globally via ?title=<tmdbId>; episode marking is wired in P2-C4 and
@@ -37,6 +38,53 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const activeSeason = season ?? regularSeasons[0]?.number ?? null;
   const { data: seasonData } = useSeasonEpisodes(tmdbId, activeSeason);
   const { data: watched } = useWatched(title?.id ?? null);
+  const { data: allEpisodes = [] } = useTitleEpisodes(title?.id ?? null);
+
+  const titleId = title?.id ?? "";
+  const markWatched = useMarkWatched(titleId);
+  const unmarkWatched = useUnmarkWatched(titleId);
+  const markUpTo = useMarkUpTo(titleId);
+  const undoMarks = useUndoMarks(titleId);
+  const [pending, setPending] = useState<EpisodeRow | null>(null);
+  const [toast, setToast] = useState<{ ids: string[]; count: number } | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const nowIso = new Date().toISOString();
+
+  /** Aired, unwatched, regular-season episodes strictly before the target. */
+  const unseenPriors = (e: EpisodeRow) =>
+    allEpisodes.filter(
+      (x) =>
+        x.season_number > 0 &&
+        x.air_datetime != null &&
+        x.air_datetime <= nowIso &&
+        (x.season_number < e.season_number ||
+          (x.season_number === e.season_number && x.episode_number < e.episode_number)) &&
+        !watched?.has(x.id),
+    ).length;
+
+  const onEpClick = (e: EpisodeRow) => {
+    const aired = Boolean(e.air_datetime && e.air_datetime <= nowIso);
+    if (!aired) return;
+    const eventId = watched?.get(e.id);
+    if (eventId) {
+      if (eventId !== "optimistic") unmarkWatched.mutate(eventId);
+      return;
+    }
+    if (unseenPriors(e) > 0) setPending(e);
+    else markWatched.mutate(e.id);
+  };
+
+  const confirmMarkUpTo = async (e: EpisodeRow) => {
+    setPending(null);
+    const ids = await markUpTo.mutateAsync(e.id);
+    setToast({ ids, count: ids.length });
+  };
 
   const entry = library.find((r) => r.tmdb_id === tmdbId);
   const added = Boolean(entry);
@@ -188,7 +236,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       const aired = Boolean(e.air_datetime && e.air_datetime <= now);
                       const isWatched = watched?.has(e.id) ?? false;
                       return (
-                        <div key={e.id} className="ep-row" style={aired ? undefined : { opacity: 0.55, cursor: "default" }}>
+                        <div key={e.id} className="ep-row" style={aired ? undefined : { opacity: 0.55, cursor: "default" }} onClick={() => onEpClick(e)}>
                           <div className={`check ${isWatched ? "on" : ""}`}><Check size={15} strokeWidth={3} /></div>
                           <div className="mute" style={{ fontSize: 13, width: 42, flex: "0 0 auto" }}>E{e.episode_number}</div>
                           <div className="flex-1 min-w-0">
@@ -205,6 +253,52 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
           </>
         )}
       </div>
+
+      {/* "Mark all up to here" confirmation */}
+      {pending && (
+        <>
+          <div className="backdrop" style={{ zIndex: 80 }} onClick={() => setPending(null)} />
+          <div
+            className="sheet-center fixed card flex flex-col"
+            style={{ zIndex: 81, left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(400px, 92vw)", padding: 22, gap: 6, borderRadius: "var(--r-lg)" }}
+          >
+            <div style={{ fontWeight: 800, fontSize: 16 }}>Mark earlier episodes as seen?</div>
+            <p className="dim" style={{ fontSize: 14, lineHeight: 1.55, margin: "2px 0 14px" }}>
+              You still have {unseenPriors(pending)} unwatched {unseenPriors(pending) === 1 ? "episode" : "episodes"} up to
+              {" "}S{pending.season_number} · E{pending.episode_number}. Mark them all as seen?
+            </p>
+            <div className="flex items-center gap-2.5">
+              <button className="btn btn-accent flex-1" onClick={() => confirmMarkUpTo(pending)}>
+                <Check size={16} />Mark all {unseenPriors(pending) + 1}
+              </button>
+              <button
+                className="btn btn-outline flex-1"
+                onClick={() => { markWatched.mutate(pending.id); setPending(null); }}
+              >
+                Only this one
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Undo toast after a bulk mark */}
+      {toast && (
+        <div
+          className="card sheet fixed flex items-center gap-3"
+          style={{ zIndex: 85, left: "50%", bottom: 26, transform: "translateX(-50%)", padding: "12px 16px", borderRadius: 999 }}
+        >
+          <span style={{ fontSize: 13.5, fontWeight: 650 }}>
+            Marked {toast.count} {toast.count === 1 ? "episode" : "episodes"} as seen
+          </span>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => { undoMarks.mutate(toast.ids); setToast(null); }}
+          >
+            Undo
+          </button>
+        </div>
+      )}
     </>
   );
 }

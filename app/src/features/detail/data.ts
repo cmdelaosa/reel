@@ -25,6 +25,35 @@ export function useSeasonEpisodes(tmdbId: number | null, season: number | null) 
   });
 }
 
+const epLiteSchema = z.array(
+  z.object({
+    id: z.string().uuid(),
+    season_number: z.number().int(),
+    episode_number: z.number().int(),
+    air_datetime: z.string().nullable(),
+  }),
+);
+export type EpisodeLite = z.infer<typeof epLiteSchema>[number];
+
+/** Every cached episode of a title (from our DB, not TMDB) — used to count
+ *  unseen priors across seasons for the mark-up-to confirm. */
+export function useTitleEpisodes(titleId: string | null) {
+  return useQuery({
+    queryKey: qk.titleEpisodes(titleId ?? ""),
+    enabled: Boolean(titleId),
+    queryFn: async (): Promise<EpisodeLite[]> => {
+      const { data, error } = await supabase
+        .from("episodes")
+        .select("id, season_number, episode_number, air_datetime")
+        .eq("title_id", titleId!)
+        .order("season_number")
+        .order("episode_number");
+      if (error) throw error;
+      return epLiteSchema.parse(data);
+    },
+  });
+}
+
 const watchedSchema = z.array(z.object({ id: z.string().uuid(), episode_id: z.string().uuid() }));
 
 /** Map episode_id → watch_event id for the caller on one title. */
