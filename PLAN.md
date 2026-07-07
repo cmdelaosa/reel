@@ -96,7 +96,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P1-C1** `feat(auth): supabase auth client, session store, magic-link + Google sign-in screen`
 - [x] **P1-C2** `feat(auth): invite-code gate on first sign-in`
 - [x] **P1-C3** `feat(app): marquee shell — top tabs, routes, mobile dock, settings sheet`
-- [ ] **P1-C4** `feat(app): onboarding — display name, handle, avatar upload`
+- [x] **P1-C4** `feat(app): onboarding — display name, handle, avatar upload`
 - [ ] **P1-C5** `chore: deploy web app (Vercel) + auth redirect config` → **login on prod URL**
 
 ### Phase 2 — Core library loop ([docs/phases/PHASE-2.md](docs/phases/PHASE-2.md))

@@ -8,6 +8,8 @@ import InvitePage from "@/features/auth/InvitePage";
 import LoginPage from "@/features/auth/LoginPage";
 import { RequireAuth } from "@/features/auth/RequireAuth";
 import { RequireInvited } from "@/features/auth/RequireInvited";
+import { RequireOnboarded } from "@/features/auth/RequireOnboarded";
+import WelcomePage from "@/features/auth/WelcomePage";
 import CalendarPage from "@/features/calendar/CalendarPage";
 import ExplorePage from "@/features/explore/ExplorePage";
 import KitPage from "@/features/kit/KitPage";
@@ -32,11 +34,23 @@ const router = createBrowserRouter([
     ),
   },
   {
+    path: "/welcome",
+    element: (
+      <RequireAuth>
+        <RequireInvited>
+          <WelcomePage />
+        </RequireInvited>
+      </RequireAuth>
+    ),
+  },
+  {
     path: "/",
     element: (
       <RequireAuth>
         <RequireInvited>
-          <Shell />
+          <RequireOnboarded>
+            <Shell />
+          </RequireOnboarded>
         </RequireInvited>
       </RequireAuth>
     ),

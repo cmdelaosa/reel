@@ -70,8 +70,12 @@ export function Shell() {
             <button className="btn btn-ghost btn-icon" title="Settings" onClick={() => setSettingsOpen(true)}>
               <Sliders size={18} />
             </button>
-            <button className="mq-avatar" title="Your profile" onClick={() => navigate("/you")}>
-              {initial}
+            <button className="mq-avatar" title="Your profile" onClick={() => navigate("/you")} style={{ overflow: "hidden", padding: 0 }}>
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              ) : (
+                initial
+              )}
             </button>
           </div>
         </div>
