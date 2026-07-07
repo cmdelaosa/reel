@@ -1,0 +1,58 @@
+/* Calendar feed grouping — pure. Mirrors the prototype's episodeFeed grouping:
+   per-day buckets for local-day offsets 0..6 plus past days, and a single
+   "Later" bucket beyond 6 days. Day offsets use LOCAL calendar days (midnight
+   boundaries), so a 23/25-hour DST day still counts as exactly one day. */
+
+export interface FeedEpish {
+  air_datetime: string | null;
+}
+
+const startOfLocalDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+/** Whole local-calendar-day offset of `iso` relative to `now` (0 = today). */
+export function dayOffset(iso: string, now: Date): number {
+  const diff = startOfLocalDay(new Date(iso)) - startOfLocalDay(now);
+  return Math.round(diff / 86_400_000); // round absorbs DST 23h/25h days
+}
+
+export interface GroupedFeed<T> {
+  /** [dayOffset, rows] sorted ascending (past first). */
+  days: [number, T[]][];
+  /** Beyond 6 days out. */
+  later: T[];
+}
+
+export function groupFeed<T extends FeedEpish>(rows: T[], now: Date): GroupedFeed<T> {
+  const map = new Map<number, T[]>();
+  const later: T[] = [];
+  for (const r of rows) {
+    if (!r.air_datetime) continue;
+    const off = dayOffset(r.air_datetime, now);
+    if (off >= 7) {
+      later.push(r);
+      continue;
+    }
+    const list = map.get(off);
+    if (list) list.push(r);
+    else map.set(off, [r]);
+  }
+  return { days: [...map.entries()].sort((a, b) => a[0] - b[0]), later };
+}
+
+/** Today / Tomorrow / weekday for 0..6; FULL DATE (upper) in the past. */
+export function dayLabel(off: number, iso: string): string {
+  const d = new Date(iso);
+  if (off === 0) return "Today";
+  if (off === 1) return "Tomorrow";
+  if (off > 1) return d.toLocaleDateString(undefined, { weekday: "long" });
+  return d
+    .toLocaleDateString(undefined, { weekday: "short", month: "long", day: "numeric", year: "numeric" })
+    .toUpperCase();
+}
+
+/** Premiere/finale badge — the only two the product ships. */
+export function episodeBadge(e: { is_premiere: boolean; is_finale: boolean; season_number: number }): string | null {
+  if (e.is_premiere) return e.season_number === 1 ? "Series premiere" : "Season premiere";
+  if (e.is_finale) return "Season finale";
+  return null;
+}
