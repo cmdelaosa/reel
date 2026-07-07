@@ -4,6 +4,7 @@ import {
   Bell, CalendarClock, Clapperboard, Compass, LayoutGrid, Play, Search, Sliders, User,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { DetailSheet } from "@/features/detail/DetailSheet";
 import { Palette } from "@/ui/shell/Palette";
 import { SettingsSheet } from "@/ui/shell/SettingsSheet";
 
@@ -21,7 +22,16 @@ const TABS = [
 export function Shell() {
   const { profile } = useAuth();
   const navigate = useNavigate();
-  const [, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const titleParam = searchParams.get("title");
+  const detailTmdbId = titleParam && /^\d+$/.test(titleParam) ? Number(titleParam) : null;
+
+  const closeTitle = () =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("title");
+      return next;
+    });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -110,6 +120,7 @@ export function Shell() {
       {/* ---- Overlays ---- */}
       {paletteOpen && <Palette onClose={() => setPaletteOpen(false)} onOpen={openTitle} />}
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
+      {detailTmdbId != null && <DetailSheet tmdbId={detailTmdbId} onClose={closeTitle} />}
     </div>
   );
 }
