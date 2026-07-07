@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { useLibrary, toTitleCard, type LibraryShow } from "@/lib/library";
 import type { ShowStatus } from "@/domain/status";
 import { Poster } from "@/ui";
+import { PosterGridSkeleton } from "@/ui/Skeleton";
 
 /* My Shows — the library grid with status buckets. Port of prototype
    marquee.tsx → Shows, on live data. */
@@ -69,10 +70,14 @@ export default function ShowsPage() {
         </p>
       )}
 
+      {isPending && <PosterGridSkeleton />}
+
       {!isPending && items.length === 0 && (
         <div className="card" style={{ padding: "28px 24px" }}>
           <p className="dim" style={{ margin: 0, fontSize: 14 }}>
-            Nothing here yet — hit <kbd className="mq-kbd">⌘K</kbd> and add a show.
+            {f === "all"
+              ? <>Nothing here yet — hit <kbd className="mq-kbd">⌘K</kbd> and add a show.</>
+              : `No ${FILTERS.find((x) => x.key === f)?.label.toLowerCase()} shows right now.`}
           </p>
         </div>
       )}

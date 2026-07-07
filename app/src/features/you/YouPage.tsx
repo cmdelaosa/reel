@@ -8,6 +8,7 @@ import { InvitesCard } from "@/features/you/InvitesCard";
 import { FriendsSection } from "@/features/social/FriendsSection";
 import { tmdbImg } from "@/lib/tmdb";
 import { Stars } from "@/ui";
+import { StatsSkeleton } from "@/ui/Skeleton";
 import { posterBg } from "@/ui/posterBg";
 
 /* You — profile header + your ratings (sort + 15/page). Port of prototype
@@ -108,6 +109,7 @@ export default function YouPage() {
         </div>
       </div>
 
+      {!stats && <StatsSkeleton />}
       {stats && (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
           {[

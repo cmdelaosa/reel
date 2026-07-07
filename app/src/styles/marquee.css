@@ -189,6 +189,16 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.9s linear infinite; }
 
+/* Skeleton shimmer */
+@keyframes shimmer { 100% { background-position: -200% 0; } }
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+  border-radius: var(--r);
+}
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
 /* ============================================================
    MARQUEE SHELL — top tab navigation (floating dock on mobile),
    bento home, editorial numbered sections, ⌘K command palette.
