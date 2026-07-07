@@ -184,6 +184,15 @@ Migration `0004_social_system.sql` per ARCHITECTURE → Social & system.
   appear in `titles`.
 - Client helpers typecheck; fixture tests pass.
 
+**Implementation notes**: auth is enforced by a `getUser()` check (not just
+`verify_jwt`) so the anon key alone is rejected — verified locally: no token →
+401, anon-key bearer → 401, real user token → 500 "TMDB_API_KEY not configured"
+(auth passed, reached the TMDB step). Search upserts omit network/status/runtime
+so partial search rows don't clobber richer detail rows on conflict. **Live-data
+verification (search returns rows + they land in `titles`) is pending the
+`TMDB_API_KEY`** — set it (`supabase secrets set` hosted, or `supabase/.env`
++ `--env-file` local), re-curl, then tick the box.
+
 ---
 
 ## P0-C10 `feat(scripts): TV Time zip seed importer (author data, TVDB→TMDB)`

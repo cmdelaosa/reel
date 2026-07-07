@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "0a5b3d2e-1f4c-4a6b-8c7d-9e0f1a2b3c4d",
+      "tmdb_id": 95396,
+      "kind": "tv",
+      "name": "Severance",
+      "overview": "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.",
+      "poster_path": "/lFf6LLrQjYldcZItzOkGmMMigP7.jpg",
+      "backdrop_path": "/9Rq14Eyrf7Tu1xk0Pl7VcNbGac.jpg",
+      "first_air_date": "2022-02-18",
+      "status": null,
+      "genres": ["Drama", "Mystery", "Sci-Fi & Fantasy"],
+      "network": null,
+      "episode_run_time": null,
+      "vote_average": 8.4,
+      "popularity": 512.34
+    },
+    {
+      "id": "1b6c4e3f-2a5d-4b7c-9d8e-0f1a2b3c4d5e",
+      "tmdb_id": 1396,
+      "kind": "tv",
+      "name": "Breaking Bad",
+      "overview": "A high school chemistry teacher turned methamphetamine producer.",
+      "poster_path": "/ggFHVNu6YYI5L9pCfOacjizRGt.jpg",
+      "backdrop_path": null,
+      "first_air_date": "2008-01-20",
+      "status": null,
+      "genres": ["Drama", "Crime"],
+      "network": null,
+      "episode_run_time": null,
+      "vote_average": 8.9,
+      "popularity": 389.1
+    }
+  ]
+}

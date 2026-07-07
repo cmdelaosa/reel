@@ -1,0 +1,37 @@
+{
+  "season": {
+    "id": "3d8e6a5b-4c7f-4d9e-bf0a-2b3c4d5e6f70",
+    "title_id": "0a5b3d2e-1f4c-4a6b-8c7d-9e0f1a2b3c4d",
+    "tmdb_id": 129553,
+    "number": 1,
+    "name": "Season 1",
+    "episode_count": 9,
+    "air_date": "2022-02-18"
+  },
+  "episodes": [
+    {
+      "id": "5f0a8c7d-6e9b-4f1a-a12c-4d5e6f708192",
+      "title_id": "0a5b3d2e-1f4c-4a6b-8c7d-9e0f1a2b3c4d",
+      "season_id": "3d8e6a5b-4c7f-4d9e-bf0a-2b3c4d5e6f70",
+      "tmdb_id": 2455060,
+      "season_number": 1,
+      "episode_number": 1,
+      "name": "Good News About Hell",
+      "overview": "Mark grows suspicious about the mysterious circumstances surrounding a coworker's departure.",
+      "runtime": 57,
+      "air_datetime": "2022-02-18T21:00:00Z"
+    },
+    {
+      "id": "60ab9d8e-7f0c-4a2b-b23d-5e6f70819203",
+      "title_id": "0a5b3d2e-1f4c-4a6b-8c7d-9e0f1a2b3c4d",
+      "season_id": "3d8e6a5b-4c7f-4d9e-bf0a-2b3c4d5e6f70",
+      "tmdb_id": 2661820,
+      "season_number": 1,
+      "episode_number": 2,
+      "name": "Half Loop",
+      "overview": null,
+      "runtime": 46,
+      "air_datetime": "2022-02-18T21:00:00Z"
+    }
+  ]
+}
