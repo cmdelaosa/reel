@@ -34,6 +34,34 @@ Conventions (see ARCHITECTURE.md for the full list):
 - UI parity: when a spec says "port X from the prototype", match its behavior and look
   (Marquee shell + glass look, CSS variables and all).
 
+## Local development
+
+Prerequisites: Node 22+, Docker (running), and the Supabase CLI
+(`brew install supabase/tap/supabase`).
+
+**Web app** (`app/`):
+
+```bash
+cd app
+npm install
+cp .env.example .env.local   # fill VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
+npm run dev                  # dev server
+npm run check                # tsc --noEmit && eslint src && vitest run (CI gate)
+```
+
+**Supabase** (repo root):
+
+```bash
+supabase start               # boots the local stack in Docker
+supabase db reset            # re-applies migrations + seed from scratch
+supabase stop                # tears the stack down
+```
+
+Edge-function secrets (TMDB/Resend) are never committed: copy
+`supabase/.env.example` → `supabase/.env` for local function serving, or
+`supabase secrets set …` for the hosted project. CI (`.github/workflows/check.yml`)
+runs `npm run check` in `app/` on every push and PR.
+
 ## Phases at a glance
 
 | Phase | Outcome | Milestone |
@@ -55,7 +83,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P0-C1** `docs: add architecture and phase plans` (this commit)
 - [x] **P0-C2** `chore: scaffold app/ workspace (Vite+React+TS+Router+Query+Zod, lint, vitest)`
 - [x] **P0-C3** `feat(app): port design tokens, glass look and base UI kit from prototype`
-- [ ] **P0-C4** `chore: init supabase project (config, local dev, env plumbing, CI)`
+- [x] **P0-C4** `chore: init supabase project (config, local dev, env plumbing, CI)`
 - [ ] **P0-C5** `feat(db): profiles + invites schema, RLS, signup trigger`
 - [ ] **P0-C6** `feat(db): titles/seasons/episodes metadata cache schema + RLS`
 - [ ] **P0-C7** `feat(db): library_entries, watch_events, ratings schema + RLS`
