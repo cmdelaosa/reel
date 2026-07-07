@@ -188,10 +188,11 @@ Migration `0004_social_system.sql` per ARCHITECTURE → Social & system.
 `verify_jwt`) so the anon key alone is rejected — verified locally: no token →
 401, anon-key bearer → 401, real user token → 500 "TMDB_API_KEY not configured"
 (auth passed, reached the TMDB step). Search upserts omit network/status/runtime
-so partial search rows don't clobber richer detail rows on conflict. **Live-data
-verification (search returns rows + they land in `titles`) is pending the
-`TMDB_API_KEY`** — set it (`supabase secrets set` hosted, or `supabase/.env`
-+ `--env-file` local), re-curl, then tick the box.
+so partial search rows don't clobber richer detail rows on conflict. Live-data
+verified with the real key (local `supabase/.env` + `--env-file`): `search
+severance` → 1 result with genres mapped from ids and a row in `titles`;
+`/title/95396` → network/status/seasons; `/title/95396/season/1` → 9 episodes
+(air_datetime 21:00 UTC placeholder); cache = titles 1 / seasons 4 / episodes 9.
 
 ---
 
