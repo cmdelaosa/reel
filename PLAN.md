@@ -133,7 +133,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P5-C1** `feat(explore): trending via TMDB, genre chips, discover grid with Add`
 - [x] **P5-C2** `feat(explore): curated collections`
 - [x] **P5-C3** `feat(ui): rails with edge arrows, network logos, empty states, skeletons`
-- [ ] **P5-C4** `fix(ui): error boundaries, retry states, offline toast`
+- [x] **P5-C4** `fix(ui): error boundaries, retry states, offline toast`
 - [ ] **P5-C5** `feat(a11y): keyboard nav, focus traps in sheets, reduced-motion`
 - [ ] **P5-C6** `test(e2e): playwright smoke — login, add show, mark watched, calendar`
 

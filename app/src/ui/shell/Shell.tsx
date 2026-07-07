@@ -10,6 +10,7 @@ import { useNotifications, useNotificationsRealtime } from "@/lib/notifications"
 import { NotifPanel } from "@/ui/shell/NotifPanel";
 import { Palette } from "@/ui/shell/Palette";
 import { SettingsSheet } from "@/ui/shell/SettingsSheet";
+import { OfflineToast } from "@/ui/shell/OfflineToast";
 
 /* Marquee shell — top tab navigation, floating dock on mobile, ⌘K palette.
    Markup/classes ported verbatim from prototype/src/marquee.tsx. */
@@ -138,6 +139,8 @@ export function Shell() {
       {notifOpen && <NotifPanel onClose={() => setNotifOpen(false)} />}
       {friendParam && <FriendSheet friendId={friendParam} onClose={closeFriend} />}
       {detailTmdbId != null && <DetailSheet tmdbId={detailTmdbId} onClose={closeTitle} />}
+
+      <OfflineToast />
     </div>
   );
 }

@@ -20,10 +20,25 @@ import ShowsPage from "@/features/shows/ShowsPage";
 import TonightPage from "@/features/tonight/TonightPage";
 import YouPage from "@/features/you/YouPage";
 import { Shell } from "@/ui/shell/Shell";
+import { ErrorBoundary } from "@/ui/ErrorBoundary";
 import "@/styles/index.css";
 import "@/lib/settings"; // applies persisted theme/accent/density to <html> on boot
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: (failureCount, error) => {
+        // Don't retry auth/permission errors; back off on the rest (max 2).
+        const code = (error as { code?: string } | null)?.code;
+        if (code && ["PGRST301", "42501", "PGRST116"].includes(code)) return false;
+        return failureCount < 2;
+      },
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    },
+    mutations: { retry: 0 },
+  },
+});
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -52,7 +67,9 @@ const router = createBrowserRouter([
       <RequireAuth>
         <RequireInvited>
           <RequireOnboarded>
-            <Shell />
+            <ErrorBoundary>
+              <Shell />
+            </ErrorBoundary>
           </RequireOnboarded>
         </RequireInvited>
       </RequireAuth>
