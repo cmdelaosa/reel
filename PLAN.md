@@ -114,7 +114,7 @@ Tick a box **in the same commit** that completes it.
 
 ### Phase 3 — Round out + onboard friends ([docs/phases/PHASE-3.md](docs/phases/PHASE-3.md))
 
-- [ ] **P3-C1** `feat(notifications): in-app inbox + bell + read state`
+- [x] **P3-C1** `feat(notifications): in-app inbox + bell + read state`
 - [ ] **P3-C2** `feat(edge): new-episode alert job → inbox rows + Resend email`
 - [ ] **P3-C3** `feat(notifications): preferences UI (per-type in-app/email toggles)`
 - [ ] **P3-C4** `feat(import): in-app TV Time zip importer (upload → job → report)`

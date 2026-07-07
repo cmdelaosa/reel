@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
+import { useNotifications, useNotificationsRealtime } from "@/lib/notifications";
+import { NotifPanel } from "@/ui/shell/NotifPanel";
 import { Palette } from "@/ui/shell/Palette";
 import { SettingsSheet } from "@/ui/shell/SettingsSheet";
 
@@ -34,6 +36,10 @@ export function Shell() {
     });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  useNotificationsRealtime();
+  const { data: notifications = [] } = useNotifications();
+  const unread = notifications.filter((n) => !n.read_at).length;
 
   /** Open the detail sheet for a TMDB id via the global ?title= param (P2-C3). */
   const openTitle = (tmdbId: number) => {
@@ -84,9 +90,9 @@ export function Shell() {
               <span className="mq-searchbtn-label">Search</span>
               <kbd className="mq-kbd">⌘K</kbd>
             </button>
-            {/* Bell placeholder — the inbox lands in Phase 3 */}
-            <button className="btn btn-ghost btn-icon relative" title="Notifications (coming soon)">
+            <button className="btn btn-ghost btn-icon relative" title="Notifications" onClick={() => setNotifOpen((v) => !v)}>
               <Bell size={18} />
+              {unread > 0 && <span className="mq-belldot" />}
             </button>
             <button className="btn btn-ghost btn-icon" title="Settings" onClick={() => setSettingsOpen(true)}>
               <Sliders size={18} />
@@ -120,6 +126,7 @@ export function Shell() {
       {/* ---- Overlays ---- */}
       {paletteOpen && <Palette onClose={() => setPaletteOpen(false)} onOpen={openTitle} />}
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
+      {notifOpen && <NotifPanel onClose={() => setNotifOpen(false)} />}
       {detailTmdbId != null && <DetailSheet tmdbId={detailTmdbId} onClose={closeTitle} />}
     </div>
   );
