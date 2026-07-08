@@ -135,6 +135,23 @@ export function parseShows(files: Record<string, string>): Show[] {
     .filter((s) => s.tvdbId && (s.followed || s.seen > 0));
 }
 
+/** TheTVDB ids of shows the user archived in TV Time (kept, but stopped
+ *  watching). Read from the per-show `user-series` rows of the v2 tracking file;
+ *  empty when absent. Maps to library_entries.stopped. */
+export function parseArchived(files: Record<string, string>): Set<string> {
+  const raw = files[TRACKING.file];
+  if (!raw) return new Set();
+  const { headers, rows } = toRecords(raw);
+  if (!headers.includes("is_archived") || !headers.includes(TRACKING.tvdbId)) return new Set();
+  const out = new Set<string>();
+  for (const r of rows) {
+    if (r[TRACKING.key]?.startsWith("user-series") && r.is_archived?.toLowerCase() === "true" && r[TRACKING.tvdbId]) {
+      out.add(r[TRACKING.tvdbId]);
+    }
+  }
+  return out;
+}
+
 /** Parse the exact per-episode watch history: TheTVDB show id → deduped
  *  (season, episode, first-watched-at) list. Specials (season 0) excluded, like
  *  everywhere else. Returns an empty map when the tracking file is absent or
@@ -275,6 +292,7 @@ export async function importShow(
   userId: string,
   show: Show,
   watches?: EpisodeWatch[],
+  stopped = false,
 ): Promise<{ matched: boolean; watchEvents: number; unmatchedEpisodes: number }> {
   const tmdbId = await tvdbToTmdb(tmdbKey, show.tvdbId);
   if (!tmdbId) return { matched: false, watchEvents: 0, unmatchedEpisodes: 0 };
@@ -283,7 +301,7 @@ export async function importShow(
   const titleId = await upsertTitle(admin, detail);
 
   await admin.from("library_entries").upsert(
-    { user_id: userId, title_id: titleId, followed: show.followed, favorite: show.favorite },
+    { user_id: userId, title_id: titleId, followed: show.followed, favorite: show.favorite, stopped },
     { onConflict: "user_id,title_id" },
   );
 
@@ -337,6 +355,7 @@ export async function runImport(
   userId: string,
   shows: Show[],
   watchesByShow?: Map<string, EpisodeWatch[]>,
+  archivedIds?: Set<string>,
   onProgress?: (done: number, report: ImportReport) => void,
 ): Promise<ImportReport> {
   const report: ImportReport = {
@@ -359,6 +378,7 @@ export async function runImport(
         userId,
         show,
         watchesByShow?.get(show.tvdbId),
+        archivedIds?.has(show.tvdbId) ?? false,
       );
       if (matched) {
         report.matched++;

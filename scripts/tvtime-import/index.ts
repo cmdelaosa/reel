@@ -15,7 +15,7 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { parseShows, parseWatches, runImport, tvdbToTmdb, type Show } from "./lib.ts";
+import { parseShows, parseWatches, parseArchived, runImport, tvdbToTmdb, type Show } from "./lib.ts";
 
 function readEnv() {
   const need = (k: string): string => {
@@ -51,6 +51,7 @@ async function main() {
   const files = readCsvDir(dir);
   const shows = parseShows(files);
   const watches = parseWatches(files);
+  const archived = parseArchived(files);
   const exactTotal = [...watches.values()].reduce((n, w) => n + w.length, 0);
   console.log(
     `${dir}${dryRun ? " (dry run)" : ""}: ${shows.length} shows (${shows.filter((s: Show) => s.followed).length} followed), ` +
@@ -82,7 +83,7 @@ async function main() {
     console.log(`--replace: deleted ${count ?? 0} previous tvtime_import watch_events`);
   }
 
-  const report = await runImport(admin, env.tmdbKey, env.targetUserId, shows, watches, (done, r) => {
+  const report = await runImport(admin, env.tmdbKey, env.targetUserId, shows, watches, archived, (done, r) => {
     if (done % 25 === 0) console.log(`  ${done}/${shows.length} — matched ${r.matched}, watch_events ${r.watchEvents}`);
   });
   writeFileSync(join(dir, "import-report.json"), JSON.stringify(report, null, 2));
@@ -93,6 +94,7 @@ async function main() {
   console.log(`  titles cached  : ${report.titles}`);
   console.log(`  watch_events   : ${report.watchEvents}`);
   console.log(`  eps unmatched  : ${report.unmatchedEpisodes} (numbering drift)`);
+  console.log(`  stopped shows  : ${archived.size} (TV Time archived)`);
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });
