@@ -29,12 +29,31 @@ const SOURCE = {
   seen: "nb_episodes_seen",
 } as const;
 
+// Per-episode watch history. `nb_episodes_seen` above is TV Time's own cached
+// aggregate and disagrees with the real history on ~1/3 of shows (verified
+// against the 2026-07 export: counter sum 9196 vs 9449 actual distinct
+// watches), so exact rows win and the counter is only a fallback.
+const TRACKING = {
+  file: "tracking-prod-records-v2.csv",
+  key: "key",           // rows whose key starts with "watch-episode"
+  tvdbId: "s_id",       // same TheTVDB series id as SOURCE.tvdbId
+  season: "season_number",
+  episode: "episode_number",
+  watchedAt: "created_at", // "YYYY-MM-DD HH:MM:SS" (UTC, no zone suffix)
+} as const;
+
 export interface Show {
   tvdbId: string;
   name: string;
   followed: boolean;
   favorite: boolean;
   seen: number;
+}
+
+export interface EpisodeWatch {
+  season: number;
+  episode: number;
+  watchedAt: string; // ISO
 }
 
 export interface ImportReport {
@@ -46,6 +65,8 @@ export interface ImportReport {
   errors: { tvdbId: string; name: string; error: string }[];
   titles: number;
   watchEvents: number;
+  /** watched (season, episode) pairs with no TMDB counterpart (numbering drift). */
+  unmatchedEpisodes: number;
 }
 
 // ── CSV ───────────────────────────────────────────────────────────────────
@@ -114,6 +135,36 @@ export function parseShows(files: Record<string, string>): Show[] {
     .filter((s) => s.tvdbId && (s.followed || s.seen > 0));
 }
 
+/** Parse the exact per-episode watch history: TheTVDB show id → deduped
+ *  (season, episode, first-watched-at) list. Specials (season 0) excluded, like
+ *  everywhere else. Returns an empty map when the tracking file is absent or
+ *  has an unexpected shape (older exports) — callers then fall back to the
+ *  per-show counter. */
+export function parseWatches(files: Record<string, string>): Map<string, EpisodeWatch[]> {
+  const raw = files[TRACKING.file];
+  if (!raw) return new Map();
+  const { headers, rows } = toRecords(raw);
+  for (const col of [TRACKING.key, TRACKING.tvdbId, TRACKING.season, TRACKING.episode, TRACKING.watchedAt]) {
+    if (!headers.includes(col)) return new Map();
+  }
+  const byShow = new Map<string, Map<string, EpisodeWatch>>();
+  for (const r of rows) {
+    if (!r[TRACKING.key]?.startsWith("watch-episode")) continue;
+    const tvdbId = r[TRACKING.tvdbId];
+    const season = Number(r[TRACKING.season]);
+    const episode = Number(r[TRACKING.episode]);
+    if (!tvdbId || !Number.isInteger(season) || !Number.isInteger(episode) || season <= 0 || episode <= 0) continue;
+    const stamp = r[TRACKING.watchedAt];
+    const watchedAt = stamp ? `${stamp.replace(" ", "T")}Z` : new Date().toISOString();
+    const per = byShow.get(tvdbId) ?? new Map<string, EpisodeWatch>();
+    const key = `${season}:${episode}`;
+    const prev = per.get(key);
+    if (!prev || watchedAt < prev.watchedAt) per.set(key, { season, episode, watchedAt }); // keep first watch; rewatches collapse
+    byShow.set(tvdbId, per);
+  }
+  return new Map([...byShow].map(([id, per]) => [id, [...per.values()]]));
+}
+
 // ── TMDB + upserts ──────────────────────────────────────────────────────────
 type Json = Record<string, unknown>;
 const tmdbFetch = (key: string, path: string): Promise<Json> =>
@@ -155,15 +206,78 @@ async function upsertTitle(admin: DbClient, d: Json): Promise<string> {
   return data.id as string;
 }
 
-/** Import one show for one user. Returns matched + watch-event count. */
+/** Upsert one season + its episodes; returns the saved episode rows keyed for
+ *  both ordered-id (legacy fallback) and (season:episode) → id (exact) use. */
+async function importSeason(
+  admin: DbClient,
+  tmdbKey: string,
+  tmdbId: number,
+  titleId: string,
+  s: Json,
+): Promise<{ episodeIds: string[]; byPair: Map<string, string> }> {
+  const { data: season, error: se } = await admin
+    .from("seasons")
+    .upsert(
+      {
+        title_id: titleId,
+        tmdb_id: (s.id as number) ?? null,
+        number: s.season_number,
+        name: (s.name as string) ?? null,
+        episode_count: (s.episode_count as number) ?? null,
+        air_date: (s.air_date as string) || null,
+      },
+      { onConflict: "title_id,number" },
+    )
+    .select("id")
+    .single();
+  if (se || !season) throw new Error(`season upsert: ${se?.message}`);
+  const sd = await tmdbFetch(tmdbKey, `/tv/${tmdbId}/season/${s.season_number}`);
+  const eps = ((sd.episodes as Json[] | undefined) ?? [])
+    .sort((a, b) => (a.episode_number as number) - (b.episode_number as number))
+    .map((e) => ({
+      title_id: titleId,
+      season_id: season.id as string,
+      tmdb_id: (e.id as number) ?? null,
+      season_number: e.season_number as number,
+      episode_number: e.episode_number as number,
+      name: (e.name as string) ?? null,
+      overview: (e.overview as string) ?? null,
+      runtime: (e.runtime as number) ?? null,
+      air_datetime: airDatetime(e.air_date as string),
+    }));
+  const episodeIds: string[] = [];
+  const byPair = new Map<string, string>();
+  if (eps.length) {
+    const { data: saved, error: ee } = await admin
+      .from("episodes")
+      .upsert(eps, { onConflict: "title_id,season_number,episode_number" })
+      .select("id, episode_number");
+    if (ee) throw new Error(`episodes upsert: ${ee.message}`);
+    const byNum = new Map((saved ?? []).map((r: Any) => [r.episode_number, r.id]));
+    for (const e of eps) {
+      const id = byNum.get(e.episode_number);
+      if (id) {
+        episodeIds.push(id as string);
+        byPair.set(`${e.season_number}:${e.episode_number}`, id as string);
+      }
+    }
+  }
+  return { episodeIds, byPair };
+}
+
+/** Import one show for one user. With exact per-episode `watches`, every season
+ *  is cached (correct aired counts) and exactly those (season, episode) pairs
+ *  are marked, stamped with the real first-watch date. Without them, fall back
+ *  to marking the first `seen` episodes in order (the pre-2026-07 behavior). */
 export async function importShow(
   admin: DbClient,
   tmdbKey: string,
   userId: string,
   show: Show,
-): Promise<{ matched: boolean; watchEvents: number }> {
+  watches?: EpisodeWatch[],
+): Promise<{ matched: boolean; watchEvents: number; unmatchedEpisodes: number }> {
   const tmdbId = await tvdbToTmdb(tmdbKey, show.tvdbId);
-  if (!tmdbId) return { matched: false, watchEvents: 0 };
+  if (!tmdbId) return { matched: false, watchEvents: 0, unmatchedEpisodes: 0 };
 
   const detail = await tmdbFetch(tmdbKey, `/tv/${tmdbId}`);
   const titleId = await upsertTitle(admin, detail);
@@ -173,78 +287,56 @@ export async function importShow(
     { onConflict: "user_id,title_id" },
   );
 
+  const exact = (watches?.length ?? 0) > 0;
   let watchEvents = 0;
-  if (show.seen > 0) {
+  let unmatchedEpisodes = 0;
+  if (exact || show.seen > 0) {
     const seasons = ((detail.seasons as Json[] | undefined) ?? [])
       .filter((s) => (s.season_number as number) > 0)
       .sort((a, b) => (a.season_number as number) - (b.season_number as number));
     const episodeIds: string[] = [];
+    const byPair = new Map<string, string>();
     for (const s of seasons) {
-      if (episodeIds.length >= show.seen) break;
-      const { data: season, error: se } = await admin
-        .from("seasons")
-        .upsert(
-          {
-            title_id: titleId,
-            tmdb_id: (s.id as number) ?? null,
-            number: s.season_number,
-            name: (s.name as string) ?? null,
-            episode_count: (s.episode_count as number) ?? null,
-            air_date: (s.air_date as string) || null,
-          },
-          { onConflict: "title_id,number" },
-        )
-        .select("id")
-        .single();
-      if (se || !season) throw new Error(`season upsert: ${se?.message}`);
-      const sd = await tmdbFetch(tmdbKey, `/tv/${tmdbId}/season/${s.season_number}`);
-      const eps = ((sd.episodes as Json[] | undefined) ?? [])
-        .sort((a, b) => (a.episode_number as number) - (b.episode_number as number))
-        .map((e) => ({
-          title_id: titleId,
-          season_id: season.id as string,
-          tmdb_id: (e.id as number) ?? null,
-          season_number: e.season_number as number,
-          episode_number: e.episode_number as number,
-          name: (e.name as string) ?? null,
-          overview: (e.overview as string) ?? null,
-          runtime: (e.runtime as number) ?? null,
-          air_datetime: airDatetime(e.air_date as string),
-        }));
-      if (eps.length) {
-        const { data: saved, error: ee } = await admin
-          .from("episodes")
-          .upsert(eps, { onConflict: "title_id,season_number,episode_number" })
-          .select("id, episode_number");
-        if (ee) throw new Error(`episodes upsert: ${ee.message}`);
-        const byNum = new Map((saved ?? []).map((r: Any) => [r.episode_number, r.id]));
-        for (const e of eps) {
-          const id = byNum.get(e.episode_number);
-          if (id) episodeIds.push(id as string);
-        }
-      }
+      // legacy mode stops once enough episodes are cached; exact mode caches
+      // every season so aired counts (and thus progress) are right.
+      if (!exact && episodeIds.length >= show.seen) break;
+      const saved = await importSeason(admin, tmdbKey, tmdbId, titleId, s);
+      episodeIds.push(...saved.episodeIds);
+      for (const [k, v] of saved.byPair) byPair.set(k, v);
     }
-    const watched = episodeIds.slice(0, show.seen);
-    if (watched.length) {
+
+    let rows: { user_id: string; episode_id: string; watched_at?: string; source: string }[];
+    if (exact) {
+      rows = [];
+      for (const w of watches!) {
+        const id = byPair.get(`${w.season}:${w.episode}`);
+        if (id) rows.push({ user_id: userId, episode_id: id, watched_at: w.watchedAt, source: "tvtime_import" });
+        else unmatchedEpisodes++; // TVDB↔TMDB numbering drift; skipped, reported
+      }
+    } else {
+      rows = episodeIds
+        .slice(0, show.seen)
+        .map((episode_id) => ({ user_id: userId, episode_id, source: "tvtime_import" }));
+    }
+    if (rows.length) {
       const { error } = await admin
         .from("watch_events")
-        .upsert(
-          watched.map((episode_id) => ({ user_id: userId, episode_id, source: "tvtime_import" })),
-          { onConflict: "user_id,episode_id" },
-        );
+        .upsert(rows, { onConflict: "user_id,episode_id" });
       if (error) throw new Error(`watch_events upsert: ${error.message}`);
-      watchEvents = watched.length;
+      watchEvents = rows.length;
     }
   }
-  return { matched: true, watchEvents };
+  return { matched: true, watchEvents, unmatchedEpisodes };
 }
 
-/** Full import for one user, from parsed shows. onProgress fires per show. */
+/** Full import for one user, from parsed shows (+ optional exact per-episode
+ *  watches from parseWatches, keyed by TheTVDB id). onProgress fires per show. */
 export async function runImport(
   admin: DbClient,
   tmdbKey: string,
   userId: string,
   shows: Show[],
+  watchesByShow?: Map<string, EpisodeWatch[]>,
   onProgress?: (done: number, report: ImportReport) => void,
 ): Promise<ImportReport> {
   const report: ImportReport = {
@@ -256,15 +348,23 @@ export async function runImport(
     errors: [],
     titles: 0,
     watchEvents: 0,
+    unmatchedEpisodes: 0,
   };
   let done = 0;
   for (const show of shows) {
     try {
-      const { matched, watchEvents } = await importShow(admin, tmdbKey, userId, show);
+      const { matched, watchEvents, unmatchedEpisodes } = await importShow(
+        admin,
+        tmdbKey,
+        userId,
+        show,
+        watchesByShow?.get(show.tvdbId),
+      );
       if (matched) {
         report.matched++;
         report.titles++;
         report.watchEvents += watchEvents;
+        report.unmatchedEpisodes += unmatchedEpisodes;
         if (show.followed) report.matchedFollowed++;
       } else {
         report.unmatched.push({ tvdbId: show.tvdbId, name: show.name });

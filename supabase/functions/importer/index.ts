@@ -12,7 +12,7 @@
 // safe). Requires a real user JWT.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { unzipCsvs, parseShows, runImport, NotATvTimeExport } from "../../../scripts/tvtime-import/lib.ts";
+import { unzipCsvs, parseShows, parseWatches, runImport, NotATvTimeExport } from "../../../scripts/tvtime-import/lib.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -61,10 +61,12 @@ Deno.serve(async (req) => {
   const { data: blob, error: dlErr } = await admin.storage.from("imports").download(path);
   if (dlErr || !blob) return fail(`could not read upload: ${dlErr?.message ?? "missing"}`);
 
-  let shows;
+  let shows, watches;
   try {
     const bytes = new Uint8Array(await blob.arrayBuffer());
-    shows = parseShows(unzipCsvs(bytes));
+    const csvs = unzipCsvs(bytes);
+    shows = parseShows(csvs);
+    watches = parseWatches(csvs); // exact per-episode history; empty map → counter fallback
   } catch (err) {
     return fail(err instanceof NotATvTimeExport ? err.message : `unreadable zip: ${String(err)}`);
   }
@@ -74,7 +76,7 @@ Deno.serve(async (req) => {
 
   const started = Date.now();
   const work = (async () => {
-    const report = await runImport(admin, tmdbKey, user.id, shows, (done, r) => {
+    const report = await runImport(admin, tmdbKey, user.id, shows, watches, (done, r) => {
       if (Date.now() - started > WALL_MS) throw new Error("__wall__");
       if (done % 10 === 0) {
         admin.from("import_jobs")

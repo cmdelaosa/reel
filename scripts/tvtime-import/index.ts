@@ -15,7 +15,7 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { parseShows, runImport, tvdbToTmdb, type Show } from "./lib.ts";
+import { parseShows, parseWatches, runImport, tvdbToTmdb, type Show } from "./lib.ts";
 
 function readEnv() {
   const need = (k: string): string => {
@@ -42,13 +42,20 @@ function readCsvDir(dir: string): Record<string, string> {
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
+  const replace = args.includes("--replace");
   const dir = args.find((a) => !a.startsWith("--"));
-  if (!dir) throw new Error("usage: tsx index.ts <export-dir> [--dry-run]");
+  if (!dir) throw new Error("usage: tsx index.ts <export-dir> [--dry-run] [--replace]");
 
   const env = readEnv();
   const admin = createClient(env.supabaseUrl, env.serviceKey, { auth: { persistSession: false } });
-  const shows = parseShows(readCsvDir(dir));
-  console.log(`${dir}${dryRun ? " (dry run)" : ""}: ${shows.length} shows (${shows.filter((s: Show) => s.followed).length} followed). Ratings skipped by design.`);
+  const files = readCsvDir(dir);
+  const shows = parseShows(files);
+  const watches = parseWatches(files);
+  const exactTotal = [...watches.values()].reduce((n, w) => n + w.length, 0);
+  console.log(
+    `${dir}${dryRun ? " (dry run)" : ""}: ${shows.length} shows (${shows.filter((s: Show) => s.followed).length} followed), ` +
+      `${exactTotal} exact episode watches across ${watches.size} shows${exactTotal ? "" : " — FALLING BACK to per-show counters"}. Ratings skipped by design.`,
+  );
 
   if (dryRun) {
     let matched = 0, matchedFollowed = 0;
@@ -63,7 +70,19 @@ async function main() {
     return;
   }
 
-  const report = await runImport(admin, env.tmdbKey, env.targetUserId, shows, (done, r) => {
+  if (replace) {
+    // wipe this user's previous import (e.g. counter-based first-N marks) so the
+    // exact history fully replaces it; manual marks (other sources) are kept.
+    const { error, count } = await admin
+      .from("watch_events")
+      .delete({ count: "exact" })
+      .eq("user_id", env.targetUserId)
+      .eq("source", "tvtime_import");
+    if (error) throw new Error(`--replace delete failed: ${error.message}`);
+    console.log(`--replace: deleted ${count ?? 0} previous tvtime_import watch_events`);
+  }
+
+  const report = await runImport(admin, env.tmdbKey, env.targetUserId, shows, watches, (done, r) => {
     if (done % 25 === 0) console.log(`  ${done}/${shows.length} — matched ${r.matched}, watch_events ${r.watchEvents}`);
   });
   writeFileSync(join(dir, "import-report.json"), JSON.stringify(report, null, 2));
@@ -73,6 +92,7 @@ async function main() {
   console.log(`  errors         : ${report.errors.length}`);
   console.log(`  titles cached  : ${report.titles}`);
   console.log(`  watch_events   : ${report.watchEvents}`);
+  console.log(`  eps unmatched  : ${report.unmatchedEpisodes} (numbering drift)`);
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });
