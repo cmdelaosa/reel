@@ -306,7 +306,9 @@
 .mq-hero-meta { font-size: 12.5px; }
 .mq-hero-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 
-.mq-statgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--gap); }
+/* Stat tiles only render when they fit BESIDE the hero (two-column bento,
+   ≥1024px — see Responsive). Below that they'd stack under it: hide instead. */
+.mq-statgrid { display: none; grid-template-columns: repeat(2, 1fr); gap: var(--gap); }
 .mq-stat { padding: 16px; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
 .mq-stat-ico {
   display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--r-sm);
@@ -568,6 +570,7 @@
   .mq-dock { display: none; }
   .mq-main { padding-bottom: 48px; }
   .mq-bento { grid-template-columns: 1.7fr 1fr; }
+  .mq-statgrid { display: grid; }
   .mq-cols { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 560px) {

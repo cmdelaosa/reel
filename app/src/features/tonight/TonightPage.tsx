@@ -137,26 +137,7 @@ export default function TonightPage() {
           </div>
           <Rail>
             {rest.map((r) => (
-              <div key={r.title_id} style={{ width: "var(--rail-pw)" }} className="flex flex-col gap-2">
-                <Poster
-                  t={{
-                    id: String(r.tmdb_id),
-                    name: r.name,
-                    year: "",
-                    genres: [seLabel(r)],
-                    network: r.network ?? "",
-                    posterPath: tmdbImg(r.poster_path),
-                    voteAverage: r.vote_average ?? 0,
-                    progress: r.aired_count > 0 ? Math.round((r.watched_count / r.aired_count) * 100) : undefined,
-                  }}
-                  subtitle={seLabel(r)}
-                  onClick={() => open(r.tmdb_id)}
-                />
-                <div className="px-0.5">
-                  <div style={{ fontSize: 13.5, fontWeight: 650 }} className="truncate">{r.name}</div>
-                  <div className="mute truncate" style={{ fontSize: 12 }}>{r.episode_name ?? seLabel(r)}</div>
-                </div>
-              </div>
+              <ContinueCard key={r.title_id} r={r} onOpen={() => open(r.tmdb_id)} />
             ))}
           </Rail>
         </section>
@@ -194,6 +175,49 @@ export default function TonightPage() {
             ))}
           </div>
         </section>
+      </div>
+    </div>
+  );
+}
+
+/** Continue-watching tile: show art, but the caption is the concrete next
+ *  episode, with a check to mark it watched in place (the rail then advances
+ *  via the upNext refetch). */
+function ContinueCard({ r, onOpen }: { r: UpNextRow; onOpen: () => void }) {
+  const mark = useMarkWatched(r.title_id);
+  return (
+    <div style={{ width: "var(--rail-pw)" }} className="flex flex-col gap-2">
+      <Poster
+        t={{
+          id: String(r.tmdb_id),
+          name: r.name,
+          year: "",
+          genres: [seLabel(r)],
+          network: r.network ?? "",
+          posterPath: tmdbImg(r.poster_path),
+          voteAverage: r.vote_average ?? 0,
+          progress: r.aired_count > 0 ? Math.round((r.watched_count / r.aired_count) * 100) : undefined,
+        }}
+        subtitle={seLabel(r)}
+        onClick={onOpen}
+      />
+      <div className="flex items-center gap-2 px-0.5">
+        <div className="flex-1 min-w-0">
+          <div style={{ fontSize: 13.5, fontWeight: 650 }} className="truncate">
+            {r.episode_name ?? seLabel(r)}
+          </div>
+          <div className="mute truncate" style={{ fontSize: 12 }}>
+            {r.name} · {seLabel(r)}
+          </div>
+        </div>
+        <button
+          className="check"
+          onClick={(e) => { e.stopPropagation(); mark.mutate(r.episode_id); }}
+          title={`Mark ${seLabel(r)} watched`}
+          aria-label={`Mark ${r.name} ${seLabel(r)} watched`}
+        >
+          <Check size={15} strokeWidth={3} />
+        </button>
       </div>
     </div>
   );
