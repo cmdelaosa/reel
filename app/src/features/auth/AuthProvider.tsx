@@ -27,7 +27,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    supabase.auth.getSession().then(({ data }) => {
+      // Dev-only shortcut: with no session, sign straight into a seeded account
+      // instead of the magic-link flow. Inert in production (import.meta.env.DEV)
+      // and unless VITE_DEV_AUTOLOGIN_EMAIL is set (local .env.local, gitignored).
+      const autoEmail = import.meta.env.VITE_DEV_AUTOLOGIN_EMAIL as string | undefined;
+      if (!data.session && import.meta.env.DEV && autoEmail) {
+        supabase.auth
+          .signInWithPassword({
+            email: autoEmail,
+            password: (import.meta.env.VITE_DEV_AUTOLOGIN_PASSWORD as string | undefined) ?? "password123",
+          })
+          .then(({ error }) => {
+            if (error) setSession(null); // fall back to the login UI
+          });
+        return; // onAuthStateChange sets the session once sign-in resolves
+      }
+      setSession(data.session);
+    });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
