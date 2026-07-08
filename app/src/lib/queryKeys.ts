@@ -16,4 +16,5 @@ export const qk = {
   ratings: ["ratings"] as const,
   stats: ["stats"] as const,
   notifications: ["notifications"] as const,
+  ignored: ["ignored"] as const,
 };

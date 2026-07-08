@@ -1,7 +1,8 @@
 import { useParams, useSearchParams, Link } from "react-router";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, EyeOff } from "lucide-react";
 import { useCollection } from "@/lib/collections";
 import { useFollow, useUnfollow, useLibrary } from "@/lib/library";
+import { useIgnore, useIgnored } from "@/lib/ignore";
 import type { TitleRow } from "@/lib/schemas";
 import { tmdbImg } from "@/lib/tmdb";
 import { Check, Plus } from "lucide-react";
@@ -10,7 +11,10 @@ import { posterBg } from "@/ui/posterBg";
 export default function CollectionPage() {
   const { slug } = useParams();
   const { data, isPending } = useCollection(slug);
+  const { isIgnored } = useIgnored();
+  const ignore = useIgnore();
   const [, setSearchParams] = useSearchParams();
+  const titles = (data?.titles ?? []).filter((t) => !isIgnored(t.tmdb_id));
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -36,9 +40,9 @@ export default function CollectionPage() {
       )}
 
       <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))" }}>
-        {(data?.titles ?? []).map((t) => (
+        {titles.map((t) => (
           <div key={t.tmdb_id} className="flex flex-col gap-1.5">
-            <CollectionPoster t={t} onOpen={() => open(t.tmdb_id)} />
+            <CollectionPoster t={t} onOpen={() => open(t.tmdb_id)} onIgnore={() => ignore.mutate(t.id)} />
             <AddButton t={t} />
           </div>
         ))}
@@ -47,12 +51,21 @@ export default function CollectionPage() {
   );
 }
 
-function CollectionPoster({ t, onOpen }: { t: TitleRow; onOpen: () => void }) {
+function CollectionPoster({ t, onOpen, onIgnore }: { t: TitleRow; onOpen: () => void; onIgnore: () => void }) {
   const art = tmdbImg(t.poster_path);
   return (
     <div className="poster" style={{ background: posterBg(t.name) }} onClick={onOpen}>
       {art && <img className="poster-img" src={art} alt="" loading="lazy" />}
       <div className="poster-sheen" />
+      <button
+        className="btn btn-icon badge-glass absolute"
+        style={{ top: 8, right: 8, color: "#fff" }}
+        title="Not interested — hide from suggestions"
+        aria-label={`Hide ${t.name} from suggestions`}
+        onClick={(e) => { e.stopPropagation(); onIgnore(); }}
+      >
+        <EyeOff size={15} />
+      </button>
       <div className="poster-body">
         <div className="poster-title">{t.name}</div>
         <div className="poster-sub">{[t.first_air_date?.slice(0, 4), t.genres[0]].filter(Boolean).join(" · ")}</div>

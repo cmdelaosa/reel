@@ -2,6 +2,7 @@ import { useSearchParams } from "react-router";
 import { Search, Star } from "lucide-react";
 import { useFriendships } from "@/lib/friends";
 import { usePopularWithFriends, useBestRatedByFriends, type BestRatedByFriends } from "@/lib/explore";
+import { useIgnored } from "@/lib/ignore";
 import { tmdbImg } from "@/lib/tmdb";
 import { NetworkLogo, Poster, Rail } from "@/ui";
 import { FriendStack } from "@/ui/FriendAvatar";
@@ -28,8 +29,11 @@ export default function ExplorePage() {
   const friendCount = friendships.filter((f) => f.status === "accepted").length;
   const hasFriends = friendCount >= 2;
 
-  const { data: popular = [] } = usePopularWithFriends(hasFriends);
-  const { data: bestRated = [] } = useBestRatedByFriends(hasFriends);
+  const { isIgnored } = useIgnored();
+  const { data: popularRaw = [] } = usePopularWithFriends(hasFriends);
+  const { data: bestRatedRaw = [] } = useBestRatedByFriends(hasFriends);
+  const popular = popularRaw.filter((p) => !isIgnored(p.tmdb_id));
+  const bestRated = bestRatedRaw.filter((b) => !isIgnored(b.tmdb_id));
   const open = useOpenTitle();
 
   return (

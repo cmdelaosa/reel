@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Bell, Check, Download, Mail, RotateCcw, Sparkles, Upload, X } from "lucide-react";
+import { Bell, Check, Download, EyeOff, Mail, RotateCcw, Sparkles, Undo2, Upload, X } from "lucide-react";
 import { useFocusTrap } from "@/ui/useFocusTrap";
 import {
   useSettings, setSetting, resetSettings,
@@ -9,6 +9,8 @@ import {
 import {
   NOTIFICATION_TYPES, prefFor, useNotificationPrefs, useSetPref,
 } from "@/lib/notificationPrefs";
+import { useIgnored, useUnignore } from "@/lib/ignore";
+import { tmdbImg } from "@/lib/tmdb";
 
 /* Settings sheet — the prototype's DesignLab stripped to production scope:
    theme (system/dark/oled/light), accent, density. Look/concept/radius were
@@ -81,6 +83,39 @@ function NotificationsSection() {
           );
         })}
       </div>
+    </Row>
+  );
+}
+
+function IgnoredSection() {
+  const { ignored } = useIgnored();
+  const unignore = useUnignore();
+  return (
+    <Row label="Ignored suggestions">
+      {ignored.length === 0 ? (
+        <p className="dim" style={{ fontSize: 13, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+          <EyeOff size={14} /> Shows you hide from Explore appear here to restore.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {ignored.map((t) => (
+            <div key={t.titleId} className="flex items-center gap-2.5">
+              <div
+                className="mq-row-art"
+                style={{ width: 30, height: 44, flex: "0 0 auto", background: "var(--surface-3)" }}
+              >
+                {tmdbImg(t.posterPath, "w92") && (
+                  <img src={tmdbImg(t.posterPath, "w92")!} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                )}
+              </div>
+              <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5 }}>{t.name}</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => unignore.mutate(t.titleId)} title="Restore to suggestions">
+                <Undo2 size={14} />Restore
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </Row>
   );
 }
@@ -162,6 +197,8 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           </Row>
 
           <NotificationsSection />
+
+          <IgnoredSection />
 
           <Row label="Your data">
             <div className="flex flex-col gap-2">
