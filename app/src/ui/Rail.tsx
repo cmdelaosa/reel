@@ -34,26 +34,33 @@ export function Rail({ children, scrollToStartKey }: { children: React.ReactNode
     return () => { ro.disconnect(); window.removeEventListener("resize", update); };
   }, []);
 
-  // follow a marked show to the front: glide to the start after the reorder.
-  // A hand-rolled rAF tween (not scrollTo behavior:"smooth") so it runs
-  // consistently across browsers and doesn't get eaten by scroll-snap.
+  // follow a marked show to the front: glide the rail back to the start. We ease
+  // toward 0 by re-reading scrollLeft each frame (not a captured start) and keep
+  // going through the reorder — the marked show only jumps to index 0 after the
+  // up-next refetch, and scroll-snap then nudges scrollLeft off 0, so a fixed
+  // tween would either no-op (we were already at 0) or get overridden. The lerp
+  // catches that late nudge and pulls it back. Direct scrollLeft assignment (vs
+  // scrollTo "smooth") isn't blocked by scroll-snap.
   useEffect(() => {
     if (!scrollToStartKey) return;
     const el = ref.current;
-    if (!el || el.scrollLeft <= 0) return;
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.scrollLeft = 0; return; }
-    const start = el.scrollLeft;
-    const duration = 460;
+    if (!el) return;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     let raf = 0;
     let t0: number | null = null;
     const step = (ts: number) => {
       if (t0 == null) t0 = ts;
-      const p = Math.min(1, (ts - t0) / duration);
-      el.scrollLeft = Math.round(start * (1 - p) ** 3); // easeOutCubic decay → 0
-      if (p < 1) raf = requestAnimationFrame(step);
+      const cur = el.scrollLeft;
+      if (cur > 1) el.scrollLeft = cur * 0.78; // exponential ease → 0
+      else el.scrollLeft = 0;
+      if (ts - t0 < 750) raf = requestAnimationFrame(step); // outlast the refetch/reorder
     };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    if (!reduce) raf = requestAnimationFrame(step);
+    // Guarantee the landing regardless of the rAF tween — it's paused in a hidden
+    // tab and skipped under reduced-motion, and the up-next reorder can settle
+    // late. Fires just after the tween window.
+    const done = setTimeout(() => { el.scrollLeft = 0; }, reduce ? 0 : 800);
+    return () => { cancelAnimationFrame(raf); clearTimeout(done); };
   }, [scrollToStartKey]);
 
   const nudge = (dir: number) => ref.current?.scrollBy({ left: dir * ref.current.clientWidth * 0.8, behavior: "smooth" });
@@ -102,7 +109,7 @@ export function Rail({ children, scrollToStartKey }: { children: React.ReactNode
         <ChevronLeft size={20} />
       </button>
       <div
-        className={`rail no-scrollbar${grabbing ? " grabbing" : ""}`}
+        className={`rail no-scrollbar${grabbing ? " grabbing" : ""}${scrollToStartKey !== undefined ? " no-snap" : ""}`}
         ref={ref}
         onScroll={update}
         onPointerDown={onPointerDown}

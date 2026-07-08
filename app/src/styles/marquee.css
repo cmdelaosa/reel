@@ -113,6 +113,9 @@
 /* mouse drag-to-scroll (pointer handlers in Rail.tsx) */
 @media (hover: hover) and (pointer: fine) { .rail { cursor: grab; } }
 .rail.grabbing { cursor: grabbing; scroll-snap-type: none; user-select: none; }
+/* follow-enabled rails (continue watching) reorder on mark; snap would re-align
+   to the old front card and shove the just-marked one off-screen left. */
+.rail.no-snap { scroll-snap-type: none; }
 .rail.grabbing img { pointer-events: none; -webkit-user-drag: none; }
 
 /* Rail with edge scroll arrows */
