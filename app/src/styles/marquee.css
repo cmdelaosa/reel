@@ -160,6 +160,15 @@
   color: transparent; transition: all .16s ease;
 }
 .check.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+/* Fill + spring pop on tap, so the confirmation is visible before the card
+   advances (the mark itself is delayed to let this play). */
+.check.pop { animation: check-pop .42s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes check-pop {
+  0%   { transform: scale(.8); }
+  45%  { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .check.pop { animation: none; } }
 
 /* Profile header */
 .profile-cover {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { CalendarClock, Check, ChevronRight, Clapperboard, Flame, Tv } from "lucide-react";
 import { splitTonight, premieresSoon, premiereMs } from "@/domain/tonight";
@@ -180,6 +181,35 @@ export default function TonightPage() {
   );
 }
 
+/** Check button that fills with a pop before the mark actually lands — the
+ *  optimistic mark + up-next refetch is otherwise instant, so the confirmation
+ *  never registers. Delaying the mutate ~420ms lets the fill play. `marked` is
+ *  derived by comparing the clicked episode to the current one, so when the card
+ *  advances to the next episode it resets on its own (no stale filled state). */
+function MarkCheck({ episodeId, mark, label }: {
+  episodeId: string;
+  mark: ReturnType<typeof useMarkWatched>;
+  label: string;
+}) {
+  const [markedEp, setMarkedEp] = useState<string | null>(null);
+  const marked = markedEp === episodeId;
+  return (
+    <button
+      className={`check ${marked ? "on pop" : ""}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (marked) return;
+        setMarkedEp(episodeId);
+        setTimeout(() => mark.mutate(episodeId), 420);
+      }}
+      title={label}
+      aria-label={label}
+    >
+      <Check size={15} strokeWidth={3} />
+    </button>
+  );
+}
+
 /** Continue-watching tile: show art, but the caption is the concrete next
  *  episode, with a check to mark it watched in place (the rail then advances
  *  via the upNext refetch). */
@@ -210,14 +240,7 @@ function ContinueCard({ r, onOpen }: { r: UpNextRow; onOpen: () => void }) {
             {r.name} · {seLabel(r)}
           </div>
         </div>
-        <button
-          className="check"
-          onClick={(e) => { e.stopPropagation(); mark.mutate(r.episode_id); }}
-          title={`Mark ${seLabel(r)} watched`}
-          aria-label={`Mark ${r.name} ${seLabel(r)} watched`}
-        >
-          <Check size={15} strokeWidth={3} />
-        </button>
+        <MarkCheck episodeId={r.episode_id} mark={mark} label={`Mark ${r.name} ${seLabel(r)} watched`} />
       </div>
     </div>
   );
@@ -238,13 +261,7 @@ function FreshRow({ r, onOpen }: { r: UpNextRow; onOpen: () => void }) {
           S{r.season_number} E{r.episode_number}{r.episode_name ? ` · ${r.episode_name}` : ""}
         </div>
       </div>
-      <button
-        className="check"
-        onClick={(e) => { e.stopPropagation(); mark.mutate(r.episode_id); }}
-        title="Mark watched"
-      >
-        <Check size={15} strokeWidth={3} />
-      </button>
+      <MarkCheck episodeId={r.episode_id} mark={mark} label={`Mark ${r.name} ${seLabel(r)} watched`} />
     </div>
   );
 }
