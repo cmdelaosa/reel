@@ -19,6 +19,16 @@ export interface LibraryShow extends LibraryRow {
 
 const rollupSchema = z.array(libraryRowSchema);
 
+/* Follow/notify/unfollow all change what rpc_up_next, rpc_calendar_feed and
+   rpc_user_stats return (they key off library_entries.followed), so invalidate
+   those derived queries too — not just the rollup. Mirrors watch.ts. */
+function invalidateLibraryDerived(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: qk.library });
+  qc.invalidateQueries({ queryKey: qk.upNext });
+  qc.invalidateQueries({ queryKey: qk.stats });
+  qc.invalidateQueries({ queryKey: ["calendarFeed"] });
+}
+
 function decorate(row: LibraryRow): LibraryShow {
   return {
     ...row,
@@ -103,7 +113,7 @@ export function useFollow() {
       return { prev };
     },
     onError: (_e, _t, ctx) => queryClient.setQueryData(qk.library, ctx?.prev),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: qk.library }),
+    onSettled: () => invalidateLibraryDerived(queryClient),
   });
 }
 
@@ -129,7 +139,7 @@ export function useToggleNotify() {
       return { prev };
     },
     onError: (_e, _v, ctx) => queryClient.setQueryData(qk.library, ctx?.prev),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: qk.library }),
+    onSettled: () => invalidateLibraryDerived(queryClient),
   });
 }
 
@@ -154,6 +164,6 @@ export function useUnfollow() {
       return { prev };
     },
     onError: (_e, _t, ctx) => queryClient.setQueryData(qk.library, ctx?.prev),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: qk.library }),
+    onSettled: () => invalidateLibraryDerived(queryClient),
   });
 }

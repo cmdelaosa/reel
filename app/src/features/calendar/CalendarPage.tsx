@@ -84,14 +84,17 @@ function MyShowsFeed() {
     return () => io.disconnect();
   }, [weeksBack, isPending]);
 
-  // keep the viewport steady when earlier weeks are prepended
+  // keep the viewport steady when earlier weeks are prepended. Key on the rows
+  // *reference* (not its length): keepPreviousData holds the old array during a
+  // widen and hands back a fresh array on settle, so this runs — and clears the
+  // anchor — on every settle, even when the widened range yields no new rows.
   useLayoutEffect(() => {
     if (prevH.current) {
       const delta = document.documentElement.scrollHeight - prevH.current;
       if (delta > 0) window.scrollBy(0, delta);
       prevH.current = 0;
     }
-  }, [rows.length]);
+  }, [rows]);
 
   // land on "Today" once the first page is in
   useEffect(() => {

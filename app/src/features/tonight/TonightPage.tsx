@@ -44,6 +44,9 @@ export default function TonightPage() {
   const hero = fresh[0] ?? cont[0];
   const heroMark = useMarkWatched(hero?.title_id ?? "");
   const rest = cont.filter((r) => r.title_id !== hero?.title_id);
+  // drop the hero from the Fresh list so it isn't shown twice (it's fresh[0]
+  // whenever there's any fresh episode).
+  const freshRest = fresh.filter((r) => r.title_id !== hero?.title_id);
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -170,7 +173,7 @@ export default function TonightPage() {
           </div>
           <div className="flex flex-col gap-3">
             {fresh.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>Nothing new this week.</p>}
-            {fresh.map((r) => (
+            {freshRest.map((r) => (
               <FreshRow key={r.title_id} r={r} onOpen={() => open(r.tmdb_id)} />
             ))}
           </div>

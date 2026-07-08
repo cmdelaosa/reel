@@ -138,7 +138,12 @@ export function Shell() {
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
       {notifOpen && <NotifPanel onClose={() => setNotifOpen(false)} />}
       {friendParam && <FriendSheet friendId={friendParam} onClose={closeFriend} />}
-      {detailTmdbId != null && <DetailSheet tmdbId={detailTmdbId} onClose={closeTitle} />}
+      {/* key on the tmdb id so switching titles (⌘K, notification) while the
+          sheet is open remounts it — otherwise stale season/pending/toast state
+          carries over from the previous show. */}
+      {detailTmdbId != null && (
+        <DetailSheet key={detailTmdbId} tmdbId={detailTmdbId} onClose={closeTitle} />
+      )}
 
       <OfflineToast />
     </div>

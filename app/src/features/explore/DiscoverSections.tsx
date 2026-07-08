@@ -49,15 +49,18 @@ function AddButton({ t }: { t: TitleRow }) {
 
 export function DiscoverSections() {
   const { data: trending = [] } = useTrending();
-  const { data: library = [] } = useLibrary();
+  const { data: library = [], isSuccess: libraryLoaded } = useLibrary();
   const [genre, setGenre] = useState<string | null>(null);
   const [, setSearchParams] = useSearchParams();
 
   // Snapshot the followed set the first time trending loads, so a title just
   // Added stays in the grid (showing "Added") until you navigate — matching the
   // prototype's chosen behavior. (setState-in-render, converges once.)
+  // Gate on the library query having settled too: on a cold cache trending can
+  // resolve first, and snapshotting an empty library would show every followed
+  // show as un-added for the life of the mount.
   const [excluded, setExcluded] = useState<Set<number> | null>(null);
-  if (excluded === null && trending.length > 0) {
+  if (excluded === null && trending.length > 0 && libraryLoaded) {
     setExcluded(new Set(library.map((r) => r.tmdb_id)));
   }
   const discover = trending.filter((t) => !(excluded ?? new Set<number>()).has(t.tmdb_id));
