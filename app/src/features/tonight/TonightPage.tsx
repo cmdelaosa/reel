@@ -38,6 +38,9 @@ export default function TonightPage() {
   const { data: upNext = [], isPending } = useUpNext();
   const { data: library = [] } = useLibrary();
   const [, setSearchParams] = useSearchParams();
+  // bumped after marking from the continue rail → smooth-scroll it back to the
+  // front, following the just-marked show to its new position.
+  const [followKey, setFollowKey] = useState(0);
 
   const now = new Date();
   const { fresh, cont } = splitTonight(upNext, now);
@@ -136,9 +139,9 @@ export default function TonightPage() {
               <p className="mute" style={{ fontSize: 13 }}>Pick up where you left off</p>
             </div>
           </div>
-          <Rail>
+          <Rail scrollToStartKey={followKey}>
             {rest.map((r) => (
-              <ContinueCard key={r.title_id} r={r} onOpen={() => open(r.tmdb_id)} />
+              <ContinueCard key={r.title_id} r={r} onOpen={() => open(r.tmdb_id)} onMarked={() => setFollowKey((k) => k + 1)} />
             ))}
           </Rail>
         </section>
@@ -186,10 +189,11 @@ export default function TonightPage() {
  *  never registers. Delaying the mutate ~420ms lets the fill play. `marked` is
  *  derived by comparing the clicked episode to the current one, so when the card
  *  advances to the next episode it resets on its own (no stale filled state). */
-function MarkCheck({ episodeId, mark, label }: {
+function MarkCheck({ episodeId, mark, label, onMarked }: {
   episodeId: string;
   mark: ReturnType<typeof useMarkWatched>;
   label: string;
+  onMarked?: () => void;
 }) {
   const [markedEp, setMarkedEp] = useState<string | null>(null);
   const marked = markedEp === episodeId;
@@ -200,7 +204,7 @@ function MarkCheck({ episodeId, mark, label }: {
         e.stopPropagation();
         if (marked) return;
         setMarkedEp(episodeId);
-        setTimeout(() => mark.mutate(episodeId), 420);
+        setTimeout(() => { mark.mutate(episodeId); onMarked?.(); }, 420);
       }}
       title={label}
       aria-label={label}
@@ -213,7 +217,7 @@ function MarkCheck({ episodeId, mark, label }: {
 /** Continue-watching tile: show art, but the caption is the concrete next
  *  episode, with a check to mark it watched in place (the rail then advances
  *  via the upNext refetch). */
-function ContinueCard({ r, onOpen }: { r: UpNextRow; onOpen: () => void }) {
+function ContinueCard({ r, onOpen, onMarked }: { r: UpNextRow; onOpen: () => void; onMarked?: () => void }) {
   const mark = useMarkWatched(r.title_id);
   return (
     <div style={{ width: "var(--rail-pw)" }} className="flex flex-col gap-2">
@@ -240,7 +244,7 @@ function ContinueCard({ r, onOpen }: { r: UpNextRow; onOpen: () => void }) {
             {r.name} · {seLabel(r)}
           </div>
         </div>
-        <MarkCheck episodeId={r.episode_id} mark={mark} label={`Mark ${r.name} ${seLabel(r)} watched`} />
+        <MarkCheck episodeId={r.episode_id} mark={mark} label={`Mark ${r.name} ${seLabel(r)} watched`} onMarked={onMarked} />
       </div>
     </div>
   );

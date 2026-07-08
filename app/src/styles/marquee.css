@@ -110,6 +110,10 @@
 /* Rails */
 .rail { display: flex; gap: var(--gap); overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px; }
 .rail > * { scroll-snap-align: start; flex: 0 0 auto; }
+/* mouse drag-to-scroll (pointer handlers in Rail.tsx) */
+@media (hover: hover) and (pointer: fine) { .rail { cursor: grab; } }
+.rail.grabbing { cursor: grabbing; scroll-snap-type: none; user-select: none; }
+.rail.grabbing img { pointer-events: none; -webkit-user-drag: none; }
 
 /* Rail with edge scroll arrows */
 .rail-wrap { position: relative; }
