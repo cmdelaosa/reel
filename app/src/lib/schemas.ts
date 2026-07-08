@@ -76,10 +76,12 @@ export const libraryRowSchema = z.object({
   vote_average: z.number().nullable(),
   favorite: z.boolean(),
   notify: z.boolean(),
+  stopped: z.boolean(),
   added_at: z.string(),
   aired_count: z.number().int(),
   watched_count: z.number().int(),
   last_watched_at: z.string().nullable(),
+  last_aired_datetime: z.string().nullable(),
   next_air_datetime: z.string().nullable(),
 });
 export type LibraryRow = z.infer<typeof libraryRowSchema>;

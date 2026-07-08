@@ -8,25 +8,52 @@ import { PosterGridSkeleton } from "@/ui/Skeleton";
 /* My Shows — the library grid with status buckets. Port of prototype
    marquee.tsx → Shows, on live data. */
 
-const FILTERS: { key: ShowStatus | "all"; label: string }[] = [
+type Bucket = ShowStatus | "all" | "stopped";
+const FILTERS: { key: Bucket; label: string }[] = [
   { key: "watching", label: "Watching" },
   { key: "caughtup", label: "Caught up" },
   { key: "watchlist", label: "Watchlist" },
   { key: "upcoming", label: "Upcoming" },
   { key: "finished", label: "Finished" },
+  { key: "stopped", label: "Stopped" },
   { key: "all", label: "All" },
 ];
 
+type SortKey = "lastwatched" | "lastreleased" | "az" | "rating";
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "lastwatched", label: "Last watched" },
+  { key: "lastreleased", label: "Last released" },
+  { key: "az", label: "A–Z" },
+  { key: "rating", label: "Top rated" },
+];
+const ms = (s: string | null) => (s ? new Date(s).getTime() : 0);
+const COMPARATORS: Record<SortKey, (a: LibraryShow, b: LibraryShow) => number> = {
+  lastwatched: (a, b) => ms(b.last_watched_at) - ms(a.last_watched_at),
+  lastreleased: (a, b) => ms(b.last_aired_datetime) - ms(a.last_aired_datetime),
+  az: (a, b) => a.name.localeCompare(b.name),
+  rating: (a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0),
+};
+
 export default function ShowsPage() {
   const { data: library = [], isPending } = useLibrary();
-  const [f, setF] = useState<ShowStatus | "all">("watching");
-  const [sort, setSort] = useState<"az" | "rating">("az");
+  const [f, setF] = useState<Bucket>("watching");
+  const [sort, setSort] = useState<SortKey>("lastwatched");
   const [, setSearchParams] = useSearchParams();
 
-  const inBucket = (s: LibraryShow) => f === "all" || s.status === f;
-  const items = library.filter(inBucket).sort((a, b) =>
-    sort === "az" ? a.name.localeCompare(b.name) : (b.vote_average ?? 0) - (a.vote_average ?? 0),
-  );
+  // Stopped shows live only in the Stopped bucket; every other bucket (and All)
+  // shows active follows.
+  const inBucket = (s: LibraryShow) => {
+    if (f === "stopped") return s.stopped;
+    if (s.stopped) return false;
+    return f === "all" || s.status === f;
+  };
+  const count = (key: Bucket) =>
+    key === "stopped"
+      ? library.filter((s) => s.stopped).length
+      : key === "all"
+        ? library.filter((s) => !s.stopped).length
+        : library.filter((s) => !s.stopped && s.status === key).length;
+  const items = library.filter(inBucket).sort(COMPARATORS[sort]);
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -49,16 +76,14 @@ export default function ShowsPage() {
           {FILTERS.map((x) => (
             <button key={x.key} className={`chip ${f === x.key ? "chip-active" : ""}`} onClick={() => setF(x.key)}>
               {x.label}
-              <span className="mute" style={{ fontWeight: 700 }}>
-                {x.key === "all" ? library.length : library.filter((s) => s.status === x.key).length}
-              </span>
+              <span className="mute" style={{ fontWeight: 700 }}>{count(x.key)}</span>
             </button>
           ))}
         </div>
         <div className="segmented">
-          {(["az", "rating"] as const).map((s) => (
-            <div key={s} className={`seg ${sort === s ? "seg-active" : ""}`} onClick={() => setSort(s)}>
-              {s === "az" ? "A–Z" : "Top rated"}
+          {SORTS.map((s) => (
+            <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => setSort(s.key)}>
+              {s.label}
             </div>
           ))}
         </div>

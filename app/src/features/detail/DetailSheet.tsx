@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Bell, Check, Plus, Star, X } from "lucide-react";
+import { Bell, Check, Pause, Play, Plus, Star, X } from "lucide-react";
 import { tmdbImg } from "@/lib/tmdb";
-import { useLibrary, useFollow, useUnfollow, useToggleNotify } from "@/lib/library";
+import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
 import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useUndoMarks } from "@/lib/watch";
 import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
@@ -34,6 +34,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const follow = useFollow();
   const unfollow = useUnfollow();
   const toggleNotify = useToggleNotify();
+  const setStopped = useSetStopped();
   const [season, setSeason] = useState<number | null>(null);
 
   const title = data?.title;
@@ -183,12 +184,21 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 <button className={`btn ${added ? "btn-outline" : "btn-accent"}`} onClick={toggleFollow}>
                   {added ? <><Check size={16} />Remove</> : <><Plus size={16} />Add</>}
                 </button>
-                {added && entry && isUpcoming && (
+                {added && entry && isUpcoming && !entry.stopped && (
                   <button
                     className={`btn ${entry.notify ? "btn-accent" : "btn-outline"}`}
                     onClick={() => toggleNotify.mutate({ titleId: entry.title_id, notify: !entry.notify })}
                   >
                     <Bell size={16} />{entry.notify ? "Tracking" : "Notify me"}
+                  </button>
+                )}
+                {added && entry && (
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => setStopped.mutate({ titleId: entry.title_id, stopped: !entry.stopped })}
+                    title={entry.stopped ? "Resume — back in Tonight & calendar" : "Stop watching — keeps history, hides from Tonight"}
+                  >
+                    {entry.stopped ? <><Play size={16} />Resume</> : <><Pause size={16} />Stop watching</>}
                   </button>
                 )}
               </div>

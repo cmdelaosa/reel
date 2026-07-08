@@ -43,8 +43,11 @@ export default function TonightPage() {
   const [followKey, setFollowKey] = useState(0);
 
   const now = new Date();
+  // stopped shows are hidden from Tonight (up-next already excludes them; filter
+  // them from the library-derived stats + premieres too).
+  const activeLibrary = library.filter((s) => !s.stopped);
   const { fresh, cont } = splitTonight(upNext, now);
-  const soon = premieresSoon(library, now).slice(0, 6);
+  const soon = premieresSoon(activeLibrary, now).slice(0, 6);
   const hero = fresh[0] ?? cont[0];
   const heroMark = useMarkWatched(hero?.title_id ?? "");
   const rest = cont.filter((r) => r.title_id !== hero?.title_id);
@@ -64,7 +67,7 @@ export default function TonightPage() {
 
   const stats = [
     { icon: Clapperboard, label: "Fresh this week", value: fresh.length },
-    { icon: Tv, label: "Following", value: library.length },
+    { icon: Tv, label: "Following", value: activeLibrary.length },
     { icon: Flame, label: "Shows in progress", value: upNext.length },
     { icon: CalendarClock, label: "Premieres soon", value: soon.length },
   ];

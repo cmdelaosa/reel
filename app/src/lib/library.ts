@@ -80,10 +80,12 @@ function optimisticRow(t: TitleRow): LibraryShow {
     vote_average: t.vote_average,
     favorite: false,
     notify: false,
+    stopped: false,
     added_at: new Date().toISOString(),
     aired_count: t.first_air_date && t.first_air_date <= new Date().toISOString().slice(0, 10) ? 1 : 0,
     watched_count: 0,
     last_watched_at: null,
+    last_aired_datetime: null,
     next_air_datetime: null,
   });
 }
@@ -135,6 +137,34 @@ export function useToggleNotify() {
       const prev = queryClient.getQueryData<LibraryShow[]>(qk.library);
       queryClient.setQueryData<LibraryShow[]>(qk.library, (old = []) =>
         old.map((r) => (r.title_id === titleId ? { ...r, notify } : r)),
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => queryClient.setQueryData(qk.library, ctx?.prev),
+    onSettled: () => invalidateLibraryDerived(queryClient),
+  });
+}
+
+/** Stop / resume a followed show. Stopping keeps history but drops it out of
+ *  Tonight/up-next/calendar and turns notifications off. Optimistic. */
+export function useSetStopped() {
+  const queryClient = useQueryClient();
+  const { session } = useAuth();
+  return useMutation({
+    mutationFn: async ({ titleId, stopped }: { titleId: string; stopped: boolean }) => {
+      const patch = stopped ? { stopped: true, notify: false } : { stopped: false };
+      const { error } = await supabase
+        .from("library_entries")
+        .update(patch)
+        .eq("user_id", session!.user.id)
+        .eq("title_id", titleId);
+      if (error) throw error;
+    },
+    onMutate: async ({ titleId, stopped }) => {
+      await queryClient.cancelQueries({ queryKey: qk.library });
+      const prev = queryClient.getQueryData<LibraryShow[]>(qk.library);
+      queryClient.setQueryData<LibraryShow[]>(qk.library, (old = []) =>
+        old.map((r) => (r.title_id === titleId ? { ...r, stopped, notify: stopped ? false : r.notify } : r)),
       );
       return { prev };
     },
