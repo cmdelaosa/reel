@@ -47,6 +47,12 @@ Deno.serve(async (req) => {
   // The uploaded object must live under the caller's own folder.
   if (!String(path).startsWith(`${user.id}/`)) return json({ error: "forbidden path" }, 403);
 
+  // The job row must belong to the caller (service-role writes bypass RLS, so
+  // verify ownership before touching it — otherwise a caller could overwrite
+  // another user's import_jobs row).
+  const { data: jobRow } = await admin.from("import_jobs").select("user_id").eq("id", job_id).maybeSingle();
+  if (!jobRow || jobRow.user_id !== user.id) return json({ error: "job not found" }, 404);
+
   const fail = async (message: string, status = 400) => {
     await admin.from("import_jobs").update({ status: "error", report: { error: message }, finished_at: new Date().toISOString() }).eq("id", job_id);
     return json({ error: message }, status);
@@ -71,7 +77,10 @@ Deno.serve(async (req) => {
     const report = await runImport(admin, tmdbKey, user.id, shows, (done, r) => {
       if (Date.now() - started > WALL_MS) throw new Error("__wall__");
       if (done % 10 === 0) {
-        admin.from("import_jobs").update({ report: { total: shows.length, done, matched: r.matched, watch_events: r.watchEvents } }).eq("id", job_id);
+        admin.from("import_jobs")
+          .update({ report: { total: shows.length, done, matched: r.matched, watch_events: r.watchEvents } })
+          .eq("id", job_id)
+          .then(() => {}, () => {}); // fire-and-forget progress; never let a blip reject the isolate
       }
     }).catch((e) => (e?.message === "__wall__" ? "__wall__" : Promise.reject(e)));
 
@@ -90,8 +99,12 @@ Deno.serve(async (req) => {
     await admin.storage.from("imports").remove([path]);
   })();
 
+  // Respond immediately; run the import in the background where supported,
+  // else await inline. (waitUntil() returns void — must branch explicitly.)
   // deno-lint-ignore no-explicit-any
-  (globalThis as any).EdgeRuntime?.waitUntil?.(work) ?? (await work);
+  const edge = (globalThis as any).EdgeRuntime;
+  if (edge?.waitUntil) edge.waitUntil(work);
+  else await work;
 
   return json({ job_id, shows: shows.length, status: "running" });
 });

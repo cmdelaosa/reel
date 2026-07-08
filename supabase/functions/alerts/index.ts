@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   const rows = (pending ?? []) as Pending[];
 
-  const report = { pending: rows.length, inappInserted: 0, emailsSent: 0, emailSkipped: 0, users: 0 };
+  const report = { pending: rows.length, recorded: 0, inappInserted: 0, emailsSent: 0, emailSkipped: 0, users: 0 };
   if (rows.length === 0) return new Response(JSON.stringify(report), { headers: { "content-type": "application/json" } });
 
   const userIds = [...new Set(rows.map((r) => r.user_id))];
@@ -74,8 +74,30 @@ Deno.serve(async (req) => {
   const inappOn = (uid: string) => prefs.get(uid)?.inapp ?? true;
   const emailOn = (uid: string) => prefs.get(uid)?.email ?? false;
 
-  // in-app rows + dedupe ledger (always record, so we don't re-alert)
-  const notifRows = rows
+  // ── Atomic dedupe: record the ledger FIRST, alert only what it accepted.
+  // ON CONFLICT DO NOTHING … RETURNING (ignoreDuplicates + select) hands back
+  // only the (user, episode) pairs this run actually inserted. So a retry after
+  // a mid-run crash (ledger written, notifications not) won't re-alert, and two
+  // concurrent runs can't both claim the same pair. The ledger is the source of
+  // truth; in-app rows and emails are derived from what it accepted.
+  const { data: recorded, error: se } = await admin
+    .from("notifications_sent")
+    .upsert(
+      rows.map((r) => ({ user_id: r.user_id, episode_id: r.episode_id })),
+      { onConflict: "user_id,episode_id", ignoreDuplicates: true },
+    )
+    .select("user_id, episode_id");
+  if (se) return new Response(JSON.stringify({ error: se.message }), { status: 500 });
+
+  const fresh = new Set((recorded ?? []).map((r: Any) => `${r.user_id}:${r.episode_id}`));
+  const freshRows = rows.filter((r) => fresh.has(`${r.user_id}:${r.episode_id}`));
+  report.recorded = freshRows.length;
+  if (freshRows.length === 0) {
+    return new Response(JSON.stringify(report), { headers: { "content-type": "application/json" } });
+  }
+
+  // in-app notifications for opted-in recipients (only the freshly-recorded rows)
+  const notifRows = freshRows
     .filter((r) => inappOn(r.user_id))
     .map((r) => ({
       user_id: r.user_id,
@@ -94,24 +116,19 @@ Deno.serve(async (req) => {
     report.inappInserted = notifRows.length;
   }
 
-  const { error: se } = await admin
-    .from("notifications_sent")
-    .insert(rows.map((r) => ({ user_id: r.user_id, episode_id: r.episode_id })));
-  if (se) return new Response(JSON.stringify({ error: se.message }), { status: 500 });
-
-  // one digest email per user who opted in
-  const emailUsers = userIds.filter(emailOn);
+  // one digest email per opted-in recipient with fresh episodes. Resolve each
+  // address individually — listUsers() returns only the first page, silently
+  // dropping recipients past it.
+  const emailUsers = [...new Set(freshRows.map((r) => r.user_id))].filter(emailOn);
   if (emailUsers.length > 0) {
     if (!resendKey) {
       report.emailSkipped = emailUsers.length; // coded; pending RESEND_API_KEY
     } else {
-      // resolve emails from auth.users
-      const { data: authList } = await admin.auth.admin.listUsers();
-      const emailById = new Map((authList?.users ?? []).map((u: Any) => [u.id, u.email]));
       for (const uid of emailUsers) {
-        const to = emailById.get(uid);
+        const { data: authUser } = await admin.auth.admin.getUserById(uid);
+        const to = authUser?.user?.email;
         if (!to) continue;
-        const mine = rows.filter((r) => r.user_id === uid);
+        const mine = freshRows.filter((r) => r.user_id === uid);
         const res = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${resendKey}`, "content-type": "application/json" },

@@ -115,8 +115,11 @@ async function ensureTitle(admin: SupabaseClient, apiKey: string, tmdbId: number
   return { detail: d, title: row };
 }
 
-const fetchTmdb = (apiKey: string, p: string) =>
-  fetch(`${TMDB}${p}${p.includes("?") ? "&" : "?"}api_key=${apiKey}`).then((r) => r.json());
+const fetchTmdb = async (apiKey: string, p: string) => {
+  const res = await fetch(`${TMDB}${p}${p.includes("?") ? "&" : "?"}api_key=${apiKey}`);
+  if (!res.ok) throw new Error(`TMDB ${p}: ${res.status}`); // don't treat an error body as data
+  return res.json();
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -169,9 +172,14 @@ Deno.serve(async (req) => {
         const results: Any[] = (data.results ?? []).slice(0, 20);
         if (results.length) {
           await upsertReturning(admin, "titles", results.map(searchRow), "tmdb_id");
-          await admin.from("trending_cache").delete().gte("rank", 0);
           ranked = results.map((r, i) => ({ tmdb_id: r.id as number, rank: i + 1 }));
-          await admin.from("trending_cache").insert(ranked);
+          // Upsert (not delete+insert) so two concurrent cold-cache refreshes
+          // can't collide on the PK. Stale rows keep their old cached_at and are
+          // filtered out by the 24h window above.
+          const now = new Date().toISOString();
+          await admin
+            .from("trending_cache")
+            .upsert(ranked.map((r) => ({ ...r, cached_at: now })), { onConflict: "tmdb_id" });
         }
       }
       if (ranked.length === 0) return json({ results: [] });

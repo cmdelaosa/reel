@@ -16,8 +16,10 @@ type Any = any;
 
 function csv(rows: Record<string, Any>[], columns: string[]): string {
   const esc = (v: Any) => {
-    const s = v == null ? "" : String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    let s = v == null ? "" : String(v);
+    // Neutralize spreadsheet formula injection (leading =,+,-,@).
+    if (/^[=+\-@]/.test(s)) s = `'${s}`;
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const head = columns.join(",");
   const body = rows.map((r) => columns.map((c) => esc(r[c])).join(",")).join("\n");
@@ -34,22 +36,29 @@ Deno.serve(async (req) => {
   if (!user) return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: cors });
 
   // Page past PostgREST's max_rows (1000) so big watch histories export whole.
-  const all = async (table: string, columns: string): Promise<Any[]> => {
+  // Stable ORDER BY (per-table unique key) so offset paging can't skip or
+  // duplicate rows across requests.
+  const all = async (table: string, columns: string, orderBy: string): Promise<Any[]> => {
     const out: Any[] = [];
-    for (let from = 0; ; from += 1000) {
-      const { data, error } = await client.from(table).select(columns).range(from, from + 999);
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await client
+        .from(table)
+        .select(columns)
+        .order(orderBy, { ascending: true })
+        .range(from, from + PAGE - 1);
       if (error) throw error;
       out.push(...(data ?? []));
-      if (!data || data.length < 1000) break;
+      if (!data || data.length < PAGE) break;
     }
     return out;
   };
 
   const [{ data: profile }, library, watch, ratings] = await Promise.all([
     client.from("profiles").select("*").eq("id", user.id).single(),
-    all("library_entries", "title_id, followed, favorite, notify, added_at, titles(tmdb_id, name)"),
-    all("watch_events", "watched_at, source, episodes(season_number, episode_number, titles(tmdb_id, name))"),
-    all("ratings", "score, created_at, updated_at, titles(tmdb_id, name)"),
+    all("library_entries", "title_id, followed, favorite, notify, added_at, titles(tmdb_id, name)", "title_id"),
+    all("watch_events", "id, watched_at, source, episodes(season_number, episode_number, titles(tmdb_id, name))", "id"),
+    all("ratings", "id, score, created_at, updated_at, titles(tmdb_id, name)", "id"),
   ]);
 
   const watchRows = watch.map((w: Any) => ({

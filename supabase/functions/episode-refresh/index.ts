@@ -176,8 +176,13 @@ Deno.serve(async (req) => {
     );
   })();
 
+  // Respond immediately and let the backfill run in the background where the
+  // runtime supports it; otherwise await inline. (waitUntil() returns void, so
+  // `?? await` would always run inline — must branch explicitly.)
   // deno-lint-ignore no-explicit-any
-  (globalThis as Any).EdgeRuntime?.waitUntil?.(work) ?? (await work);
+  const edge = (globalThis as Any).EdgeRuntime;
+  if (edge?.waitUntil) edge.waitUntil(work);
+  else await work;
 
   return new Response(
     JSON.stringify({
