@@ -38,10 +38,16 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
 
   const title = data?.title;
   const regularSeasons = (data?.seasons ?? []).filter((s: SeasonRow) => s.number > 0);
-  const activeSeason = season ?? regularSeasons[0]?.number ?? null;
-  const { data: seasonData } = useSeasonEpisodes(tmdbId, activeSeason);
   const { data: watched } = useWatched(title?.id ?? null);
   const { data: allEpisodes = [] } = useTitleEpisodes(title?.id ?? null);
+  // Default to the season holding the first aired-but-unwatched episode (where
+  // you'd pick up), falling back to season 1. A manual pick (`season`) wins.
+  const nowIso0 = new Date().toISOString();
+  const firstUnwatched = allEpisodes
+    .filter((e) => e.season_number > 0 && e.air_datetime != null && e.air_datetime <= nowIso0 && !watched?.has(e.id))
+    .sort((a, b) => a.season_number - b.season_number || a.episode_number - b.episode_number)[0];
+  const activeSeason = season ?? firstUnwatched?.season_number ?? regularSeasons[0]?.number ?? null;
+  const { data: seasonData } = useSeasonEpisodes(tmdbId, activeSeason);
 
   const titleId = title?.id ?? "";
   const { data: myRating } = useMyRating(title?.id ?? null);

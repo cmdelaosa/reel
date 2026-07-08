@@ -154,7 +154,7 @@ export default function TonightPage() {
               <h2 className="section-title">Fresh episodes</h2>
               <p className="mute" style={{ fontSize: 13 }}>Just aired from shows you follow</p>
             </div>
-            <Link to="/shows" className="btn btn-ghost btn-sm">See all <ChevronRight size={14} /></Link>
+            <Link to="/calendar" className="btn btn-ghost btn-sm">See all <ChevronRight size={14} /></Link>
           </div>
           <div className="flex flex-col gap-3">
             {fresh.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>Nothing new this week.</p>}
