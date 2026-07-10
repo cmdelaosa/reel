@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Plus, X } from "lucide-react";
-import { useTrending, usePopular } from "@/lib/explore";
+import { useTrending, usePopular, usePopularNow } from "@/lib/explore";
 import { useLibrary, useFollow, useUnfollow } from "@/lib/library";
 import { useIgnore, useIgnored, useUnignore } from "@/lib/ignore";
 import type { TitleRow } from "@/lib/schemas";
@@ -104,7 +104,12 @@ export function DiscoverSections() {
   const [fromYear, setFromYear] = useState<number | null>(null);
   const [toYear, setToYear] = useState<number | null>(null);
   const [showHidden, setShowHidden] = useState(false);
-  const { data: popularRaw = [] } = usePopular(fromYear, toYear);
+  // Dual-mode grid: with no year range it shows "Popular now" (recent/imminent
+  // season premieres); picking a year falls back to the classic catalog query.
+  const catalogMode = fromYear != null || toYear != null;
+  const { data: popularNowRaw = [] } = usePopularNow(!catalogMode);
+  const { data: catalogRaw = [] } = usePopular(fromYear, toYear, catalogMode);
+  const popularRaw = catalogMode ? catalogRaw : popularNowRaw;
   const [, setSearchParams] = useSearchParams();
 
   const toggleGenre = (g: string) =>
@@ -161,8 +166,10 @@ export function DiscoverSections() {
       <section className="flex flex-col gap-4">
         <div className="mq-sechead">
           <div>
-            <h2 className="section-title">Popular tv shows</h2>
-            <p className="mute" style={{ fontSize: 13 }}>Trending picks you're not following yet</p>
+            <h2 className="section-title">{catalogMode ? "Popular tv shows" : "Popular now"}</h2>
+            <p className="mute" style={{ fontSize: 13 }}>
+              {catalogMode ? "Most popular for the selected years" : "New shows and fresh seasons, ranked by buzz"}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

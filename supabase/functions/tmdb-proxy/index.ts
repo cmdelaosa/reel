@@ -3,6 +3,7 @@
 // Routes (under /functions/v1/tmdb-proxy):
 //   GET /search?q=                 → { results: TitleRow[] }
 //   GET /trending                  → { results: TitleRow[] }
+//   GET /popular-now               → { results: TitleRow[] }
 //   GET /popular?from=&to=         → { results: TitleRow[] }
 //   GET /collection/:slug          → { results: TitleRow[] }
 //   GET /title/:tmdbId             → { title: TitleRow, seasons: SeasonRow[] }
@@ -248,6 +249,79 @@ Deno.serve(async (req) => {
           const now = new Date().toISOString();
           await admin
             .from("trending_cache")
+            .upsert(ranked.map((r) => ({ ...r, cached_at: now })), { onConflict: "tmdb_id" });
+        }
+      }
+      if (ranked.length === 0) return json({ results: [] });
+      const { data: rows } = await admin
+        .from("titles")
+        .select("*")
+        .in("tmdb_id", ranked.map((r) => r.tmdb_id));
+      const byTmdb = new Map((rows ?? []).map((r: Any) => [r.tmdb_id, r]));
+      return json({ results: ranked.map((r) => byTmdb.get(r.tmdb_id)).filter(Boolean) });
+    }
+
+    // GET /popular-now  — shows with a *season premiere* (S1 or a new season)
+    // in the last 90 days or the next 30, ranked by TMDB popularity. Raw
+    // popularity.desc favours long-running syndicated shows (SVU, Grey's…);
+    // gating on a premiere keeps the grid about things happening *now*.
+    // Discover can't see season dates, so we detail-check the top candidates
+    // and cache the resulting order 24h in popular_now_cache.
+    if (path === "/popular-now") {
+      const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { data: fresh } = await admin
+        .from("popular_now_cache")
+        .select("tmdb_id, rank")
+        .gte("cached_at", dayAgo)
+        .order("rank");
+      let ranked: { tmdb_id: number; rank: number }[] = fresh ?? [];
+      if (ranked.length === 0) {
+        const DAY = 24 * 3600 * 1000;
+        const since = new Date(Date.now() - 90 * DAY).toISOString().slice(0, 10);
+        const until = new Date(Date.now() + 30 * DAY).toISOString().slice(0, 10);
+        const CANDIDATES = 80; // detail fetches per cold refresh
+        const KEEP = 48;
+        // Candidate pool: shows with episodes airing in the window, plus shows
+        // *first* airing in it (covers upcoming S1s with nothing aired yet).
+        const queries = [
+          ...Array.from({ length: 4 }, (_, i) =>
+            `/discover/tv?sort_by=popularity.desc&include_adult=false&air_date.gte=${since}&air_date.lte=${until}&page=${i + 1}`),
+          ...Array.from({ length: 2 }, (_, i) =>
+            `/discover/tv?sort_by=popularity.desc&include_adult=false&first_air_date.gte=${since}&first_air_date.lte=${until}&page=${i + 1}`),
+        ];
+        const pages = await Promise.all(queries.map((q) => fetchTmdb(apiKey, q)));
+        const seen = new Set<number>();
+        const candidates: Any[] = [];
+        for (const r of pages.flatMap((d) => d.results ?? [])) {
+          if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); candidates.push(r); }
+        }
+        candidates.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+        candidates.length = Math.min(candidates.length, CANDIDATES);
+        // Detail-check in chunks (TMDB rate limit): keep shows with a real
+        // season (not specials) premiering inside the window.
+        const premiered: Any[] = [];
+        const CHUNK = 20;
+        for (let i = 0; i < candidates.length; i += CHUNK) {
+          const details = await Promise.all(
+            candidates.slice(i, i + CHUNK).map((c) => fetchTmdb(apiKey, `/tv/${c.id}`).catch(() => null)),
+          );
+          for (const d of details) {
+            if (!d) continue;
+            const hasPremiere = (d.seasons ?? []).some((s: Any) =>
+              (s.season_number ?? 0) > 0 && s.air_date && s.air_date >= since && s.air_date <= until);
+            if (hasPremiere) premiered.push(d);
+          }
+        }
+        premiered.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+        premiered.length = Math.min(premiered.length, KEEP);
+        if (premiered.length) {
+          // We hold full details here, so upsert the rich row (network, status…).
+          await upsertReturning(admin, "titles", premiered.map(titleRow), "tmdb_id");
+          await cacheNetworkLogos(admin, premiered.flatMap((d: Any) => d.networks ?? []));
+          ranked = premiered.map((d, i) => ({ tmdb_id: d.id as number, rank: i + 1 }));
+          const now = new Date().toISOString();
+          await admin
+            .from("popular_now_cache")
             .upsert(ranked.map((r) => ({ ...r, cached_at: now })), { onConflict: "tmdb_id" });
         }
       }

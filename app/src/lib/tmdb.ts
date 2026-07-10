@@ -47,6 +47,13 @@ export async function getTrending(): Promise<TitleRow[]> {
   return searchResponseSchema.parse(json).results;
 }
 
+/** "Popular now": shows with a season premiere in the last ~90 days or the
+ *  next ~30, ranked by TMDB popularity (server-cached 24h). */
+export async function getPopularNow(): Promise<TitleRow[]> {
+  const json = await call(`/popular-now`);
+  return searchResponseSchema.parse(json).results;
+}
+
 /** Popular TV shows (by popularity), optionally restricted to a first-air-year
  *  range. `from`/`to` are 4-digit years; omit either end for an open bound. */
 export async function getPopular(from?: number | null, to?: number | null): Promise<TitleRow[]> {
