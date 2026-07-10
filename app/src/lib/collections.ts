@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { getCollectionTitles } from "@/lib/tmdb";
 import type { TitleRow } from "@/lib/schemas";
 
 const collectionSchema = z.object({
@@ -25,38 +26,16 @@ export function useCollections() {
   });
 }
 
-const titleRowSchema = z.object({
-  id: z.string().uuid(),
-  tmdb_id: z.number().int(),
-  kind: z.enum(["tv", "movie"]),
-  name: z.string(),
-  overview: z.string().nullable(),
-  poster_path: z.string().nullable(),
-  backdrop_path: z.string().nullable(),
-  first_air_date: z.string().nullable(),
-  status: z.string().nullable(),
-  genres: z.array(z.string()),
-  network: z.string().nullable(),
-  episode_run_time: z.number().int().nullable(),
-  vote_average: z.number().nullable(),
-  popularity: z.number().nullable(),
-});
-
 export function useCollection(slug: string | undefined) {
   return useQuery({
     queryKey: ["collection", slug],
     enabled: Boolean(slug),
+    staleTime: 60 * 60 * 1000,
     queryFn: async (): Promise<{ collection: Collection; titles: TitleRow[] }> => {
       const { data: col, error: ce } = await supabase.from("collections").select("*").eq("slug", slug!).single();
       if (ce) throw ce;
       const collection = collectionSchema.parse(col);
-      const { data: cts, error: te } = await supabase
-        .from("collection_titles")
-        .select("position, titles(*)")
-        .eq("collection_id", collection.id)
-        .order("position");
-      if (te) throw te;
-      const titles = (cts ?? []).map((r) => titleRowSchema.parse((r as { titles: unknown }).titles));
+      const titles = await getCollectionTitles(slug!);
       return { collection, titles };
     },
   });

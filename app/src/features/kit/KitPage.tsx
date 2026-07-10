@@ -72,7 +72,7 @@ export default function KitPage() {
       </Section>
 
       <Section title="Rail">
-        <Rail>
+        <Rail title="Trending" subtitle="Drag or use the arrows">
           {FIXTURES.map((t) => (
             <div key={t.id} style={{ width: "var(--rail-pw)" }}>
               <Poster t={t} />

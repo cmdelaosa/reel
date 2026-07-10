@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { CalendarClock, Check, ChevronRight, Clapperboard, Flame, Tv } from "lucide-react";
-import { splitTonight, premieresSoon, premiereMs } from "@/domain/tonight";
-import { useLibrary, type LibraryShow } from "@/lib/library";
+import { orderByActivity, soonPremieres, recentlyAired } from "@/domain/tonight";
+import { useLibrary } from "@/lib/library";
+import { useCalendarFeed } from "@/lib/calendar";
+import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { useUpNext, type UpNextRow } from "@/lib/upnext";
 import { useMarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
-import { NetworkLogo, Poster, Rail } from "@/ui";
+import { Poster, Rail } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 
 /* Tonight — bento hero + continue rail + fresh/premieres. Port of prototype
@@ -24,19 +26,11 @@ function airLabel(iso: string | null): string | null {
   return null;
 }
 
-function RowArt({ poster, name }: { poster: string | null; name: string }) {
-  const art = tmdbImg(poster, "w92");
-  return (
-    <div className="mq-row-art" style={art ? undefined : { background: posterBg(name) }}>
-      {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
-      <div className="poster-sheen" />
-    </div>
-  );
-}
 
 export default function TonightPage() {
   const { data: upNext = [], isPending } = useUpNext();
   const { data: library = [] } = useLibrary();
+  const { data: feed = [] } = useCalendarFeed(1);
   const [, setSearchParams] = useSearchParams();
   // bumped after marking from the continue rail → smooth-scroll it back to the
   // front, following the just-marked show to its new position.
@@ -46,14 +40,18 @@ export default function TonightPage() {
   // stopped shows are hidden from Tonight (up-next already excludes them; filter
   // them from the library-derived stats + premieres too).
   const activeLibrary = library.filter((s) => !s.stopped);
-  const { fresh, cont } = splitTonight(upNext, now);
-  const soon = premieresSoon(activeLibrary, now).slice(0, 6);
-  const hero = fresh[0] ?? cont[0];
+  // One continue-watching order by effective activity (most recent watch OR
+  // newly-aired next episode). The top of that list is the hero; the rest fill
+  // the rail.
+  const ordered = orderByActivity(upNext);
+  const soon = soonPremieres(feed, now).slice(0, 6);
+  // Fresh episodes = everything a followed show aired in the last 5 days (from
+  // the calendar feed), newest first — independent of the per-show up-next.
+  const freshFeed = recentlyAired(feed, now);
+  const freshUnseen = freshFeed.filter((e) => e.watch_event_id == null).length;
+  const hero = ordered[0];
   const heroMark = useMarkWatched(hero?.title_id ?? "");
-  const rest = cont.filter((r) => r.title_id !== hero?.title_id);
-  // drop the hero from the Fresh list so it isn't shown twice (it's fresh[0]
-  // whenever there's any fresh episode).
-  const freshRest = fresh.filter((r) => r.title_id !== hero?.title_id);
+  const rest = ordered.slice(1);
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -66,7 +64,7 @@ export default function TonightPage() {
   const heroProgress = hero && hero.aired_count > 0 ? Math.round((hero.watched_count / hero.aired_count) * 100) : 0;
 
   const stats = [
-    { icon: Clapperboard, label: "Fresh this week", value: fresh.length },
+    { icon: Clapperboard, label: "Fresh (5 days)", value: freshFeed.length },
     { icon: Tv, label: "Following", value: activeLibrary.length },
     { icon: Flame, label: "Shows in progress", value: upNext.length },
     { icon: CalendarClock, label: "Premieres soon", value: soon.length },
@@ -79,7 +77,7 @@ export default function TonightPage() {
         <p className="dim mq-sub">
           {isPending
             ? "Working out what's next…"
-            : `${dateLabel} — ${fresh.length} new ${fresh.length === 1 ? "episode" : "episodes"} waiting, ${soon.length} premieres on the way.`}
+            : `${dateLabel} — ${freshUnseen} new ${freshUnseen === 1 ? "episode" : "episodes"} waiting, ${soon.length} premieres on the way.`}
         </p>
       </header>
 
@@ -136,13 +134,7 @@ export default function TonightPage() {
 
       {rest.length > 0 && (
         <section className="flex flex-col gap-4">
-          <div className="mq-sechead">
-            <div>
-              <h2 className="section-title">Continue watching</h2>
-              <p className="mute" style={{ fontSize: 13 }}>Pick up where you left off</p>
-            </div>
-          </div>
-          <Rail scrollToStartKey={followKey}>
+          <Rail title="Continue watching" subtitle="Pick up where you left off" scrollToStartKey={followKey}>
             {rest.map((r) => (
               <ContinueCard key={r.title_id} r={r} onOpen={() => open(r.tmdb_id)} onMarked={() => setFollowKey((k) => k + 1)} />
             ))}
@@ -160,9 +152,9 @@ export default function TonightPage() {
             <Link to="/calendar" className="btn btn-ghost btn-sm">See all <ChevronRight size={14} /></Link>
           </div>
           <div className="flex flex-col gap-3">
-            {fresh.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>Nothing new this week.</p>}
-            {freshRest.map((r) => (
-              <FreshRow key={r.title_id} r={r} onOpen={() => open(r.tmdb_id)} />
+            {freshFeed.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>Nothing new in the last 5 days.</p>}
+            {freshFeed.map((ep) => (
+              <CalEpRow key={ep.episode_id} ep={ep} now={now} />
             ))}
           </div>
         </section>
@@ -177,8 +169,8 @@ export default function TonightPage() {
           </div>
           <div className="flex flex-col gap-3">
             {soon.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>No dated premieres yet.</p>}
-            {soon.map((s) => (
-              <SoonRow key={s.title_id} s={s} onOpen={() => open(s.tmdb_id)} />
+            {soon.map((ep) => (
+              <CalEpRow key={ep.episode_id} ep={ep} now={now} later />
             ))}
           </div>
         </section>
@@ -253,44 +245,3 @@ function ContinueCard({ r, onOpen, onMarked }: { r: UpNextRow; onOpen: () => voi
   );
 }
 
-function FreshRow({ r, onOpen }: { r: UpNextRow; onOpen: () => void }) {
-  const mark = useMarkWatched(r.title_id);
-  return (
-    <div className="card mq-row" onClick={onOpen}>
-      <RowArt poster={r.poster_path} name={r.name} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="badge badge-accent">New</span>
-          {r.network && <NetworkLogo network={r.network} />}
-        </div>
-        <div className="mq-row-title truncate">{r.name}</div>
-        <div className="dim truncate" style={{ fontSize: 12.5 }}>
-          S{r.season_number} E{r.episode_number}{r.episode_name ? ` · ${r.episode_name}` : ""}
-        </div>
-      </div>
-      <MarkCheck episodeId={r.episode_id} mark={mark} label={`Mark ${r.name} ${seLabel(r)} watched`} />
-    </div>
-  );
-}
-
-function SoonRow({ s, onOpen }: { s: LibraryShow; onOpen: () => void }) {
-  const at = premiereMs(s);
-  const label = at
-    ? new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-    : "TBA";
-  return (
-    <div className="card mq-row" onClick={onOpen}>
-      <RowArt poster={s.poster_path} name={s.name} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="badge badge-accent">{label}</span>
-          {s.network && <NetworkLogo network={s.network} />}
-        </div>
-        <div className="mq-row-title truncate">{s.name}</div>
-        <div className="dim truncate" style={{ fontSize: 12.5 }}>
-          {s.genres.slice(0, 2).join(" · ") || "Premiere"}
-        </div>
-      </div>
-    </div>
-  );
-}

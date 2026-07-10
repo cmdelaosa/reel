@@ -1,13 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-/* Horizontal carousel with edge arrows that appear only when there's room to
-   scroll that way. On a mouse it also drag-scrolls (click-hold and move);
-   touch keeps native momentum scrolling. Reused for every horizontal rail.
+/* Horizontal carousel with a header row: title/subtitle on the left and the two
+   scroll arrows grouped at the top-right (opposite the title). Each arrow is
+   disabled when there's no room to scroll that way. On a mouse it also
+   drag-scrolls (click-hold and move); touch keeps native momentum scrolling.
+   Reused for every horizontal rail.
 
+   title/subtitle: the section heading, rendered inside the rail so the arrows
+   can sit beside it. action: extra header content (e.g. a "See all" link) placed
+   just left of the arrows.
    scrollToStartKey: bump this (any changing number) to smooth-scroll back to the
    start — Tonight uses it to follow a just-marked show to the front. */
-export function Rail({ children, scrollToStartKey }: { children: React.ReactNode; scrollToStartKey?: number }) {
+export function Rail({
+  children,
+  title,
+  subtitle,
+  action,
+  scrollToStartKey,
+}: {
+  children: React.ReactNode;
+  title?: React.ReactNode;
+  subtitle?: React.ReactNode;
+  action?: React.ReactNode;
+  scrollToStartKey?: number;
+}) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [canL, setCanL] = useState(false);
   const [canR, setCanR] = useState(false);
@@ -103,11 +120,27 @@ export function Rail({ children, scrollToStartKey }: { children: React.ReactNode
     }
   };
 
+  const hasHead = title != null || subtitle != null || action != null;
+
   return (
     <div className="rail-wrap">
-      <button className={`rail-arrow left ${canL ? "" : "hide"}`} onClick={() => nudge(-1)} aria-label="Scroll left">
-        <ChevronLeft size={20} />
-      </button>
+      {hasHead && (
+        <div className="rail-head">
+          <div>
+            {title != null && <h2 className="section-title">{title}</h2>}
+            {subtitle != null && <p className="mute" style={{ fontSize: 13 }}>{subtitle}</p>}
+          </div>
+          <div className="rail-nav">
+            {action}
+            <button className="rail-arrow" onClick={() => nudge(-1)} disabled={!canL} aria-label="Scroll left">
+              <ChevronLeft size={18} />
+            </button>
+            <button className="rail-arrow" onClick={() => nudge(1)} disabled={!canR} aria-label="Scroll right">
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
       <div
         className={`rail no-scrollbar${grabbing ? " grabbing" : ""}${scrollToStartKey !== undefined ? " no-snap" : ""}`}
         ref={ref}
@@ -120,9 +153,6 @@ export function Rail({ children, scrollToStartKey }: { children: React.ReactNode
       >
         {children}
       </div>
-      <button className={`rail-arrow right ${canR ? "" : "hide"}`} onClick={() => nudge(1)} aria-label="Scroll right">
-        <ChevronRight size={20} />
-      </button>
     </div>
   );
 }

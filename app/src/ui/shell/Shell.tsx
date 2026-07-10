@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useSearchParams } from "react-router";
 import {
-  Bell, CalendarClock, Clapperboard, Compass, LayoutGrid, Play, Search, Sliders, User,
+  Bell, CalendarClock, Clapperboard, Compass, History, LayoutGrid, Play, Search, Sliders, User,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
@@ -20,6 +20,7 @@ const TABS = [
   { path: "/shows", label: "My Shows", icon: LayoutGrid },
   { path: "/explore", label: "Explore", icon: Compass },
   { path: "/calendar", label: "Calendar", icon: CalendarClock },
+  { path: "/history", label: "History", icon: History },
   { path: "/you", label: "You", icon: User },
 ] as const;
 

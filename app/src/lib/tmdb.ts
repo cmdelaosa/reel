@@ -47,6 +47,24 @@ export async function getTrending(): Promise<TitleRow[]> {
   return searchResponseSchema.parse(json).results;
 }
 
+/** Popular TV shows (by popularity), optionally restricted to a first-air-year
+ *  range. `from`/`to` are 4-digit years; omit either end for an open bound. */
+export async function getPopular(from?: number | null, to?: number | null): Promise<TitleRow[]> {
+  const qs = new URLSearchParams();
+  if (from) qs.set("from", String(from));
+  if (to) qs.set("to", String(to));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const json = await call(`/popular${suffix}`);
+  return searchResponseSchema.parse(json).results;
+}
+
+/** Titles for a curated collection, resolved live from TMDB discover by the
+ *  proxy (criteria live server-side, keyed by slug). */
+export async function getCollectionTitles(slug: string): Promise<TitleRow[]> {
+  const json = await call(`/collection/${encodeURIComponent(slug)}`);
+  return searchResponseSchema.parse(json).results;
+}
+
 export async function getTitle(tmdbId: number): Promise<TitleResponse> {
   const json = await call(`/title/${tmdbId}`);
   return titleResponseSchema.parse(json);

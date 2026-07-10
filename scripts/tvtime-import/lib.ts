@@ -220,7 +220,19 @@ async function upsertTitle(admin: DbClient, d: Json): Promise<string> {
     .select("id")
     .single();
   if (error || !data) throw new Error(`title upsert: ${error?.message}`);
+  await cacheNetworkLogos(admin, d.networks as Json[] | undefined);
   return data.id as string;
+}
+
+// Cache each network's official TMDB logo_path by display name (best-effort) so
+// the client can render the brand image. Mirrors the edge functions.
+async function cacheNetworkLogos(admin: DbClient, networks: Json[] | undefined) {
+  const rows = (networks ?? [])
+    .filter((n) => n?.name)
+    .map((n) => ({ name: n.name as string, logo_path: (n.logo_path as string) ?? null, updated_at: new Date().toISOString() }));
+  if (!rows.length) return;
+  const { error } = await admin.from("network_logos").upsert(rows, { onConflict: "name" });
+  if (error) console.error(`network_logos upsert: ${error.message}`);
 }
 
 /** Upsert one season + its episodes; returns the saved episode rows keyed for

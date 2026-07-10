@@ -14,6 +14,7 @@ import CalendarPage from "@/features/calendar/CalendarPage";
 import ExplorePage from "@/features/explore/ExplorePage";
 import CollectionPage from "@/features/explore/CollectionPage";
 import ExportPage from "@/features/export/ExportPage";
+import HistoryPage from "@/features/history/HistoryPage";
 import ImportPage from "@/features/import/ImportPage";
 import KitPage from "@/features/kit/KitPage";
 import ShowsPage from "@/features/shows/ShowsPage";
@@ -81,6 +82,7 @@ const router = createBrowserRouter([
       { path: "explore", element: <ExplorePage /> },
       { path: "collection/:slug", element: <CollectionPage /> },
       { path: "calendar", element: <CalendarPage /> },
+      { path: "history", element: <HistoryPage /> },
       { path: "you", element: <YouPage /> },
       { path: "import", element: <ImportPage /> },
       { path: "settings/import", element: <ImportPage /> },

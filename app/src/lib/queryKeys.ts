@@ -13,8 +13,10 @@ export const qk = {
   myRating: (titleId: string) => ["myRating", titleId] as const,
   upNext: ["upNext"] as const,
   calendarFeed: (fromIso: string, toIso: string) => ["calendarFeed", fromIso, toIso] as const,
+  history: ["history"] as const,
   ratings: ["ratings"] as const,
   stats: ["stats"] as const,
   notifications: ["notifications"] as const,
   ignored: ["ignored"] as const,
+  networkLogos: ["networkLogos"] as const,
 };

@@ -11,10 +11,13 @@ import { posterBg } from "@/ui/posterBg";
 export default function CollectionPage() {
   const { slug } = useParams();
   const { data, isPending } = useCollection(slug);
+  const { data: library = [] } = useLibrary();
   const { isIgnored } = useIgnored();
   const ignore = useIgnore();
   const [, setSearchParams] = useSearchParams();
-  const titles = (data?.titles ?? []).filter((t) => !isIgnored(t.tmdb_id));
+  // Only surface discoveries: drop what you already follow or have hidden.
+  const followed = new Set(library.map((r) => r.tmdb_id));
+  const titles = (data?.titles ?? []).filter((t) => !isIgnored(t.tmdb_id) && !followed.has(t.tmdb_id));
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -33,9 +36,11 @@ export default function CollectionPage() {
         <p className="dim mq-sub">{data?.collection.sub ?? (isPending ? "Loading…" : "")}</p>
       </header>
 
-      {!isPending && data && data.titles.length === 0 && (
+      {!isPending && data && titles.length === 0 && (
         <div className="card" style={{ padding: "28px 24px" }}>
-          <p className="dim" style={{ margin: 0, fontSize: 14 }}>Nothing here yet.</p>
+          <p className="dim" style={{ margin: 0, fontSize: 14 }}>
+            {data.titles.length > 0 ? "You already follow (or hid) everything here." : "Nothing here yet."}
+          </p>
         </div>
       )}
 

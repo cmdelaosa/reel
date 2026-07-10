@@ -2,6 +2,9 @@
 //
 // Routes (under /functions/v1/tmdb-proxy):
 //   GET /search?q=                 → { results: TitleRow[] }
+//   GET /trending                  → { results: TitleRow[] }
+//   GET /popular?from=&to=         → { results: TitleRow[] }
+//   GET /collection/:slug          → { results: TitleRow[] }
 //   GET /title/:tmdbId             → { title: TitleRow, seasons: SeasonRow[] }
 //   GET /title/:tmdbId/season/:n   → { season: SeasonRow, episodes: EpisodeRow[] }
 //
@@ -24,6 +27,45 @@ const TV_GENRES: Record<number, string> = {
   99: "Documentary", 18: "Drama", 10751: "Family", 10762: "Kids",
   9648: "Mystery", 10763: "News", 10764: "Reality", 10765: "Sci-Fi & Fantasy",
   10766: "Soap", 10767: "Talk", 10768: "War & Politics", 37: "Western",
+};
+
+// Content hidden from the *discovery* surfaces (trending + popular) only;
+// search still finds any of it by name. TMDB's /discover can't express these
+// exclusions (no without_language param; with_original_language is single-
+// valued), so we post-filter the raw results:
+//   • anime          — Animation genre + a Japanese/Chinese/Korean original
+//                      language (keeps Western animation: Rick & Morty, Arcane…).
+//   • soaps          — the Soap genre (10766), incl. telenovelas.
+//   • reality        — the Reality genre (10764).
+//   • indian/turkish — original language from the Indian subcontinent or Turkish,
+//                      which dominate TMDB popularity but aren't of interest here.
+const ANIMATION_GENRE = 16;
+const HIDDEN_GENRES = new Set([10766, 10764]); // Soap, Reality
+const ANIME_LANGS = new Set(["ja", "zh", "ko"]);
+const HIDDEN_LANGS = new Set(["hi", "ta", "te", "ml", "kn", "bn", "mr", "pa", "gu", "ur", "tr"]);
+// deno-lint-ignore no-explicit-any
+const isHidden = (r: any) => {
+  const genres: number[] = r?.genre_ids ?? [];
+  const lang: string = r?.original_language ?? "";
+  if (genres.includes(ANIMATION_GENRE) && ANIME_LANGS.has(lang)) return true; // anime
+  if (genres.some((g) => HIDDEN_GENRES.has(g))) return true; // soaps / reality
+  if (HIDDEN_LANGS.has(lang)) return true; // indian / turkish
+  return false;
+};
+
+// Curated-collection slugs → TMDB /discover/tv criteria. Mirrors the intent of
+// the original 0020 seed (which capped each at 12 cached titles) but pulls live
+// from the full TMDB catalog. The rating sorts need a high vote_count floor:
+// with a low one, niche fan-voted titles outrank Breaking Bad.
+const COLLECTION_QUERIES: Record<string, string> = {
+  // best-reviewed of all time
+  "critically-acclaimed": "sort_by=vote_average.desc&vote_count.gte=1000",
+  // comedies, most popular first
+  "bingeable-weekend": "with_genres=35&sort_by=popularity.desc&vote_count.gte=100",
+  // sci-fi/fantasy or mystery, best-rated first
+  "mind-benders": "with_genres=10765|9648&sort_by=vote_average.desc&vote_count.gte=1000",
+  // top-rated dramas
+  "award-winners": "with_genres=18&vote_average.gte=8&sort_by=vote_average.desc&vote_count.gte=1000",
 };
 
 const cors = {
@@ -109,9 +151,22 @@ async function upsertReturning(admin: SupabaseClient, table: string, rows: Any, 
   return data ?? [];
 }
 
+// Cache each network's official TMDB logo_path keyed by its display name, so the
+// client can render the brand image for any platform (not just the hard-coded
+// few). Best-effort: a logo cache miss must never break title loading.
+async function cacheNetworkLogos(admin: SupabaseClient, networks: Any) {
+  const rows = ((networks ?? []) as Any[])
+    .filter((n) => n?.name)
+    .map((n) => ({ name: n.name as string, logo_path: n.logo_path ?? null, updated_at: new Date().toISOString() }));
+  if (!rows.length) return;
+  const { error } = await admin.from("network_logos").upsert(rows, { onConflict: "name" });
+  if (error) console.error(`network_logos upsert: ${error.message}`);
+}
+
 async function ensureTitle(admin: SupabaseClient, apiKey: string, tmdbId: number) {
   const d = await fetchTmdb(apiKey, `/tv/${tmdbId}`);
   const [row] = await upsertReturning(admin, "titles", titleRow(d), "tmdb_id");
+  await cacheNetworkLogos(admin, d.networks);
   return { detail: d, title: row };
 }
 
@@ -168,8 +223,22 @@ Deno.serve(async (req) => {
         .order("rank");
       let ranked: { tmdb_id: number; rank: number }[] = fresh ?? [];
       if (ranked.length === 0) {
-        const data = await fetchTmdb(apiKey, `/trending/tv/week`);
-        const results: Any[] = (data.results ?? []).slice(0, 20);
+        // Pull a couple of pages: after hiding anime/soaps/reality/etc a single
+        // 20-item page thins out, so we go wider and keep the top TREND_KEEP.
+        const TREND_PAGES = 2;
+        const TREND_KEEP = 24;
+        const pages = await Promise.all(
+          Array.from({ length: TREND_PAGES }, (_, i) =>
+            fetchTmdb(apiKey, `/trending/tv/week?page=${i + 1}`)
+          ),
+        );
+        // Dedupe across pages (trending repeats titles) before dropping hidden.
+        const seen = new Set<number>();
+        const results: Any[] = [];
+        for (const r of pages.flatMap((d) => d.results ?? [])) {
+          if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); results.push(r); }
+        }
+        results.length = Math.min(results.length, TREND_KEEP);
         if (results.length) {
           await upsertReturning(admin, "titles", results.map(searchRow), "tmdb_id");
           ranked = results.map((r, i) => ({ tmdb_id: r.id as number, rank: i + 1 }));
@@ -189,6 +258,58 @@ Deno.serve(async (req) => {
         .in("tmdb_id", ranked.map((r) => r.tmdb_id));
       const byTmdb = new Map((rows ?? []).map((r: Any) => [r.tmdb_id, r]));
       return json({ results: ranked.map((r) => byTmdb.get(r.tmdb_id)).filter(Boolean) });
+    }
+
+    // GET /popular?from=YYYY&to=YYYY  (TMDB /discover/tv by popularity, with an
+    // optional first-air-year range). Pulls a few pages so the grid has depth.
+    if (path === "/popular") {
+      const from = url.searchParams.get("from");
+      const to = url.searchParams.get("to");
+      const yearParams =
+        (from ? `&first_air_date.gte=${from}-01-01` : "") +
+        (to ? `&first_air_date.lte=${to}-12-31` : "");
+      const PAGES = 5;
+      const pages = await Promise.all(
+        Array.from({ length: PAGES }, (_, i) =>
+          fetchTmdb(apiKey, `/discover/tv?sort_by=popularity.desc&include_adult=false&page=${i + 1}${yearParams}`)
+        ),
+      );
+      // Dedupe across pages before upserting — a repeated tmdb_id in one upsert
+      // batch errors ("cannot affect row a second time").
+      const seen = new Set<number>();
+      const uniq: Any[] = [];
+      for (const r of pages.flatMap((d) => d.results ?? [])) {
+        if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); uniq.push(r); }
+      }
+      if (uniq.length === 0) return json({ results: [] });
+      const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
+      const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
+      return json({ results: uniq.map((r) => byTmdb.get(r.id)).filter(Boolean) });
+    }
+
+    // GET /collection/:slug  (TMDB /discover/tv per curated-collection criteria;
+    // several pages so each collection has real depth beyond the old 12-row seed)
+    const mCollection = path.match(/^\/collection\/([a-z0-9-]+)$/);
+    if (mCollection) {
+      const query = COLLECTION_QUERIES[mCollection[1]];
+      if (!query) return json({ error: "unknown collection" }, 404);
+      // Deeper than /popular's 5: the hidden-content filter plus the client
+      // dropping everything already followed/ignored eats a lot of rows here.
+      const PAGES = 8;
+      const pages = await Promise.all(
+        Array.from({ length: PAGES }, (_, i) =>
+          fetchTmdb(apiKey, `/discover/tv?include_adult=false&${query}&page=${i + 1}`)
+        ),
+      );
+      const seen = new Set<number>();
+      const uniq: Any[] = [];
+      for (const r of pages.flatMap((d) => d.results ?? [])) {
+        if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); uniq.push(r); }
+      }
+      if (uniq.length === 0) return json({ results: [] });
+      const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
+      const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
+      return json({ results: uniq.map((r) => byTmdb.get(r.id)).filter(Boolean) });
     }
 
     // GET /title/:id

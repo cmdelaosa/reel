@@ -1,33 +1,19 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
-import { Bell, Check, ChevronRight } from "lucide-react";
-import { dayLabel, dayOffset, episodeBadge, groupFeed } from "@/domain/calendar";
+import { Bell } from "lucide-react";
+import { dayLabel, groupFeed } from "@/domain/calendar";
 import { premiereMs } from "@/domain/tonight";
-import { useCalendarFeed, type FeedRow } from "@/lib/calendar";
+import { useCalendarFeed } from "@/lib/calendar";
 import { useLibrary, useToggleNotify, type LibraryShow } from "@/lib/library";
-import { useMarkWatched, useUnmarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
+import { useOpenTitle } from "@/lib/useOpenTitle";
+import { CalEpRow } from "@/features/calendar/CalEpRow";
 
 /* Calendar — chronological my-shows feed with lazy history, plus returning /
    new views. Port of prototype marquee.tsx CalendarTab/MyShowsFeed/CalEpRow/
    PremieresList, including the IntersectionObserver + useLayoutEffect
    scroll-preservation approach. */
-
-const pad2 = (n: number) => String(n).padStart(2, "0");
-const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-const fmtShort = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-
-function useOpenTitle() {
-  const [, setSearchParams] = useSearchParams();
-  return (tmdbId: number) =>
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("title", String(tmdbId));
-      return next;
-    });
-}
 
 export default function CalendarPage() {
   const [view, setView] = useState<"shows" | "returning" | "new">("shows");
@@ -136,57 +122,6 @@ function MyShowsFeed() {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function CalEpRow({ ep, now, later = false }: { ep: FeedRow; now: Date; later?: boolean }) {
-  const open = useOpenTitle();
-  const mark = useMarkWatched(ep.title_id);
-  const unmark = useUnmarkWatched(ep.title_id);
-  const past = new Date(ep.air_datetime).getTime() < now.getTime();
-  const days = dayOffset(ep.air_datetime, now);
-  const tag = episodeBadge(ep);
-  const seen = ep.watch_event_id != null;
-  const art = tmdbImg(ep.poster_path, "w92");
-
-  const toggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (seen) unmark.mutate(ep.watch_event_id!);
-    else mark.mutate(ep.episode_id);
-  };
-
-  return (
-    <div className="cal-ep" onClick={() => open(ep.tmdb_id)}>
-      <div className="cal-ep-art" style={art ? undefined : { background: posterBg(ep.show_name) }}>
-        {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
-        <div className="poster-sheen" />
-      </div>
-      <div className="cal-ep-main">
-        <span className="cal-showpill">{ep.show_name}<ChevronRight size={12} /></span>
-        <div className="cal-ep-se">
-          S{pad2(ep.season_number)} · E{pad2(ep.episode_number)}
-          {tag && <span className="badge badge-soft" style={{ marginLeft: 8 }}>{tag}</span>}
-        </div>
-        <div className="cal-ep-name mute">{ep.episode_name}</div>
-      </div>
-      <div className="cal-ep-right">
-        {later ? (
-          <>
-            <div className="cal-days">{days}<span>days</span></div>
-            <div className="cal-when mute">{fmtShort(ep.air_datetime)} · {fmtTime(ep.air_datetime)}</div>
-          </>
-        ) : past ? (
-          <button className={`check ${seen ? "on" : ""}`} onClick={toggle} title={seen ? "Watched" : "Mark watched"}>
-            <Check size={15} strokeWidth={3} />
-          </button>
-        ) : (
-          <>
-            <div className="cal-time">{fmtTime(ep.air_datetime)}</div>
-            {ep.network && <NetworkLogo network={ep.network} />}
-          </>
-        )}
-      </div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ function invalidateDerived(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: qk.upNext });
   qc.invalidateQueries({ queryKey: qk.stats });
   qc.invalidateQueries({ queryKey: ["calendarFeed"] });
+  qc.invalidateQueries({ queryKey: qk.history });
 }
 
 export function useMarkWatched(titleId: string) {

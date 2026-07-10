@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { Bell, Check, Pause, Play, Plus, Star, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bell, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Pause, Play, Plus, Star, X } from "lucide-react";
 import { tmdbImg } from "@/lib/tmdb";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
+import { useIgnored, useIgnore, useUnignore } from "@/lib/ignore";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
 import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useUndoMarks } from "@/lib/watch";
 import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
@@ -27,6 +28,75 @@ function Skeleton() {
   );
 }
 
+/* Interactive 5-star rating on a 1-10 scale (each half-star = 1 point). Hovering
+   previews the score you'd set — the stars fill dimmed and the number shows the
+   pending value; clicking commits it. */
+function RatingStars({ value, onRate }: { value: number; onRate: (v: number) => void }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const shown = hover ?? value; // 0-10
+  const previewing = hover != null;
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className={`rating-stars${previewing ? " previewing" : ""}`} onMouseLeave={() => setHover(null)}>
+        {[1, 2, 3, 4, 5].map((i) => {
+          const pct = shown >= i * 2 ? 100 : shown >= i * 2 - 1 ? 50 : 0;
+          return (
+            <span key={i} className="rating-star">
+              <Star size={24} strokeWidth={1.6} className="rating-star-bg" />
+              <span className="rating-star-fg" style={{ width: `${pct}%` }}>
+                <Star size={24} strokeWidth={0} fill="currentColor" />
+              </span>
+              <span className="rating-half left" onMouseEnter={() => setHover(i * 2 - 1)} onClick={() => onRate(i * 2 - 1)} />
+              <span className="rating-half right" onMouseEnter={() => setHover(i * 2)} onClick={() => onRate(i * 2)} />
+            </span>
+          );
+        })}
+      </div>
+      <span className={previewing ? "dim" : ""} style={{ fontWeight: 800, fontSize: 15, minWidth: 42 }}>
+        {shown ? `${shown}/10` : "—"}
+      </span>
+    </div>
+  );
+}
+
+/* Season picker: one pill per season on a single scrollable row, with arrows
+   (opposite the label) that also nudge it — matches the rail arrows. */
+function SeasonTabs({ seasons, active, onPick }: { seasons: SeasonRow[]; active: number | null; onPick: (n: number) => void }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [canL, setCanL] = useState(false);
+  const [canR, setCanR] = useState(false);
+  const update = () => {
+    const el = ref.current;
+    if (!el) return;
+    setCanL(el.scrollLeft > 4);
+    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+  useEffect(update); // re-measure on every render (season list / active change)
+  const nudge = (dir: number) => ref.current?.scrollBy({ left: dir * ref.current.clientWidth * 0.8, behavior: "smooth" });
+  return (
+    <div>
+      <div className="rail-head" style={{ marginBottom: 10 }}>
+        <div className="eyebrow">Seasons</div>
+        <div className="rail-nav">
+          <button className="rail-arrow" onClick={() => nudge(-1)} disabled={!canL} aria-label="Earlier seasons">
+            <ChevronLeft size={18} />
+          </button>
+          <button className="rail-arrow" onClick={() => nudge(1)} disabled={!canR} aria-label="Later seasons">
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+      <div className="segmented scroll no-scrollbar" ref={ref} onScroll={update}>
+        {seasons.map((s) => (
+          <div key={s.number} className={`seg ${active === s.number ? "seg-active" : ""}`} onClick={() => onPick(s.number)}>
+            {s.number}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () => void }) {
   const trapRef = useFocusTrap<HTMLDivElement>();
   const { data, isPending } = useTitle(tmdbId);
@@ -35,19 +105,30 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const unfollow = useUnfollow();
   const toggleNotify = useToggleNotify();
   const setStopped = useSetStopped();
+  const { isIgnored } = useIgnored();
+  const ignore = useIgnore();
+  const unignore = useUnignore();
   const [season, setSeason] = useState<number | null>(null);
 
   const title = data?.title;
   const regularSeasons = (data?.seasons ?? []).filter((s: SeasonRow) => s.number > 0);
   const { data: watched } = useWatched(title?.id ?? null);
   const { data: allEpisodes = [] } = useTitleEpisodes(title?.id ?? null);
-  // Default to the season holding the first aired-but-unwatched episode (where
-  // you'd pick up), falling back to season 1. A manual pick (`season`) wins.
+  // Which season to open on (a manual pick always wins):
+  //  1. the season of the first aired-but-unwatched episode — where you'd pick up;
+  //  2. if you're all caught up, the season of the next upcoming episode — so a
+  //     show with a premiere on the way opens on its new season, not season 1;
+  //  3. otherwise the latest season.
   const nowIso0 = new Date().toISOString();
   const firstUnwatched = allEpisodes
     .filter((e) => e.season_number > 0 && e.air_datetime != null && e.air_datetime <= nowIso0 && !watched?.has(e.id))
     .sort((a, b) => a.season_number - b.season_number || a.episode_number - b.episode_number)[0];
-  const activeSeason = season ?? firstUnwatched?.season_number ?? regularSeasons[0]?.number ?? null;
+  const nextUpcoming = allEpisodes
+    .filter((e) => e.season_number > 0 && e.air_datetime != null && e.air_datetime > nowIso0)
+    .sort((a, b) => a.season_number - b.season_number || a.episode_number - b.episode_number)[0];
+  const lastSeason = regularSeasons[regularSeasons.length - 1]?.number ?? null;
+  const activeSeason =
+    season ?? firstUnwatched?.season_number ?? nextUpcoming?.season_number ?? lastSeason;
   const { data: seasonData } = useSeasonEpisodes(tmdbId, activeSeason);
 
   const titleId = title?.id ?? "";
@@ -180,60 +261,56 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
 
             {/* Body */}
             <div className="overflow-y-auto p-6 flex flex-col gap-6">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <button className={`btn ${added ? "btn-outline" : "btn-accent"}`} onClick={toggleFollow}>
-                  {added ? <><Check size={16} />Remove</> : <><Plus size={16} />Add</>}
-                </button>
-                {added && entry && isUpcoming && !entry.stopped && (
-                  <button
-                    className={`btn ${entry.notify ? "btn-accent" : "btn-outline"}`}
-                    onClick={() => toggleNotify.mutate({ titleId: entry.title_id, notify: !entry.notify })}
-                  >
-                    <Bell size={16} />{entry.notify ? "Tracking" : "Notify me"}
+              {/* Actions on the left, ratings tucked to the right at the same height */}
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <button className={`btn ${added ? "btn-outline" : "btn-accent"}`} onClick={toggleFollow}>
+                    {added ? <><Check size={16} />Remove</> : <><Plus size={16} />Add</>}
                   </button>
-                )}
-                {added && entry && (
-                  <button
-                    className="btn btn-outline"
-                    onClick={() => setStopped.mutate({ titleId: entry.title_id, stopped: !entry.stopped })}
-                    title={entry.stopped ? "Resume — back in Tonight & calendar" : "Stop watching — keeps history, hides from Tonight"}
-                  >
-                    {entry.stopped ? <><Play size={16} />Resume</> : <><Pause size={16} />Stop watching</>}
-                  </button>
-                )}
-              </div>
-
-              {/* Ratings — yours (persisted in P2-C5) + TMDB community */}
-              <div className="card p-4 flex items-stretch gap-4">
-                <div className="flex-1">
-                  <div className="eyebrow" style={{ marginBottom: 7 }}>Your rating</div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1">
-                      {[2, 4, 6, 8, 10].map((v) => (
-                        <Star
-                          key={v}
-                          size={24}
-                          className="star"
-                          style={{ color: v <= rating ? "var(--accent)" : "var(--text-mute)" }}
-                          fill={v <= rating ? "currentColor" : "none"}
-                          strokeWidth={v <= rating ? 0 : 1.6}
-                          onClick={() => rateTitle.mutate(v)}
-                        />
-                      ))}
-                    </div>
-                    <span style={{ fontWeight: 800, fontSize: 15 }}>{rating ? `${rating}/10` : "—"}</span>
-                  </div>
+                  {!added && (
+                    <button
+                      className={`btn ${isIgnored(title.tmdb_id) ? "btn-accent" : "btn-outline"}`}
+                      onClick={() => (isIgnored(title.tmdb_id) ? unignore.mutate(title.id) : ignore.mutate(title.id))}
+                      title={isIgnored(title.tmdb_id) ? "Un-ignore — show in suggestions again" : "Not interested — hide from suggestions"}
+                    >
+                      {isIgnored(title.tmdb_id) ? <><Eye size={16} />Un-ignore</> : <><EyeOff size={16} />Not interested</>}
+                    </button>
+                  )}
+                  {added && entry && isUpcoming && !entry.stopped && (
+                    <button
+                      className={`btn ${entry.notify ? "btn-accent" : "btn-outline"}`}
+                      onClick={() => toggleNotify.mutate({ titleId: entry.title_id, notify: !entry.notify })}
+                    >
+                      <Bell size={16} />{entry.notify ? "Tracking" : "Notify me"}
+                    </button>
+                  )}
+                  {added && entry && (
+                    <button
+                      className="btn btn-outline"
+                      onClick={() => setStopped.mutate({ titleId: entry.title_id, stopped: !entry.stopped })}
+                      title={entry.stopped ? "Resume — back in Tonight & calendar" : "Stop watching — keeps history, hides from Tonight"}
+                    >
+                      {entry.stopped ? <><Play size={16} />Resume</> : <><Pause size={16} />Stop watching</>}
+                    </button>
+                  )}
                 </div>
-                <div style={{ width: 1, background: "var(--border)", flex: "0 0 auto" }} />
-                <div style={{ textAlign: "center", minWidth: 92 }}>
-                  <div className="eyebrow" style={{ marginBottom: 7 }}>TMDB</div>
-                  <div className="flex items-center justify-center gap-1.5">
-                    <Star size={18} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                    <span style={{ fontWeight: 850, fontSize: 19 }}>
-                      {title.vote_average ? title.vote_average.toFixed(1) : "—"}
-                    </span>
+
+                {/* Ratings — yours (persisted in P2-C5) + TMDB community */}
+                <div className="flex items-center gap-4">
+                  <div>
+                    <div className="eyebrow" style={{ marginBottom: 5 }}>Your rating</div>
+                    <RatingStars value={rating} onRate={(v) => rateTitle.mutate(v)} />
                   </div>
-                  <div className="mute" style={{ fontSize: 11 }}>community</div>
+                  <div style={{ width: 1, height: 40, background: "var(--border)", flex: "0 0 auto" }} />
+                  <div style={{ textAlign: "center" }}>
+                    <div className="eyebrow" style={{ marginBottom: 5 }}>TMDB</div>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                      <span style={{ fontWeight: 850, fontSize: 17 }}>
+                        {title.vote_average ? title.vote_average.toFixed(1) : "—"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -241,28 +318,10 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 <p className="dim" style={{ fontSize: 14.5, lineHeight: 1.6, margin: 0 }}>{title.overview}</p>
               )}
 
-              {title.network && (
-                <div>
-                  <div className="eyebrow mb-2.5">Where to watch</div>
-                  <div className="flex gap-2 flex-wrap">
-                    <span className="chip">{title.network}</span>
-                  </div>
-                </div>
-              )}
-
               {/* Episodes */}
               {regularSeasons.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="eyebrow">Episodes</div>
-                    <div className="segmented" style={{ flexWrap: "wrap" }}>
-                      {regularSeasons.map((s) => (
-                        <div key={s.number} className={`seg ${activeSeason === s.number ? "seg-active" : ""}`} onClick={() => setSeason(s.number)}>
-                          S{s.number}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <SeasonTabs seasons={regularSeasons} active={activeSeason} onPick={setSeason} />
                   <div className="flex flex-col">
                     {episodes.length === 0 && (
                       <div className="dim" style={{ fontSize: 13.5, padding: "10px 0" }}>Loading episodes…</div>

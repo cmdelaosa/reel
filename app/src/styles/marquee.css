@@ -51,6 +51,32 @@
   transition: all .16s ease; white-space: nowrap;
 }
 .chip:hover { color: var(--text); border-color: var(--border-strong); }
+/* Year range dropdowns on the discover filter row — match the chips. */
+.year-select {
+  appearance: none; -webkit-appearance: none;
+  padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); cursor: pointer; transition: border-color .16s ease;
+}
+.year-select:hover { border-color: var(--border-strong); }
+/* Multi-select genre dropdown panel */
+.filter-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
+  min-width: 210px; max-height: 320px; overflow-y: auto;
+  /* opaque, theme-safe surface — var(--surface) is translucent under the glass
+     look, which let the posters bleed through and made the menu unreadable */
+  background: color-mix(in srgb, var(--bg) 90%, #ffffff 5%);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r); box-shadow: var(--shadow); padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.filter-opt {
+  display: flex; align-items: center; gap: 9px; padding: 7px 10px;
+  border-radius: calc(var(--r) - 4px); cursor: pointer; font-size: 13.5px; color: var(--text);
+}
+.filter-opt:hover { background: var(--surface-2); }
+.filter-opt input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex: 0 0 auto; }
 .chip-active {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   color: var(--accent);
@@ -99,6 +125,10 @@
 
 /* Segmented control */
 .segmented { display: inline-flex; padding: 4px; gap: 4px; background: var(--surface-2); border-radius: var(--r); border: 1px solid var(--border); }
+/* Scrollable variant: keeps every pill on one row, extras reachable by scroll
+   (used for shows with many seasons). */
+.segmented.scroll { display: flex; max-width: 100%; overflow-x: auto; }
+.segmented.scroll .seg { flex: 0 0 auto; min-width: 30px; text-align: center; }
 .seg { padding: 7px 14px; border-radius: calc(var(--r) - 4px); font-size: 13px; font-weight: 600; color: var(--text-dim); cursor: pointer; transition: all .15s ease; }
 .seg:hover { color: var(--text); }
 .seg-active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
@@ -118,31 +148,43 @@
 .rail.no-snap { scroll-snap-type: none; }
 .rail.grabbing img { pointer-events: none; -webkit-user-drag: none; }
 
-/* Rail with edge scroll arrows */
-.rail-wrap { position: relative; }
+/* Rail with a header row: title left, scroll arrows grouped at the top-right */
+.rail-wrap { position: relative; display: flex; flex-direction: column; gap: 16px; }
+.rail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rail-nav { display: flex; align-items: center; gap: 8px; }
 .rail-arrow {
-  position: absolute; top: 50%; transform: translateY(-50%); z-index: 6;
   display: grid; place-items: center;
-  width: 40px; height: 40px; border-radius: 999px;
+  width: 34px; height: 34px; border-radius: 999px;
   background: color-mix(in srgb, var(--bg) 76%, transparent);
   border: 1px solid var(--border-strong); color: var(--text);
-  cursor: pointer; box-shadow: var(--shadow);
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  cursor: pointer;
   transition: opacity 0.2s ease, background 0.2s ease, transform 0.15s ease;
 }
-.rail-arrow:hover { background: var(--surface-3); }
-.rail-arrow:active { transform: translateY(-50%) scale(0.92); }
-.rail-arrow.left { left: 4px; }
-.rail-arrow.right { right: 4px; }
-.rail-arrow.hide { opacity: 0; pointer-events: none; }
+.rail-arrow:hover:not(:disabled) { background: var(--surface-3); }
+.rail-arrow:active:not(:disabled) { transform: scale(0.92); }
+.rail-arrow:disabled { opacity: 0.35; cursor: default; }
 /* On touch devices swiping is natural — hide the arrows */
-@media (hover: none) { .rail-arrow { display: none; } }
+@media (hover: none) { .rail-nav { display: none; } }
 
 /* Star rating */
 .stars { display: inline-flex; gap: 2px; }
 .star { cursor: pointer; color: var(--text-mute); transition: color .12s ease, transform .12s ease; }
 .star.on { color: var(--accent); }
 .star:hover { transform: scale(1.15); }
+
+/* Interactive half-star rating (RatingStars in DetailSheet). Each star layers an
+   empty outline (bg) under a filled copy (fg) clipped to 0/50/100% width. Two
+   half-width hit zones drive half-point hover/click. While previewing a hovered
+   value the fill dims so you can tell it isn't committed yet. */
+.rating-stars { display: inline-flex; gap: 3px; }
+.rating-star { position: relative; display: inline-block; width: 24px; height: 24px; line-height: 0; color: var(--text-mute); }
+.rating-star-bg { display: block; }
+.rating-star-fg { position: absolute; inset: 0; overflow: hidden; color: var(--accent); pointer-events: none; }
+.rating-star-fg svg { display: block; }
+.rating-stars.previewing .rating-star-fg { opacity: .5; }
+.rating-half { position: absolute; top: 0; height: 100%; width: 50%; z-index: 2; cursor: pointer; }
+.rating-half.left { left: 0; }
+.rating-half.right { right: 0; }
 
 /* Overlays */
 .backdrop { position: fixed; inset: 0; background: var(--scrim); backdrop-filter: blur(6px); z-index: 60; animation: fade .2s ease; }
@@ -163,8 +205,18 @@
 .ep-row:hover { background: var(--surface-2); }
 .check {
   flex: 0 0 auto; width: 26px; height: 26px; border-radius: 999px;
-  border: 2px solid var(--border-strong); display: grid; place-items: center;
-  color: transparent; transition: all .16s ease;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, var(--border-strong));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  display: grid; place-items: center;
+  color: transparent; cursor: pointer; transition: all .16s ease;
+}
+/* Idle circle is a dimmed echo of the filled state — enough accent tint to read
+   as "the spot to mark watched" without shouting. Hover intensifies it and
+   reveals a faint check so the affordance is unmistakable. */
+.check:not(.on):hover {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+  color: color-mix(in srgb, var(--accent) 60%, transparent);
 }
 .check.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 /* Fill + spring pop on tap, so the confirmation is visible before the card

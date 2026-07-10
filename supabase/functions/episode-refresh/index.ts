@@ -58,6 +58,17 @@ async function tmdb(key: string, path: string): Promise<Any> {
 
 const airDatetime = (d?: string | null) => (d ? `${d}${AIR_TIME}` : null);
 
+// Cache each network's official TMDB logo_path by display name (best-effort);
+// the client renders the brand image from it. Mirrors tmdb-proxy.
+async function cacheNetworkLogos(admin: SupabaseClient, networks: Any) {
+  const rows = ((networks ?? []) as Any[])
+    .filter((n) => n?.name)
+    .map((n) => ({ name: n.name as string, logo_path: n.logo_path ?? null, updated_at: new Date().toISOString() }));
+  if (!rows.length) return;
+  const { error } = await admin.from("network_logos").upsert(rows, { onConflict: "name" });
+  if (error) console.error(`network_logos upsert: ${error.message}`);
+}
+
 async function refreshTitle(admin: SupabaseClient, key: string, row: { id: string; tmdb_id: number }) {
   const d = await tmdb(key, `/tv/${row.tmdb_id}`);
   const { error: te } = await admin
@@ -78,6 +89,8 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
     })
     .eq("id", row.id);
   if (te) throw new Error(`title update: ${te.message}`);
+
+  await cacheNetworkLogos(admin, d.networks);
 
   const latest = (d.seasons ?? [])
     .filter((s: Any) => (s.season_number as number) > 0)

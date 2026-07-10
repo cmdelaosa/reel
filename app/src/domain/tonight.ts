@@ -1,8 +1,8 @@
-/* Tonight derivations — pure. Fresh vs continue-watching split of the up-next
-   list, and the premieres-soon filter. All date math uses absolute epoch
+/* Tonight derivations — pure. Continue-watching ordering of the up-next list,
+   and the premieres-soon filter. All date math uses absolute epoch
    milliseconds, so DST wall-clock shifts cannot skew the windows. */
 
-export const FRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+export const FRESH_WINDOW_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
 export const PREMIERE_WINDOW_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
 
 export interface UpNextish {
@@ -10,24 +10,23 @@ export interface UpNextish {
   last_watched_at: string | null;
 }
 
-/** Fresh = up-next episode aired within the last 7 days (newest first).
- *  Continue = the rest, by most recent watch activity (nulls last). */
-export function splitTonight<T extends UpNextish>(items: T[], now: Date): { fresh: T[]; cont: T[] } {
-  const nowMs = now.getTime();
-  const fresh: T[] = [];
-  const cont: T[] = [];
-  for (const it of items) {
-    const air = it.air_datetime ? new Date(it.air_datetime).getTime() : null;
-    if (air != null && air <= nowMs && nowMs - air <= FRESH_WINDOW_MS) fresh.push(it);
-    else cont.push(it);
-  }
-  fresh.sort((a, b) => new Date(b.air_datetime!).getTime() - new Date(a.air_datetime!).getTime());
-  cont.sort((a, b) => {
-    const la = a.last_watched_at ? new Date(a.last_watched_at).getTime() : 0;
-    const lb = b.last_watched_at ? new Date(b.last_watched_at).getTime() : 0;
-    return lb - la;
-  });
-  return { fresh, cont };
+/** Effective activity instant used to order continue-watching: the more recent
+ *  of (a) the last time an episode of this show was marked watched and (b) the
+ *  air time of its next unwatched aired episode. Both are present in practice —
+ *  up-next rows always have a watched episode and an aired next one — but we
+ *  fall back to 0 defensively. A newly aired episode of a show you were caught
+ *  up on therefore resurfaces it as if you'd just been active, counting from
+ *  that episode's air date rather than from your (older) last watch. */
+export function activityMs(it: UpNextish): number {
+  const watched = it.last_watched_at ? new Date(it.last_watched_at).getTime() : 0;
+  const air = it.air_datetime ? new Date(it.air_datetime).getTime() : 0;
+  return Math.max(watched, air);
+}
+
+/** Continue-watching order: shows by most recent effective activity, newest
+ *  first. The first entry is the Tonight hero; the rest fill the rail. */
+export function orderByActivity<T extends UpNextish>(items: T[]): T[] {
+  return [...items].sort((a, b) => activityMs(b) - activityMs(a));
 }
 
 export interface Premiereish {
@@ -53,4 +52,38 @@ export function premiereMs(s: Premiereish): number | null {
   if (s.next_air_datetime) return new Date(s.next_air_datetime).getTime();
   if (s.first_air_date) return new Date(`${s.first_air_date}T21:00:00Z`).getTime();
   return null;
+}
+
+/** Calendar-feed episodes that aired within the last 5 days (the FRESH window),
+ *  newest first. Feed-driven so it surfaces every recently-aired episode of a
+ *  followed show — not just the next-to-watch one per show. */
+export function recentlyAired<T extends { air_datetime: string }>(feed: T[], now: Date): T[] {
+  const nowMs = now.getTime();
+  return feed
+    .map((e) => ({ e, at: new Date(e.air_datetime).getTime() }))
+    .filter((x) => x.at <= nowMs && nowMs - x.at <= FRESH_WINDOW_MS)
+    .sort((a, b) => b.at - a.at)
+    .map((x) => x.e);
+}
+
+export interface PremiereFeedish {
+  title_id: string;
+  air_datetime: string;
+  is_premiere: boolean;
+}
+
+/** Premiere episodes (episode 1 — a new series or a new season) from the
+ *  calendar feed landing within the next 60 days, soonest first, deduped to one
+ *  row per show. Feed-driven so "Premieres soon" renders the same rows as the
+ *  calendar (season/episode, exact time, days-away countdown). */
+export function soonPremieres<T extends PremiereFeedish>(feed: T[], now: Date): T[] {
+  const nowMs = now.getTime();
+  const seen = new Set<string>();
+  return feed
+    .filter((e) => e.is_premiere)
+    .map((e) => ({ e, at: new Date(e.air_datetime).getTime() }))
+    .filter((x) => x.at > nowMs && x.at - nowMs <= PREMIERE_WINDOW_MS)
+    .sort((a, b) => a.at - b.at)
+    .map((x) => x.e)
+    .filter((e) => !seen.has(e.title_id) && (seen.add(e.title_id), true));
 }

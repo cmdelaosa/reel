@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
-import { getTrending } from "@/lib/tmdb";
+import { getTrending, getPopular } from "@/lib/tmdb";
 import type { TitleRow } from "@/lib/schemas";
 
 export function useTrending() {
@@ -9,6 +9,18 @@ export function useTrending() {
     queryKey: ["trending"],
     staleTime: 6 * 60 * 60 * 1000,
     queryFn: (): Promise<TitleRow[]> => getTrending(),
+  });
+}
+
+/** Popular shows for the discover grid, optionally filtered to a first-air-year
+ *  range. Keyed on the range so changing the years refetches; keeps the prior
+ *  page on screen while the new range loads. */
+export function usePopular(from: number | null, to: number | null) {
+  return useQuery({
+    queryKey: ["popular", from, to],
+    staleTime: 60 * 60 * 1000,
+    placeholderData: (prev) => prev,
+    queryFn: (): Promise<TitleRow[]> => getPopular(from, to),
   });
 }
 

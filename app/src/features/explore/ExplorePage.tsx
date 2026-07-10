@@ -54,13 +54,7 @@ export default function ExplorePage() {
 
       {hasFriends && popular.length > 0 && (
         <section className="flex flex-col gap-4">
-          <div className="mq-sechead">
-            <div>
-              <h2 className="section-title">Popular with friends</h2>
-              <p className="mute" style={{ fontSize: 13 }}>Shows several of your friends follow</p>
-            </div>
-          </div>
-          <Rail>
+          <Rail title="Popular with friends" subtitle="Shows several of your friends follow">
             {popular.map((p) => (
               <div key={p.tmdb_id} style={{ width: "var(--rail-pw)" }} className="flex flex-col gap-2">
                 <Poster
