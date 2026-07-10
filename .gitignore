@@ -10,6 +10,7 @@ app/.env.local
 app/.env*.local
 app/*.log
 app/.vite/
+app/*.tsbuildinfo
 
 # Playwright
 app/test-results/
