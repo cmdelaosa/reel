@@ -199,7 +199,12 @@ function MarkCheck({ episodeId, mark, label, onMarked }: {
         e.stopPropagation();
         if (marked) return;
         setMarkedEp(episodeId);
-        setTimeout(() => { mark.mutate(episodeId); onMarked?.(); }, 420);
+        // Reset the fill if the mark fails, otherwise the check stays lit while
+        // the episode never actually advanced (the mutation rolls the data back).
+        setTimeout(() => {
+          mark.mutate(episodeId, { onError: () => setMarkedEp(null) });
+          onMarked?.();
+        }, 420);
       }}
       title={label}
       aria-label={label}
