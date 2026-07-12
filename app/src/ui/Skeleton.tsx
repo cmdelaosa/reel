@@ -13,7 +13,6 @@ export function PosterGridSkeleton({ count = 12 }: { count?: number }) {
   );
 }
 
-
 export function StatsSkeleton({ count = 6 }: { count?: number }) {
   return (
     <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
