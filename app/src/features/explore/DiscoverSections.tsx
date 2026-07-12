@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Plus, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eye, EyeOff, LayoutGrid, List, Plus, X } from "lucide-react";
 import { useTrending, usePopular, usePopularNow } from "@/lib/explore";
 import { useLibrary, useFollow, useUnfollow } from "@/lib/library";
 import { useIgnore, useIgnored, useUnignore } from "@/lib/ignore";
@@ -62,6 +62,50 @@ function AddButton({ t }: { t: TitleRow }) {
 const THIS_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: THIS_YEAR - 1970 + 1 }, (_, i) => THIS_YEAR - i);
 
+/* Popular now keeps a constant number of cards on screen: the server sends
+   ~48 ranked rows, so as you add/hide shows the next candidate tops the grid
+   back up. Catalog mode (year filters) still shows everything. */
+const POPULAR_NOW_VISIBLE = 18;
+
+/* Discover-grid view mode (mosaic of posters vs compact rows), persisted so
+   the choice sticks across visits. */
+type ViewMode = "mosaic" | "list";
+const VIEW_KEY = "reel.exploreView";
+const loadView = (): ViewMode => {
+  try { return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "mosaic"; }
+  catch { return "mosaic"; }
+};
+
+/* List-view row: same data as TitlePoster, in the app's mq-row shape. */
+function TitleListRow({ t, onOpen, onIgnore }: { t: TitleRow; onOpen: () => void; onIgnore: () => void }) {
+  const art = tmdbImg(t.poster_path, "w92");
+  return (
+    <div className="card mq-row" onClick={onOpen}>
+      <div className="mq-row-art" style={art ? undefined : { background: posterBg(t.name) }}>
+        {art && <img src={art} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+        <div className="poster-sheen" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name}</div>
+        <div className="mute truncate" style={{ fontSize: 12.5, marginTop: 3 }}>
+          {[t.first_air_date?.slice(0, 4), ...t.genres.slice(0, 2)].filter(Boolean).join(" · ")}
+        </div>
+      </div>
+      <div style={{ flex: "0 0 auto", width: 96 }} onClick={(e) => e.stopPropagation()}>
+        <AddButton t={t} />
+      </div>
+      <button
+        className="btn btn-icon"
+        title="Not interested — hide from suggestions"
+        aria-label={`Hide ${t.name} from suggestions`}
+        onClick={(e) => { e.stopPropagation(); onIgnore(); }}
+      >
+        <EyeOff size={15} />
+      </button>
+    </div>
+  );
+}
+
 /* Multi-select genre dropdown: pick any number of genres via checkboxes. Empty
    selection means "all". Closes on outside click. */
 function GenreDropdown({ options, selected, onToggle }: { options: string[]; selected: string[]; onToggle: (g: string) => void }) {
@@ -104,6 +148,11 @@ export function DiscoverSections() {
   const [fromYear, setFromYear] = useState<number | null>(null);
   const [toYear, setToYear] = useState<number | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [view, setView] = useState<ViewMode>(loadView);
+  const switchView = (v: ViewMode) => {
+    setView(v);
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* session-only */ }
+  };
   // Dual-mode grid: with no year range it shows "Popular now" (recent/imminent
   // season premieres); picking a year falls back to the classic catalog query.
   const catalogMode = fromYear != null || toYear != null;
@@ -127,6 +176,8 @@ export function DiscoverSections() {
   const filtered = selectedGenres.length === 0
     ? popular
     : popular.filter((t) => t.genres.some((g) => selectedGenres.includes(g)));
+  // Constant-size grid in "Popular now"; the catalog shows the full pull.
+  const visible = catalogMode ? filtered : filtered.slice(0, POPULAR_NOW_VISIBLE);
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -171,6 +222,24 @@ export function DiscoverSections() {
               {catalogMode ? "Most popular for the selected years" : "New shows and fresh seasons, ranked by buzz"}
             </p>
           </div>
+          <div className="flex items-center gap-1.5" role="group" aria-label="View mode">
+            <button
+              className={`chip ${view === "mosaic" ? "chip-active" : ""}`}
+              onClick={() => switchView("mosaic")}
+              title="Mosaic view"
+              aria-pressed={view === "mosaic"}
+            >
+              <LayoutGrid size={14} />
+            </button>
+            <button
+              className={`chip ${view === "list" ? "chip-active" : ""}`}
+              onClick={() => switchView("list")}
+              title="List view"
+              aria-pressed={view === "list"}
+            >
+              <List size={14} />
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <GenreDropdown options={genres} selected={selectedGenres} onToggle={toggleGenre} />
@@ -185,11 +254,17 @@ export function DiscoverSections() {
             )}
           </div>
         </div>
-        {filtered.length === 0 ? (
+        {visible.length === 0 ? (
           <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>No popular shows match these filters.</p>
+        ) : view === "list" ? (
+          <div className="flex flex-col gap-2">
+            {visible.map((t) => (
+              <TitleListRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} onIgnore={() => ignore.mutate(t.id)} />
+            ))}
+          </div>
         ) : (
           <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))" }}>
-            {filtered.map((t) => (
+            {visible.map((t) => (
               <div key={t.tmdb_id} className="flex flex-col gap-1.5">
                 <TitlePoster t={t} onOpen={() => open(t.tmdb_id)} onIgnore={() => ignore.mutate(t.id)} />
                 <AddButton t={t} />
