@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, Navigate } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { AuthProvider } from "@/features/auth/AuthProvider";
@@ -22,10 +22,14 @@ import TonightPage from "@/features/tonight/TonightPage";
 import YouPage from "@/features/you/YouPage";
 import { Shell } from "@/ui/shell/Shell";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
+import { flashQueryError } from "@/ui/shell/queryErrorStore";
 import "@/styles/index.css";
 import "@/lib/settings"; // applies persisted theme/accent/density to <html> on boot
 
 const queryClient = new QueryClient({
+  // A failed query used to render as an empty state / eternal skeleton with no
+  // signal. Surface a transient toast once retries are exhausted so it's visible.
+  queryCache: new QueryCache({ onError: () => flashQueryError() }),
   defaultOptions: {
     queries: {
       staleTime: 30_000,

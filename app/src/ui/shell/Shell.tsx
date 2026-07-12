@@ -11,6 +11,7 @@ import { NotifPanel } from "@/ui/shell/NotifPanel";
 import { Palette } from "@/ui/shell/Palette";
 import { SettingsSheet } from "@/ui/shell/SettingsSheet";
 import { OfflineToast } from "@/ui/shell/OfflineToast";
+import { QueryErrorToast } from "@/ui/shell/QueryErrorToast";
 
 /* Marquee shell — top tab navigation, floating dock on mobile, ⌘K palette.
    Markup/classes ported verbatim from prototype/src/marquee.tsx. */
@@ -147,6 +148,7 @@ export function Shell() {
       )}
 
       <OfflineToast />
+      <QueryErrorToast />
     </div>
   );
 }
