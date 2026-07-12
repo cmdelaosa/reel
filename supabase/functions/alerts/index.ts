@@ -59,12 +59,31 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
   const resendKey = Deno.env.get("RESEND_API_KEY");
 
+  // One queryable row per exit path (job_runs, migration 0029) — including the
+  // common zero-pending day and the error exits, so a missing recent row always
+  // means the job didn't complete. Best-effort — never fail the run on it.
+  const startedAt = new Date().toISOString();
+  const logRun = (ok: boolean, summary: unknown) =>
+    admin.from("job_runs").insert({
+      job: "alerts",
+      started_at: startedAt,
+      finished_at: new Date().toISOString(),
+      ok,
+      summary,
+    }).then(() => {}, () => {});
+
   const { data: pending, error } = await admin.rpc("pending_new_episode_alerts");
-  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  if (error) {
+    await logRun(false, { error: error.message });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  }
   const rows = (pending ?? []) as Pending[];
 
   const report = { pending: rows.length, recorded: 0, inappInserted: 0, emailsSent: 0, emailFailed: 0, emailSkipped: 0, users: 0 };
-  if (rows.length === 0) return new Response(JSON.stringify(report), { headers: { "content-type": "application/json" } });
+  if (rows.length === 0) {
+    await logRun(true, report);
+    return new Response(JSON.stringify(report), { headers: { "content-type": "application/json" } });
+  }
 
   const userIds = [...new Set(rows.map((r) => r.user_id))];
   report.users = userIds.length;
@@ -92,12 +111,16 @@ Deno.serve(async (req) => {
       { onConflict: "user_id,episode_id", ignoreDuplicates: true },
     )
     .select("user_id, episode_id");
-  if (se) return new Response(JSON.stringify({ error: se.message }), { status: 500 });
+  if (se) {
+    await logRun(false, { error: se.message });
+    return new Response(JSON.stringify({ error: se.message }), { status: 500 });
+  }
 
   const fresh = new Set((recorded ?? []).map((r: Any) => `${r.user_id}:${r.episode_id}`));
   const freshRows = rows.filter((r) => fresh.has(`${r.user_id}:${r.episode_id}`));
   report.recorded = freshRows.length;
   if (freshRows.length === 0) {
+    await logRun(true, report);
     return new Response(JSON.stringify(report), { headers: { "content-type": "application/json" } });
   }
 
@@ -117,7 +140,10 @@ Deno.serve(async (req) => {
     }));
   if (notifRows.length) {
     const { error: ne } = await admin.from("notifications").insert(notifRows);
-    if (ne) return new Response(JSON.stringify({ error: ne.message }), { status: 500 });
+    if (ne) {
+      await logRun(false, { error: ne.message });
+      return new Response(JSON.stringify({ error: ne.message }), { status: 500 });
+    }
     report.inappInserted = notifRows.length;
   }
 
@@ -153,14 +179,8 @@ Deno.serve(async (req) => {
     }
   }
 
-  // One queryable row per run (see job_runs / migration 0029). ok is false if
-  // any email send failed. Best-effort — never fail the run on the log write.
-  await admin.from("job_runs").insert({
-    job: "alerts",
-    finished_at: new Date().toISOString(),
-    ok: report.emailFailed === 0,
-    summary: report,
-  }).then(() => {}, () => {});
+  // ok is false if any email send failed.
+  await logRun(report.emailFailed === 0, report);
 
   return new Response(JSON.stringify(report), { headers: { "content-type": "application/json" } });
 });
