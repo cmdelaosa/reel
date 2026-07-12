@@ -37,6 +37,9 @@ Deno.serve(async (req) => {
   });
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return json({ error: "unauthorized" }, 401);
+  // Invite gate: un-invited accounts cannot run imports (row/storage quota burn).
+  const { data: invited } = await userClient.rpc("is_invited", { uid: user.id });
+  if (!invited) return json({ error: "not invited" }, 403);
   if (!tmdbKey) return json({ error: "TMDB_API_KEY not configured" }, 500);
 
   const { job_id, path } = await req.json().catch(() => ({}));

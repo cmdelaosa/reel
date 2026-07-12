@@ -189,6 +189,12 @@ Deno.serve(async (req) => {
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return json({ error: "unauthorized" }, 401);
 
+  // Invite gate: an authenticated-but-un-invited account must not reach TMDB
+  // (quota burn) or the service-role cache writes below. is_invited() is
+  // SECURITY DEFINER + granted to authenticated, so the user client can read it.
+  const { data: invited } = await userClient.rpc("is_invited", { uid: user.id });
+  if (!invited) return json({ error: "not invited" }, 403);
+
   const apiKey = Deno.env.get("TMDB_API_KEY");
   if (!apiKey) return json({ error: "TMDB_API_KEY not configured" }, 500);
 

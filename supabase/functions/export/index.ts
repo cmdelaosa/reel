@@ -35,6 +35,10 @@ Deno.serve(async (req) => {
   const { data: { user } } = await client.auth.getUser();
   if (!user) return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: cors });
 
+  // Invite gate: only invited accounts (which alone can hold data) may export.
+  const { data: invited } = await client.rpc("is_invited", { uid: user.id });
+  if (!invited) return new Response(JSON.stringify({ error: "not invited" }), { status: 403, headers: cors });
+
   // Page past PostgREST's max_rows (1000) so big watch histories export whole.
   // Stable ORDER BY (per-table unique key) so offset paging can't skip or
   // duplicate rows across requests.
