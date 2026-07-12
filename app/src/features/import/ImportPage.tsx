@@ -14,23 +14,24 @@ export default function ImportPage() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  // Drive a chunked import to completion: a large import walls after ~4min and
-  // the server leaves the job running+waiting with a resume cursor; re-invoke to
-  // continue. Also re-invoke if a pass appears to have died mid-flight (no
-  // progress for a while), or if the job is stuck at pending — the zip uploads
-  // before the invoke, so a pending job whose invoke never reached the server
-  // just needs a kick. invoke() is idempotent, so a spurious call is safe.
+  // Backstop for a chunked import. The server now self-continues each chunk
+  // (waiting:true → it re-invokes the next pass), so the happy path needs no
+  // client kick — we only step in when progress stalls: a pass died mid-flight
+  // before it could hand off, a self-invoke was dropped, or the job is stuck at
+  // pending because its very first invoke never reached the server (the zip
+  // uploads before that invoke). invoke() is idempotent, so a spurious call is
+  // safe; kicking only on stall (not on every waiting:true) avoids racing the
+  // server's own continuation and fanning out duplicate passes.
   const stall = useRef<{ done: number; at: number } | null>(null);
   useEffect(() => {
     if (!job || (job.status !== "running" && job.status !== "pending")) { stall.current = null; return; }
     const r = job.report as Record<string, unknown>;
     const done = typeof r.done === "number" ? r.done : 0;
-    const waiting = r.waiting === true;
     const now = Date.now();
     if (!stall.current || stall.current.done !== done) stall.current = { done, at: now };
     const stalledMs = now - stall.current.at;
-    const stallLimit = job.status === "pending" ? 15_000 : 60_000;
-    if (!continueImport.isPending && (waiting || stalledMs > stallLimit)) {
+    const stallLimit = job.status === "pending" ? 15_000 : 90_000;
+    if (!continueImport.isPending && stalledMs > stallLimit) {
       stall.current = { done, at: now }; // debounce
       continueImport.mutate(job.id);
     }

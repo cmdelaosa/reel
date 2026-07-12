@@ -127,10 +127,23 @@ Deno.serve(async (req) => {
             .eq("id", job_id);
           return;
         }
-        // Persist cursor + full report and flag for the client to continue.
+        // Persist cursor + full report and flag as waiting.
         await admin.from("import_jobs")
           .update({ status: "running", report: { ...report, total: shows.length, done: report.nextIndex, waiting: true } })
           .eq("id", job_id);
+        // Self-continue server-side so completion doesn't hinge on the client
+        // tab staying open: re-invoke the next chunk with the caller's JWT. Each
+        // pass fires exactly one continuation (a linear chain, no fan-out), and
+        // the zero-progress guard above terminates it. Best-effort — the client
+        // stall kick remains a fallback if this fetch is dropped.
+        const auth = req.headers.get("Authorization");
+        if (auth) {
+          await fetch(`${url}/functions/v1/importer`, {
+            method: "POST",
+            headers: { Authorization: auth, "content-type": "application/json" },
+            body: JSON.stringify({ job_id, path }),
+          }).catch(() => {});
+        }
         return;
       }
 
