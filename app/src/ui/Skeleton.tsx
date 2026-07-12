@@ -13,16 +13,6 @@ export function PosterGridSkeleton({ count = 12 }: { count?: number }) {
   );
 }
 
-export function RowsSkeleton({ count = 4, height = 72 }: { count?: number; height?: number }) {
-  return (
-    <div className="flex flex-col gap-2.5">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="skeleton" style={{ height }} />
-      ))}
-    </div>
-  );
-}
-
 export function StatsSkeleton({ count = 6 }: { count?: number }) {
   return (
     <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>

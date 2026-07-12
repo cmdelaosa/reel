@@ -19,3 +19,27 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - run: npm run check
+
+  # The Deno edge functions aren't covered by the app's tsc — type-check them
+  # here so the unattended crons + importer can't ship a type error (audit D2).
+  edge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check edge functions
+        run: |
+          for dir in supabase/functions/*/; do
+            f="${dir}index.ts"
+            [ -f "$f" ] || continue
+            cfg="${dir}deno.json"
+            if [ -f "$cfg" ]; then
+              echo "deno check (config) $f"
+              deno check --config "$cfg" "$f"
+            else
+              echo "deno check $f"
+              deno check "$f"
+            fi
+          done

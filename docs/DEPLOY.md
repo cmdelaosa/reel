@@ -107,3 +107,6 @@ select jobname, schedule, active from cron.job;   -- expect both jobs, active
       from cron.job_run_details order by start_time desc limit 5;` shows
       `succeeded`.
 - [ ] A test alert email actually arrives (verified sender + SMTP).
+- [ ] After the crons run, `select job, ok, started_at, summary from public.job_runs
+      order by started_at desc limit 10;` shows a recent `ok = true` row for each job.
+      (Glance at this weekly — a silently-failing daily job shows up here.)

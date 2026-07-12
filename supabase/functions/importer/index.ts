@@ -47,8 +47,12 @@ Deno.serve(async (req) => {
 
   const admin: SupabaseClient = createClient(url, service);
 
-  // The uploaded object must live under the caller's own folder.
-  if (!String(path).startsWith(`${user.id}/`)) return json({ error: "forbidden path" }, 403);
+  // The uploaded object must live under the caller's own folder — and reject any
+  // `..` so a crafted path like `<uid>/../<other>/x` can't escape it under the
+  // service-role read below.
+  if (!String(path).startsWith(`${user.id}/`) || String(path).includes("..")) {
+    return json({ error: "forbidden path" }, 403);
+  }
 
   // The job row must belong to the caller (service-role writes bypass RLS, so
   // verify ownership before touching it — otherwise a caller could overwrite

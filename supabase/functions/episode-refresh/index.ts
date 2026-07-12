@@ -163,20 +163,55 @@ Deno.serve(async (req) => {
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
 
+  // One queryable row per run/exit (job_runs, migration 0029) so a silently-
+  // failing daily job is visible (edge logs are console-only + ~1 day on free
+  // tier). Best-effort — never fail the run on the log write.
+  const startedAt = new Date().toISOString();
+  const logRun = (ok: boolean, summary: unknown) =>
+    admin.from("job_runs").insert({
+      job: "episode-refresh",
+      started_at: startedAt,
+      finished_at: new Date().toISOString(),
+      ok,
+      summary,
+    }).then(() => {}, () => {});
+
   // distinct followed titles (service role sees all users). The !inner embed
   // filters titles to those with ≥1 followed entry — parent rows stay unique,
-  // and no giant `.in(id, …)` URI is needed.
-  const { data: titles, error: te } = await admin
-    .from("titles")
-    .select("id, tmdb_id, last_refreshed_at, library_entries!inner(followed)")
-    .eq("library_entries.followed", true);
-  if (te) return new Response(JSON.stringify({ error: te.message }), { status: 500 });
-  const ids = (titles ?? []).map((t: Any) => t.id);
+  // and no giant `.in(id, …)` URI is needed. Ordered oldest-refreshed first so
+  // the wall guard becomes a rotating window (no title starves), and paged past
+  // PostgREST's 1000-row cap so the whole followed set is considered. `id` is
+  // the tiebreaker: last_refreshed_at ties exactly across the never-refreshed
+  // (NULL) cohort, and untied pages can skip/duplicate rows across boundaries.
+  const PAGE = 1000;
+  const titles: Any[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error: te } = await admin
+      .from("titles")
+      .select("id, tmdb_id, status, last_refreshed_at, library_entries!inner(followed)")
+      .eq("library_entries.followed", true)
+      .order("last_refreshed_at", { ascending: true, nullsFirst: true })
+      .order("id")
+      .range(from, from + PAGE - 1);
+    if (te) {
+      await logRun(false, { error: te.message });
+      return new Response(JSON.stringify({ error: te.message }), { status: 500 });
+    }
+    titles.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+  }
+  const ids = titles.map((t: Any) => t.id);
 
-  const cutoff = Date.now() - STALE_MS;
-  const stale = (titles ?? []).filter(
-    (t: Any) => !t.last_refreshed_at || new Date(t.last_refreshed_at).getTime() < cutoff,
-  );
+  // Ended/Canceled shows never gain episodes, so touch them at most monthly
+  // instead of every daily run — that removes the bulk of a mature library's
+  // TMDB calls and keeps the daily budget for shows that actually change.
+  const now = Date.now();
+  const ENDED_STALE_MS = 30 * 24 * 60 * 60 * 1000; // 30d
+  const isDone = (s: string | null) => s === "Ended" || s === "Canceled";
+  const stale = titles.filter((t: Any) => {
+    const age = t.last_refreshed_at ? now - new Date(t.last_refreshed_at).getTime() : Infinity;
+    return age > (isDone(t.status) ? ENDED_STALE_MS : STALE_MS);
+  });
 
   // Respond immediately and refresh in the background (EdgeRuntime.waitUntil)
   // so the gateway's request timeout never truncates a big backfill. A wall
@@ -201,6 +236,13 @@ Deno.serve(async (req) => {
       `episode-refresh done: ${refreshed}/${stale.length} refreshed, ${errors.length} errors`,
       errors.slice(0, 5),
     );
+    await logRun(errors.length === 0, {
+      followed: ids.length,
+      stale: stale.length,
+      refreshed,
+      errors: errors.length,
+      sample: errors.slice(0, 5),
+    });
   })();
 
   // Respond immediately and let the backfill run in the background where the
@@ -215,7 +257,7 @@ Deno.serve(async (req) => {
     JSON.stringify({
       followedTitles: ids.length,
       stale: stale.length,
-      skipped: (titles ?? []).length - stale.length,
+      skipped: titles.length - stale.length,
       processing: stale.length > 0,
     }),
     { headers: { "content-type": "application/json" } },
