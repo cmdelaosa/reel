@@ -84,10 +84,10 @@ function YearSelect({ value, onChange, label }: { value: number | null; onChange
   );
 }
 
-/* Popular now keeps a constant number of cards on screen: the server sends
-   ~48 ranked rows, so as you add/hide shows the next candidate tops the grid
-   back up. Catalog mode (year filters) still shows everything. */
-const POPULAR_NOW_VISIBLE = 18;
+/* The discover grid keeps a constant number of cards on screen in both modes:
+   the server sends a deep ranked pool, so as you add/hide shows the next
+   candidate tops the grid back up. */
+const DISCOVER_VISIBLE = 18;
 
 /* Discover-grid view mode (mosaic of posters vs compact rows), persisted so
    the choice sticks across visits. */
@@ -306,8 +306,7 @@ export function DiscoverSections() {
   const filtered = selectedGenres.length === 0
     ? popular
     : popular.filter((t) => t.genres.some((g) => selectedGenres.includes(g)));
-  // Constant-size grid in "Popular now"; the catalog shows the full pull.
-  const visible = catalogMode ? filtered : filtered.slice(0, POPULAR_NOW_VISIBLE);
+  const visible = filtered.slice(0, DISCOVER_VISIBLE);
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {

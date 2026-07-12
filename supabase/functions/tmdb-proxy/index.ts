@@ -507,16 +507,26 @@ Deno.serve(async (req) => {
     // knob — fan-niche titles rate 8.6+ on few votes — but a fixed high floor
     // starves filtered charts (the 1970s have two 1000-vote shows, Documentary
     // has zero at 3000), so it slides with the era and drops when a genre is
-    // picked. boostSpanish is deliberately skipped: injecting lower-rated
-    // titles would falsify a by-rating chart; capNonWestern only demotes, so
-    // the order within Western titles stays honest.
+    // picked. When `from` sits in the last few years the whole range is too
+    // young to have accrued votes (a 2026 premiere can't reach 1000), so the
+    // floor collapses as `from` approaches today. boostSpanish is deliberately
+    // skipped: injecting lower-rated titles would falsify a by-rating chart;
+    // capNonWestern only demotes, so the order within Western titles stays
+    // honest.
     if (path === "/top-rated") {
       const from = url.searchParams.get("from") || null;
       const to = url.searchParams.get("to") || null;
       const genres = (url.searchParams.get("genres") ?? "")
         .split(",").map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
+      const thisYear = new Date().getUTCFullYear();
       const era = Number(from ?? to); // older bound of the range
-      const eraFloor = !from && !to ? 3000 : era >= 2005 ? 1000 : era >= 1990 ? 500 : 200;
+      const eraFloor =
+        !from && !to ? 3000
+        : Number(from) >= thisYear - 1 ? 50 // range is brand-new — votes haven't accrued yet
+        : Number(from) >= thisYear - 4 ? 300
+        : era >= 2005 ? 1000
+        : era >= 1990 ? 500
+        : 200;
       const minVotes = genres.length ? Math.min(eraFloor, 500) : eraFloor;
       const params =
         `&sort_by=vote_average.desc&vote_count.gte=${minVotes}` +
