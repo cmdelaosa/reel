@@ -23,6 +23,11 @@ const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...cors, "content-type": "application/json" } });
 
 const WALL_MS = 240_000;
+// Hosted edge isolates hit a CPU-time limit (~120 heavy shows) well before the
+// wall above, dying with "CPU Time exceeded" mid-pass. Cap each pass so it hands
+// off cleanly (waiting:true) at a boundary, and the next isolate resumes with a
+// fresh CPU budget — the client re-invokes on waiting:true within a poll tick.
+const MAX_PER_PASS = 60;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -110,7 +115,7 @@ Deno.serve(async (req) => {
               .then(() => {}, () => {});
           }
         },
-        startIndex, deadline, seed,
+        startIndex, deadline, seed, MAX_PER_PASS,
       );
 
       if (!report.complete) {

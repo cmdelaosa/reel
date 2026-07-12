@@ -402,6 +402,10 @@ export async function runImport(
   deadline?: number,
   /** cumulative report from earlier passes, so counts accumulate across chunks. */
   prior?: ImportReport,
+  /** max shows to process in this pass before stopping cleanly at a boundary
+   *  (the edge function's hosted-CPU guard — a fresh isolate per chunk gets a
+   *  fresh CPU budget). Undefined = no cap (the offline CLI runs to the end). */
+  maxPerPass?: number,
 ): Promise<ImportReport> {
   const report: ImportReport = prior ?? {
     shows: shows.length,
@@ -424,6 +428,7 @@ export async function runImport(
   let i = startIndex;
   for (; i < shows.length; i++) {
     if (deadline !== undefined && Date.now() >= deadline) break; // wall — stop at a boundary
+    if (maxPerPass !== undefined && i - startIndex >= maxPerPass) break; // per-pass cap — hand off before the CPU wall
     const show = shows[i];
     try {
       const { matched, watchEvents, unmatchedEpisodes } = await importShow(
