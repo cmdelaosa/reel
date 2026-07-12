@@ -163,11 +163,26 @@ Deno.serve(async (req) => {
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
 
+  // One queryable row per run/exit (job_runs, migration 0029) so a silently-
+  // failing daily job is visible (edge logs are console-only + ~1 day on free
+  // tier). Best-effort — never fail the run on the log write.
+  const startedAt = new Date().toISOString();
+  const logRun = (ok: boolean, summary: unknown) =>
+    admin.from("job_runs").insert({
+      job: "episode-refresh",
+      started_at: startedAt,
+      finished_at: new Date().toISOString(),
+      ok,
+      summary,
+    }).then(() => {}, () => {});
+
   // distinct followed titles (service role sees all users). The !inner embed
   // filters titles to those with ≥1 followed entry — parent rows stay unique,
   // and no giant `.in(id, …)` URI is needed. Ordered oldest-refreshed first so
   // the wall guard becomes a rotating window (no title starves), and paged past
-  // PostgREST's 1000-row cap so the whole followed set is considered.
+  // PostgREST's 1000-row cap so the whole followed set is considered. `id` is
+  // the tiebreaker: last_refreshed_at ties exactly across the never-refreshed
+  // (NULL) cohort, and untied pages can skip/duplicate rows across boundaries.
   const PAGE = 1000;
   const titles: Any[] = [];
   for (let from = 0; ; from += PAGE) {
@@ -176,8 +191,12 @@ Deno.serve(async (req) => {
       .select("id, tmdb_id, status, last_refreshed_at, library_entries!inner(followed)")
       .eq("library_entries.followed", true)
       .order("last_refreshed_at", { ascending: true, nullsFirst: true })
+      .order("id")
       .range(from, from + PAGE - 1);
-    if (te) return new Response(JSON.stringify({ error: te.message }), { status: 500 });
+    if (te) {
+      await logRun(false, { error: te.message });
+      return new Response(JSON.stringify({ error: te.message }), { status: 500 });
+    }
     titles.push(...(data ?? []));
     if (!data || data.length < PAGE) break;
   }
@@ -217,14 +236,13 @@ Deno.serve(async (req) => {
       `episode-refresh done: ${refreshed}/${stale.length} refreshed, ${errors.length} errors`,
       errors.slice(0, 5),
     );
-    // One queryable row per run so a silently-failing daily job is visible
-    // (edge logs are console-only + ~1 day on free tier). Best-effort.
-    await admin.from("job_runs").insert({
-      job: "episode-refresh",
-      finished_at: new Date().toISOString(),
-      ok: errors.length === 0,
-      summary: { followed: ids.length, stale: stale.length, refreshed, errors: errors.length, sample: errors.slice(0, 5) },
-    }).then(() => {}, () => {});
+    await logRun(errors.length === 0, {
+      followed: ids.length,
+      stale: stale.length,
+      refreshed,
+      errors: errors.length,
+      sample: errors.slice(0, 5),
+    });
   })();
 
   // Respond immediately and let the backfill run in the background where the
@@ -239,7 +257,7 @@ Deno.serve(async (req) => {
     JSON.stringify({
       followedTitles: ids.length,
       stale: stale.length,
-      skipped: (titles ?? []).length - stale.length,
+      skipped: titles.length - stale.length,
       processing: stale.length > 0,
     }),
     { headers: { "content-type": "application/json" } },
