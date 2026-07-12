@@ -191,7 +191,21 @@ type Json = Record<string, unknown>;
 const tmdbFetch = (key: string, path: string): Promise<Json> =>
   fetch(`${TMDB}${path}${path.includes("?") ? "&" : "?"}api_key=${key}`).then((r) => r.json() as Promise<Json>);
 
+// Curated TheTVDB→TMDB overrides for series TV Time still exports under an id
+// that TheTVDB has since deleted or merged (a season expansion renumbers the
+// show under a new id, orphaning the old one). Such rows have NO working TMDB
+// /find bridge AND — because TheTVDB dropped the record — TV Time often exports
+// a blank name too, so neither tvdbToTmdb nor tmdbByName can resolve them.
+// Checked first, so any user importing these gets a clean match. Add entries as
+// they surface. NB: episode numbering may differ post-merge (the show matches,
+// but some watched (season,episode) pairs land in unmatchedEpisodes).
+const TVDB_ALIASES: Record<string, number> = {
+  "349078": 71446, // La casa de papel / Money Heist — original Antena 3 id, orphaned when Netflix's expansion renumbered it
+};
+
 export async function tvdbToTmdb(key: string, tvdbId: string): Promise<number | null> {
+  const alias = TVDB_ALIASES[tvdbId];
+  if (alias) return alias;
   const data = await tmdbFetch(key, `/find/${tvdbId}?external_source=tvdb_id`);
   const results = (data.tv_results as Json[] | undefined) ?? [];
   return results[0] ? (results[0].id as number) : null;
