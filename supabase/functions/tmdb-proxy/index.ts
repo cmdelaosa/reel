@@ -41,20 +41,21 @@ const TV_GENRES: Record<number, string> = {
 //                      language (keeps Western animation: Rick & Morty, Arcane…).
 //   • soaps          — the Soap genre (10766), incl. telenovelas.
 //   • reality        — the Reality genre (10764).
-//   • indian/turkish — original language from the Indian subcontinent or Turkish,
-//                      which dominate TMDB popularity but aren't of interest here.
+//   • indian/turkish/russian — original language from the Indian subcontinent,
+//                      Turkish or Russian: the first two dominate TMDB
+//                      popularity, and none are of interest here.
 // On top of the hard hides, non-Western titles are *capped* (see capNonWestern).
 const ANIMATION_GENRE = 16;
 const HIDDEN_GENRES = new Set([10766, 10764]); // Soap, Reality
 const ANIME_LANGS = new Set(["ja", "zh", "ko"]);
-const HIDDEN_LANGS = new Set(["hi", "ta", "te", "ml", "kn", "bn", "mr", "pa", "gu", "ur", "tr"]);
+const HIDDEN_LANGS = new Set(["hi", "ta", "te", "ml", "kn", "bn", "mr", "pa", "gu", "ur", "tr", "ru"]);
 // deno-lint-ignore no-explicit-any
 const isHidden = (r: any) => {
   const genres: number[] = r?.genre_ids ?? [];
   const lang: string = r?.original_language ?? "";
   if (genres.includes(ANIMATION_GENRE) && ANIME_LANGS.has(lang)) return true; // anime
   if (genres.some((g) => HIDDEN_GENRES.has(g))) return true; // soaps / reality
-  if (HIDDEN_LANGS.has(lang)) return true; // indian / turkish
+  if (HIDDEN_LANGS.has(lang)) return true; // indian / turkish / russian
   return false;
 };
 
@@ -66,7 +67,7 @@ const isHidden = (r: any) => {
 // Search by name is unaffected.
 const WESTERN_LANGS = new Set([
   "en", "es", "pt", "fr", "de", "it", "nl", "sv", "da", "no", "nb", "nn", "fi",
-  "is", "pl", "cs", "sk", "hu", "ro", "bg", "el", "ru", "uk", "hr", "sr", "bs",
+  "is", "pl", "cs", "sk", "hu", "ro", "bg", "el", "uk", "hr", "sr", "bs",
   "sl", "mk", "sq", "et", "lv", "lt", "be", "ga", "cy", "ca", "eu", "gl", "mt",
 ]);
 const NON_WESTERN_MAX = 0.1; // at most 1 slot in 10
@@ -90,6 +91,31 @@ const capNonWestern = (rows: any[]): any[] => {
   return out;
 };
 
+// Spain-origin shows get a guaranteed *floor* (the mirror of the cap above):
+// the discover-grid routes fetch extra with_origin_country=ES pages so the
+// pool has Spanish supply, and this re-rank promotes the best-ranked Spanish
+// titles into slots 6, 12, 18… (~1 in 6), supply permitting. Judged by TMDB's
+// origin_country (present on both discover and detail payloads) — language
+// won't do, it can't tell Spain from Latin America. Trending and the curated
+// collections are left honest.
+// ORDER MATTERS: always boost first, cap last — capNonWestern's per-prefix
+// guarantee only holds for the list it emits. Boosting afterwards pulls the
+// (Western) Spanish rows out of the tail, leaving a tail that over-fills with
+// the non-Western titles the cap had spaced out against them.
+const SPANISH_MIN = 1 / 6;
+const isSpanish = (r: Any) => ((r?.origin_country ?? []) as string[]).includes("ES");
+const boostSpanish = (rows: Any[]): Any[] => {
+  const spanish = rows.filter(isSpanish);
+  const rest = rows.filter((r) => !isSpanish(r));
+  const out: Any[] = [];
+  let s = 0, o = 0;
+  while (o < rest.length) {
+    if (s < spanish.length && s + 1 <= Math.floor((out.length + 1) * SPANISH_MIN)) out.push(spanish[s++]);
+    else out.push(rest[o++]);
+  }
+  return out;
+};
+
 // Curated-collection slugs → TMDB /discover/tv criteria. Mirrors the intent of
 // the original 0020 seed (which capped each at 12 cached titles) but pulls live
 // from the full TMDB catalog. The rating sorts need a high vote_count floor:
@@ -107,7 +133,7 @@ const COLLECTION_QUERIES: Record<string, string> = {
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
 
@@ -385,6 +411,10 @@ Deno.serve(async (req) => {
             `/discover/tv?sort_by=popularity.desc&include_adult=false&air_date.gte=${since}&air_date.lte=${until}&page=${i + 1}`),
           ...Array.from({ length: 2 }, (_, i) =>
             `/discover/tv?sort_by=popularity.desc&include_adult=false&first_air_date.gte=${since}&first_air_date.lte=${until}&page=${i + 1}`),
+          // Spanish supply for the boostSpanish floor: same premiere windows,
+          // Spain-only. Global pages rarely carry Spanish shows deep enough.
+          `/discover/tv?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&air_date.gte=${since}&air_date.lte=${until}&page=1`,
+          `/discover/tv?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&first_air_date.gte=${since}&first_air_date.lte=${until}&page=1`,
         ];
         const pages = await Promise.all(queries.map((q) => fetchTmdb(apiKey, q)));
         const seen = new Set<number>();
@@ -393,10 +423,11 @@ Deno.serve(async (req) => {
           if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); candidates.push(r); }
         }
         candidates.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
-        // Cap before the detail-check so the fetch budget isn't spent on titles
-        // the quota would drop anyway; capped again after the premiere gate
-        // below, since dropping non-premiering rows can skew the ratio back up.
-        const pool = capNonWestern(candidates);
+        // Cap + boost before the detail-check so the fetch budget isn't spent
+        // on titles the quota would drop anyway (and so Spanish candidates
+        // survive into the top CANDIDATES); both run again after the premiere
+        // gate below, since dropping non-premiering rows skews ratios back.
+        const pool = capNonWestern(boostSpanish(candidates));
         pool.length = Math.min(pool.length, CANDIDATES);
         // Detail-check in chunks (TMDB rate limit): keep shows with a real
         // season (not specials) premiering inside the window.
@@ -414,7 +445,7 @@ Deno.serve(async (req) => {
           }
         }
         premiered.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
-        const keep = capNonWestern(premiered);
+        const keep = capNonWestern(boostSpanish(premiered));
         keep.length = Math.min(keep.length, KEEP);
         if (keep.length) {
           // We hold full details here, so upsert the rich row (network, status…).
@@ -445,11 +476,13 @@ Deno.serve(async (req) => {
         (from ? `&first_air_date.gte=${from}-01-01` : "") +
         (to ? `&first_air_date.lte=${to}-12-31` : "");
       const PAGES = 5;
-      const pages = await Promise.all(
-        Array.from({ length: PAGES }, (_, i) =>
-          fetchTmdb(apiKey, `/discover/tv?sort_by=popularity.desc&include_adult=false&page=${i + 1}${yearParams}`)
-        ),
-      );
+      const ES_PAGES = 2; // Spanish supply for the boostSpanish floor
+      const pages = await Promise.all([
+        ...Array.from({ length: PAGES }, (_, i) =>
+          fetchTmdb(apiKey, `/discover/tv?sort_by=popularity.desc&include_adult=false&page=${i + 1}${yearParams}`)),
+        ...Array.from({ length: ES_PAGES }, (_, i) =>
+          fetchTmdb(apiKey, `/discover/tv?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&page=${i + 1}${yearParams}`)),
+      ]);
       // Dedupe across pages before upserting — a repeated tmdb_id in one upsert
       // batch errors ("cannot affect row a second time").
       const seen = new Set<number>();
@@ -457,7 +490,7 @@ Deno.serve(async (req) => {
       for (const r of pages.flatMap((d) => d.results ?? [])) {
         if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); deduped.push(r); }
       }
-      const uniq = capNonWestern(deduped);
+      const uniq = capNonWestern(boostSpanish(deduped));
       if (uniq.length === 0) return json({ results: [] });
       const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
