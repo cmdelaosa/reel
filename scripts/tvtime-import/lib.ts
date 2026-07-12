@@ -67,6 +67,10 @@ export interface ImportReport {
   watchEvents: number;
   /** watched (season, episode) pairs with no TMDB counterpart (numbering drift). */
   unmatchedEpisodes: number;
+  /** false when a wall/deadline stopped the run before the last show. */
+  complete: boolean;
+  /** index of the next unprocessed show — the resume cursor for chunked runs. */
+  nextIndex: number;
 }
 
 // ── CSV ───────────────────────────────────────────────────────────────────
@@ -369,8 +373,16 @@ export async function runImport(
   watchesByShow?: Map<string, EpisodeWatch[]>,
   archivedIds?: Set<string>,
   onProgress?: (done: number, report: ImportReport) => void,
+  /** Resume from this show index (0 = fresh). Shows before it are skipped —
+   *  earlier passes already imported them (idempotently). */
+  startIndex = 0,
+  /** epoch ms after which the run stops cleanly at a show boundary (the edge
+   *  function's wall). Undefined = run to completion (the offline CLI). */
+  deadline?: number,
+  /** cumulative report from earlier passes, so counts accumulate across chunks. */
+  prior?: ImportReport,
 ): Promise<ImportReport> {
-  const report: ImportReport = {
+  const report: ImportReport = prior ?? {
     shows: shows.length,
     followed: shows.filter((s) => s.followed).length,
     matched: 0,
@@ -380,9 +392,18 @@ export async function runImport(
     titles: 0,
     watchEvents: 0,
     unmatchedEpisodes: 0,
+    complete: false,
+    nextIndex: 0,
   };
-  let done = 0;
-  for (const show of shows) {
+  // Totals always reflect the full list (a prior report predates nothing here,
+  // but keep them authoritative in case the show set differs on a re-upload).
+  report.shows = shows.length;
+  report.followed = shows.filter((s) => s.followed).length;
+
+  let i = startIndex;
+  for (; i < shows.length; i++) {
+    if (deadline !== undefined && Date.now() >= deadline) break; // wall — stop at a boundary
+    const show = shows[i];
     try {
       const { matched, watchEvents, unmatchedEpisodes } = await importShow(
         admin,
@@ -404,8 +425,9 @@ export async function runImport(
     } catch (err) {
       report.errors.push({ tvdbId: show.tvdbId, name: show.name, error: (err as Error).message });
     }
-    done++;
-    onProgress?.(done, report);
+    onProgress?.(i + 1, report);
   }
+  report.nextIndex = i;
+  report.complete = i >= shows.length;
   return report;
 }

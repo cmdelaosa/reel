@@ -37,6 +37,21 @@ export function useLatestImportJob() {
   });
 }
 
+/** Continue a walled import: re-invoke the importer for an in-progress job so it
+ *  processes the next chunk (idempotent; the server resumes from its cursor). */
+export function useContinueImport() {
+  const qc = useQueryClient();
+  const { session } = useAuth();
+  return useMutation({
+    mutationFn: async (jobId: string) => {
+      const path = `${session!.user.id}/${jobId}.zip`;
+      const { error } = await supabase.functions.invoke("importer", { body: { job_id: jobId, path } });
+      if (error) throw new Error(`import failed to continue: ${error.message}`);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: jobsKey }),
+  });
+}
+
 export function useStartImport() {
   const qc = useQueryClient();
   const { session } = useAuth();

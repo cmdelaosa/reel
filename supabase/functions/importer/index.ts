@@ -12,7 +12,7 @@
 // safe). Requires a real user JWT.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { unzipCsvs, parseShows, parseWatches, parseArchived, runImport, NotATvTimeExport } from "../../../scripts/tvtime-import/lib.ts";
+import { unzipCsvs, parseShows, parseWatches, parseArchived, runImport, NotATvTimeExport, type ImportReport } from "../../../scripts/tvtime-import/lib.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -76,33 +76,69 @@ Deno.serve(async (req) => {
   }
   if (shows.length === 0) return fail("no shows found in export");
 
-  await admin.from("import_jobs").update({ status: "running", report: { total: shows.length, done: 0 } }).eq("id", job_id);
+  // Resume cursor: the client re-invokes while status is running+waiting to
+  // continue a walled import. nextIndex/counts persist on the job's report.
+  const { data: priorJob } = await admin.from("import_jobs").select("report").eq("id", job_id).maybeSingle();
+  const priorReport = (priorJob?.report ?? {}) as Record<string, unknown>;
+  const startIndex = typeof priorReport.nextIndex === "number" ? priorReport.nextIndex : 0;
+  // Seed cumulative counts only when actually resuming (a full report was saved
+  // at the wall); a first pass carries only { total, done } and must start fresh.
+  const seed = startIndex > 0 && Array.isArray(priorReport.unmatched) ? (priorReport as unknown as ImportReport) : undefined;
 
-  const started = Date.now();
+  await admin.from("import_jobs")
+    .update({ status: "running", report: { ...(seed ?? {}), total: shows.length, done: startIndex, waiting: false } })
+    .eq("id", job_id);
+
+  const deadline = Date.now() + WALL_MS;
   const work = (async () => {
-    const report = await runImport(admin, tmdbKey, user.id, shows, watches, archived, (done, r) => {
-      if (Date.now() - started > WALL_MS) throw new Error("__wall__");
-      if (done % 10 === 0) {
-        admin.from("import_jobs")
-          .update({ report: { total: shows.length, done, matched: r.matched, watch_events: r.watchEvents } })
-          .eq("id", job_id)
-          .then(() => {}, () => {}); // fire-and-forget progress; never let a blip reject the isolate
-      }
-    }).catch((e) => (e?.message === "__wall__" ? "__wall__" : Promise.reject(e)));
+    try {
+      const report = await runImport(
+        admin, tmdbKey, user.id, shows, watches, archived,
+        (done, r) => {
+          // Throttled progress; carry nextIndex so even a mid-pass isolate death
+          // stays resumable. Fire-and-forget — never let a blip reject the isolate.
+          if (done % 5 === 0) {
+            admin.from("import_jobs")
+              .update({ report: { total: shows.length, done, matched: r.matched, watch_events: r.watchEvents, nextIndex: done } })
+              .eq("id", job_id)
+              .then(() => {}, () => {});
+          }
+        },
+        startIndex, deadline, seed,
+      );
 
-    if (report === "__wall__") {
-      // hit the wall — leave as running; client re-invokes to continue
-      await admin.from("import_jobs").update({ status: "running" }).eq("id", job_id);
-      return;
+      if (!report.complete) {
+        // Hit the wall. If a whole pass made zero forward progress, don't spin
+        // forever — fail cleanly (one show can't fit the budget).
+        if (report.nextIndex <= startIndex) {
+          await admin.from("import_jobs")
+            .update({ status: "error", report: { error: `import stalled at show ${startIndex + 1} of ${shows.length}` }, finished_at: new Date().toISOString() })
+            .eq("id", job_id);
+          return;
+        }
+        // Persist cursor + full report and flag for the client to continue.
+        await admin.from("import_jobs")
+          .update({ status: "running", report: { ...report, total: shows.length, done: report.nextIndex, waiting: true } })
+          .eq("id", job_id);
+        return;
+      }
+
+      await admin.from("import_jobs")
+        .update({ status: "done", report: { ...report, total: shows.length, done: shows.length, waiting: false }, finished_at: new Date().toISOString() })
+        .eq("id", job_id);
+      await admin.from("notifications").insert({
+        user_id: user.id,
+        type: "import_done",
+        payload: { matched: report.matched, watch_events: report.watchEvents, unmatched: report.unmatched.length },
+      });
+      // best-effort cleanup of the uploaded zip
+      await admin.storage.from("imports").remove([path]);
+    } catch (e) {
+      // ANY failure now reaches a terminal state (was: job stuck 'running' forever).
+      await admin.from("import_jobs")
+        .update({ status: "error", report: { error: (e as Error)?.message ?? String(e) }, finished_at: new Date().toISOString() })
+        .eq("id", job_id);
     }
-    await admin.from("import_jobs").update({ status: "done", report, finished_at: new Date().toISOString() }).eq("id", job_id);
-    await admin.from("notifications").insert({
-      user_id: user.id,
-      type: "import_done",
-      payload: { matched: report.matched, watch_events: report.watchEvents, unmatched: report.unmatched.length },
-    });
-    // best-effort cleanup of the uploaded zip
-    await admin.storage.from("imports").remove([path]);
   })();
 
   // Respond immediately; run the import in the background where supported,

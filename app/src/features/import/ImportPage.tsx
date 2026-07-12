@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Loader2, Upload, XCircle } from "lucide-react";
-import { useLatestImportJob, useStartImport } from "@/lib/import";
+import { useContinueImport, useLatestImportJob, useStartImport } from "@/lib/import";
 import { qk } from "@/lib/queryKeys";
 
 /* Import from TV Time — drop zone → job status (polled) → report. */
@@ -9,9 +9,29 @@ import { qk } from "@/lib/queryKeys";
 export default function ImportPage() {
   const { data: job } = useLatestImportJob();
   const start = useStartImport();
+  const continueImport = useContinueImport();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  // Drive a chunked import to completion: a large import walls after ~4min and
+  // the server leaves the job running+waiting with a resume cursor; re-invoke to
+  // continue. Also re-invoke if a pass appears to have died mid-flight (no
+  // progress for a while). invoke() is idempotent, so a spurious call is safe.
+  const stall = useRef<{ done: number; at: number } | null>(null);
+  useEffect(() => {
+    if (!job || job.status !== "running") { stall.current = null; return; }
+    const r = job.report as Record<string, unknown>;
+    const done = typeof r.done === "number" ? r.done : 0;
+    const waiting = r.waiting === true;
+    const now = Date.now();
+    if (!stall.current || stall.current.done !== done) stall.current = { done, at: now };
+    const stalledMs = now - stall.current.at;
+    if (!continueImport.isPending && (waiting || stalledMs > 60_000)) {
+      stall.current = { done, at: now }; // debounce
+      continueImport.mutate(job.id);
+    }
+  }, [job, continueImport]);
 
   const busy = start.isPending || job?.status === "pending" || job?.status === "running";
 
