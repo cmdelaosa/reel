@@ -7,6 +7,7 @@ import type { TitleRow } from "@/lib/schemas";
 import { tmdbImg } from "@/lib/tmdb";
 import { Check, Plus } from "lucide-react";
 import { posterBg } from "@/ui/posterBg";
+import { useTitleIntent } from "@/lib/useOpenTitle";
 
 export default function CollectionPage() {
   const { slug } = useParams();
@@ -58,8 +59,9 @@ export default function CollectionPage() {
 
 function CollectionPoster({ t, onOpen, onIgnore }: { t: TitleRow; onOpen: () => void; onIgnore: () => void }) {
   const art = tmdbImg(t.poster_path);
+  const intent = useTitleIntent(t.tmdb_id);
   return (
-    <div className="poster" style={{ background: posterBg(t.name) }} onClick={onOpen}>
+    <div className="poster" style={{ background: posterBg(t.name) }} onClick={onOpen} {...intent}>
       {art && <img className="poster-img" src={art} alt="" loading="lazy" />}
       <div className="poster-sheen" />
       <button

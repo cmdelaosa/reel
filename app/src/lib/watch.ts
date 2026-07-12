@@ -18,6 +18,11 @@ function invalidateDerived(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: qk.history });
 }
 
+function invalidateDetail(qc: ReturnType<typeof useQueryClient>, titleId: string) {
+  qc.invalidateQueries({ queryKey: qk.watched(titleId) });
+  qc.invalidateQueries({ queryKey: qk.detailProgress(titleId) });
+}
+
 export function useMarkWatched(titleId: string) {
   const qc = useQueryClient();
   const { session } = useAuth();
@@ -43,7 +48,7 @@ export function useMarkWatched(titleId: string) {
     },
     onError: (_e, _v, ctx) => qc.setQueryData(qk.watched(titleId), ctx?.prev),
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: qk.watched(titleId) });
+      invalidateDetail(qc, titleId);
       invalidateDerived(qc);
     },
   });
@@ -68,7 +73,7 @@ export function useUnmarkWatched(titleId: string) {
     },
     onError: (_e, _v, ctx) => qc.setQueryData(qk.watched(titleId), ctx?.prev),
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: qk.watched(titleId) });
+      invalidateDetail(qc, titleId);
       invalidateDerived(qc);
     },
   });
@@ -87,7 +92,7 @@ export function useMarkUpTo(titleId: string) {
       return idsSchema.parse(data ?? []);
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: qk.watched(titleId) });
+      invalidateDetail(qc, titleId);
       invalidateDerived(qc);
     },
   });
@@ -102,7 +107,7 @@ export function useUndoMarks(titleId: string) {
       if (error) throw error;
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: qk.watched(titleId) });
+      invalidateDetail(qc, titleId);
       invalidateDerived(qc);
     },
   });

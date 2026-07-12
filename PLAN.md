@@ -9,6 +9,7 @@ Companion docs:
 
 - [DESIGN.md](DESIGN.md) — product vision + locked decisions (updated, still authoritative for *what*).
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — stack, repo layout, full DB schema, RLS, derivations, conventions (authoritative for *how*).
+- [docs/DETAIL-PERFORMANCE.md](docs/DETAIL-PERFORMANCE.md) — durable metadata cache, title/season hot paths, prefetch, stable transitions, diagnostics, and rollout notes.
 - `docs/phases/PHASE-N.md` — the commit specs (authoritative for *do this next*).
 
 ## How to execute this plan (instructions for the agent)

@@ -2,22 +2,26 @@ import { Star } from "lucide-react";
 import type { TitleCard } from "@/domain/types";
 import { posterBg } from "@/ui/posterBg";
 import { NetworkLogo } from "@/ui/NetworkLogo";
+import { useTitleIntent } from "@/lib/useOpenTitle";
 
 /* ---- Poster tile (overlaid title, TV-Time-like) ---- */
-export function Poster({ t, subtitle, showNetwork = true, onClick }: {
+export function Poster({ t, subtitle, showNetwork = true, onClick, prefetchTmdbId }: {
   t: TitleCard;
   subtitle?: string;
   showNetwork?: boolean;
   onClick?: () => void;
+  prefetchTmdbId?: number;
 }) {
   const progress = t.progress ?? 0;
   const showProgress = progress > 0 && progress < 100;
+  const intent = useTitleIntent(prefetchTmdbId);
 
   return (
     <div
       className="poster"
       style={{ background: posterBg(t.name) }}
       onClick={onClick}
+      {...intent}
       {...(onClick
         ? {
             role: "button",

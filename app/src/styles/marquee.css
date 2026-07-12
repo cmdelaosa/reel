@@ -196,6 +196,7 @@
 /* For sheets centered via transform: translate(-50%,-50%) — a plain `rise` would
    override the centering transform during the animation */
 .sheet-center { animation: rise-center .28s cubic-bezier(.16,1,.3,1); }
+.detail-sheet { animation: none; }
 @keyframes rise-center {
   from { opacity: 0; transform: translate(-50%, calc(-50% + 18px)) scale(.985); }
   to   { opacity: 1; transform: translate(-50%, -50%); }

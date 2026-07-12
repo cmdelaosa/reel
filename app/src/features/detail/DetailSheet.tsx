@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Pause, Play, Plus, Star, X } from "lucide-react";
 import { tmdbImg } from "@/lib/tmdb";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
@@ -9,7 +10,13 @@ import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useFocusTrap } from "@/ui/useFocusTrap";
-import { useTitle, useSeasonEpisodes, useWatched, useTitleEpisodes } from "@/features/detail/data";
+import {
+  seasonQueryOptions,
+  useTitle,
+  useSeasonEpisodes,
+  useWatched,
+  useDetailProgress,
+} from "@/features/detail/data";
 
 /* Show detail sheet — port of prototype screens.tsx DetailSheet on live data.
    Opened globally via ?title=<tmdbId>; episode marking is wired in P2-C4 and
@@ -22,7 +29,17 @@ function Skeleton() {
   return (
     <div className="overflow-y-auto p-6 flex flex-col gap-4">
       {[220, 60, 120].map((h, i) => (
-        <div key={i} style={{ height: h, borderRadius: "var(--r)", background: "var(--surface-2)" }} className="screen" />
+        <div key={i} style={{ height: h }} className="skeleton" />
+      ))}
+    </div>
+  );
+}
+
+function EpisodeSkeleton() {
+  return (
+    <div className="flex flex-col gap-2" aria-label="Loading episodes">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="skeleton" style={{ height: 50 }} />
       ))}
     </div>
   );
@@ -99,6 +116,7 @@ function SeasonTabs({ seasons, active, onPick }: { seasons: SeasonRow[]; active:
 
 export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () => void }) {
   const trapRef = useFocusTrap<HTMLDivElement>();
+  const queryClient = useQueryClient();
   const { data, isPending } = useTitle(tmdbId);
   const { data: library = [] } = useLibrary();
   const follow = useFollow();
@@ -112,36 +130,38 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
 
   const title = data?.title;
   const regularSeasons = (data?.seasons ?? []).filter((s: SeasonRow) => s.number > 0);
-  const { data: watched, isPending: watchedPending } = useWatched(title?.id ?? null);
-  const { data: allEpisodesData, isPending: allEpisodesPending } = useTitleEpisodes(title?.id ?? null);
-  const allEpisodes = allEpisodesData ?? [];
+  const { data: watched } = useWatched(title?.id ?? null);
+  const { data: progress, isPending: progressPending } = useDetailProgress(title?.id ?? null);
   // Which season to open on (a manual pick always wins):
   //  1. the season of the first aired-but-unwatched episode — where you'd pick up;
   //  2. if you're all caught up, the season of the next upcoming episode — so a
   //     show with a premiere on the way opens on its new season, not season 1;
   //  3. otherwise: season 1 if you've never watched the show (nothing cached
   //     yet to derive 1–2 from), or the latest season if you've seen it all.
-  // The choice waits for the two watch-history queries (fast DB reads that run
-  // in parallel) so exactly one season is fetched — no last-season flash that
-  // then jumps to where you left off.
-  const nowIso0 = new Date().toISOString();
-  const firstUnwatched = allEpisodes
-    .filter((e) => e.season_number > 0 && e.air_datetime != null && e.air_datetime <= nowIso0 && !watched?.has(e.id))
-    .sort((a, b) => a.season_number - b.season_number || a.episode_number - b.episode_number)[0];
-  const nextUpcoming = allEpisodes
-    .filter((e) => e.season_number > 0 && e.air_datetime != null && e.air_datetime > nowIso0)
-    .sort((a, b) => a.season_number - b.season_number || a.episode_number - b.episode_number)[0];
+  // Postgres returns the recommendation and per-season unseen counts in one
+  // compact query, avoiding a download of every episode just for this choice.
   const firstSeason = regularSeasons[0]?.number ?? null;
-  const lastSeason = regularSeasons[regularSeasons.length - 1]?.number ?? null;
-  const historyReady = !watchedPending && !allEpisodesPending;
   const activeSeason =
     season ??
-    (historyReady
-      ? (firstUnwatched?.season_number ??
-        nextUpcoming?.season_number ??
-        (watched?.size ? lastSeason : firstSeason))
-      : null);
-  const { data: seasonData } = useSeasonEpisodes(tmdbId, activeSeason);
+    (!progressPending ? (progress?.recommended_season ?? firstSeason) : null);
+  const { data: seasonData, isFetching: seasonFetching, isPlaceholderData } =
+    useSeasonEpisodes(tmdbId, activeSeason, data);
+
+  // Once the chosen season is visible, warm its immediate neighbours while
+  // the browser is idle. Sequential browsing then feels instant without
+  // pulling every season of a decades-long show or burning TMDB quota blindly.
+  useEffect(() => {
+    if (!data || activeSeason == null || !seasonData || seasonData.season.number !== activeSeason) return;
+    const regular = data.seasons.filter((item) => item.number > 0);
+    const index = regular.findIndex((item) => item.number === activeSeason);
+    const neighbours = [regular[index - 1], regular[index + 1]].filter(Boolean);
+    const timer = setTimeout(() => {
+      for (const neighbour of neighbours) {
+        void queryClient.prefetchQuery(seasonQueryOptions(tmdbId, neighbour.number, data));
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [activeSeason, data, queryClient, seasonData, tmdbId]);
 
   const titleId = title?.id ?? "";
   const { data: myRating } = useMyRating(title?.id ?? null);
@@ -161,18 +181,24 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   }, [toast]);
 
   const nowIso = new Date().toISOString();
+  const episodes = seasonData?.episodes ?? [];
+  const changingSeason = Boolean(
+    isPlaceholderData ||
+    (activeSeason != null && seasonData && seasonData.season.number !== activeSeason),
+  );
 
   /** Aired, unwatched, regular-season episodes strictly before the target. */
-  const unseenPriors = (e: EpisodeRow) =>
-    allEpisodes.filter(
+  const unseenPriors = (e: EpisodeRow) => {
+    const beforeSeason = progress?.unseen_before[String(e.season_number)] ?? 0;
+    const earlierInSeason = episodes.filter(
       (x) =>
-        x.season_number > 0 &&
         x.air_datetime != null &&
         x.air_datetime <= nowIso &&
-        (x.season_number < e.season_number ||
-          (x.season_number === e.season_number && x.episode_number < e.episode_number)) &&
+        x.episode_number < e.episode_number &&
         !watched?.has(x.id),
     ).length;
+    return beforeSeason + earlierInSeason;
+  };
 
   const onEpClick = (e: EpisodeRow) => {
     const aired = Boolean(e.air_datetime && e.air_datetime <= nowIso);
@@ -210,7 +236,6 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
 
   const backdrop = tmdbImg(title?.backdrop_path ?? null, "w780");
   const poster = tmdbImg(title?.poster_path ?? null, "w342");
-  const episodes = seasonData?.episodes ?? [];
   const now = new Date().toISOString();
 
   return (
@@ -222,7 +247,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
         aria-modal="true"
         aria-label={title ? `${title.name} details` : "Show details"}
         tabIndex={-1}
-        className="sheet-center fixed z-[70] card overflow-hidden flex flex-col"
+        className="detail-sheet sheet-center fixed z-[70] card overflow-hidden flex flex-col"
         style={{
           left: "50%", top: "50%", transform: "translate(-50%,-50%)",
           width: "min(760px, 94vw)", maxHeight: "90vh", borderRadius: "var(--r-xl)",
@@ -334,24 +359,35 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
               {regularSeasons.length > 0 && (
                 <div>
                   <SeasonTabs seasons={regularSeasons} active={activeSeason} onPick={setSeason} />
-                  <div className="flex flex-col">
-                    {episodes.length === 0 && (
-                      <div className="dim" style={{ fontSize: 13.5, padding: "10px 0" }}>Loading episodes…</div>
+                  <div style={{ position: "relative", minHeight: episodes.length ? undefined : 310 }}>
+                    {episodes.length === 0 && seasonFetching && <EpisodeSkeleton />}
+                    {episodes.length === 0 && !seasonFetching && (
+                      <div className="dim" style={{ fontSize: 13.5, padding: "12px 0" }}>No episodes available yet.</div>
                     )}
-                    {episodes.map((e) => {
-                      const aired = Boolean(e.air_datetime && e.air_datetime <= now);
-                      const isWatched = watched?.has(e.id) ?? false;
-                      return (
-                        <div key={e.id} className="ep-row" style={aired ? undefined : { opacity: 0.55, cursor: "default" }} onClick={() => onEpClick(e)}>
-                          <div className={`check ${isWatched ? "on" : ""}`}><Check size={15} strokeWidth={3} /></div>
-                          <div className="mute" style={{ fontSize: 13, width: 42, flex: "0 0 auto" }}>E{e.episode_number}</div>
-                          <div className="flex-1 min-w-0">
-                            <div style={{ fontSize: 14, fontWeight: 600 }} className="truncate">{e.name ?? `Episode ${e.episode_number}`}</div>
+                    <div
+                      className="flex flex-col"
+                      aria-busy={changingSeason}
+                      style={{
+                        opacity: changingSeason ? 0.45 : 1,
+                        pointerEvents: changingSeason ? "none" : undefined,
+                        transition: "opacity .15s ease",
+                      }}
+                    >
+                      {episodes.map((e) => {
+                        const aired = Boolean(e.air_datetime && e.air_datetime <= now);
+                        const isWatched = watched?.has(e.id) ?? false;
+                        return (
+                          <div key={e.id} className="ep-row" style={aired ? undefined : { opacity: 0.55, cursor: "default" }} onClick={() => onEpClick(e)}>
+                            <div className={`check ${isWatched ? "on" : ""}`}><Check size={15} strokeWidth={3} /></div>
+                            <div className="mute" style={{ fontSize: 13, width: 42, flex: "0 0 auto" }}>E{e.episode_number}</div>
+                            <div className="flex-1 min-w-0">
+                              <div style={{ fontSize: 14, fontWeight: 600 }} className="truncate">{e.name ?? `Episode ${e.episode_number}`}</div>
+                            </div>
+                            <div className="mute" style={{ fontSize: 12 }}>{fmtDate(e.air_datetime)}</div>
                           </div>
-                          <div className="mute" style={{ fontSize: 12 }}>{fmtDate(e.air_datetime)}</div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}

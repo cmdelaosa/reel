@@ -17,3 +17,5 @@ app/test-results/
 app/playwright-report/
 app/blob-report/
 app/.playwright/
+.vercel
+.env*

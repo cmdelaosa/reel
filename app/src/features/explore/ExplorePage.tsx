@@ -1,4 +1,3 @@
-import { useSearchParams } from "react-router";
 import { Search, Star } from "lucide-react";
 import { useFriendships } from "@/lib/friends";
 import { usePopularWithFriends, useBestRatedByFriends, type BestRatedByFriends } from "@/lib/explore";
@@ -10,19 +9,10 @@ import { posterBg } from "@/ui/posterBg";
 import { FriendActivityCard } from "@/features/explore/FriendActivityCard";
 import { DiscoverSections } from "@/features/explore/DiscoverSections";
 import { CollectionsSection } from "@/features/explore/CollectionsSection";
+import { useOpenTitle, useTitleIntent } from "@/lib/useOpenTitle";
 
 /* Explore — friend-powered sections. They only appear once you have ≥2 friends
    (no sad empties on day one). Trending/collections land in Phase 5. */
-
-function useOpenTitle() {
-  const [, setSearchParams] = useSearchParams();
-  return (tmdbId: number) =>
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("title", String(tmdbId));
-      return next;
-    });
-}
 
 export default function ExplorePage() {
   const { data: friendships = [] } = useFriendships();
@@ -63,6 +53,7 @@ export default function ExplorePage() {
                     genres: p.genres.length ? p.genres : ["—"], network: p.network ?? "",
                     posterPath: tmdbImg(p.poster_path), voteAverage: p.vote_average ?? 0,
                   }}
+                  prefetchTmdbId={p.tmdb_id}
                   onClick={() => open(p.tmdb_id)}
                 />
                 <div className="flex items-center gap-2 px-0.5">
@@ -100,8 +91,9 @@ export default function ExplorePage() {
 
 function BestRatedRow({ b, onOpen }: { b: BestRatedByFriends; onOpen: () => void }) {
   const art = tmdbImg(b.poster_path, "w92");
+  const intent = useTitleIntent(b.tmdb_id);
   return (
-    <div className="card mq-row" onClick={onOpen}>
+    <div className="card mq-row" onClick={onOpen} {...intent}>
       <div className="mq-row-art" style={art ? undefined : { background: posterBg(b.name) }}>
         {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
         <div className="poster-sheen" />

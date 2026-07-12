@@ -35,6 +35,11 @@ linked hosted DB.
 supabase functions deploy tmdb-proxy episode-refresh alerts importer export
 ```
 
+Deploy migrations before the functions. `tmdb-proxy` uses the
+`is_current_user_invited()` function introduced in migration 0033 to combine
+JWT/invite validation into one database round trip. Deploying the function
+first would make metadata requests return 401 until the migration lands.
+
 ## 3. Set edge-function secrets
 
 ```bash

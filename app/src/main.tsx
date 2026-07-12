@@ -23,6 +23,7 @@ import YouPage from "@/features/you/YouPage";
 import { Shell } from "@/ui/shell/Shell";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
 import { flashQueryError } from "@/ui/shell/queryErrorStore";
+import { restoreMetadataCache, watchMetadataCache } from "@/lib/queryPersistence";
 import "@/styles/index.css";
 import "@/lib/settings"; // applies persisted theme/accent/density to <html> on boot
 
@@ -100,12 +101,20 @@ if (!rootElement) {
   throw new Error("Root element #root not found");
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
-    </QueryClientProvider>
-  </StrictMode>,
-);
+async function start() {
+  // Hydrate durable metadata before mounting so a refresh paints from cache
+  // instead of briefly entering the loading state and starting duplicate I/O.
+  await restoreMetadataCache(queryClient);
+  watchMetadataCache(queryClient);
+  createRoot(rootElement!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+}
+
+void start();

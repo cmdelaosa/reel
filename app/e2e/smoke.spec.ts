@@ -61,14 +61,19 @@ test("core loop: search → add → mark watched → tonight → calendar → ra
   }
 
   // Rate it 8/10 (4th star)
-  const stars = dialog.locator(".star");
-  await stars.nth(3).click();
+  const starScores = dialog.locator(".rating-half.right");
+  await starScores.nth(3).click();
   await expect(dialog.getByText("8/10")).toBeVisible();
 
-  // Mark episode 1 watched (season 1 shown by default)
+  // Exercise an episode write in whichever continuation season opens. Keep the
+  // smoke idempotent when the local DB retains state from an earlier run.
   const epRows = dialog.locator(".ep-row");
   await expect(epRows.first()).toBeVisible();
   const firstCheck = epRows.first().locator(".check");
+  if (await firstCheck.evaluate((node) => node.classList.contains("on"))) {
+    await firstCheck.click();
+    await expect(firstCheck).not.toHaveClass(/\bon\b/);
+  }
   await firstCheck.click();
   await expect(epRows.first().locator(".check.on")).toBeVisible();
 

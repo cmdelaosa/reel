@@ -13,6 +13,7 @@ import {
    shared zod schemas before returning. */
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tmdb-proxy`;
+const FRESH_MS = 24 * 60 * 60 * 1000;
 
 /** Full TMDB image URL for a cached *_path column (null-safe). */
 export function tmdbImg(path: string | null | undefined, size: "w92" | "w342" | "w780" | "original" = "w342"): string | undefined {
@@ -35,6 +36,10 @@ async function call(path: string): Promise<unknown> {
     throw new Error(`tmdb-proxy ${res.status}: ${await res.text()}`);
   }
   return res.json();
+}
+
+function isFresh(iso: string | null | undefined): boolean {
+  return Boolean(iso) && Date.now() - new Date(iso!).getTime() < FRESH_MS;
 }
 
 export async function searchShows(q: string): Promise<TitleRow[]> {
@@ -86,11 +91,59 @@ export async function getCollectionTitles(slug: string): Promise<TitleRow[]> {
 }
 
 export async function getTitle(tmdbId: number): Promise<TitleResponse> {
+  // Warm path: metadata tables are authenticated-readable already. Going
+  // straight to PostgREST avoids an Edge cold start plus repeated auth/invite
+  // and service-role DB round trips. The proxy remains the cache-fill path.
+  const { data, error } = await supabase
+    .from("titles")
+    .select("*, seasons(*)")
+    .eq("tmdb_id", tmdbId)
+    .maybeSingle();
+
+  if (!error && data && Array.isArray(data.seasons) && data.seasons.length > 0) {
+    const parsed = titleResponseSchema.parse({
+      title: data,
+      seasons: [...data.seasons].sort((a, b) => a.number - b.number),
+    });
+    // Stale-while-revalidate: render the DB row now and let the proxy refresh
+    // it out of band. A failed refresh never turns a cache hit into an error.
+    if (!isFresh(parsed.title.last_refreshed_at)) {
+      void call(`/title/${tmdbId}`).catch(() => {});
+    }
+    return parsed;
+  }
+
   const json = await call(`/title/${tmdbId}`);
   return titleResponseSchema.parse(json);
 }
 
-export async function getSeason(tmdbId: number, n: number): Promise<SeasonResponse> {
+export async function getSeason(
+  tmdbId: number,
+  n: number,
+  titleId?: string,
+  titleRefreshedAt?: string | null,
+): Promise<SeasonResponse> {
+  if (titleId) {
+    const { data, error } = await supabase
+      .from("seasons")
+      .select("*, episodes(*)")
+      .eq("title_id", titleId)
+      .eq("number", n)
+      .maybeSingle();
+
+    if (!error && data && Array.isArray(data.episodes) && data.episodes.length > 0) {
+      const parsed = seasonResponseSchema.parse({
+        season: data,
+        episodes: [...data.episodes].sort((a, b) => a.episode_number - b.episode_number),
+      });
+      const complete = parsed.season.episode_count == null || parsed.episodes.length >= parsed.season.episode_count;
+      if (!complete || !isFresh(titleRefreshedAt)) {
+        void call(`/title/${tmdbId}/season/${n}`).catch(() => {});
+      }
+      return parsed;
+    }
+  }
+
   const json = await call(`/title/${tmdbId}/season/${n}`);
   return seasonResponseSchema.parse(json);
 }

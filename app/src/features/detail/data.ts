@@ -1,65 +1,79 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { qk } from "@/lib/queryKeys";
 import { getSeason, getTitle } from "@/lib/tmdb";
+import type { TitleResponse } from "@/lib/schemas";
 
 /* Detail-sheet data: title+seasons (proxy, cached), episodes per season
    (lazy), and the caller's watched episode-ids for one title. */
 
+export const METADATA_STALE_MS = 24 * 60 * 60_000;
+export const METADATA_GC_MS = 30 * 24 * 60 * 60_000;
+
+export function titleQueryOptions(tmdbId: number) {
+  return {
+    queryKey: qk.title(tmdbId ?? 0),
+    staleTime: METADATA_STALE_MS,
+    gcTime: METADATA_GC_MS,
+    queryFn: () => getTitle(tmdbId),
+  };
+}
+
 export function useTitle(tmdbId: number | null) {
   return useQuery({
-    queryKey: qk.title(tmdbId ?? 0),
+    ...titleQueryOptions(tmdbId ?? 0),
     enabled: tmdbId != null,
-    staleTime: 5 * 60_000,
-    queryFn: () => getTitle(tmdbId!),
   });
 }
 
-export function useSeasonEpisodes(tmdbId: number | null, season: number | null) {
-  return useQuery({
+export function seasonQueryOptions(tmdbId: number, season: number, titleResponse?: TitleResponse) {
+  return {
     queryKey: qk.season(tmdbId ?? 0, season ?? -1),
+    staleTime: METADATA_STALE_MS,
+    gcTime: METADATA_GC_MS,
+    // Preserve the rendered rows while another season is in flight. The detail
+    // sheet dims and disables this placeholder, avoiding a collapse/flash.
+    placeholderData: keepPreviousData,
+    queryFn: () => getSeason(
+      tmdbId,
+      season,
+      titleResponse?.title.id,
+      titleResponse?.title.last_refreshed_at,
+    ),
+  };
+}
+
+export function useSeasonEpisodes(tmdbId: number | null, season: number | null, titleResponse?: TitleResponse) {
+  return useQuery({
+    ...seasonQueryOptions(tmdbId ?? 0, season ?? -1, titleResponse),
     enabled: tmdbId != null && season != null,
-    staleTime: 5 * 60_000,
-    queryFn: () => getSeason(tmdbId!, season!),
   });
 }
 
-const epLiteSchema = z.array(
-  z.object({
-    id: z.string().uuid(),
-    season_number: z.number().int(),
-    episode_number: z.number().int(),
-    air_datetime: z.string().nullable(),
-  }),
-);
-export type EpisodeLite = z.infer<typeof epLiteSchema>[number];
+const detailProgressSchema = z.object({
+  recommended_season: z.number().int().nullable(),
+  unseen_before: z.record(z.string(), z.number().int().nonnegative()),
+});
+export type DetailProgress = z.infer<typeof detailProgressSchema>;
 
-/** Every cached episode of a title (from our DB, not TMDB) — used to count
- *  unseen priors across seasons for the mark-up-to confirm. */
-export function useTitleEpisodes(titleId: string | null) {
-  return useQuery({
-    queryKey: qk.titleEpisodes(titleId ?? ""),
-    enabled: Boolean(titleId),
-    queryFn: async (): Promise<EpisodeLite[]> => {
-      // Page past PostgREST's 1000-row cap — a long-running show (daily soap)
-      // can exceed it, and a truncated list would undercount unseen priors.
-      const PAGE = 1000;
-      const rows: unknown[] = [];
-      for (let from = 0; ; from += PAGE) {
-        const { data, error } = await supabase
-          .from("episodes")
-          .select("id, season_number, episode_number, air_datetime")
-          .eq("title_id", titleId!)
-          .order("season_number")
-          .order("episode_number")
-          .range(from, from + PAGE - 1);
-        if (error) throw error;
-        rows.push(...(data ?? []));
-        if (!data || data.length < PAGE) break;
-      }
-      return epLiteSchema.parse(rows);
+/** Small server-side derivation replacing the old download of every episode
+ * row just to choose an initial season and count unseen previous seasons. */
+export function detailProgressQueryOptions(titleId: string) {
+  return {
+    queryKey: qk.detailProgress(titleId),
+    queryFn: async (): Promise<DetailProgress> => {
+      const { data, error } = await supabase.rpc("rpc_title_detail_progress", { p_title_id: titleId });
+      if (error) throw error;
+      return detailProgressSchema.parse(data);
     },
+  };
+}
+
+export function useDetailProgress(titleId: string | null) {
+  return useQuery({
+    ...detailProgressQueryOptions(titleId ?? ""),
+    enabled: Boolean(titleId),
   });
 }
 

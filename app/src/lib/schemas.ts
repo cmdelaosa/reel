@@ -19,6 +19,9 @@ export const titleRowSchema = z.object({
   episode_run_time: z.number().int().nullable(),
   vote_average: z.number().nullable(),
   popularity: z.number().nullable(),
+  // Present on full DB/proxy rows. Search fixtures and older persisted cache
+  // entries may omit it, so keep it optional for backwards compatibility.
+  last_refreshed_at: z.string().nullable().optional(),
 });
 export type TitleRow = z.infer<typeof titleRowSchema>;
 

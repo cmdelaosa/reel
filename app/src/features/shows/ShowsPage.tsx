@@ -110,7 +110,7 @@ export default function ShowsPage() {
       <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))", gap: "var(--gap)" }}>
         {items.map((s) => (
           <div key={s.title_id} className="flex flex-col gap-1.5">
-            <Poster t={toTitleCard(s)} onClick={() => open(s.tmdb_id)} />
+            <Poster t={toTitleCard(s)} prefetchTmdbId={s.tmdb_id} onClick={() => open(s.tmdb_id)} />
             {s.status === "caughtup" && s.next_air_datetime && (
               <div className="mute" style={{ fontSize: 11.5, paddingLeft: 2 }}>
                 ⏳ Next episode {new Date(s.next_air_datetime).toLocaleDateString(undefined, { month: "short", day: "numeric" })}

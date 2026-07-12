@@ -139,13 +139,14 @@ const COLLECTION_QUERIES: Record<string, string> = {
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Expose-Headers": "x-cache, server-timing",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
 
-const json = (body: unknown, status = 200) =>
+const json = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...cors, "content-type": "application/json" },
+    headers: { ...cors, "content-type": "application/json", ...extraHeaders },
   });
 
 const airDatetime = (airDate?: string | null) =>
@@ -301,20 +302,18 @@ const fetchTmdb = async (apiKey: string, p: string) => {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-  // --- auth: require a real signed-in user (anon key alone → 401) ---
+  const requestStarted = performance.now();
+
+  // --- auth + invite gate in one PostgREST round trip ---
   const userClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY")!,
     { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } },
   );
-  const { data: { user } } = await userClient.auth.getUser();
-  if (!user) return json({ error: "unauthorized" }, 401);
-
-  // Invite gate: an authenticated-but-un-invited account must not reach TMDB
-  // (quota burn) or the service-role cache writes below. is_invited() is
-  // SECURITY DEFINER + granted to authenticated, so the user client can read it.
-  const { data: invited } = await userClient.rpc("is_invited", { uid: user.id });
+  const { data: invited, error: gateError } = await userClient.rpc("is_current_user_invited");
+  if (gateError) return json({ error: "unauthorized" }, 401);
   if (!invited) return json({ error: "not invited" }, 403);
+  const gateFinished = performance.now();
 
   const apiKey = Deno.env.get("TMDB_API_KEY");
   if (!apiKey) return json({ error: "TMDB_API_KEY not configured" }, 500);
@@ -326,6 +325,18 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const path = url.pathname.replace(/^\/tmdb-proxy/, "").replace(/\/+$/, "");
+
+  const detailHeaders = (cache: "HIT" | "MISS" | "STALE", dbMs: number, fillMs = 0) => ({
+    "X-Cache": cache,
+    "Cache-Control": "private, max-age=300, stale-while-revalidate=86400",
+    "Vary": "Authorization",
+    "Server-Timing": [
+      `gate;dur=${(gateFinished - requestStarted).toFixed(1)}`,
+      `db;dur=${dbMs.toFixed(1)}`,
+      ...(fillMs > 0 ? [`fill;dur=${fillMs.toFixed(1)}`] : []),
+      `total;dur=${(performance.now() - requestStarted).toFixed(1)}`,
+    ].join(", "),
+  });
 
   try {
     // GET /search?q=
@@ -507,16 +518,26 @@ Deno.serve(async (req) => {
     // knob — fan-niche titles rate 8.6+ on few votes — but a fixed high floor
     // starves filtered charts (the 1970s have two 1000-vote shows, Documentary
     // has zero at 3000), so it slides with the era and drops when a genre is
-    // picked. boostSpanish is deliberately skipped: injecting lower-rated
-    // titles would falsify a by-rating chart; capNonWestern only demotes, so
-    // the order within Western titles stays honest.
+    // picked. When `from` sits in the last few years the whole range is too
+    // young to have accrued votes (a 2026 premiere can't reach 1000), so the
+    // floor collapses as `from` approaches today. boostSpanish is deliberately
+    // skipped: injecting lower-rated titles would falsify a by-rating chart;
+    // capNonWestern only demotes, so the order within Western titles stays
+    // honest.
     if (path === "/top-rated") {
       const from = url.searchParams.get("from") || null;
       const to = url.searchParams.get("to") || null;
       const genres = (url.searchParams.get("genres") ?? "")
         .split(",").map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
+      const thisYear = new Date().getUTCFullYear();
       const era = Number(from ?? to); // older bound of the range
-      const eraFloor = !from && !to ? 3000 : era >= 2005 ? 1000 : era >= 1990 ? 500 : 200;
+      const eraFloor =
+        !from && !to ? 3000
+        : Number(from) >= thisYear - 1 ? 50 // range is brand-new — votes haven't accrued yet
+        : Number(from) >= thisYear - 4 ? 300
+        : era >= 2005 ? 1000
+        : era >= 1990 ? 500
+        : 200;
       const minVotes = genres.length ? Math.min(eraFloor, 500) : eraFloor;
       const params =
         `&sort_by=vote_average.desc&vote_count.gte=${minVotes}` +
@@ -574,15 +595,23 @@ Deno.serve(async (req) => {
     const mTitle = path.match(/^\/title\/(\d+)$/);
     if (mTitle) {
       const tmdbId = Number(mTitle[1]);
-      const { data: cached } = await admin.from("titles").select("*").eq("tmdb_id", tmdbId).maybeSingle();
-      if (cached) {
-        const { data: seasons } = await admin.from("seasons").select("*").eq("title_id", cached.id).order("number");
-        if ((seasons ?? []).length) {
-          if (!isFresh(cached)) inBackground(refreshTitle(admin, apiKey, tmdbId));
-          return json({ title: cached, seasons });
-        }
+      const dbStarted = performance.now();
+      const { data: cached } = await admin
+        .from("titles")
+        .select("*, seasons(*)")
+        .eq("tmdb_id", tmdbId)
+        .maybeSingle();
+      const dbMs = performance.now() - dbStarted;
+      if (cached && (cached.seasons ?? []).length) {
+        const { seasons: nestedSeasons, ...title } = cached;
+        const seasons = [...nestedSeasons].sort((a: Any, b: Any) => a.number - b.number);
+        const stale = !isFresh(title);
+        if (stale) inBackground(refreshTitle(admin, apiKey, tmdbId));
+        return json({ title, seasons }, 200, detailHeaders(stale ? "STALE" : "HIT", dbMs));
       }
-      return json(await refreshTitle(admin, apiKey, tmdbId));
+      const fillStarted = performance.now();
+      const filled = await refreshTitle(admin, apiKey, tmdbId);
+      return json(filled, 200, detailHeaders("MISS", dbMs, performance.now() - fillStarted));
     }
 
     // GET /title/:id/season/:n — cache-first like /title. Cached episodes are
@@ -594,21 +623,26 @@ Deno.serve(async (req) => {
     if (mSeason) {
       const tmdbId = Number(mSeason[1]);
       const n = Number(mSeason[2]);
+      const dbStarted = performance.now();
       const { data: existing } = await admin
         .from("titles").select("id, last_refreshed_at").eq("tmdb_id", tmdbId).maybeSingle();
       const title = existing ?? (await refreshTitle(admin, apiKey, tmdbId)).title;
       const { data: season } = await admin
-        .from("seasons").select("*").eq("title_id", title.id).eq("number", n).maybeSingle();
+        .from("seasons").select("*, episodes(*)").eq("title_id", title.id).eq("number", n).maybeSingle();
+      const dbMs = performance.now() - dbStarted;
       if (season) {
-        const { data: episodes } = await admin
-          .from("episodes").select("*").eq("title_id", title.id).eq("season_number", n).order("episode_number");
+        const { episodes: nestedEpisodes, ...seasonRow } = season;
+        const episodes = [...(nestedEpisodes ?? [])].sort((a: Any, b: Any) => a.episode_number - b.episode_number);
         if ((episodes ?? []).length) {
-          const complete = season.episode_count == null || episodes!.length >= season.episode_count;
-          if (!isFresh(title) || !complete) inBackground(refreshSeason(admin, apiKey, tmdbId, title.id, n));
-          return json({ season, episodes });
+          const complete = seasonRow.episode_count == null || episodes.length >= seasonRow.episode_count;
+          const stale = !isFresh(title) || !complete;
+          if (stale) inBackground(refreshSeason(admin, apiKey, tmdbId, title.id, n));
+          return json({ season: seasonRow, episodes }, 200, detailHeaders(stale ? "STALE" : "HIT", dbMs));
         }
       }
-      return json(await refreshSeason(admin, apiKey, tmdbId, title.id, n));
+      const fillStarted = performance.now();
+      const filled = await refreshSeason(admin, apiKey, tmdbId, title.id, n);
+      return json(filled, 200, detailHeaders("MISS", dbMs, performance.now() - fillStarted));
     }
 
     return json({ error: "not found" }, 404);

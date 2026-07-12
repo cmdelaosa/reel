@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Clock, Search } from "lucide-react";
 import { qk } from "@/lib/queryKeys";
+import { usePrefetchTitle } from "@/lib/useOpenTitle";
 import { searchShows, tmdbImg } from "@/lib/tmdb";
 import { posterBg } from "@/ui/posterBg";
 
@@ -46,6 +47,7 @@ export function Palette({ onClose, onOpen }: {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const debounced = useDebounced(q.trim(), 300);
   const [recent] = useState<string[]>(loadRecent);
+  const prefetchTitle = usePrefetchTitle();
 
   const { data: results, isFetching } = useQuery({
     queryKey: qk.search(debounced),
@@ -64,6 +66,13 @@ export function Palette({ onClose, onOpen }: {
   }
 
   const rows = debounced.length >= 2 ? (results ?? []) : [];
+  const selectedTmdbId = rows[sel]?.tmdb_id;
+
+  useEffect(() => {
+    if (selectedTmdbId == null) return;
+    const timer = setTimeout(() => void prefetchTitle(selectedTmdbId), 150);
+    return () => clearTimeout(timer);
+  }, [selectedTmdbId, prefetchTitle]);
 
   const open = (tmdbId: number) => {
     pushRecent(debounced);

@@ -8,14 +8,16 @@ import type { TitleRow } from "@/lib/schemas";
 import { tmdbImg } from "@/lib/tmdb";
 import { Rail } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
+import { useTitleIntent } from "@/lib/useOpenTitle";
 
 /* Trending rail (ranked) + a "Popular tv shows" grid with genre chips and a
    first-air-year range filter, + hide (ignore) a suggestion. */
 
 function TitlePoster({ t, rank, score, onOpen, onIgnore }: { t: TitleRow; rank?: number; score?: number | null; onOpen: () => void; onIgnore?: () => void }) {
   const art = tmdbImg(t.poster_path);
+  const intent = useTitleIntent(t.tmdb_id);
   return (
-    <div className="poster" style={{ background: posterBg(t.name) }} onClick={onOpen}>
+    <div className="poster" style={{ background: posterBg(t.name) }} onClick={onOpen} {...intent}>
       {art && <img className="poster-img" src={art} alt="" loading="lazy" />}
       <div className="poster-sheen" />
       {rank != null && <span className="mq-rank">{rank}</span>}
@@ -84,10 +86,10 @@ function YearSelect({ value, onChange, label }: { value: number | null; onChange
   );
 }
 
-/* Popular now keeps a constant number of cards on screen: the server sends
-   ~48 ranked rows, so as you add/hide shows the next candidate tops the grid
-   back up. Catalog mode (year filters) still shows everything. */
-const POPULAR_NOW_VISIBLE = 18;
+/* The discover grid keeps a constant number of cards on screen in both modes:
+   the server sends a deep ranked pool, so as you add/hide shows the next
+   candidate tops the grid back up. */
+const DISCOVER_VISIBLE = 18;
 
 /* Discover-grid view mode (mosaic of posters vs compact rows), persisted so
    the choice sticks across visits. */
@@ -101,8 +103,9 @@ const loadView = (): ViewMode => {
 /* List-view row: same data as TitlePoster, in the app's mq-row shape. */
 function TitleListRow({ t, score, onOpen, onIgnore }: { t: TitleRow; score?: number | null; onOpen: () => void; onIgnore: () => void }) {
   const art = tmdbImg(t.poster_path, "w92");
+  const intent = useTitleIntent(t.tmdb_id);
   return (
-    <div className="card mq-row" onClick={onOpen}>
+    <div className="card mq-row" onClick={onOpen} {...intent}>
       <div className="mq-row-art" style={art ? undefined : { background: posterBg(t.name) }}>
         {art && <img src={art} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
         <div className="poster-sheen" />
@@ -306,8 +309,7 @@ export function DiscoverSections() {
   const filtered = selectedGenres.length === 0
     ? popular
     : popular.filter((t) => t.genres.some((g) => selectedGenres.includes(g)));
-  // Constant-size grid in "Popular now"; the catalog shows the full pull.
-  const visible = catalogMode ? filtered : filtered.slice(0, POPULAR_NOW_VISIBLE);
+  const visible = filtered.slice(0, DISCOVER_VISIBLE);
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {

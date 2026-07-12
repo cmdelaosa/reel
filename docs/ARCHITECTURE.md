@@ -211,7 +211,24 @@ split by whether TMDB says the title has a previous season; bucketed month / lat
 
 ## Data-access conventions (client)
 
+The title/season-specific implementation and operational diagnostics are
+documented in [DETAIL-PERFORMANCE.md](DETAIL-PERFORMANCE.md).
+
 - One `lib/queryKeys.ts` — every TanStack Query key defined centrally, typed.
+- Title and season query results are persisted selectively in IndexedDB (30-day
+  retention, 24-hour freshness). Private/user-specific queries are never
+  dehydrated. Hydration completes before React mounts, so a browser refresh can
+  paint previously visited details immediately.
+- Cached title/season metadata is read directly from the authenticated-readable
+  Postgres tables. `tmdb-proxy` is the miss/revalidation path, not an extra hop
+  on every warm read. Stale DB rows render immediately and revalidate in the
+  background.
+- Poster/search intent (brief hover, focus or pointer-down) prefetches the title,
+  the server-derived continuation season, and that season's episodes. Query-key
+  deduplication lets a click reuse work already in flight.
+- `rpc_title_detail_progress()` chooses the continuation season and reduces
+  unseen-prior counts in Postgres; the detail sheet does not download every
+  episode of a long-running title merely to make those decisions.
 - Mutations are **optimistic** with rollback (follow/unfollow, mark watched, rate) —
   match the prototype's instant feel.
 - All supabase rows validated with Zod schemas in `lib/schemas.ts` before use.

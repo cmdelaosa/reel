@@ -10,6 +10,7 @@ import { useMarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { Poster, Rail } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
+import { useTitleIntent } from "@/lib/useOpenTitle";
 
 /* Tonight — bento hero + continue rail + fresh/premieres. Port of prototype
    marquee.tsx → Tonight on live up-next data. */
@@ -52,6 +53,7 @@ export default function TonightPage() {
   const hero = ordered[0];
   const heroMark = useMarkWatched(hero?.title_id ?? "");
   const rest = ordered.slice(1);
+  const heroIntent = useTitleIntent(hero?.tmdb_id);
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -83,7 +85,7 @@ export default function TonightPage() {
 
       {hero && (
         <div className="mq-bento">
-          <section className="card mq-hero" onClick={() => open(hero.tmdb_id)}>
+          <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} {...heroIntent}>
             <div className="mq-hero-art" style={{ background: posterBg(hero.name) }}>
               {tmdbImg(hero.poster_path) && (
                 <img src={tmdbImg(hero.poster_path)} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
@@ -233,6 +235,7 @@ function ContinueCard({ r, onOpen, onMarked }: { r: UpNextRow; onOpen: () => voi
           progress: r.aired_count > 0 ? Math.round((r.watched_count / r.aired_count) * 100) : undefined,
         }}
         subtitle={seLabel(r)}
+        prefetchTmdbId={r.tmdb_id}
         onClick={onOpen}
       />
       <div className="flex items-center gap-2 px-0.5">
@@ -249,4 +252,3 @@ function ContinueCard({ r, onOpen, onMarked }: { r: UpNextRow; onOpen: () => voi
     </div>
   );
 }
-
