@@ -5,6 +5,7 @@
 //   GET /trending                  → { results: TitleRow[] }
 //   GET /popular-now               → { results: TitleRow[] }
 //   GET /popular?from=&to=         → { results: TitleRow[] }
+//   GET /top-rated?from=&to=&genres= → { results: TitleRow[] }
 //   GET /collection/:slug          → { results: TitleRow[] }
 //   GET /title/:tmdbId             → { title: TitleRow, seasons: SeasonRow[] }
 //   GET /title/:tmdbId/season/:n   → { season: SeasonRow, episodes: EpisodeRow[] }
@@ -116,19 +117,23 @@ const boostSpanish = (rows: Any[]): Any[] => {
   return out;
 };
 
-// Curated-collection slugs → TMDB /discover/tv criteria. Mirrors the intent of
-// the original 0020 seed (which capped each at 12 cached titles) but pulls live
-// from the full TMDB catalog. The rating sorts need a high vote_count floor:
-// with a low one, niche fan-voted titles outrank Breaking Bad.
+// Curated-collection slugs → TMDB /discover/tv criteria. Each query must earn
+// the tile's *name/sub* (seeded in 0020), not just approximate it: rating sorts
+// need a high vote_count floor (fan-niche titles rate 8.6+ on few votes and
+// outrank Breaking Bad), and several TMDB genres read wrong on a shelf —
+// Comedy includes late-night talk, and Sci-Fi & Fantasy / Drama are dominated
+// by Western cartoons unless Animation (16) / Family / Kids are excluded.
 const COLLECTION_QUERIES: Record<string, string> = {
-  // best-reviewed of all time
-  "critically-acclaimed": "sort_by=vote_average.desc&vote_count.gte=1000",
-  // comedies, most popular first
-  "bingeable-weekend": "with_genres=35&sort_by=popularity.desc&vote_count.gte=100",
-  // sci-fi/fantasy or mystery, best-rated first
-  "mind-benders": "with_genres=10765|9648&sort_by=vote_average.desc&vote_count.gte=1000",
-  // top-rated dramas
-  "award-winners": "with_genres=18&vote_average.gte=8&sort_by=vote_average.desc&vote_count.gte=1000",
+  // best-reviewed of all time; the 3000-vote floor keeps acclaimed animation
+  // (Arcane, Avatar) while dropping fan-voted teen cartoons
+  "critically-acclaimed": "sort_by=vote_average.desc&vote_count.gte=3000",
+  // top-rated miniseries — literally watchable in a weekend
+  "bingeable-weekend": "with_type=2&sort_by=vote_average.desc&vote_count.gte=1000",
+  // sci-fi AND mystery (comma = AND), no cartoons: Dark/Severance/Black Mirror
+  // territory. ~66 titles total — a shorter shelf, by design.
+  "mind-benders": "with_genres=10765,9648&without_genres=16&sort_by=vote_average.desc&vote_count.gte=500",
+  // prestige-drama proxy for awards (TMDB has no award data)
+  "award-winners": "with_genres=18&without_genres=16,10751,10762&vote_average.gte=8&sort_by=vote_average.desc&vote_count.gte=3000",
 };
 
 const cors = {
@@ -491,6 +496,44 @@ Deno.serve(async (req) => {
         if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); deduped.push(r); }
       }
       const uniq = capNonWestern(boostSpanish(deduped));
+      if (uniq.length === 0) return json({ results: [] });
+      const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
+      const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
+      return json({ results: uniq.map((r) => byTmdb.get(r.id)).filter(Boolean) });
+    }
+
+    // GET /top-rated?from=YYYY&to=YYYY&genres=18,80  (TMDB /discover/tv sorted
+    // by rating; genre ids are OR-ed). The vote_count floor is the honesty
+    // knob — fan-niche titles rate 8.6+ on few votes — but a fixed high floor
+    // starves filtered charts (the 1970s have two 1000-vote shows, Documentary
+    // has zero at 3000), so it slides with the era and drops when a genre is
+    // picked. boostSpanish is deliberately skipped: injecting lower-rated
+    // titles would falsify a by-rating chart; capNonWestern only demotes, so
+    // the order within Western titles stays honest.
+    if (path === "/top-rated") {
+      const from = url.searchParams.get("from") || null;
+      const to = url.searchParams.get("to") || null;
+      const genres = (url.searchParams.get("genres") ?? "")
+        .split(",").map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
+      const era = Number(from ?? to); // older bound of the range
+      const eraFloor = !from && !to ? 3000 : era >= 2005 ? 1000 : era >= 1990 ? 500 : 200;
+      const minVotes = genres.length ? Math.min(eraFloor, 500) : eraFloor;
+      const params =
+        `&sort_by=vote_average.desc&vote_count.gte=${minVotes}` +
+        (from ? `&first_air_date.gte=${from}-01-01` : "") +
+        (to ? `&first_air_date.lte=${to}-12-31` : "") +
+        (genres.length ? `&with_genres=${genres.join("%7C")}` : "");
+      const PAGES = 8;
+      const pages = await Promise.all(
+        Array.from({ length: PAGES }, (_, i) =>
+          fetchTmdb(apiKey, `/discover/tv?include_adult=false${params}&page=${i + 1}`)),
+      );
+      const seen = new Set<number>();
+      const deduped: Any[] = [];
+      for (const r of pages.flatMap((d) => d.results ?? [])) {
+        if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); deduped.push(r); }
+      }
+      const uniq = capNonWestern(deduped);
       if (uniq.length === 0) return json({ results: [] });
       const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));

@@ -51,6 +51,7 @@
   transition: all .16s ease; white-space: nowrap;
 }
 .chip:hover { color: var(--text); border-color: var(--border-strong); }
+.chip:disabled { opacity: .38; cursor: default; pointer-events: none; }
 /* Year range dropdowns on the discover filter row — match the chips. */
 .year-select {
   appearance: none; -webkit-appearance: none;

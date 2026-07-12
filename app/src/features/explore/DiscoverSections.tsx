@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Check, ChevronDown, ChevronUp, Eye, EyeOff, LayoutGrid, List, Plus, X } from "lucide-react";
-import { useTrending, usePopular, usePopularNow } from "@/lib/explore";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Eye, EyeOff, LayoutGrid, List, Plus, Star, X } from "lucide-react";
+import { useTrending, usePopular, usePopularNow, useTopRated } from "@/lib/explore";
 import { useLibrary, useFollow, useUnfollow } from "@/lib/library";
 import { useIgnore, useIgnored, useUnignore } from "@/lib/ignore";
 import type { TitleRow } from "@/lib/schemas";
@@ -12,13 +12,18 @@ import { posterBg } from "@/ui/posterBg";
 /* Trending rail (ranked) + a "Popular tv shows" grid with genre chips and a
    first-air-year range filter, + hide (ignore) a suggestion. */
 
-function TitlePoster({ t, rank, onOpen, onIgnore }: { t: TitleRow; rank?: number; onOpen: () => void; onIgnore?: () => void }) {
+function TitlePoster({ t, rank, score, onOpen, onIgnore }: { t: TitleRow; rank?: number; score?: number | null; onOpen: () => void; onIgnore?: () => void }) {
   const art = tmdbImg(t.poster_path);
   return (
     <div className="poster" style={{ background: posterBg(t.name) }} onClick={onOpen}>
       {art && <img className="poster-img" src={art} alt="" loading="lazy" />}
       <div className="poster-sheen" />
       {rank != null && <span className="mq-rank">{rank}</span>}
+      {score != null && score > 0 && (
+        <span className="badge badge-glass absolute" style={{ top: 8, left: 8, zIndex: 3 }}>
+          <Star size={11} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} /> {score.toFixed(1)}
+        </span>
+      )}
       {onIgnore && (
         <button
           className="btn btn-icon badge-glass absolute"
@@ -62,6 +67,23 @@ function AddButton({ t }: { t: TitleRow }) {
 const THIS_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: THIS_YEAR - 1970 + 1 }, (_, i) => THIS_YEAR - i);
 
+/* First-air-year bound picker, shared by the discover grids. */
+function YearSelect({ value, onChange, label }: { value: number | null; onChange: (y: number | null) => void; label: string }) {
+  return (
+    <label className="flex items-center gap-1.5">
+      <span className="mute" style={{ fontSize: 13 }}>{label}</span>
+      <select
+        className="year-select"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">Any</option>
+        {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+      </select>
+    </label>
+  );
+}
+
 /* Popular now keeps a constant number of cards on screen: the server sends
    ~48 ranked rows, so as you add/hide shows the next candidate tops the grid
    back up. Catalog mode (year filters) still shows everything. */
@@ -77,7 +99,7 @@ const loadView = (): ViewMode => {
 };
 
 /* List-view row: same data as TitlePoster, in the app's mq-row shape. */
-function TitleListRow({ t, onOpen, onIgnore }: { t: TitleRow; onOpen: () => void; onIgnore: () => void }) {
+function TitleListRow({ t, score, onOpen, onIgnore }: { t: TitleRow; score?: number | null; onOpen: () => void; onIgnore: () => void }) {
   const art = tmdbImg(t.poster_path, "w92");
   return (
     <div className="card mq-row" onClick={onOpen}>
@@ -91,6 +113,11 @@ function TitleListRow({ t, onOpen, onIgnore }: { t: TitleRow; onOpen: () => void
           {[t.first_air_date?.slice(0, 4), ...t.genres.slice(0, 2)].filter(Boolean).join(" · ")}
         </div>
       </div>
+      {score != null && score > 0 && (
+        <span className="mq-score" style={{ fontSize: 15, flex: "0 0 auto" }}>
+          <Star size={12} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)", verticalAlign: "-1px" }} /> {score.toFixed(1)}
+        </span>
+      )}
       <div style={{ flex: "0 0 auto", width: 96 }} onClick={(e) => e.stopPropagation()}>
         <AddButton t={t} />
       </div>
@@ -135,6 +162,109 @@ function GenreDropdown({ options, selected, onToggle }: { options: string[]; sel
         </div>
       )}
     </div>
+  );
+}
+
+/* TMDB TV genre ids for the Top-rated grid's server-side genre filter (subset
+   of the proxy's TV_GENRES: no Soap/Reality — always hidden — and no News/Talk,
+   which are noise on a ratings chart). */
+const TOP_RATED_GENRES: Record<string, number> = {
+  "Action & Adventure": 10759, "Animation": 16, "Comedy": 35, "Crime": 80,
+  "Documentary": 99, "Drama": 18, "Family": 10751, "Kids": 10762,
+  "Mystery": 9648, "Sci-Fi & Fantasy": 10765, "War & Politics": 10768, "Western": 37,
+};
+
+const TOP_RATED_VISIBLE = 18;
+
+/* "Top rated" — the catalog ranked by TMDB score, with the score on every
+   card. Same filter row as Popular now, but genre goes to the server (a niche
+   genre's top shows rarely survive inside a global pool) and the arrows page
+   through the ranked pool TOP_RATED_VISIBLE at a time. */
+function TopRatedSection({ view }: { view: ViewMode }) {
+  const { data: library = [] } = useLibrary();
+  const { isIgnored } = useIgnored();
+  const ignore = useIgnore();
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [fromYear, setFromYear] = useState<number | null>(null);
+  const [toYear, setToYear] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
+  const [, setSearchParams] = useSearchParams();
+
+  const genreIds = selectedGenres.map((g) => TOP_RATED_GENRES[g]).filter(Boolean);
+  const { data: ratedRaw = [] } = useTopRated(fromYear, toYear, genreIds);
+
+  // Discovery surface: drop what you already follow or have hidden.
+  const followed = new Set(library.map((r) => r.tmdb_id));
+  const rated = ratedRaw.filter((t) => !isIgnored(t.tmdb_id) && !followed.has(t.tmdb_id));
+
+  const pageCount = Math.max(1, Math.ceil(rated.length / TOP_RATED_VISIBLE));
+  const current = Math.min(page, pageCount - 1); // clamp when the pool shrinks
+  const visible = rated.slice(current * TOP_RATED_VISIBLE, (current + 1) * TOP_RATED_VISIBLE);
+
+  const toggleGenre = (g: string) => {
+    setSelectedGenres((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]));
+    setPage(0);
+  };
+  const changeYear = (set: (y: number | null) => void) => (y: number | null) => { set(y); setPage(0); };
+  const hasFilters = selectedGenres.length > 0 || fromYear != null || toYear != null;
+  const clearFilters = () => { setSelectedGenres([]); setFromYear(null); setToYear(null); setPage(0); };
+
+  const open = (tmdbId: number) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("title", String(tmdbId));
+      return next;
+    });
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="mq-sechead">
+        <div>
+          <h2 className="section-title">Top rated</h2>
+          <p className="mute" style={{ fontSize: 13 }}>The best of the catalog, ranked by TMDB score</p>
+        </div>
+        <div className="flex items-center gap-1.5" role="group" aria-label="Pagination">
+          <span className="mute" style={{ fontSize: 12.5 }}>{current + 1} / {pageCount}</span>
+          <button className="chip" disabled={current === 0} onClick={() => setPage(current - 1)} aria-label="Previous page">
+            <ChevronLeft size={14} />
+          </button>
+          <button className="chip" disabled={current >= pageCount - 1} onClick={() => setPage(current + 1)} aria-label="Next page">
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 flex-wrap">
+        <GenreDropdown options={Object.keys(TOP_RATED_GENRES)} selected={selectedGenres} onToggle={toggleGenre} />
+        <div className="flex items-center gap-2.5 flex-wrap" style={{ marginLeft: "auto" }}>
+          <YearSelect value={fromYear} onChange={changeYear(setFromYear)} label="From:" />
+          <YearSelect value={toYear} onChange={changeYear(setToYear)} label="To:" />
+          {hasFilters && (
+            <button className="chip" onClick={clearFilters} title="Clear all filters">
+              <X size={13} />
+              Clear filters
+            </button>
+          )}
+        </div>
+      </div>
+      {visible.length === 0 ? (
+        <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>No top-rated shows match these filters.</p>
+      ) : view === "list" ? (
+        <div className="flex flex-col gap-2">
+          {visible.map((t) => (
+            <TitleListRow key={t.tmdb_id} t={t} score={t.vote_average} onOpen={() => open(t.tmdb_id)} onIgnore={() => ignore.mutate(t.id)} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))" }}>
+          {visible.map((t) => (
+            <div key={t.tmdb_id} className="flex flex-col gap-1.5">
+              <TitlePoster t={t} score={t.vote_average} onOpen={() => open(t.tmdb_id)} onIgnore={() => ignore.mutate(t.id)} />
+              <AddButton t={t} />
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -186,20 +316,6 @@ export function DiscoverSections() {
       return next;
     });
 
-  const yearSelect = (value: number | null, onChange: (y: number | null) => void, label: string) => (
-    <label className="flex items-center gap-1.5">
-      <span className="mute" style={{ fontSize: 13 }}>{label}</span>
-      <select
-        className="year-select"
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-      >
-        <option value="">Any</option>
-        {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-      </select>
-    </label>
-  );
-
   return (
     <>
       {trending.length > 0 && (
@@ -244,8 +360,8 @@ export function DiscoverSections() {
         <div className="flex items-center gap-3 flex-wrap">
           <GenreDropdown options={genres} selected={selectedGenres} onToggle={toggleGenre} />
           <div className="flex items-center gap-2.5 flex-wrap" style={{ marginLeft: "auto" }}>
-            {yearSelect(fromYear, setFromYear, "From:")}
-            {yearSelect(toYear, setToYear, "To:")}
+            <YearSelect value={fromYear} onChange={setFromYear} label="From:" />
+            <YearSelect value={toYear} onChange={setToYear} label="To:" />
             {hasFilters && (
               <button className="chip" onClick={clearFilters} title="Clear all filters">
                 <X size={13} />
@@ -313,6 +429,8 @@ export function DiscoverSections() {
           </div>
         )}
       </section>
+
+      <TopRatedSection view={view} />
     </>
   );
 }

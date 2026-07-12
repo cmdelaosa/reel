@@ -65,6 +65,19 @@ export async function getPopular(from?: number | null, to?: number | null): Prom
   return searchResponseSchema.parse(json).results;
 }
 
+/** Top-rated TV shows (by TMDB score, with a server-side vote-count floor),
+ *  optionally restricted to a first-air-year range and/or TMDB genre ids
+ *  (OR across ids). */
+export async function getTopRated(from?: number | null, to?: number | null, genreIds: number[] = []): Promise<TitleRow[]> {
+  const qs = new URLSearchParams();
+  if (from) qs.set("from", String(from));
+  if (to) qs.set("to", String(to));
+  if (genreIds.length) qs.set("genres", genreIds.join(","));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const json = await call(`/top-rated${suffix}`);
+  return searchResponseSchema.parse(json).results;
+}
+
 /** Titles for a curated collection, resolved live from TMDB discover by the
  *  proxy (criteria live server-side, keyed by slug). */
 export async function getCollectionTitles(slug: string): Promise<TitleRow[]> {

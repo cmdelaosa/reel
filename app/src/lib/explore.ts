@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
-import { getTrending, getPopular, getPopularNow } from "@/lib/tmdb";
+import { getTrending, getPopular, getPopularNow, getTopRated } from "@/lib/tmdb";
 import type { TitleRow } from "@/lib/schemas";
 
 export function useTrending() {
@@ -33,6 +33,20 @@ export function usePopular(from: number | null, to: number | null, enabled: bool
     staleTime: 60 * 60 * 1000,
     placeholderData: (prev) => prev,
     queryFn: (): Promise<TitleRow[]> => getPopular(from, to),
+  });
+}
+
+/** "Top rated" grid: highest-scored shows, optionally filtered to a first-air-
+ *  year range and genre set. Genre filtering is server-side (unlike the
+ *  Popular-now grid): a niche genre's top shows rarely survive inside a global
+ *  popularity pool, so the proxy queries TMDB per genre. Keyed on all filters;
+ *  keeps the prior grid on screen while a new combination loads. */
+export function useTopRated(from: number | null, to: number | null, genreIds: number[]) {
+  return useQuery({
+    queryKey: ["topRated", from, to, [...genreIds].sort((a, b) => a - b).join(",")],
+    staleTime: 60 * 60 * 1000,
+    placeholderData: (prev) => prev,
+    queryFn: (): Promise<TitleRow[]> => getTopRated(from, to, genreIds),
   });
 }
 
