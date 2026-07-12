@@ -55,8 +55,10 @@ jobs:
           E2E_EMAIL: e2e@example.com
           E2E_PASSWORD: password123
           E2E_ANON_KEY: ""
+          E2E_SERVICE_ROLE_KEY: ""
         run: |
           export E2E_ANON_KEY=$(cd .. && supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '"')
+          export E2E_SERVICE_ROLE_KEY=$(cd .. && supabase status -o env | grep '^SERVICE_ROLE_KEY=' | cut -d= -f2- | tr -d '"')
           npm run test:e2e
 
       - uses: actions/upload-artifact@v4
