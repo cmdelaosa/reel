@@ -28,6 +28,8 @@ function GoogleMark() {
   );
 }
 
+const googleEnabled = import.meta.env.VITE_GOOGLE_AUTH === "true";
+
 export default function LoginPage() {
   const { session } = useAuth();
   const location = useLocation();
@@ -124,16 +126,23 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0" }}>
-              <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
-              <span className="mute" style={{ fontSize: 12, fontWeight: 600 }}>or</span>
-              <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
-            </div>
+            {/* Google sign-in only renders when the provider is actually
+                configured (VITE_GOOGLE_AUTH=true); otherwise it's a dead button
+                whose click yields a Supabase "provider is not enabled" error. */}
+            {googleEnabled && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0" }}>
+                  <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                  <span className="mute" style={{ fontSize: 12, fontWeight: 600 }}>or</span>
+                  <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                </div>
 
-            <button className="btn btn-outline" style={{ width: "100%" }} onClick={googleSignIn}>
-              <GoogleMark />
-              Continue with Google
-            </button>
+                <button className="btn btn-outline" style={{ width: "100%" }} onClick={googleSignIn}>
+                  <GoogleMark />
+                  Continue with Google
+                </button>
+              </>
+            )}
 
             {error && (
               <p role="alert" style={{ color: "#e5484d", fontSize: 13, marginTop: 14, textAlign: "center" }}>
