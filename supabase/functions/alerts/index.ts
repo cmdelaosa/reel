@@ -153,5 +153,14 @@ Deno.serve(async (req) => {
     }
   }
 
+  // One queryable row per run (see job_runs / migration 0029). ok is false if
+  // any email send failed. Best-effort — never fail the run on the log write.
+  await admin.from("job_runs").insert({
+    job: "alerts",
+    finished_at: new Date().toISOString(),
+    ok: report.emailFailed === 0,
+    summary: report,
+  }).then(() => {}, () => {});
+
   return new Response(JSON.stringify(report), { headers: { "content-type": "application/json" } });
 });

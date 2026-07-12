@@ -217,6 +217,14 @@ Deno.serve(async (req) => {
       `episode-refresh done: ${refreshed}/${stale.length} refreshed, ${errors.length} errors`,
       errors.slice(0, 5),
     );
+    // One queryable row per run so a silently-failing daily job is visible
+    // (edge logs are console-only + ~1 day on free tier). Best-effort.
+    await admin.from("job_runs").insert({
+      job: "episode-refresh",
+      finished_at: new Date().toISOString(),
+      ok: errors.length === 0,
+      summary: { followed: ids.length, stale: stale.length, refreshed, errors: errors.length, sample: errors.slice(0, 5) },
+    }).then(() => {}, () => {});
   })();
 
   // Respond immediately and let the backfill run in the background where the
