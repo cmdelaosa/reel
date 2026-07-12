@@ -9,8 +9,11 @@
 //   GET /title/:tmdbId             → { title: TitleRow, seasons: SeasonRow[] }
 //   GET /title/:tmdbId/season/:n   → { season: SeasonRow, episodes: EpisodeRow[] }
 //
-// Each call upserts into the metadata cache with the service-role key and
-// returns the cached rows — the client never sees raw TMDB payloads. A valid
+// Every response is served from the metadata cache (rows written with the
+// service-role key) — the client never sees raw TMDB payloads. /title and
+// /season are cache-first: fresh rows (last_refreshed_at < 24h) skip TMDB
+// entirely, stale rows are served immediately and revalidated in the
+// background, and only never-cached data blocks on a TMDB fetch. A valid
 // *user* JWT is required (the anon key alone is rejected). The response shape is
 // mirrored (minimally, no cross-runtime import) by app/src/lib/schemas.ts.
 //
@@ -87,6 +90,19 @@ const airDatetime = (airDate?: string | null) =>
 // deno-lint-ignore no-explicit-any
 type Any = any;
 
+// Authoritative aired-episode count from the TMDB title payload. Hand-mirror of
+// app/src/domain/airedCount.ts (canonical spec + unit tests) — keep in sync.
+function airedCount(seasons: Any[], last: Any): number | null {
+  if (!last || (last.season_number ?? 0) <= 0) return null;
+  let aired = 0;
+  for (const s of seasons ?? []) {
+    if ((s.season_number ?? 0) <= 0) continue; // specials
+    if (s.season_number < last.season_number) aired += s.episode_count ?? 0;
+    else if (s.season_number === last.season_number) aired += last.episode_number;
+  }
+  return aired;
+}
+
 function titleRow(d: Any) {
   return {
     tmdb_id: d.id,
@@ -102,6 +118,7 @@ function titleRow(d: Any) {
     episode_run_time: d.episode_run_time?.[0] ?? null,
     vote_average: d.vote_average ?? null,
     popularity: d.popularity ?? null,
+    aired_count: airedCount(d.seasons, d.last_episode_to_air),
     last_refreshed_at: new Date().toISOString(),
   };
 }
@@ -109,6 +126,9 @@ function titleRow(d: Any) {
 // Search results are partial: only genre_ids (mapped) and no network/status/
 // runtime — so we omit those columns to avoid clobbering richer detail rows on
 // conflict (PostgREST upsert only updates the columns present in the payload).
+// last_refreshed_at is also omitted: it marks a *full detail* refresh (the
+// cache-first /title path and the episode-refresh cron key off it), and a
+// search hit must not make a title look fresher than its detail data is.
 function searchRow(r: Any) {
   return {
     tmdb_id: r.id,
@@ -121,7 +141,6 @@ function searchRow(r: Any) {
     genres: (r.genre_ids ?? []).map((id: number) => TV_GENRES[id]).filter(Boolean),
     vote_average: r.vote_average ?? null,
     popularity: r.popularity ?? null,
-    last_refreshed_at: new Date().toISOString(),
   };
 }
 
@@ -164,11 +183,49 @@ async function cacheNetworkLogos(admin: SupabaseClient, networks: Any) {
   if (error) console.error(`network_logos upsert: ${error.message}`);
 }
 
-async function ensureTitle(admin: SupabaseClient, apiKey: string, tmdbId: number) {
+// How long a cached title (and its seasons/episodes) is served without any
+// TMDB round trip. Matches the daily episode-refresh cron cadence, so followed
+// shows are effectively always a cache hit.
+const FRESH_MS = 24 * 3600 * 1000;
+
+const isFresh = (title: Any) =>
+  Boolean(title?.last_refreshed_at) &&
+  Date.now() - new Date(title.last_refreshed_at).getTime() < FRESH_MS;
+
+// Run best-effort work after the response is sent (EdgeRuntime.waitUntil on
+// hosted; a detached promise on the local serve runtime, which stays alive).
+// Failures are logged, never surfaced to the caller.
+function inBackground(work: Promise<unknown>) {
+  const guarded = work.catch((err) => console.error(`background refresh: ${String(err)}`));
+  (globalThis as Any).EdgeRuntime?.waitUntil?.(guarded);
+}
+
+/** TMDB → cache refresh of a title and its season list; returns the
+ *  GET /title/:id response shape. Network logos are cached off the hot path. */
+async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: number) {
   const d = await fetchTmdb(apiKey, `/tv/${tmdbId}`);
-  const [row] = await upsertReturning(admin, "titles", titleRow(d), "tmdb_id");
-  await cacheNetworkLogos(admin, d.networks);
-  return { detail: d, title: row };
+  const [title] = await upsertReturning(admin, "titles", titleRow(d), "tmdb_id");
+  inBackground(cacheNetworkLogos(admin, d.networks));
+  const seasons = (d.seasons ?? []).length
+    ? await upsertReturning(admin, "seasons", d.seasons.map((s: Any) => seasonRow(title.id, s)), "title_id,number")
+    : [];
+  return { title, seasons };
+}
+
+/** TMDB → cache refresh of one season's episodes; returns the
+ *  GET /title/:id/season/:n response shape. */
+async function refreshSeason(admin: SupabaseClient, apiKey: string, tmdbId: number, titleId: string, n: number) {
+  const s = await fetchTmdb(apiKey, `/tv/${tmdbId}/season/${n}`);
+  const [season] = await upsertReturning(admin, "seasons", seasonRow(titleId, s), "title_id,number");
+  const episodes = (s.episodes ?? []).length
+    ? await upsertReturning(
+        admin,
+        "episodes",
+        s.episodes.map((e: Any) => episodeRow(titleId, season.id, e)),
+        "title_id,season_number,episode_number",
+      )
+    : [];
+  return { season, episodes };
 }
 
 const fetchTmdb = async (apiKey: string, p: string) => {
@@ -392,31 +449,49 @@ Deno.serve(async (req) => {
       return json({ results: uniq.map((r) => byTmdb.get(r.id)).filter(Boolean) });
     }
 
-    // GET /title/:id
+    // GET /title/:id — cache-first. A cached title WITH season rows is served
+    // straight from the DB; if it's stale it is still served now and
+    // revalidated behind the response. Only a never-cached title — or one only
+    // partially cached by search/discover, which never write seasons — blocks
+    // on TMDB.
     const mTitle = path.match(/^\/title\/(\d+)$/);
     if (mTitle) {
-      const { detail, title } = await ensureTitle(admin, apiKey, Number(mTitle[1]));
-      const seasons = (detail.seasons ?? []).length
-        ? await upsertReturning(admin, "seasons", detail.seasons.map((s: Any) => seasonRow(title.id, s)), "title_id,number")
-        : [];
-      return json({ title, seasons });
+      const tmdbId = Number(mTitle[1]);
+      const { data: cached } = await admin.from("titles").select("*").eq("tmdb_id", tmdbId).maybeSingle();
+      if (cached) {
+        const { data: seasons } = await admin.from("seasons").select("*").eq("title_id", cached.id).order("number");
+        if ((seasons ?? []).length) {
+          if (!isFresh(cached)) inBackground(refreshTitle(admin, apiKey, tmdbId));
+          return json({ title: cached, seasons });
+        }
+      }
+      return json(await refreshTitle(admin, apiKey, tmdbId));
     }
 
-    // GET /title/:id/season/:n
+    // GET /title/:id/season/:n — cache-first like /title. Cached episodes are
+    // considered stale when the title row is stale or the row count disagrees
+    // with the season's announced episode_count (an episode was added since);
+    // both still serve the cache and revalidate behind the response. Only a
+    // season with no cached episodes blocks on TMDB.
     const mSeason = path.match(/^\/title\/(\d+)\/season\/(\d+)$/);
     if (mSeason) {
-      const { title } = await ensureTitle(admin, apiKey, Number(mSeason[1]));
-      const s = await fetchTmdb(apiKey, `/tv/${mSeason[1]}/season/${mSeason[2]}`);
-      const [season] = await upsertReturning(admin, "seasons", seasonRow(title.id, s), "title_id,number");
-      const episodes = (s.episodes ?? []).length
-        ? await upsertReturning(
-            admin,
-            "episodes",
-            s.episodes.map((e: Any) => episodeRow(title.id, season.id, e)),
-            "title_id,season_number,episode_number",
-          )
-        : [];
-      return json({ season, episodes });
+      const tmdbId = Number(mSeason[1]);
+      const n = Number(mSeason[2]);
+      const { data: existing } = await admin
+        .from("titles").select("id, last_refreshed_at").eq("tmdb_id", tmdbId).maybeSingle();
+      const title = existing ?? (await refreshTitle(admin, apiKey, tmdbId)).title;
+      const { data: season } = await admin
+        .from("seasons").select("*").eq("title_id", title.id).eq("number", n).maybeSingle();
+      if (season) {
+        const { data: episodes } = await admin
+          .from("episodes").select("*").eq("title_id", title.id).eq("season_number", n).order("episode_number");
+        if ((episodes ?? []).length) {
+          const complete = season.episode_count == null || episodes!.length >= season.episode_count;
+          if (!isFresh(title) || !complete) inBackground(refreshSeason(admin, apiKey, tmdbId, title.id, n));
+          return json({ season, episodes });
+        }
+      }
+      return json(await refreshSeason(admin, apiKey, tmdbId, title.id, n));
     }
 
     return json({ error: "not found" }, 404);

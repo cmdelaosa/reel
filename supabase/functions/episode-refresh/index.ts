@@ -29,6 +29,19 @@ const WINDOW_MS = 10_000;
 // deno-lint-ignore no-explicit-any
 type Any = any;
 
+// Authoritative aired-episode count from the TMDB title payload. Hand-mirror of
+// app/src/domain/airedCount.ts (canonical spec + unit tests) — keep in sync.
+function airedCount(seasons: Any[], last: Any): number | null {
+  if (!last || (last.season_number ?? 0) <= 0) return null;
+  let aired = 0;
+  for (const s of seasons ?? []) {
+    if ((s.season_number ?? 0) <= 0) continue; // specials
+    if (s.season_number < last.season_number) aired += s.episode_count ?? 0;
+    else if (s.season_number === last.season_number) aired += last.episode_number;
+  }
+  return aired;
+}
+
 // -- fixed-window limiter (mirror of app/src/domain/rateLimit.ts) -------------
 let winStart = 0;
 let winUsed = 0;
@@ -85,6 +98,7 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
       episode_run_time: d.episode_run_time?.[0] ?? null,
       vote_average: d.vote_average ?? null,
       popularity: d.popularity ?? null,
+      aired_count: airedCount(d.seasons, d.last_episode_to_air),
       last_refreshed_at: new Date().toISOString(),
     })
     .eq("id", row.id);

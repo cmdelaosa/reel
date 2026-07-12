@@ -87,6 +87,7 @@ titles (
   genres text[] not null default '{}',
   network text,                            -- primary network display name
   episode_run_time int, vote_average numeric, popularity numeric,
+  aired_count int,                         -- authoritative aired regular-season episodes (0028)
   last_refreshed_at timestamptz
 )
 seasons (
