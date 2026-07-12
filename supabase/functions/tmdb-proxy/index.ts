@@ -43,6 +43,7 @@ const TV_GENRES: Record<number, string> = {
 //   • reality        — the Reality genre (10764).
 //   • indian/turkish — original language from the Indian subcontinent or Turkish,
 //                      which dominate TMDB popularity but aren't of interest here.
+// On top of the hard hides, non-Western titles are *capped* (see capNonWestern).
 const ANIMATION_GENRE = 16;
 const HIDDEN_GENRES = new Set([10766, 10764]); // Soap, Reality
 const ANIME_LANGS = new Set(["ja", "zh", "ko"]);
@@ -55,6 +56,38 @@ const isHidden = (r: any) => {
   if (genres.some((g) => HIDDEN_GENRES.has(g))) return true; // soaps / reality
   if (HIDDEN_LANGS.has(lang)) return true; // indian / turkish
   return false;
+};
+
+// East/Southeast Asian dramas dominate TMDB's global popularity, but discovery
+// here should be overwhelmingly Western — so beyond the hard hides above,
+// non-Western titles are capped rather than hidden. "Western" is judged by
+// original language: any European language qualifies (Latin America included
+// via es/pt); everything else (ko, ja, zh, th…) competes for the capped slots.
+// Search by name is unaffected.
+const WESTERN_LANGS = new Set([
+  "en", "es", "pt", "fr", "de", "it", "nl", "sv", "da", "no", "nb", "nn", "fi",
+  "is", "pl", "cs", "sk", "hu", "ro", "bg", "el", "ru", "uk", "hr", "sr", "bs",
+  "sl", "mk", "sq", "et", "lv", "lt", "be", "ga", "cy", "ca", "eu", "gl", "mt",
+]);
+const NON_WESTERN_MAX = 0.1; // at most 1 slot in 10
+// Re-ranks a list so non-Western titles fill at most NON_WESTERN_MAX of every
+// prefix: Western titles keep their order, and the best-ranked non-Western
+// ones are demoted into slots 10, 20, 30… (not dropped — a #1 global hit still
+// shows, just below the Western top 9). The prefix property means truncating
+// the result anywhere preserves the ratio. Ends with the Western supply, so a
+// mostly-Asian tail can't form.
+// deno-lint-ignore no-explicit-any
+const capNonWestern = (rows: any[]): any[] => {
+  const isWestern = (r: Any) => WESTERN_LANGS.has(r?.original_language ?? "");
+  const western = rows.filter(isWestern);
+  const rest = rows.filter((r) => !isWestern(r));
+  const out: Any[] = [];
+  let w = 0, n = 0;
+  while (w < western.length) {
+    if (n < rest.length && n + 1 <= (out.length + 1) * NON_WESTERN_MAX) out.push(rest[n++]);
+    else out.push(western[w++]);
+  }
+  return out;
 };
 
 // Curated-collection slugs → TMDB /discover/tv criteria. Mirrors the intent of
@@ -298,10 +331,11 @@ Deno.serve(async (req) => {
         );
         // Dedupe across pages (trending repeats titles) before dropping hidden.
         const seen = new Set<number>();
-        const results: Any[] = [];
+        const deduped: Any[] = [];
         for (const r of pages.flatMap((d) => d.results ?? [])) {
-          if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); results.push(r); }
+          if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); deduped.push(r); }
         }
+        const results = capNonWestern(deduped);
         results.length = Math.min(results.length, TREND_KEEP);
         if (results.length) {
           await upsertReturning(admin, "titles", results.map(searchRow), "tmdb_id");
@@ -359,14 +393,18 @@ Deno.serve(async (req) => {
           if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); candidates.push(r); }
         }
         candidates.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
-        candidates.length = Math.min(candidates.length, CANDIDATES);
+        // Cap before the detail-check so the fetch budget isn't spent on titles
+        // the quota would drop anyway; capped again after the premiere gate
+        // below, since dropping non-premiering rows can skew the ratio back up.
+        const pool = capNonWestern(candidates);
+        pool.length = Math.min(pool.length, CANDIDATES);
         // Detail-check in chunks (TMDB rate limit): keep shows with a real
         // season (not specials) premiering inside the window.
         const premiered: Any[] = [];
         const CHUNK = 20;
-        for (let i = 0; i < candidates.length; i += CHUNK) {
+        for (let i = 0; i < pool.length; i += CHUNK) {
           const details = await Promise.all(
-            candidates.slice(i, i + CHUNK).map((c) => fetchTmdb(apiKey, `/tv/${c.id}`).catch(() => null)),
+            pool.slice(i, i + CHUNK).map((c) => fetchTmdb(apiKey, `/tv/${c.id}`).catch(() => null)),
           );
           for (const d of details) {
             if (!d) continue;
@@ -376,12 +414,13 @@ Deno.serve(async (req) => {
           }
         }
         premiered.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
-        premiered.length = Math.min(premiered.length, KEEP);
-        if (premiered.length) {
+        const keep = capNonWestern(premiered);
+        keep.length = Math.min(keep.length, KEEP);
+        if (keep.length) {
           // We hold full details here, so upsert the rich row (network, status…).
-          await upsertReturning(admin, "titles", premiered.map(titleRow), "tmdb_id");
-          await cacheNetworkLogos(admin, premiered.flatMap((d: Any) => d.networks ?? []));
-          ranked = premiered.map((d, i) => ({ tmdb_id: d.id as number, rank: i + 1 }));
+          await upsertReturning(admin, "titles", keep.map(titleRow), "tmdb_id");
+          await cacheNetworkLogos(admin, keep.flatMap((d: Any) => d.networks ?? []));
+          ranked = keep.map((d, i) => ({ tmdb_id: d.id as number, rank: i + 1 }));
           const now = new Date().toISOString();
           await admin
             .from("popular_now_cache")
@@ -414,10 +453,11 @@ Deno.serve(async (req) => {
       // Dedupe across pages before upserting — a repeated tmdb_id in one upsert
       // batch errors ("cannot affect row a second time").
       const seen = new Set<number>();
-      const uniq: Any[] = [];
+      const deduped: Any[] = [];
       for (const r of pages.flatMap((d) => d.results ?? [])) {
-        if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); uniq.push(r); }
+        if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); deduped.push(r); }
       }
+      const uniq = capNonWestern(deduped);
       if (uniq.length === 0) return json({ results: [] });
       const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
@@ -439,10 +479,11 @@ Deno.serve(async (req) => {
         ),
       );
       const seen = new Set<number>();
-      const uniq: Any[] = [];
+      const deduped: Any[] = [];
       for (const r of pages.flatMap((d) => d.results ?? [])) {
-        if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); uniq.push(r); }
+        if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); deduped.push(r); }
       }
+      const uniq = capNonWestern(deduped);
       if (uniq.length === 0) return json({ results: [] });
       const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
