@@ -165,18 +165,34 @@ Deno.serve(async (req) => {
 
   // distinct followed titles (service role sees all users). The !inner embed
   // filters titles to those with ≥1 followed entry — parent rows stay unique,
-  // and no giant `.in(id, …)` URI is needed.
-  const { data: titles, error: te } = await admin
-    .from("titles")
-    .select("id, tmdb_id, last_refreshed_at, library_entries!inner(followed)")
-    .eq("library_entries.followed", true);
-  if (te) return new Response(JSON.stringify({ error: te.message }), { status: 500 });
-  const ids = (titles ?? []).map((t: Any) => t.id);
+  // and no giant `.in(id, …)` URI is needed. Ordered oldest-refreshed first so
+  // the wall guard becomes a rotating window (no title starves), and paged past
+  // PostgREST's 1000-row cap so the whole followed set is considered.
+  const PAGE = 1000;
+  const titles: Any[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error: te } = await admin
+      .from("titles")
+      .select("id, tmdb_id, status, last_refreshed_at, library_entries!inner(followed)")
+      .eq("library_entries.followed", true)
+      .order("last_refreshed_at", { ascending: true, nullsFirst: true })
+      .range(from, from + PAGE - 1);
+    if (te) return new Response(JSON.stringify({ error: te.message }), { status: 500 });
+    titles.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+  }
+  const ids = titles.map((t: Any) => t.id);
 
-  const cutoff = Date.now() - STALE_MS;
-  const stale = (titles ?? []).filter(
-    (t: Any) => !t.last_refreshed_at || new Date(t.last_refreshed_at).getTime() < cutoff,
-  );
+  // Ended/Canceled shows never gain episodes, so touch them at most monthly
+  // instead of every daily run — that removes the bulk of a mature library's
+  // TMDB calls and keeps the daily budget for shows that actually change.
+  const now = Date.now();
+  const ENDED_STALE_MS = 30 * 24 * 60 * 60 * 1000; // 30d
+  const isDone = (s: string | null) => s === "Ended" || s === "Canceled";
+  const stale = titles.filter((t: Any) => {
+    const age = t.last_refreshed_at ? now - new Date(t.last_refreshed_at).getTime() : Infinity;
+    return age > (isDone(t.status) ? ENDED_STALE_MS : STALE_MS);
+  });
 
   // Respond immediately and refresh in the background (EdgeRuntime.waitUntil)
   // so the gateway's request timeout never truncates a big backfill. A wall
