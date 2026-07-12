@@ -55,6 +55,9 @@ export default function ImportPage() {
   };
 
   const report = (job?.report ?? {}) as Record<string, number | string>;
+  const raw = (job?.report ?? {}) as Record<string, unknown>;
+  const unmatched = (Array.isArray(raw.unmatched) ? (raw.unmatched as { name?: string }[]) : [])
+    .map((u) => u.name?.trim() || "(unnamed)");
 
   return (
     <div className="screen mq-page" style={{ maxWidth: 640, marginInline: "auto" }}>
@@ -118,7 +121,7 @@ export default function ImportPage() {
               {[
                 { label: "Shows matched", value: report.matched },
                 { label: "Episodes marked", value: report.watchEvents ?? report.watch_events },
-                { label: "Couldn't match", value: report.unmatched ?? (Array.isArray(report.unmatched) ? (report.unmatched as unknown[]).length : 0) },
+                { label: "Couldn't match", value: unmatched.length },
               ].map((s) => (
                 <div key={s.label} className="surface-2" style={{ borderRadius: "var(--r)", padding: 14 }}>
                   <div style={{ fontSize: 20, fontWeight: 800 }}>{String(s.value ?? 0)}</div>
@@ -128,9 +131,9 @@ export default function ImportPage() {
             </div>
           )}
 
-          {job.status === "done" && Array.isArray((job.report as Record<string, unknown>).unmatched) && (
+          {job.status === "done" && unmatched.length > 0 && (
             <p className="mute" style={{ fontSize: 12.5, margin: 0 }}>
-              Unmatched shows can be added by hand — search for them with ⌘K.
+              Couldn't match: {unmatched.join(", ")} — add them by hand with ⌘K.
             </p>
           )}
         </div>

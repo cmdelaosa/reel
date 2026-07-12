@@ -99,11 +99,13 @@ Deno.serve(async (req) => {
       const report = await runImport(
         admin, tmdbKey, user.id, shows, watches, archived,
         (done, r) => {
-          // Throttled progress; carry nextIndex so even a mid-pass isolate death
-          // stays resumable. Fire-and-forget — never let a blip reject the isolate.
+          // Throttled progress; persist the FULL cumulative report so a resume
+          // after a mid-pass isolate death seeds from it (the seed check above
+          // needs `unmatched` — partial writes here used to reset the counters).
+          // Fire-and-forget — never let a blip reject the isolate.
           if (done % 5 === 0) {
             admin.from("import_jobs")
-              .update({ report: { total: shows.length, done, matched: r.matched, watch_events: r.watchEvents, nextIndex: done } })
+              .update({ report: { ...r, total: shows.length, done, nextIndex: done } })
               .eq("id", job_id)
               .then(() => {}, () => {});
           }

@@ -197,6 +197,27 @@ export async function tvdbToTmdb(key: string, tvdbId: string): Promise<number | 
   return results[0] ? (results[0].id as number) : null;
 }
 
+/** Fallback for when TMDB lacks the TVDB-id bridge (brand-new shows, or stale
+ *  mappings — e.g. Prison Break is tvdb 75340 in TV Time exports but TMDB maps
+ *  it to 360115). Search by name and accept only an exact normalized title
+ *  match — never a fuzzy guess, since a wrong match would import watch history
+ *  onto a stranger show. */
+export async function tmdbByName(key: string, rawName: string): Promise<number | null> {
+  const m = rawName.match(/^(.*?)\s*\((\d{4})\)\s*$/); // TV Time disambiguates as "The Lowdown (2025)"
+  const name = (m ? m[1] : rawName).trim();
+  if (!name) return null;
+  const norm = (s: string) =>
+    s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const want = norm(name);
+  const year = m ? `&first_air_date_year=${m[2]}` : "";
+  const data = await tmdbFetch(key, `/search/tv?query=${encodeURIComponent(name)}${year}`);
+  const results = (data.results as Json[] | undefined) ?? [];
+  const hit = results.find(
+    (r) => norm((r.name as string) ?? "") === want || norm((r.original_name as string) ?? "") === want,
+  );
+  return hit ? (hit.id as number) : null;
+}
+
 const airDatetime = (d?: string | null) => (d ? `${d}${AIR_TIME}` : null);
 
 async function upsertTitle(admin: DbClient, d: Json): Promise<string> {
@@ -310,7 +331,7 @@ export async function importShow(
   watches?: EpisodeWatch[],
   stopped = false,
 ): Promise<{ matched: boolean; watchEvents: number; unmatchedEpisodes: number }> {
-  const tmdbId = await tvdbToTmdb(tmdbKey, show.tvdbId);
+  const tmdbId = (await tvdbToTmdb(tmdbKey, show.tvdbId)) ?? (await tmdbByName(tmdbKey, show.name));
   if (!tmdbId) return { matched: false, watchEvents: 0, unmatchedEpisodes: 0 };
 
   const detail = await tmdbFetch(tmdbKey, `/tv/${tmdbId}`);
