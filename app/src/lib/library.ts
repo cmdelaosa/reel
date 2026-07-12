@@ -96,7 +96,9 @@ export function useFollow() {
   return useMutation({
     mutationFn: async (title: TitleRow) => {
       const { error } = await supabase.from("library_entries").upsert(
-        { user_id: session!.user.id, title_id: title.id, followed: true },
+        // stopped:false so re-adding a previously stopped show reactivates it —
+        // otherwise it stays stopped=true and invisible in Tonight/Shows.
+        { user_id: session!.user.id, title_id: title.id, followed: true, stopped: false },
         { onConflict: "user_id,title_id" },
       );
       if (error) throw error;
@@ -110,7 +112,9 @@ export function useFollow() {
       await queryClient.cancelQueries({ queryKey: qk.library });
       const prev = queryClient.getQueryData<LibraryShow[]>(qk.library);
       queryClient.setQueryData<LibraryShow[]>(qk.library, (old = []) =>
-        old.some((r) => r.title_id === title.id) ? old : [...old, optimisticRow(title)],
+        old.some((r) => r.title_id === title.id)
+          ? old.map((r) => (r.title_id === title.id ? { ...r, followed: true, stopped: false } : r))
+          : [...old, optimisticRow(title)],
       );
       return { prev };
     },
