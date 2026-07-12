@@ -17,17 +17,20 @@ export default function ImportPage() {
   // Drive a chunked import to completion: a large import walls after ~4min and
   // the server leaves the job running+waiting with a resume cursor; re-invoke to
   // continue. Also re-invoke if a pass appears to have died mid-flight (no
-  // progress for a while). invoke() is idempotent, so a spurious call is safe.
+  // progress for a while), or if the job is stuck at pending — the zip uploads
+  // before the invoke, so a pending job whose invoke never reached the server
+  // just needs a kick. invoke() is idempotent, so a spurious call is safe.
   const stall = useRef<{ done: number; at: number } | null>(null);
   useEffect(() => {
-    if (!job || job.status !== "running") { stall.current = null; return; }
+    if (!job || (job.status !== "running" && job.status !== "pending")) { stall.current = null; return; }
     const r = job.report as Record<string, unknown>;
     const done = typeof r.done === "number" ? r.done : 0;
     const waiting = r.waiting === true;
     const now = Date.now();
     if (!stall.current || stall.current.done !== done) stall.current = { done, at: now };
     const stalledMs = now - stall.current.at;
-    if (!continueImport.isPending && (waiting || stalledMs > 60_000)) {
+    const stallLimit = job.status === "pending" ? 15_000 : 60_000;
+    if (!continueImport.isPending && (waiting || stalledMs > stallLimit)) {
       stall.current = { done, at: now }; // debounce
       continueImport.mutate(job.id);
     }
