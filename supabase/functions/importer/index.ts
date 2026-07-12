@@ -62,11 +62,18 @@ Deno.serve(async (req) => {
   // The job row must belong to the caller (service-role writes bypass RLS, so
   // verify ownership before touching it — otherwise a caller could overwrite
   // another user's import_jobs row).
-  const { data: jobRow } = await admin.from("import_jobs").select("user_id").eq("id", job_id).maybeSingle();
+  const { data: jobRow } = await admin.from("import_jobs").select("user_id, status").eq("id", job_id).maybeSingle();
   if (!jobRow || jobRow.user_id !== user.id) return json({ error: "job not found" }, 404);
+  // A finished job is terminal. A late duplicate invoke — the client backstop,
+  // or a self-invoke still in flight when the final pass completed and deleted
+  // the zip — must not re-process it or, worse, flip a successful import to
+  // "error" on the now-missing upload. No-op.
+  if (jobRow.status === "done") return json({ job_id, status: "done" });
 
+  // `.neq("status","done")` on every terminal-error write: if a concurrent
+  // invoke completes the job between here and the write, don't clobber it.
   const fail = async (message: string, status = 400) => {
-    await admin.from("import_jobs").update({ status: "error", report: { error: message }, finished_at: new Date().toISOString() }).eq("id", job_id);
+    await admin.from("import_jobs").update({ status: "error", report: { error: message }, finished_at: new Date().toISOString() }).eq("id", job_id).neq("status", "done");
     return json({ error: message }, status);
   };
 
@@ -124,7 +131,7 @@ Deno.serve(async (req) => {
         if (report.nextIndex <= startIndex) {
           await admin.from("import_jobs")
             .update({ status: "error", report: { error: `import stalled at show ${startIndex + 1} of ${shows.length}` }, finished_at: new Date().toISOString() })
-            .eq("id", job_id);
+            .eq("id", job_id).neq("status", "done");
           return;
         }
         // Persist cursor + full report and flag as waiting.
@@ -161,7 +168,7 @@ Deno.serve(async (req) => {
       // ANY failure now reaches a terminal state (was: job stuck 'running' forever).
       await admin.from("import_jobs")
         .update({ status: "error", report: { error: (e as Error)?.message ?? String(e) }, finished_at: new Date().toISOString() })
-        .eq("id", job_id);
+        .eq("id", job_id).neq("status", "done");
     }
   })();
 
