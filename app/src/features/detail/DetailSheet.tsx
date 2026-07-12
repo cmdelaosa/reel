@@ -112,13 +112,18 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
 
   const title = data?.title;
   const regularSeasons = (data?.seasons ?? []).filter((s: SeasonRow) => s.number > 0);
-  const { data: watched } = useWatched(title?.id ?? null);
-  const { data: allEpisodes = [] } = useTitleEpisodes(title?.id ?? null);
+  const { data: watched, isPending: watchedPending } = useWatched(title?.id ?? null);
+  const { data: allEpisodesData, isPending: allEpisodesPending } = useTitleEpisodes(title?.id ?? null);
+  const allEpisodes = allEpisodesData ?? [];
   // Which season to open on (a manual pick always wins):
   //  1. the season of the first aired-but-unwatched episode — where you'd pick up;
   //  2. if you're all caught up, the season of the next upcoming episode — so a
   //     show with a premiere on the way opens on its new season, not season 1;
-  //  3. otherwise the latest season.
+  //  3. otherwise: season 1 if you've never watched the show (nothing cached
+  //     yet to derive 1–2 from), or the latest season if you've seen it all.
+  // The choice waits for the two watch-history queries (fast DB reads that run
+  // in parallel) so exactly one season is fetched — no last-season flash that
+  // then jumps to where you left off.
   const nowIso0 = new Date().toISOString();
   const firstUnwatched = allEpisodes
     .filter((e) => e.season_number > 0 && e.air_datetime != null && e.air_datetime <= nowIso0 && !watched?.has(e.id))
@@ -126,9 +131,16 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const nextUpcoming = allEpisodes
     .filter((e) => e.season_number > 0 && e.air_datetime != null && e.air_datetime > nowIso0)
     .sort((a, b) => a.season_number - b.season_number || a.episode_number - b.episode_number)[0];
+  const firstSeason = regularSeasons[0]?.number ?? null;
   const lastSeason = regularSeasons[regularSeasons.length - 1]?.number ?? null;
+  const historyReady = !watchedPending && !allEpisodesPending;
   const activeSeason =
-    season ?? firstUnwatched?.season_number ?? nextUpcoming?.season_number ?? lastSeason;
+    season ??
+    (historyReady
+      ? (firstUnwatched?.season_number ??
+        nextUpcoming?.season_number ??
+        (watched?.size ? lastSeason : firstSeason))
+      : null);
   const { data: seasonData } = useSeasonEpisodes(tmdbId, activeSeason);
 
   const titleId = title?.id ?? "";
