@@ -27,7 +27,12 @@ interface Pending {
   episode_name: string | null;
 }
 
-const EMAIL_FROM = "Reel <onboarding@resend.dev>"; // replace with a verified sender once a domain is set
+// Sender for digest emails. Set the RESEND_FROM secret to a verified-domain
+// address (e.g. "Reel <alerts@yourdomain>"); resend.dev's shared test sender
+// only delivers to the Resend account owner, so leaving it unset would silently
+// drop every recipient's mail. When unset we skip sending (and report it)
+// rather than send from a sender nobody but the owner receives.
+const EMAIL_FROM = Deno.env.get("RESEND_FROM");
 
 function digestHtml(rows: Pending[]): string {
   const items = rows
@@ -58,7 +63,7 @@ Deno.serve(async (req) => {
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   const rows = (pending ?? []) as Pending[];
 
-  const report = { pending: rows.length, recorded: 0, inappInserted: 0, emailsSent: 0, emailSkipped: 0, users: 0 };
+  const report = { pending: rows.length, recorded: 0, inappInserted: 0, emailsSent: 0, emailFailed: 0, emailSkipped: 0, users: 0 };
   if (rows.length === 0) return new Response(JSON.stringify(report), { headers: { "content-type": "application/json" } });
 
   const userIds = [...new Set(rows.map((r) => r.user_id))];
@@ -121,8 +126,10 @@ Deno.serve(async (req) => {
   // dropping recipients past it.
   const emailUsers = [...new Set(freshRows.map((r) => r.user_id))].filter(emailOn);
   if (emailUsers.length > 0) {
-    if (!resendKey) {
-      report.emailSkipped = emailUsers.length; // coded; pending RESEND_API_KEY
+    if (!resendKey || !EMAIL_FROM) {
+      // Missing key or verified sender → in-app notifications still landed
+      // above; record the skip instead of sending mail nobody would receive.
+      report.emailSkipped = emailUsers.length;
     } else {
       for (const uid of emailUsers) {
         const { data: authUser } = await admin.auth.admin.getUserById(uid);
@@ -141,6 +148,7 @@ Deno.serve(async (req) => {
           }),
         });
         if (res.ok) report.emailsSent++;
+        else report.emailFailed++; // surfaced in the run report instead of swallowed
       }
     }
   }
