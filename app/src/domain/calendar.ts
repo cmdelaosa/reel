@@ -56,3 +56,46 @@ export function episodeBadge(e: { is_premiere: boolean; is_finale: boolean; seas
   if (e.is_finale) return "Season finale";
   return null;
 }
+
+export interface ClusterRow extends FeedEpish {
+  title_id: string;
+  season_number: number;
+  episode_number: number;
+}
+
+/** A show's episodes sharing one local day. `count === 1` renders as a normal
+ *  single row; `count > 1` collapses into a batch led by `lead` (the lowest
+ *  season/episode) with `rest` revealed on expand. `last` is the highest
+ *  episode — the "mark up to here" target for a binged drop. */
+export interface FeedCluster<T> {
+  lead: T;
+  rest: T[];
+  last: T;
+  count: number;
+}
+
+/** Group a chronologically-sorted feed by (show, local day), preserving the
+ *  order of each cluster's first-seen row. Mirrors TV Time's same-day collapse:
+ *  a full-season drop becomes one row, a weekly show stays one row per day.
+ *  Rows without an air_datetime are dropped (they never render). */
+export function clusterFeed<T extends ClusterRow>(rows: T[], now: Date): FeedCluster<T>[] {
+  const order: string[] = [];
+  const groups = new Map<string, T[]>();
+  for (const r of rows) {
+    if (!r.air_datetime) continue;
+    const key = `${r.title_id}|${dayOffset(r.air_datetime, now)}`;
+    const list = groups.get(key);
+    if (list) list.push(r);
+    else {
+      groups.set(key, [r]);
+      order.push(key);
+    }
+  }
+  return order.map((key) => {
+    const eps = groups
+      .get(key)!
+      .slice()
+      .sort((a, b) => a.season_number - b.season_number || a.episode_number - b.episode_number);
+    return { lead: eps[0], rest: eps.slice(1), last: eps[eps.length - 1], count: eps.length };
+  });
+}

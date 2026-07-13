@@ -9,13 +9,15 @@ import { posterBg } from "@/ui/posterBg";
 
 /* One episode row in the calendar feed. Shared so Tonight's "Premieres soon"
    renders identical rows (always the `later` variant — a days-away countdown
-   plus the dated time). */
+   plus the dated time). `sub` renders it as a borderless child inside a
+   CalEpGroup: a future child hides the date (the group header carries it),
+   a past child keeps its own watched-check. */
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
-export function CalEpRow({ ep, now, later = false }: { ep: FeedRow; now: Date; later?: boolean }) {
+export function CalEpRow({ ep, now, later = false, sub = false }: { ep: FeedRow; now: Date; later?: boolean; sub?: boolean }) {
   const open = useOpenTitle();
   const mark = useMarkWatched(ep.title_id);
   const unmark = useUnmarkWatched(ep.title_id);
@@ -32,7 +34,7 @@ export function CalEpRow({ ep, now, later = false }: { ep: FeedRow; now: Date; l
   };
 
   return (
-    <div className="cal-ep" onClick={() => open(ep.tmdb_id)}>
+    <div className={sub ? "cal-ep cal-ep-sub" : "cal-ep"} onClick={() => open(ep.tmdb_id)}>
       <div className="cal-ep-art" style={art ? undefined : { background: posterBg(ep.show_name) }}>
         {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
         <div className="poster-sheen" />
@@ -46,7 +48,7 @@ export function CalEpRow({ ep, now, later = false }: { ep: FeedRow; now: Date; l
         <div className="cal-ep-name mute">{ep.episode_name}</div>
       </div>
       <div className="cal-ep-right">
-        {later ? (
+        {sub && !past ? null : later ? (
           <>
             <div className="cal-days">{days}<span>days</span></div>
             <div className="cal-when mute">{fmtShort(ep.air_datetime)} · {fmtTime(ep.air_datetime)}</div>

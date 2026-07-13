@@ -1,14 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Bell } from "lucide-react";
-import { dayLabel, groupFeed } from "@/domain/calendar";
+import { clusterFeed, dayLabel, groupFeed, type FeedCluster } from "@/domain/calendar";
 import { premiereMs } from "@/domain/tonight";
-import { useCalendarFeed } from "@/lib/calendar";
+import { useCalendarFeed, type FeedRow } from "@/lib/calendar";
 import { useLibrary, useToggleNotify, type LibraryShow } from "@/lib/library";
+import { useUndoMarks } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useOpenTitle } from "@/lib/useOpenTitle";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
+import { CalEpGroup } from "@/features/calendar/CalEpGroup";
 
 /* Calendar — chronological my-shows feed with lazy history, plus returning /
    new views. Port of prototype marquee.tsx CalendarTab/MyShowsFeed/CalEpRow/
@@ -48,7 +50,29 @@ function MyShowsFeed() {
   const prevH = useRef(0);
   const anchored = useRef(false);
 
+  // Undo toast for the bulk "mark up to here" on a collapsed past batch.
+  const [toast, setToast] = useState<{ titleId: string; ids: string[]; count: number } | null>(null);
+  const undoMarks = useUndoMarks(toast?.titleId ?? "");
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   const { days, later } = useMemo(() => groupFeed(rows, now), [rows, now]);
+
+  const renderCluster = (c: FeedCluster<FeedRow>, isLater: boolean) =>
+    c.count === 1 ? (
+      <CalEpRow key={c.lead.episode_id} ep={c.lead} now={now} later={isLater} />
+    ) : (
+      <CalEpGroup
+        key={`${c.lead.title_id}-${c.lead.episode_id}`}
+        cluster={c}
+        now={now}
+        later={isLater}
+        onMarked={({ titleId, ids }) => setToast({ titleId, ids, count: ids.length })}
+      />
+    );
 
   // lazy history: an observer near the top pulls in earlier weeks
   useEffect(() => {
@@ -100,29 +124,41 @@ function MyShowsFeed() {
   const todayOffset = days.find(([off]) => off >= 0)?.[0];
 
   return (
-    <div className="cal-feed">
-      <div ref={topRef} className="cal-sentinel">
-        {weeksBack < 60 ? "Loading earlier episodes…" : "That's the start of your history."}
+    <>
+      <div className="cal-feed">
+        <div ref={topRef} className="cal-sentinel">
+          {weeksBack < 60 ? "Loading earlier episodes…" : "That's the start of your history."}
+        </div>
+
+        {days.map(([off, list]) => (
+          <div key={off} ref={off === todayOffset ? todayRef : undefined} className="cal-day">
+            <div className="cal-daysep"><span>{dayLabel(off, list[0].air_datetime)}</span></div>
+            {clusterFeed(list, now).map((c) => renderCluster(c, false))}
+          </div>
+        ))}
+
+        {later.length > 0 && (
+          <div className="cal-day">
+            <div className="cal-daysep"><span>Later</span></div>
+            {clusterFeed(later, now).map((c) => renderCluster(c, true))}
+          </div>
+        )}
       </div>
 
-      {days.map(([off, list]) => (
-        <div key={off} ref={off === todayOffset ? todayRef : undefined} className="cal-day">
-          <div className="cal-daysep"><span>{dayLabel(off, list[0].air_datetime)}</span></div>
-          {list.map((ep) => (
-            <CalEpRow key={ep.episode_id} ep={ep} now={now} />
-          ))}
-        </div>
-      ))}
-
-      {later.length > 0 && (
-        <div className="cal-day">
-          <div className="cal-daysep"><span>Later</span></div>
-          {later.map((ep) => (
-            <CalEpRow key={ep.episode_id} ep={ep} now={now} later />
-          ))}
+      {toast && (
+        <div
+          className="card sheet fixed flex items-center gap-3"
+          style={{ zIndex: 85, left: "50%", bottom: 26, transform: "translateX(-50%)", padding: "12px 16px", borderRadius: 999 }}
+        >
+          <span style={{ fontSize: 13.5, fontWeight: 650 }}>
+            Marked {toast.count} {toast.count === 1 ? "episode" : "episodes"} as seen
+          </span>
+          <button className="btn btn-ghost btn-sm" onClick={() => { undoMarks.mutate(toast.ids); setToast(null); }}>
+            Undo
+          </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
