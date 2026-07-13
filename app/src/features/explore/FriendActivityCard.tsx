@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useFriendActivity, type ActivityItem } from "@/lib/explore";
 import { relativeTime } from "@/domain/time";
 import { tmdbImg } from "@/lib/tmdb";
@@ -19,18 +19,17 @@ function phrase(a: ActivityItem): React.ReactNode {
 export function FriendActivityCard({ enabled }: { enabled: boolean }) {
   const { data: items = [] } = useFriendActivity(enabled);
   const [, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   if (!enabled || items.length === 0) return null;
 
-  const openTitle = (tmdbId: number) => setParam("title", String(tmdbId));
-  const openFriend = (id: string) => setParam("friend", id);
-  function setParam(key: string, value: string) {
+  const openTitle = (tmdbId: number) =>
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set(key, value);
+      next.set("title", String(tmdbId));
       return next;
     });
-  }
+  const openFriend = (id: string) => navigate(`/friend/${id}`);
 
   return (
     <section className="flex flex-col gap-4">

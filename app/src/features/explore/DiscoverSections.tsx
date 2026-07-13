@@ -204,7 +204,7 @@ type Tab = "popular" | "rated" | "friends";
 const TABS: { key: Tab; label: string }[] = [
   { key: "popular", label: "Popular now" },
   { key: "rated", label: "Top rated" },
-  { key: "friends", label: "With friends" },
+  { key: "friends", label: "Popular with friends" },
 ];
 
 /* Normalised discover card: a title plus the per-tab extras (TMDB score on the

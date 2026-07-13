@@ -5,7 +5,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
-import { FriendSheet } from "@/features/social/FriendSheet";
 import { useNotifications, useNotificationsRealtime } from "@/lib/notifications";
 import { NotifPanel } from "@/ui/shell/NotifPanel";
 import { Palette } from "@/ui/shell/Palette";
@@ -31,14 +30,6 @@ export function Shell() {
   const [searchParams, setSearchParams] = useSearchParams();
   const titleParam = searchParams.get("title");
   const detailTmdbId = titleParam && /^\d+$/.test(titleParam) ? Number(titleParam) : null;
-  const friendParam = searchParams.get("friend");
-
-  const closeFriend = () =>
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete("friend");
-      return next;
-    });
 
   const closeTitle = () =>
     setSearchParams((prev) => {
@@ -139,7 +130,6 @@ export function Shell() {
       {paletteOpen && <Palette onClose={() => setPaletteOpen(false)} onOpen={openTitle} />}
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
       {notifOpen && <NotifPanel onClose={() => setNotifOpen(false)} />}
-      {friendParam && <FriendSheet friendId={friendParam} onClose={closeFriend} />}
       {/* key on the tmdb id so switching titles (⌘K, notification) while the
           sheet is open remounts it — otherwise stale season/pending/toast state
           carries over from the previous show. */}

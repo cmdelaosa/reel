@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 
-/* Rich friend-profile data for the enriched FriendSheet: the friend's full
+/* Rich friend-profile data for the friend page (/friend/:id): the friend's full
    follow list (with metadata + when they added it) and every show rating,
    read straight from the friend-readable tables — the 0015 friend-read RLS
    gates each one (a non-friend / private profile yields empty). Episode counts

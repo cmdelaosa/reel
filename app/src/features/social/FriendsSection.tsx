@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate } from "react-router";
 import { Check, ChevronRight, UserPlus, X } from "lucide-react";
 import {
   useAcceptRequest, useFindProfile, useFriendships, useRemoveFriend, useSendRequest,
@@ -15,7 +15,7 @@ export function FriendsSection() {
   const send = useSendRequest();
   const accept = useAcceptRequest();
   const remove = useRemoveFriend();
-  const [, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [handle, setHandle] = useState("");
   const [found, setFound] = useState<FoundProfile | null | "none">(null);
@@ -31,12 +31,7 @@ export function FriendsSection() {
     setFound(p ?? "none");
   };
 
-  const openFriend = (id: string) =>
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("friend", id);
-      return next;
-    });
+  const openFriend = (id: string) => navigate(`/friend/${id}`);
 
   return (
     <section className="flex flex-col gap-4">
