@@ -60,6 +60,9 @@ const friendRefSchema = z.object({
 
 const popularSchema = z.array(
   z.object({
+    // Present once migration 0035 lands; optional so the tab keeps parsing
+    // against the older RPC shape (cards without an id skip add/hide).
+    id: z.string().uuid().optional(),
     tmdb_id: z.number().int(),
     name: z.string(),
     poster_path: z.string().nullable(),

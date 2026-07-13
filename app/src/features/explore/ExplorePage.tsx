@@ -1,9 +1,9 @@
 import { Search, Star } from "lucide-react";
 import { useFriendships } from "@/lib/friends";
-import { usePopularWithFriends, useBestRatedByFriends, type BestRatedByFriends } from "@/lib/explore";
+import { useBestRatedByFriends, type BestRatedByFriends } from "@/lib/explore";
 import { useIgnored } from "@/lib/ignore";
 import { tmdbImg } from "@/lib/tmdb";
-import { NetworkLogo, Poster, Rail } from "@/ui";
+import { NetworkLogo } from "@/ui";
 import { FriendStack } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 import { FriendActivityCard } from "@/features/explore/FriendActivityCard";
@@ -11,18 +11,17 @@ import { DiscoverSections } from "@/features/explore/DiscoverSections";
 import { CollectionsSection } from "@/features/explore/CollectionsSection";
 import { useOpenTitle, useTitleIntent } from "@/lib/useOpenTitle";
 
-/* Explore — friend-powered sections. They only appear once you have ≥2 friends
-   (no sad empties on day one). Trending/collections land in Phase 5. */
+/* Explore — trending + a tabbed discover section (Popular now / Top rated /
+   With friends), collections, and the friend sections. Friend-powered surfaces
+   appear once you have at least one accepted friend. */
 
 export default function ExplorePage() {
   const { data: friendships = [] } = useFriendships();
   const friendCount = friendships.filter((f) => f.status === "accepted").length;
-  const hasFriends = friendCount >= 2;
+  const hasFriends = friendCount >= 1;
 
   const { isIgnored } = useIgnored();
-  const { data: popularRaw = [] } = usePopularWithFriends(hasFriends);
   const { data: bestRatedRaw = [] } = useBestRatedByFriends(hasFriends);
-  const popular = popularRaw.filter((p) => !isIgnored(p.tmdb_id));
   const bestRated = bestRatedRaw.filter((b) => !isIgnored(b.tmdb_id));
   const open = useOpenTitle();
 
@@ -40,31 +39,6 @@ export default function ExplorePage() {
       </button>
 
       <DiscoverSections />
-
-
-      {hasFriends && popular.length > 0 && (
-        <section className="flex flex-col gap-4">
-          <Rail title="Popular with friends" subtitle="Shows several of your friends follow">
-            {popular.map((p) => (
-              <div key={p.tmdb_id} style={{ width: "var(--rail-pw)" }} className="flex flex-col gap-2">
-                <Poster
-                  t={{
-                    id: String(p.tmdb_id), name: p.name, year: p.first_air_date?.slice(0, 4) ?? "",
-                    genres: p.genres.length ? p.genres : ["—"], network: p.network ?? "",
-                    posterPath: tmdbImg(p.poster_path), voteAverage: p.vote_average ?? 0,
-                  }}
-                  prefetchTmdbId={p.tmdb_id}
-                  onClick={() => open(p.tmdb_id)}
-                />
-                <div className="flex items-center gap-2 px-0.5">
-                  <FriendStack fans={p.friends.map((f) => ({ id: f.id, name: f.name, avatarUrl: f.avatar_url }))} size={22} />
-                  <span className="mute" style={{ fontSize: 12 }}>{p.count} friends</span>
-                </div>
-              </div>
-            ))}
-          </Rail>
-        </section>
-      )}
 
       {hasFriends && bestRated.length > 0 && (
         <section className="flex flex-col gap-4">
@@ -102,7 +76,7 @@ function BestRatedRow({ b, onOpen }: { b: BestRatedByFriends; onOpen: () => void
         <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{b.name}</div>
         <div className="flex items-center gap-2" style={{ marginTop: 3 }}>
           <FriendStack fans={b.raters.map((r) => ({ id: r.id, name: r.name, avatarUrl: r.avatar_url }))} size={20} />
-          <span className="mute" style={{ fontSize: 12 }}>{b.count} friends</span>
+          <span className="mute" style={{ fontSize: 12 }}>{b.count} {b.count === 1 ? "friend" : "friends"}</span>
         </div>
       </div>
       {b.network && <NetworkLogo network={b.network} size={11} />}
