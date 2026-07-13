@@ -21,8 +21,11 @@ export const feedRowSchema = z.object({
 export type FeedRow = z.infer<typeof feedRowSchema>;
 
 const WEEK_MS = 7 * 24 * 3600_000;
+/** How far ahead the feed reaches. ~12 months so far-out announced episodes
+ *  (season premieres, finales) surface in "Later" instead of dropping off. */
+const FORWARD_WEEKS = 52;
 
-/** Episodes of followed shows in [now - weeksBack, now + 12 weeks]. Widening
+/** Episodes of followed shows in [now - weeksBack, now + 52 weeks]. Widening
  *  weeksBack keeps previous data on screen while the wider range loads. */
 export function useCalendarFeed(weeksBack: number) {
   return useQuery({
@@ -31,7 +34,7 @@ export function useCalendarFeed(weeksBack: number) {
     queryFn: async (): Promise<FeedRow[]> => {
       const now = Date.now();
       const from = new Date(now - weeksBack * WEEK_MS).toISOString();
-      const to = new Date(now + 12 * WEEK_MS).toISOString();
+      const to = new Date(now + FORWARD_WEEKS * WEEK_MS).toISOString();
       const { data, error } = await supabase.rpc("rpc_calendar_feed", { p_from: from, p_to: to });
       if (error) throw error;
       return z.array(feedRowSchema).parse(data);
