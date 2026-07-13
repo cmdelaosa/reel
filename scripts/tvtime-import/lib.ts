@@ -234,6 +234,22 @@ export async function tmdbByName(key: string, rawName: string): Promise<number |
 
 const airDatetime = (d?: string | null) => (d ? `${d}${AIR_TIME}` : null);
 
+// Authoritative aired-episode count from the TMDB title payload. Hand-mirror of
+// app/src/domain/airedCount.ts (canonical spec + unit tests) — keep in sync.
+// Without it, stamping last_refreshed_at below would make the daily
+// episode-refresh skip the title for 20h (30d if Ended) while the rollup still
+// sees no aired episodes — freshly imported never-watched shows read "upcoming".
+function airedCount(seasons: Json[] | undefined, last: Json | null | undefined): number | null {
+  if (!last || ((last.season_number as number) ?? 0) <= 0) return null;
+  let aired = 0;
+  for (const s of seasons ?? []) {
+    if (((s.season_number as number) ?? 0) <= 0) continue; // specials
+    if ((s.season_number as number) < (last.season_number as number)) aired += (s.episode_count as number) ?? 0;
+    else if (s.season_number === last.season_number) aired += last.episode_number as number;
+  }
+  return aired;
+}
+
 async function upsertTitle(admin: DbClient, d: Json): Promise<string> {
   const { data, error } = await admin
     .from("titles")
@@ -252,6 +268,7 @@ async function upsertTitle(admin: DbClient, d: Json): Promise<string> {
         episode_run_time: (d.episode_run_time as number[] | undefined)?.[0] ?? null,
         vote_average: (d.vote_average as number) ?? null,
         popularity: (d.popularity as number) ?? null,
+        aired_count: airedCount(d.seasons as Json[] | undefined, d.last_episode_to_air as Json | null),
         last_refreshed_at: new Date().toISOString(),
       },
       { onConflict: "tmdb_id" },
