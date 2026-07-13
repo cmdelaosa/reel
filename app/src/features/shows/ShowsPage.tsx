@@ -12,7 +12,7 @@ type Bucket = ShowStatus | "all" | "stopped";
 const FILTERS: { key: Bucket; label: string }[] = [
   { key: "watching", label: "Watching" },
   { key: "caughtup", label: "Caught up" },
-  { key: "watchlist", label: "Watchlist" },
+  { key: "watchlist", label: "Not started" },
   { key: "upcoming", label: "Upcoming" },
   { key: "finished", label: "Finished" },
   { key: "stopped", label: "Stopped" },
@@ -67,7 +67,7 @@ export default function ShowsPage() {
       <header className="mq-header">
         <h1 className="mq-h1">My Shows</h1>
         <p className="dim mq-sub">
-          {isPending ? "Loading your watchlist…" : `${library.length} shows in your watchlist.`}
+          {isPending ? "Loading your shows…" : `${library.length} shows in your library.`}
         </p>
       </header>
 
@@ -102,7 +102,7 @@ export default function ShowsPage() {
           <p className="dim" style={{ margin: 0, fontSize: 14 }}>
             {f === "all"
               ? <>Nothing here yet — hit <kbd className="mq-kbd">⌘K</kbd> and add a show.</>
-              : `No ${FILTERS.find((x) => x.key === f)?.label.toLowerCase()} shows right now.`}
+              : `Nothing in ${FILTERS.find((x) => x.key === f)?.label} right now.`}
           </p>
         </div>
       )}
