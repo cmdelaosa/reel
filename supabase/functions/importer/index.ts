@@ -12,7 +12,7 @@
 // safe). Requires a real user JWT.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { unzipCsvs, parseShows, parseWatches, parseArchived, runImport, NotATvTimeExport, type ImportReport } from "../../../scripts/tvtime-import/lib.ts";
+import { unzipCsvs, parseShows, parseWatches, parseArchived, parseFollowedAt, runImport, NotATvTimeExport, type ImportReport } from "../../../scripts/tvtime-import/lib.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -80,13 +80,14 @@ Deno.serve(async (req) => {
   const { data: blob, error: dlErr } = await admin.storage.from("imports").download(path);
   if (dlErr || !blob) return fail(`could not read upload: ${dlErr?.message ?? "missing"}`);
 
-  let shows, watches, archived;
+  let shows, watches, archived, followed;
   try {
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const csvs = unzipCsvs(bytes);
     shows = parseShows(csvs);
     watches = parseWatches(csvs); // exact per-episode history; empty map → counter fallback
     archived = parseArchived(csvs); // TV Time "archived" → stopped
+    followed = parseFollowedAt(csvs); // real "followed since" date → backdates added_at
   } catch (err) {
     return fail(err instanceof NotATvTimeExport ? err.message : `unreadable zip: ${String(err)}`);
   }
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
   const work = (async () => {
     try {
       const report = await runImport(
-        admin, tmdbKey, user.id, shows, watches, archived,
+        admin, tmdbKey, user.id, shows, watches, archived, followed,
         (done, r) => {
           // Throttled progress; persist the FULL cumulative report so a resume
           // after a mid-pass isolate death seeds from it (the seed check above

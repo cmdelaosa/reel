@@ -156,6 +156,31 @@ export function parseArchived(files: Record<string, string>): Set<string> {
   return out;
 }
 
+/** TheTVDB id → ISO timestamp of when the user started following the show in TV
+ *  Time, read from the `created_at` of the per-show `user-series` rows in the v2
+ *  tracking file. This is the only "followed since" signal the export carries —
+ *  `user_tv_show_data.csv` has no date column — so the importer uses it to
+ *  backdate `library_entries.added_at` (else friend activity shows every
+ *  imported follow as "added today"). Empty when the file/columns are absent
+ *  (older exports); callers then fall back to the earliest watch / premiere. */
+export function parseFollowedAt(files: Record<string, string>): Map<string, string> {
+  const raw = files[TRACKING.file];
+  const out = new Map<string, string>();
+  if (!raw) return out;
+  const { headers, rows } = toRecords(raw);
+  if (!headers.includes(TRACKING.watchedAt) || !headers.includes(TRACKING.tvdbId)) return out;
+  for (const r of rows) {
+    if (!r[TRACKING.key]?.startsWith("user-series")) continue;
+    const tvdbId = r[TRACKING.tvdbId];
+    const stamp = r[TRACKING.watchedAt];
+    if (!tvdbId || !stamp) continue;
+    const iso = `${stamp.replace(" ", "T")}Z`;
+    const prev = out.get(tvdbId);
+    if (!prev || iso < prev) out.set(tvdbId, iso); // earliest, defensive against dupe rows
+  }
+  return out;
+}
+
 /** Parse the exact per-episode watch history: TheTVDB show id → deduped
  *  (season, episode, first-watched-at) list. Specials (season 0) excluded, like
  *  everywhere else. Returns an empty map when the tracking file is absent or
@@ -361,6 +386,9 @@ export async function importShow(
   show: Show,
   watches?: EpisodeWatch[],
   stopped = false,
+  /** ISO date the user first followed the show in TV Time (parseFollowedAt),
+   *  when the export carries it. Highest-priority source for added_at below. */
+  followedAt?: string,
 ): Promise<{ matched: boolean; watchEvents: number; unmatchedEpisodes: number }> {
   const tmdbId = (await tvdbToTmdb(tmdbKey, show.tvdbId)) ?? (await tmdbByName(tmdbKey, show.name));
   if (!tmdbId) return { matched: false, watchEvents: 0, unmatchedEpisodes: 0 };
@@ -368,8 +396,20 @@ export async function importShow(
   const detail = await tmdbFetch(tmdbKey, `/tv/${tmdbId}`);
   const titleId = await upsertTitle(admin, detail);
 
+  // Backdate the library "added" date to a real historical moment so friend
+  // activity (rpc_friend_activity reads library_entries.added_at for the
+  // "added" verb) and the "recently added" sort reflect the true timeline, not
+  // the import moment. Prefer the real TV Time follow date; else the earliest
+  // watch; else the show's premiere. Undefined → the DB default now() (a
+  // followed, never-watched show with no known air date — no signal exists).
+  const earliestWatch = watches?.length
+    ? watches.reduce((min, w) => (w.watchedAt < min ? w.watchedAt : min), watches[0].watchedAt)
+    : undefined;
+  const firstAir = (detail.first_air_date as string) || null;
+  const addedAt = followedAt ?? earliestWatch ?? (firstAir ? `${firstAir}T00:00:00Z` : undefined);
+
   await admin.from("library_entries").upsert(
-    { user_id: userId, title_id: titleId, followed: show.followed, favorite: show.favorite, stopped },
+    { user_id: userId, title_id: titleId, followed: show.followed, favorite: show.favorite, stopped, ...(addedAt ? { added_at: addedAt } : {}) },
     { onConflict: "user_id,title_id" },
   );
 
@@ -424,6 +464,8 @@ export async function runImport(
   shows: Show[],
   watchesByShow?: Map<string, EpisodeWatch[]>,
   archivedIds?: Set<string>,
+  /** TheTVDB id → ISO follow date (parseFollowedAt); backdates added_at. */
+  followedByShow?: Map<string, string>,
   onProgress?: (done: number, report: ImportReport) => void,
   /** Resume from this show index (0 = fresh). Shows before it are skipped —
    *  earlier passes already imported them (idempotently). */
@@ -469,6 +511,7 @@ export async function runImport(
         show,
         watchesByShow?.get(show.tvdbId),
         archivedIds?.has(show.tvdbId) ?? false,
+        followedByShow?.get(show.tvdbId),
       );
       if (matched) {
         report.matched++;
