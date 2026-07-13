@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Ticket } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { clearStashedInvite, readStashedInvite } from "@/lib/invites";
 import { Logo } from "@/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { invitedQueryKey, useInvited } from "@/features/auth/invited";
@@ -27,13 +28,7 @@ export default function InvitePage() {
   const { data: invited } = useInvited();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [code, setCode] = useState(() => {
-    try {
-      return sessionStorage.getItem("reel.invite") ?? "";
-    } catch {
-      return "";
-    }
-  });
+  const [code, setCode] = useState(() => readStashedInvite() ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,11 +49,7 @@ export default function InvitePage() {
       );
       return;
     }
-    try {
-      sessionStorage.removeItem("reel.invite");
-    } catch {
-      /* ignore */
-    }
+    clearStashedInvite();
     if (session) queryClient.setQueryData(invitedQueryKey(session.user.id), true);
     navigate("/", { replace: true }); // → onboarding (RequireOnboarded) or the app
   };

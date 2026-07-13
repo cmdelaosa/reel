@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate, useLocation } from "react-router";
 import { MailCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { readStashedInvite, stashInvite } from "@/lib/invites";
 import { Logo } from "@/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 
@@ -35,15 +36,11 @@ export default function LoginPage() {
   const location = useLocation();
 
   // Stash an invite code from the share link so the /invite gate can prefill
-  // it after the auth redirect (which drops the query string).
+  // it after the auth redirect. This also runs on the return leg of the magic
+  // link (which lands back on /login?invite=CODE), covering redemption on a
+  // different device or browser from where the link was requested.
   const inviteParam = new URLSearchParams(location.search).get("invite");
-  if (inviteParam) {
-    try {
-      sessionStorage.setItem("reel.invite", inviteParam);
-    } catch {
-      /* storage unavailable */
-    }
-  }
+  if (inviteParam) stashInvite(inviteParam);
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,13 +52,23 @@ export default function LoginPage() {
     return <Navigate to={from} replace />;
   }
 
+  // Carry the invite code through the auth redirect in the URL itself, so it
+  // survives the magic link being opened on another device. The /login base of
+  // this URL must be covered by Supabase's redirect allowlist.
+  const authRedirect = () => {
+    const invite = readStashedInvite();
+    return invite
+      ? `${window.location.origin}/login?invite=${encodeURIComponent(invite)}`
+      : window.location.origin;
+  };
+
   const sendLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: authRedirect() },
     });
     setBusy(false);
     if (error) setError(error.message);
@@ -72,7 +79,7 @@ export default function LoginPage() {
     setError(null);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: authRedirect() },
     });
     if (error) setError(error.message);
   };

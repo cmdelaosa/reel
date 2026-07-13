@@ -41,3 +41,35 @@ export function useCreateInvite() {
 export function inviteLink(code: string): string {
   return `${window.location.origin}/login?invite=${encodeURIComponent(code)}`;
 }
+
+/* Invite-code stash: bridges the share link (?invite=CODE on /login) to the
+   /invite gate shown after auth. localStorage, not sessionStorage — the magic
+   link opens in a fresh tab, where sessionStorage from the original tab is
+   gone. Cross-device redemption is covered separately by embedding the code
+   in the auth redirect URL (see LoginPage). */
+
+const STASH_KEY = "reel.invite";
+
+export function stashInvite(code: string): void {
+  try {
+    localStorage.setItem(STASH_KEY, code);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export function readStashedInvite(): string | null {
+  try {
+    return localStorage.getItem(STASH_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function clearStashedInvite(): void {
+  try {
+    localStorage.removeItem(STASH_KEY);
+  } catch {
+    /* ignore */
+  }
+}
