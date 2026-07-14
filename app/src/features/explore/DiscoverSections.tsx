@@ -312,7 +312,7 @@ export function DiscoverSections() {
     ? (catalogMode ? "Most popular for the selected years" : "New shows and fresh seasons, ranked by buzz")
     : tab === "rated"
       ? "The best of the catalog, ranked by TMDB score"
-      : "Shows your friends follow";
+      : "Shows your friends are watching, most friends first";
   const emptyMsg = tab === "popular"
     ? "No popular shows match these filters."
     : tab === "rated"
