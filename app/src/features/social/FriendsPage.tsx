@@ -1,5 +1,7 @@
-import { Star } from "lucide-react";
+import { ChevronRight, Heart, Star } from "lucide-react";
+import { useNavigate } from "react-router";
 import { useFriendships } from "@/lib/friends";
+import { useTaste } from "@/lib/taste";
 import { useBestRatedByFriends, type BestRatedByFriends } from "@/lib/explore";
 import { useIgnored } from "@/lib/ignore";
 import { tmdbImg } from "@/lib/tmdb";
@@ -31,6 +33,8 @@ export default function FriendsPage() {
         <p className="dim mq-sub">Who you watch with — their activity, their favorites.</p>
       </header>
 
+      {hasFriends && <TasteCard />}
+
       <FriendsSection />
 
       <FriendActivityCard enabled={hasFriends} />
@@ -52,6 +56,30 @@ export default function FriendsPage() {
       )}
 
       <InvitesCard />
+    </div>
+  );
+}
+
+/* Teaser for the aggregate taste comparison — leads with your closest match
+   so the card is useful before you even open /friends/taste. */
+function TasteCard() {
+  const taste = useTaste();
+  const navigate = useNavigate();
+  const best = taste.ranked[0];
+  return (
+    <div className="card mq-row" onClick={() => navigate("/friends/taste")}>
+      <span className="badge badge-soft btn-icon" style={{ width: 40, height: 40, flex: "0 0 auto" }}>
+        <Heart size={18} style={{ color: "var(--accent)" }} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>Taste match</div>
+        <div className="dim truncate" style={{ fontSize: 12.5 }}>
+          {best
+            ? <>Closest match: <b style={{ fontWeight: 650 }}>{best.name}</b> · {best.affinity!.pct}%</>
+            : "See how your ratings line up with your friends'"}
+        </div>
+      </div>
+      <ChevronRight size={16} className="mute" />
     </div>
   );
 }

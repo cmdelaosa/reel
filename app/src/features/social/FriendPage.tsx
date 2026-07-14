@@ -15,6 +15,7 @@ import {
 } from "@/lib/friendProfile";
 import { useLibrary, useFollow } from "@/lib/library";
 import { useMyRatings } from "@/lib/ratings";
+import { tasteAffinity } from "@/lib/taste";
 import { timeSpentLabel } from "@/lib/stats";
 import type { TitleRow } from "@/lib/schemas";
 
@@ -182,7 +183,9 @@ export default function FriendPage() {
     const { follows, ratings } = fp;
 
     const sharedFollows = follows.filter((f) => myFollowIds.has(f.tmdb_id));
-    const match = follows.length ? Math.round((sharedFollows.length / follows.length) * 100) : 0;
+    // Same confidence-adjusted taste affinity as the /friends/taste leaderboard,
+    // so a friend shows one number app-wide (replaces the old follow-overlap %).
+    const affinity = tasteAffinity(myScoreByTmdb, theirScoreByTmdb);
 
     const coRated = ratings
       .filter((r) => myScoreByTmdb.has(r.tmdb_id))
@@ -204,8 +207,8 @@ export default function FriendPage() {
 
     const topRated = [...ratings].sort((a, b) => b.score - a.score || b.created_at.localeCompare(a.created_at)).slice(0, 8);
 
-    return { sharedFollows, match, coRated, topGenres, sharedGenres, topNetworks, avgRuntime, avgRating, topRated };
-  }, [fp, myFollowIds, myGenres, myScoreByTmdb]);
+    return { sharedFollows, affinity, coRated, topGenres, sharedGenres, topNetworks, avgRuntime, avgRating, topRated };
+  }, [fp, myFollowIds, myGenres, myScoreByTmdb, theirScoreByTmdb]);
 
   // Activity feed: episode watches (consecutive same-show-same-day runs are
   // collapsed into one "watched N episodes" entry) + ratings + follows.
@@ -350,16 +353,23 @@ export default function FriendPage() {
               ))}
             </div>
 
-            {/* Match */}
+            {/* Taste match — the same confidence-adjusted figure as /friends/taste */}
             {derived && (
               <div className="card p-4 flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2" style={{ fontSize: 13.5, fontWeight: 700 }}>
-                    <Heart size={15} style={{ color: "var(--accent)" }} />{derived.match}% match with you
+                    <Heart size={15} style={{ color: "var(--accent)" }} />
+                    {derived.affinity ? `${derived.affinity.pct}% taste match` : "No taste match yet"}
                   </div>
-                  <span className="mute" style={{ fontSize: 12.5 }}>{derived.sharedFollows.length} shows in common</span>
+                  <span className="mute" style={{ fontSize: 12.5 }}>
+                    {derived.affinity ? `${derived.affinity.common} rated in common · ` : ""}
+                    {derived.sharedFollows.length} shows in common
+                  </span>
                 </div>
-                <div className="fr-matchbar"><i style={{ width: `${derived.match}%` }} /></div>
+                <div className="fr-matchbar"><i style={{ width: `${derived.affinity?.pct ?? 0}%` }} /></div>
+                {!derived.affinity && (
+                  <p className="mute" style={{ fontSize: 12, margin: 0 }}>Rate shows you've both seen and the match score appears.</p>
+                )}
                 {derived.sharedGenres.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: 2 }}>
                     <span className="mute" style={{ fontSize: 11.5 }}>Shared taste:</span>
