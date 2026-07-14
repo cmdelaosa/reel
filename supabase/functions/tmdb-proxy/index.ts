@@ -612,6 +612,14 @@ Deno.serve(async (req) => {
     const mTitle = path.match(/^\/title\/(\d+)$/);
     if (mTitle) {
       const tmdbId = Number(mTitle[1]);
+      // ?refresh=1 forces a synchronous re-fetch from TMDB, bypassing the
+      // freshness cache — used to backfill new derivations (e.g.
+      // upcoming_season_number) across an already-cached library. Invite +
+      // auth gated like every other route; refreshTitle is idempotent.
+      if (url.searchParams.get("refresh") === "1") {
+        const forced = await refreshTitle(admin, apiKey, tmdbId);
+        return json(forced, 200, detailHeaders("MISS", 0));
+      }
       const dbStarted = performance.now();
       const { data: cached } = await admin
         .from("titles")
