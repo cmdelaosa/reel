@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { CalendarClock, ChevronLeft, ChevronRight, Clock, Eye, Share2, Star, Tv, Users } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { useLibrary } from "@/lib/library";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
 import { useUserStats, timeSpentLabel } from "@/lib/stats";
 import { tmdbImg } from "@/lib/tmdb";
@@ -48,6 +49,7 @@ export default function YouPage() {
   const { profile } = useAuth();
   const { data: ratings = [] } = useMyRatings();
   const { data: stats } = useUserStats();
+  const { data: library = [] } = useLibrary();
   const [sort, setSort] = useState<RateSort>("new");
   const [page, setPage] = useState(0);
   const [, setSearchParams] = useSearchParams();
@@ -78,6 +80,20 @@ export default function YouPage() {
     { v: "best", label: "Best rated" },
     { v: "worst", label: "Worst rated" },
   ];
+
+  // Your taste profile — genre + network mix across the shows you follow,
+  // same aggregation the friend page shows for others (friendProfile derived).
+  const taste = useMemo(() => {
+    const genreCounts = new Map<string, number>();
+    for (const s of library) for (const g of s.genres) genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
+    const topGenres = [...genreCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+
+    const netCounts = new Map<string, number>();
+    for (const s of library) if (s.network) netCounts.set(s.network, (netCounts.get(s.network) ?? 0) + 1);
+    const topNetworks = [...netCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
+
+    return { topGenres, topNetworks };
+  }, [library]);
 
   const initial = (profile?.display_name?.[0] ?? "?").toUpperCase();
 
@@ -127,6 +143,29 @@ export default function YouPage() {
         </div>
       )}
 
+      {taste.topGenres.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div className="eyebrow">Taste profile</div>
+          <div className="card p-4 flex flex-col gap-2">
+            {taste.topGenres.slice(0, 8).map((g) => (
+              <div key={g.name} className="flex items-center gap-2.5">
+                <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{g.name}</span>
+                <div className="fr-matchbar" style={{ flex: 1 }}><i style={{ width: `${(g.count / taste.topGenres[0].count) * 100}%` }} /></div>
+                <span className="mute" style={{ fontSize: 11.5, width: 24, textAlign: "right", flex: "0 0 auto" }}>{g.count}</span>
+              </div>
+            ))}
+          </div>
+          {taste.topNetworks.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="mute" style={{ fontSize: 11.5 }}>Top networks:</span>
+              {taste.topNetworks.map((n) => (
+                <span key={n.name} className="badge badge-soft" style={{ fontSize: 11 }}>{n.name} · {n.count}</span>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       <section className="flex flex-col gap-4">
         <div className="mq-sechead">
           <div>
@@ -136,7 +175,7 @@ export default function YouPage() {
         </div>
 
         <div className="mq-rate-toolbar">
-          <div className="segmented" style={{ flexWrap: "wrap" }}>
+          <div className="segmented scroll no-scrollbar">
             {sorts.map((s) => (
               <div key={s.v} className={`seg ${sort === s.v ? "seg-active" : ""}`} onClick={() => { setSort(s.v); setPage(0); }}>
                 {s.label}
