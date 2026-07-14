@@ -118,17 +118,21 @@ export function useBestRatedByFriends(enabled: boolean) {
   });
 }
 
+const activityVerbs = ["rated", "added", "watched", "started", "finished_season"] as const;
 const activitySchema = z.array(
   z.object({
     friend_id: z.string().uuid(),
     friend_name: z.string(),
     friend_avatar: z.string().nullable(),
-    verb: z.enum(["rated", "added", "started", "finished_season"]),
+    // Post-0040 the RPC emits rated/added/watched; the older verbs stay in the
+    // enum so either side can deploy first without breaking the feed.
+    verb: z.enum(activityVerbs),
     tmdb_id: z.number().int(),
     title_name: z.string(),
     poster_path: z.string().nullable(),
     score: z.number().int().nullable(),
     season_number: z.number().int().nullable(),
+    episode_number: z.number().int().nullable().optional(),
     at: z.string(),
   }),
 );

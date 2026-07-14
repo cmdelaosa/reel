@@ -5,19 +5,32 @@ import { tmdbImg } from "@/lib/tmdb";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 
-/* Friend activity feed (P4-C4) — rated / added / started / finished a season. */
+/* Friend activity feed (P4-C4) — every episode watched, plus adds and ratings.
+   The started/finished_season branches only render against a pre-0040 RPC. */
 
 function phrase(a: ActivityItem): React.ReactNode {
   switch (a.verb) {
     case "rated": return <>rated <b style={{ fontWeight: 700 }}>{a.title_name}</b></>;
     case "added": return <>added <b style={{ fontWeight: 700 }}>{a.title_name}</b> to their watchlist</>;
+    case "watched":
+      return (
+        <>
+          watched{" "}
+          {a.season_number != null && a.episode_number != null && (
+            <b style={{ fontWeight: 700 }}>S{a.season_number} · E{a.episode_number}</b>
+          )}{" "}
+          of <b style={{ fontWeight: 700 }}>{a.title_name}</b>
+        </>
+      );
     case "started": return <>started watching <b style={{ fontWeight: 700 }}>{a.title_name}</b></>;
     case "finished_season": return <>finished season {a.season_number} of <b style={{ fontWeight: 700 }}>{a.title_name}</b></>;
   }
 }
 
 export function FriendActivityCard({ enabled }: { enabled: boolean }) {
-  const { data: items = [] } = useFriendActivity(enabled);
+  // Per-episode events (0040) fill a feed much faster than the old digest
+  // verbs did, so pull a deeper page.
+  const { data: items = [] } = useFriendActivity(enabled, 60);
   const [, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
