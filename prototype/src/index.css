@@ -111,9 +111,21 @@ body {
 }
 
 #root {
-  background: var(--bg-grad), var(--bg);
-  background-attachment: fixed;
   min-height: 100%;
+}
+
+/* Ambient background glow. A fixed, full-viewport layer instead of putting the
+   gradient on #root with `background-attachment: fixed` — that approach is
+   ignored by mobile Safari (the glow cut off mid-scroll) and collapses whenever
+   the html/body/#root `height: 100%` chain does. `position: fixed` fills the
+   viewport regardless of any ancestor height, so the glow never scrolls away. */
+#root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg-grad), var(--bg);
+  pointer-events: none;
 }
 
 ::selection { background: color-mix(in srgb, var(--accent) 40%, transparent); }
@@ -797,10 +809,20 @@ body {
   display: flex; justify-content: center;
   margin-top: calc(-1 * clamp(20px, 3.5vw, 36px));
   padding: 12px 0;
+  /* No full-width bar — a transparent wrapper so only the rounded pill shows
+     over the ambient glow. Clicks/scroll pass through the empty sides. */
+  background: transparent;
+  pointer-events: none;
+}
+/* The frosting lives on the pill itself now, so just the segmented control
+   floats over the feed instead of a full-width box. */
+.cal-tabsbar .segmented {
+  width: auto;
+  pointer-events: auto;
   background: color-mix(in srgb, var(--bg) 84%, transparent);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
 }
-.cal-tabsbar .segmented { width: auto; }
 
 /* ---- Calendar · TV-Time-style episode feed ---- */
 .cal-feed { display: flex; flex-direction: column; }
