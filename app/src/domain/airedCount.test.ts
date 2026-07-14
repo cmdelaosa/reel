@@ -72,6 +72,28 @@ describe("computeUpcomingSeason", () => {
     expect(computeUpcomingSeason(seasons, { season_number: 3, episode_number: 2 })).toBeNull();
   });
 
+  it("returns null mid-season even when a later season is already announced", () => {
+    // airing S2 (next episode is S2E6) while S3 is announced — not returning yet
+    expect(
+      computeUpcomingSeason(seasons, { season_number: 2, episode_number: 5 }, { season_number: 2 }),
+    ).toBeNull();
+  });
+
+  it("returns the new season once the current one ends (next episode is a new season)", () => {
+    // S2 finale just aired; the next scheduled episode is S3E1 → returning with S3
+    expect(
+      computeUpcomingSeason(seasons, { season_number: 2, episode_number: 8 }, { season_number: 3 }),
+    ).toEqual({ number: 3, air_date: null });
+  });
+
+  it("returns the announced season when nothing is scheduled next (between seasons)", () => {
+    // S2 finale aired, nothing dated yet (nextAired null), S3 announced undated
+    expect(computeUpcomingSeason(seasons, { season_number: 2, episode_number: 8 }, null)).toEqual({
+      number: 3,
+      air_date: null,
+    });
+  });
+
   it("returns null when nothing has aired yet (a new show, not returning)", () => {
     expect(computeUpcomingSeason(seasons, null)).toBeNull();
     expect(computeUpcomingSeason(seasons, undefined)).toBeNull();

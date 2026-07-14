@@ -48,21 +48,25 @@ export interface UpcomingSeason {
 }
 
 /** The next announced season *beyond* the last-aired one — the authoritative
- *  signal that a show the user already started is "returning". Returns the
- *  lowest-numbered season after the last-aired season with its season-level
- *  air_date (which may be null = announced, no date yet). Returns null when:
- *  nothing has aired (that's a *new* show, not a returning one), or no season
- *  exists past the last-aired one (a mid-season show — its next episode is
- *  dated, so callers rely on next_air_datetime instead). Specials (season 0)
- *  are ignored.
+ *  signal that a show the user has finished a season of is "returning" with a
+ *  NEW season. Returns the lowest-numbered season after the last-aired one with
+ *  its season-level air_date (which may be null = announced, no date yet).
+ *  Returns null when: nothing has aired (a *new* show, not returning); the show
+ *  is still mid-season (the next scheduled episode is in the same season that
+ *  just aired — it hasn't wrapped, so it isn't returning yet); or no season
+ *  exists past the last-aired one. Specials (season 0) are ignored.
  *
  *  Like computeAiredCount this is the canonical spec; the tmdb-proxy and
  *  episode-refresh edge functions hand-mirror it — keep in sync. */
 export function computeUpcomingSeason(
   seasons: UpcomingSeasonInput[],
   lastAired: LastAiredEpisode | null | undefined,
+  nextAired?: Pick<LastAiredEpisode, "season_number"> | null,
 ): UpcomingSeason | null {
   if (!lastAired || lastAired.season_number <= 0) return null;
+  // Still airing the current season (its next episode is scheduled) — the show
+  // is mid-season, not returning with a new one. Excluded until the season ends.
+  if (nextAired && nextAired.season_number === lastAired.season_number) return null;
   let best: UpcomingSeason | null = null;
   for (const s of seasons) {
     if (s.season_number <= lastAired.season_number) continue; // specials + already-aired/airing

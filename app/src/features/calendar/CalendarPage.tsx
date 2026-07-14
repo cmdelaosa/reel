@@ -166,16 +166,14 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
   const { data: library = [] } = useLibrary();
   const now = new Date();
 
-  // New = never aired (aired_count 0). Returning = the user already started it
-  // AND it's coming back — a dated next episode, or a season announced beyond
-  // the last that aired (upcoming_season_*, authoritative from TMDB, so an
-  // undated next season still counts). Stopped shows drop out of both.
+  // New = never aired (aired_count 0). Returning = the show finished a season
+  // and a NEW season is announced beyond it (upcoming_season_*, authoritative
+  // from TMDB — a show mid-season is excluded until its current season wraps).
+  // Stopped shows drop out of both.
   const items = library.filter(
     (s) =>
       !s.stopped &&
-      (kind === "new"
-        ? s.status === "upcoming"
-        : s.aired_count > 0 && (s.next_air_datetime != null || s.upcoming_season_number != null)),
+      (kind === "new" ? s.status === "upcoming" : s.upcoming_season_number != null),
   );
 
   // Premiere instant for bucketing. Returning prefers the dated next episode,
@@ -253,7 +251,11 @@ function UpcomingRow({ s, at, announced }: { s: LibraryShow; at: number | null; 
           {s.network && <NetworkLogo network={s.network} />}
         </div>
         <div className="mq-row-title truncate" style={{ fontSize: 16 }}>{s.name}</div>
-        <div className="dim truncate" style={{ fontSize: 13 }}>{s.genres.slice(0, 2).join(", ") || "—"}</div>
+        {s.upcoming_season_number != null ? (
+          <div className="truncate" style={{ fontSize: 13, fontWeight: 650 }}>Season {s.upcoming_season_number}</div>
+        ) : (
+          <div className="dim truncate" style={{ fontSize: 13 }}>{s.genres.slice(0, 2).join(", ") || "—"}</div>
+        )}
       </div>
       <button
         className={`btn btn-sm ${notify ? "btn-accent" : "btn-outline"}`}

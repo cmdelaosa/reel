@@ -45,8 +45,9 @@ function airedCount(seasons: Any[], last: Any): number | null {
 // Authoritative "next announced season" from the TMDB title payload. Hand-mirror
 // of app/src/domain/airedCount.ts → computeUpcomingSeason (canonical spec + unit
 // tests) — keep in sync.
-function upcomingSeason(seasons: Any[], last: Any): { number: number; air_date: string | null } | null {
+function upcomingSeason(seasons: Any[], last: Any, next: Any): { number: number; air_date: string | null } | null {
   if (!last || (last.season_number ?? 0) <= 0) return null;
+  if (next && next.season_number === last.season_number) return null; // still airing the current season
   let best: { number: number; air_date: string | null } | null = null;
   for (const s of seasons ?? []) {
     if ((s.season_number ?? 0) <= last.season_number) continue; // specials + already-aired/airing
@@ -112,8 +113,8 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
       vote_average: d.vote_average ?? null,
       popularity: d.popularity ?? null,
       aired_count: airedCount(d.seasons, d.last_episode_to_air),
-      upcoming_season_number: upcomingSeason(d.seasons, d.last_episode_to_air)?.number ?? null,
-      upcoming_season_air_date: upcomingSeason(d.seasons, d.last_episode_to_air)?.air_date ?? null,
+      upcoming_season_number: upcomingSeason(d.seasons, d.last_episode_to_air, d.next_episode_to_air)?.number ?? null,
+      upcoming_season_air_date: upcomingSeason(d.seasons, d.last_episode_to_air, d.next_episode_to_air)?.air_date ?? null,
       last_refreshed_at: new Date().toISOString(),
     })
     .eq("id", row.id);
