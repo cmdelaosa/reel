@@ -35,3 +35,38 @@ export function computeAiredCount(
   }
   return aired;
 }
+
+export interface UpcomingSeasonInput {
+  season_number: number;
+  /** Season-level premiere date 'YYYY-MM-DD', or null when TMDB hasn't dated it. */
+  air_date: string | null;
+}
+
+export interface UpcomingSeason {
+  number: number;
+  air_date: string | null;
+}
+
+/** The next announced season *beyond* the last-aired one — the authoritative
+ *  signal that a show the user already started is "returning". Returns the
+ *  lowest-numbered season after the last-aired season with its season-level
+ *  air_date (which may be null = announced, no date yet). Returns null when:
+ *  nothing has aired (that's a *new* show, not a returning one), or no season
+ *  exists past the last-aired one (a mid-season show — its next episode is
+ *  dated, so callers rely on next_air_datetime instead). Specials (season 0)
+ *  are ignored.
+ *
+ *  Like computeAiredCount this is the canonical spec; the tmdb-proxy and
+ *  episode-refresh edge functions hand-mirror it — keep in sync. */
+export function computeUpcomingSeason(
+  seasons: UpcomingSeasonInput[],
+  lastAired: LastAiredEpisode | null | undefined,
+): UpcomingSeason | null {
+  if (!lastAired || lastAired.season_number <= 0) return null;
+  let best: UpcomingSeason | null = null;
+  for (const s of seasons) {
+    if (s.season_number <= lastAired.season_number) continue; // specials + already-aired/airing
+    if (!best || s.season_number < best.number) best = { number: s.season_number, air_date: s.air_date ?? null };
+  }
+  return best;
+}

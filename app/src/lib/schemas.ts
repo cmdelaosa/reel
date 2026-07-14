@@ -86,6 +86,8 @@ export const libraryRowSchema = z.object({
   last_watched_at: z.string().nullable(),
   last_aired_datetime: z.string().nullable(),
   next_air_datetime: z.string().nullable(),
+  upcoming_season_number: z.number().int().nullable(),
+  upcoming_season_air_date: z.string().nullable(),
 });
 export type LibraryRow = z.infer<typeof libraryRowSchema>;
 

@@ -87,6 +87,8 @@ function optimisticRow(t: TitleRow): LibraryShow {
     last_watched_at: null,
     last_aired_datetime: null,
     next_air_datetime: null,
+    upcoming_season_number: null,
+    upcoming_season_air_date: null,
   });
 }
 

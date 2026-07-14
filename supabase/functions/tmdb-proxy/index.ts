@@ -168,7 +168,21 @@ function airedCount(seasons: Any[], last: Any): number | null {
   return aired;
 }
 
+// Authoritative "next announced season" from the TMDB title payload. Hand-mirror
+// of app/src/domain/airedCount.ts → computeUpcomingSeason (canonical spec + unit
+// tests) — keep in sync.
+function upcomingSeason(seasons: Any[], last: Any): { number: number; air_date: string | null } | null {
+  if (!last || (last.season_number ?? 0) <= 0) return null;
+  let best: { number: number; air_date: string | null } | null = null;
+  for (const s of seasons ?? []) {
+    if ((s.season_number ?? 0) <= last.season_number) continue; // specials + already-aired/airing
+    if (!best || s.season_number < best.number) best = { number: s.season_number, air_date: s.air_date || null };
+  }
+  return best;
+}
+
 function titleRow(d: Any) {
+  const up = upcomingSeason(d.seasons, d.last_episode_to_air);
   return {
     tmdb_id: d.id,
     kind: "tv",
@@ -184,6 +198,8 @@ function titleRow(d: Any) {
     vote_average: d.vote_average ?? null,
     popularity: d.popularity ?? null,
     aired_count: airedCount(d.seasons, d.last_episode_to_air),
+    upcoming_season_number: up?.number ?? null,
+    upcoming_season_air_date: up?.air_date ?? null,
     last_refreshed_at: new Date().toISOString(),
   };
 }

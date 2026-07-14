@@ -165,19 +165,31 @@ function MyShowsFeed() {
 function PremieresList({ kind }: { kind: "returning" | "new" }) {
   const { data: library = [] } = useLibrary();
   const now = new Date();
-  const todayIso = now.toISOString().slice(0, 10);
 
-  // Returning = the show aired before (a prior season exists); New = never aired.
+  // New = never aired (aired_count 0). Returning = the user already started it
+  // AND it's coming back — a dated next episode, or a season announced beyond
+  // the last that aired (upcoming_season_*, authoritative from TMDB, so an
+  // undated next season still counts). Stopped shows drop out of both.
   const items = library.filter(
     (s) =>
-      s.status === "upcoming" &&
-      (kind === "returning"
-        ? s.first_air_date != null && s.first_air_date <= todayIso
-        : s.first_air_date == null || s.first_air_date > todayIso),
+      !s.stopped &&
+      (kind === "new"
+        ? s.status === "upcoming"
+        : s.aired_count > 0 && (s.next_air_datetime != null || s.upcoming_season_number != null)),
   );
 
+  // Premiere instant for bucketing. Returning prefers the dated next episode,
+  // then the announced season's (often null) air_date; New uses premiereMs
+  // (next episode, else the show's first_air_date).
+  const premiereAt = (s: LibraryShow): number | null => {
+    if (kind === "new") return premiereMs(s);
+    if (s.next_air_datetime) return new Date(s.next_air_datetime).getTime();
+    if (s.upcoming_season_air_date) return new Date(`${s.upcoming_season_air_date}T21:00:00Z`).getTime();
+    return null;
+  };
+
   const bucketOf = (s: LibraryShow): "month" | "later" | "tba" => {
-    const at = premiereMs(s);
+    const at = premiereAt(s);
     if (at == null || at <= now.getTime()) return "tba";
     const d = new Date(at);
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() ? "month" : "later";
@@ -211,7 +223,7 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
             </div>
             <div className="flex flex-col gap-3">
               {rows.map((s) => (
-                <UpcomingRow key={s.title_id} s={s} announced={g.key === "tba"} />
+                <UpcomingRow key={s.title_id} s={s} at={premiereAt(s)} announced={g.key === "tba"} />
               ))}
             </div>
           </div>
@@ -221,11 +233,10 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
   );
 }
 
-function UpcomingRow({ s, announced }: { s: LibraryShow; announced: boolean }) {
+function UpcomingRow({ s, at, announced }: { s: LibraryShow; at: number | null; announced: boolean }) {
   const open = useOpenTitle();
   const toggleNotify = useToggleNotify();
   const notify = s.notify; // persisted flag (optimistic via the library cache)
-  const at = premiereMs(s);
   const art = tmdbImg(s.poster_path, "w92");
 
   return (
