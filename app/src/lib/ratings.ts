@@ -7,13 +7,19 @@ import { useAuth } from "@/features/auth/AuthProvider";
 /* Show-level ratings (episode ratings stay schema-only until post-Phase 5). */
 
 export function useMyRating(titleId: string | null) {
+  const { session } = useAuth();
+  const userId = session?.user.id;
   return useQuery({
     queryKey: qk.myRating(titleId ?? ""),
-    enabled: Boolean(titleId),
+    enabled: Boolean(titleId) && Boolean(userId),
     queryFn: async (): Promise<number | null> => {
+      // Scope to the caller: RLS also exposes friends' ratings (the "friends
+      // read" policy), so without user_id this could return a friend's score as
+      // ours — and maybeSingle() would throw if we and a friend both rated it.
       const { data, error } = await supabase
         .from("ratings")
         .select("score")
+        .eq("user_id", userId!)
         .eq("title_id", titleId!)
         .maybeSingle();
       if (error) throw error;
@@ -65,12 +71,18 @@ export type RatedRow = z.infer<typeof ratedRowSchema>;
 
 /** Every show-level rating of the caller, with its title, newest first. */
 export function useMyRatings() {
+  const { session } = useAuth();
+  const userId = session?.user.id;
   return useQuery({
     queryKey: qk.ratings,
+    enabled: Boolean(userId),
     queryFn: async (): Promise<RatedRow[]> => {
+      // Scope to the caller — without user_id the "friends read" RLS policy
+      // would fold friends' ratings into our own list.
       const { data, error } = await supabase
         .from("ratings")
         .select("id, score, created_at, titles(id, tmdb_id, name, poster_path, first_air_date, genres)")
+        .eq("user_id", userId!)
         .not("title_id", "is", null)
         .order("created_at", { ascending: false });
       if (error) throw error;

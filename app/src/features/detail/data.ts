@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { qk } from "@/lib/queryKeys";
 import { getSeason, getTitle } from "@/lib/tmdb";
 import type { TitleResponse } from "@/lib/schemas";
+import { useAuth } from "@/features/auth/AuthProvider";
 
 /* Detail-sheet data: title+seasons (proxy, cached), episodes per season
    (lazy), and the caller's watched episode-ids for one title. */
@@ -81,18 +82,25 @@ const watchedSchema = z.array(z.object({ id: z.string().uuid(), episode_id: z.st
 
 /** Map episode_id → watch_event id for the caller on one title. */
 export function useWatched(titleId: string | null) {
+  const { session } = useAuth();
+  const userId = session?.user.id;
   return useQuery({
     queryKey: qk.watched(titleId ?? ""),
-    enabled: Boolean(titleId),
+    enabled: Boolean(titleId) && Boolean(userId),
     queryFn: async (): Promise<Map<string, string>> => {
       // Page past the 1000-row cap so a heavily-watched long show doesn't show
       // its later episodes as unwatched (truncated map → wrong ticks).
       const PAGE = 1000;
       const raw: { id: string; episode_id: string }[] = [];
       for (let from = 0; ; from += PAGE) {
+        // Scope to the caller's own rows explicitly. RLS also exposes accepted
+        // friends' watch_events (the "friends read" policy ORs with the owner
+        // policy), so without this filter opening a title a friend has watched
+        // would render every episode ticked as if we'd watched it.
         const { data, error } = await supabase
           .from("watch_events")
           .select("id, episode_id, episodes!inner(title_id)")
+          .eq("user_id", userId!)
           .eq("episodes.title_id", titleId!)
           .order("id")
           .range(from, from + PAGE - 1);
