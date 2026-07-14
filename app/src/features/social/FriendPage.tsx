@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useParams, useSearchParams } from "react-router";
-import { Activity, Check, ChevronLeft, Clock, Eye, Heart, LayoutGrid, Play, Plus, Star, Tv, User } from "lucide-react";
+import { useParams, useSearchParams } from "react-router";
+import { Activity, Check, Clock, Eye, Heart, LayoutGrid, Play, Plus, Star, Tv, User } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { hueOf, posterBg } from "@/ui/posterBg";
@@ -9,7 +9,10 @@ import { tmdbImg } from "@/lib/tmdb";
 import { NetworkLogo, Stars } from "@/ui";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { relativeTime } from "@/domain/time";
-import { useFriendProfile, useFriendProgress, type FriendFollow, type FriendProgress } from "@/lib/friendProfile";
+import {
+  useFriendProfile, useFriendProgress, useFriendWatchHistory,
+  type FriendFollow, type FriendProgress,
+} from "@/lib/friendProfile";
 import { useLibrary, useFollow } from "@/lib/library";
 import { useMyRatings } from "@/lib/ratings";
 import { timeSpentLabel } from "@/lib/stats";
@@ -17,11 +20,12 @@ import type { TitleRow } from "@/lib/schemas";
 
 /* Friend profile page (route /friend/:id). rpc_friend_snapshot supplies the
    profile, episode counts and "watching now" (recent-first, ≤2 months since
-   their last watch); useFriendProfile adds their full follow list + ratings and
-   useFriendProgress their per-show watched/aired counts. The page is split into
-   sections behind a sticky segmented bar (Overview / Watching / Shows /
-   Activity / Ratings) instead of one long scroll. Opening a show stacks the
-   detail sheet on top via the shell's global ?title= param. */
+   their last watch); useFriendProfile adds their full follow list + ratings,
+   useFriendProgress their per-show watched/aired counts and
+   useFriendWatchHistory their latest episode watches. A slim sticky header
+   fuses identity + section tabs (Overview / Shows / Activity / Ratings) and
+   stays pinned under the top bar. Opening a show stacks the detail sheet on
+   top via the shell's global ?title= param. */
 
 const snapshotSchema = z.object({
   profile: z.object({
@@ -48,7 +52,21 @@ const snapshotSchema = z.object({
 });
 type Snapshot = z.infer<typeof snapshotSchema>;
 
-type SectionKey = "overview" | "watching" | "shows" | "activity" | "ratings";
+type SectionKey = "overview" | "shows" | "activity" | "ratings";
+type ShowFilter = "all" | "both" | "not";
+type ShowSort = "their" | "critic" | "air";
+
+type Act = {
+  kind: "rated" | "added" | "watched";
+  at: string;
+  tmdb_id: number;
+  name: string;
+  poster_path: string | null;
+  score?: number;
+  count?: number;
+  season_number?: number;
+  episode_number?: number;
+};
 
 function MiniArt({ poster, name, className = "mq-row-art", style }: { poster: string | null; name: string; className?: string; style?: React.CSSProperties }) {
   const art = tmdbImg(poster, "w92");
@@ -88,9 +106,9 @@ function ProgressStrip({ watched, aired }: { watched: number; aired: number }) {
   );
 }
 
-/* Poster tile in the browsable "Everything they follow" grid: their score
-   (if rated), a common-ring when you follow it too, a one-tap Add, and their
-   episode progress underneath. */
+/* Poster tile in the browsable "Shows" grid: their score (if rated), a
+   common-ring when you follow it too, a one-tap Add, and their episode
+   progress underneath. */
 function FollowTile({ f, theirScore, progress, added, onOpen, onAdd }: {
   f: FriendFollow; theirScore?: number; progress?: FriendProgress; added: boolean; onOpen: () => void; onAdd: () => void;
 }) {
@@ -123,7 +141,6 @@ function FollowTile({ f, theirScore, progress, added, onOpen, onAdd }: {
 export default function FriendPage() {
   const { id = "" } = useParams();
   const friendId = id;
-  const navigate = useNavigate();
   const [, setSearchParams] = useSearchParams();
 
   const { data: snap, isPending } = useQuery({
@@ -138,13 +155,14 @@ export default function FriendPage() {
 
   const { data: fp } = useFriendProfile(friendId);
   const { data: progressMap } = useFriendProgress(friendId);
+  const { data: watchHistory = [] } = useFriendWatchHistory(friendId);
   const { data: library = [] } = useLibrary();
   const { data: myRatings = [] } = useMyRatings();
   const follow = useFollow();
 
   const [section, setSection] = useState<SectionKey>("overview");
-  const [genre, setGenre] = useState<string>("");
-  const [sort, setSort] = useState<"name" | "year" | "rating">("name");
+  const [showFilter, setShowFilter] = useState<ShowFilter>("all");
+  const [showSort, setShowSort] = useState<ShowSort>("their");
 
   const openTitle = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -186,44 +204,55 @@ export default function FriendPage() {
 
     const topRated = [...ratings].sort((a, b) => b.score - a.score || b.created_at.localeCompare(a.created_at)).slice(0, 8);
 
-    type Act = { kind: "rated" | "added"; at: string; tmdb_id: number; name: string; poster_path: string | null; score?: number };
-    const activity: Act[] = [
-      ...ratings.map((r): Act => ({ kind: "rated", at: r.created_at, tmdb_id: r.tmdb_id, name: r.name, poster_path: r.poster_path, score: r.score })),
-      ...follows.map((f): Act => ({ kind: "added", at: f.added_at, tmdb_id: f.tmdb_id, name: f.name, poster_path: f.poster_path })),
-    ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 16);
-
-    return { sharedFollows, match, coRated, topGenres, sharedGenres, topNetworks, avgRuntime, avgRating, topRated, activity };
+    return { sharedFollows, match, coRated, topGenres, sharedGenres, topNetworks, avgRuntime, avgRating, topRated };
   }, [fp, myFollowIds, myGenres, myScoreByTmdb]);
 
-  // Browsable follows: genre filter + sort.
-  const followGenres = useMemo(() => [...new Set((fp?.follows ?? []).flatMap((f) => f.genres))].sort(), [fp]);
+  // Activity feed: episode watches (consecutive same-show-same-day runs are
+  // collapsed into one "watched N episodes" entry) + ratings + follows.
+  const activity = useMemo(() => {
+    if (!fp) return [];
+    const watched: Act[] = [];
+    for (const w of watchHistory) {
+      const last = watched[watched.length - 1];
+      if (last && last.tmdb_id === w.tmdb_id && last.at.slice(0, 10) === w.watched_at.slice(0, 10)) {
+        last.count = (last.count ?? 1) + 1;
+      } else {
+        watched.push({
+          kind: "watched", at: w.watched_at, tmdb_id: w.tmdb_id, name: w.name,
+          poster_path: w.poster_path, count: 1,
+          season_number: w.season_number, episode_number: w.episode_number,
+        });
+      }
+    }
+    const rest: Act[] = [
+      ...fp.ratings.map((r): Act => ({ kind: "rated", at: r.created_at, tmdb_id: r.tmdb_id, name: r.name, poster_path: r.poster_path, score: r.score })),
+      ...fp.follows.map((f): Act => ({ kind: "added", at: f.added_at, tmdb_id: f.tmdb_id, name: f.name, poster_path: f.poster_path })),
+    ];
+    return [...watched, ...rest].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 24);
+  }, [fp, watchHistory]);
+
+  // Browsable follows: follow-overlap filter + sort.
   const browseFollows = useMemo(() => {
     let list = fp?.follows ?? [];
-    if (genre) list = list.filter((f) => f.genres.includes(genre));
-    const by = {
-      name: (a: FriendFollow, b: FriendFollow) => a.name.localeCompare(b.name),
-      year: (a: FriendFollow, b: FriendFollow) => (b.first_air_date ?? "").localeCompare(a.first_air_date ?? ""),
-      rating: (a: FriendFollow, b: FriendFollow) => (theirScoreByTmdb.get(b.tmdb_id) ?? b.vote_average ?? 0) - (theirScoreByTmdb.get(a.tmdb_id) ?? a.vote_average ?? 0),
-    }[sort];
-    return [...list].sort(by);
-  }, [fp, genre, sort, theirScoreByTmdb]);
+    if (showFilter === "both") list = list.filter((f) => myFollowIds.has(f.tmdb_id));
+    if (showFilter === "not") list = list.filter((f) => !myFollowIds.has(f.tmdb_id));
+    const by: Record<ShowSort, (a: FriendFollow, b: FriendFollow) => number> = {
+      their: (a, b) => (theirScoreByTmdb.get(b.tmdb_id) ?? -1) - (theirScoreByTmdb.get(a.tmdb_id) ?? -1) || a.name.localeCompare(b.name),
+      critic: (a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0) || a.name.localeCompare(b.name),
+      air: (a, b) => (b.first_air_date ?? "").localeCompare(a.first_air_date ?? "") || a.name.localeCompare(b.name),
+    };
+    return [...list].sort(by[showSort]);
+  }, [fp, showFilter, showSort, myFollowIds, theirScoreByTmdb]);
 
   const hue = hueOf(friendId);
   const estMinutes = snap && derived ? Math.round(snap.stats.episodes * derived.avgRuntime) : 0;
 
-  const back = (
-    <button className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => navigate(-1)}>
-      <ChevronLeft size={15} />Back
-    </button>
-  );
-
   if (isPending) {
-    return <div className="screen mq-page">{back}<div className="dim">Loading…</div></div>;
+    return <div className="screen mq-page"><div className="dim">Loading…</div></div>;
   }
   if (!snap) {
     return (
       <div className="screen mq-page">
-        {back}
         <div className="card" style={{ padding: "28px 24px", textAlign: "center" }}>
           <div style={{ fontWeight: 750, fontSize: 16 }}>Profile not available</div>
           <p className="dim" style={{ fontSize: 13.5, marginTop: 6 }}>This profile is private or not one of your friends.</p>
@@ -234,36 +263,55 @@ export default function FriendPage() {
 
   const sections: { v: SectionKey; label: string; icon: typeof User }[] = [
     { v: "overview", label: "Overview", icon: User },
-    { v: "watching", label: "Watching", icon: Play },
     { v: "shows", label: "Shows", icon: LayoutGrid },
     { v: "activity", label: "Activity", icon: Activity },
     { v: "ratings", label: "Ratings", icon: Star },
   ];
 
+  const filters: { v: ShowFilter; label: string }[] = [
+    { v: "all", label: "All" },
+    { v: "both", label: "You both follow" },
+    { v: "not", label: "You don't follow" },
+  ];
+
+  const watchingCards = snap.watching.map((w) => {
+    const p = w.watched != null && w.aired != null
+      ? { watched: w.watched, aired: w.aired }
+      : progressMap?.get(w.tmdb_id);
+    const pct = p && p.aired > 0 ? Math.min(100, Math.round((p.watched / p.aired) * 100)) : null;
+    return (
+      <div key={w.tmdb_id} className="card mq-row" onClick={() => openTitle(w.tmdb_id)}>
+        <MiniArt poster={w.poster_path} name={w.name} style={{ width: 52, height: 76 }} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{w.name}</div>
+          <div className="dim" style={{ fontSize: 12.5 }}>
+            On S{w.season_number} · E{w.episode_number}
+            {w.last_watched_at ? <span className="mute"> · watched {relativeTime(w.last_watched_at)}</span> : null}
+          </div>
+          {pct != null && (
+            <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
+              <div className="fr-matchbar" style={{ flex: 1, height: 5 }}><i style={{ width: `${pct}%` }} /></div>
+              <span className="mute" style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", flex: "0 0 auto" }}>{p!.watched}/{p!.aired}</span>
+            </div>
+          )}
+        </div>
+        {w.network && <NetworkLogo network={w.network} size={11} />}
+      </div>
+    );
+  });
+
   return (
     <div className="screen mq-page">
-      {back}
-
-      {/* Hero. The banner keeps to its own box (no absolute overlay) and the
-          avatar row is lifted above it with position+z-index — a positioned
-          banner otherwise paints over the statically-positioned avatar. */}
-      <div className="card overflow-hidden">
-        <div style={{ height: 96, background: `linear-gradient(120deg, hsl(${hue} 60% 42%), hsl(${(hue + 50) % 360} 65% 24%))`, opacity: 0.9 }} />
-        <div className="px-6 pb-5" style={{ marginTop: -36 }}>
-          <div className="flex items-end gap-4 flex-wrap relative" style={{ zIndex: 1 }}>
-            <FriendAvatar f={{ id: snap.profile.id, name: snap.profile.display_name, avatarUrl: snap.profile.avatar_url }} size={88} ring />
-            <div className="pb-1 min-w-0">
-              <div style={{ fontSize: 24, fontWeight: 800 }}>{snap.profile.display_name}</div>
-              <div className="dim" style={{ fontSize: 13.5 }}>@{snap.profile.handle}{snap.profile.country ? ` · ${snap.profile.country}` : ""}</div>
-            </div>
+      {/* Slim sticky header: identity + section tabs over a fading hue wash */}
+      <div className="fr-hero" style={{ "--fr-hue": hue } as React.CSSProperties}>
+        <div className="fr-hero-id">
+          <FriendAvatar f={{ id: snap.profile.id, name: snap.profile.display_name, avatarUrl: snap.profile.avatar_url }} size={44} ring />
+          <div className="min-w-0">
+            <div className="truncate" style={{ fontSize: 16, fontWeight: 800 }}>{snap.profile.display_name}</div>
+            <div className="dim truncate" style={{ fontSize: 12 }}>@{snap.profile.handle}{snap.profile.country ? ` · ${snap.profile.country}` : ""}</div>
           </div>
-          {snap.profile.bio && <p className="dim" style={{ fontSize: 14, margin: "12px 0 0", maxWidth: "62ch" }}>{snap.profile.bio}</p>}
         </div>
-      </div>
-
-      {/* Section switcher — sticky, like the calendar's view bar */}
-      <div className="fr-tabsbar">
-        <div className="segmented" style={{ flexWrap: "wrap" }}>
+        <div className="segmented scroll fr-hero-tabs">
           {sections.map((s) => (
             <div key={s.v} className={`seg ${section === s.v ? "seg-active" : ""}`} onClick={() => setSection(s.v)}>
               <s.icon size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} />{s.label}
@@ -275,8 +323,18 @@ export default function FriendPage() {
       <div className="flex flex-col gap-6">
         {section === "overview" && (
           <>
+            {/* Watching now — the first thing you see */}
+            {snap.watching.length > 0 && (
+              <section className="flex flex-col gap-2.5">
+                <div className="eyebrow flex items-center gap-1.5"><Play size={13} />Watching now</div>
+                <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                  {watchingCards}
+                </div>
+              </section>
+            )}
+
             {/* Stats */}
-            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+            <div className="fr-stats">
               {[
                 { icon: Tv, label: "Shows", value: snap.stats.shows },
                 { icon: Eye, label: "Episodes", value: snap.stats.episodes.toLocaleString() },
@@ -337,121 +395,78 @@ export default function FriendPage() {
           </>
         )}
 
-        {section === "watching" && (
-          <section className="flex flex-col gap-2.5">
-            <div className="eyebrow flex items-center gap-1.5"><Play size={13} />Watching now</div>
-            {snap.watching.length === 0 ? (
-              <div className="card" style={{ padding: "24px" }}>
-                <p className="dim" style={{ margin: 0, fontSize: 14 }}>Nothing in rotation — no episodes watched in the last two months.</p>
-              </div>
-            ) : (
-              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
-                {snap.watching.map((w) => {
-                  const p = w.watched != null && w.aired != null
-                    ? { watched: w.watched, aired: w.aired }
-                    : progressMap?.get(w.tmdb_id);
-                  const pct = p && p.aired > 0 ? Math.min(100, Math.round((p.watched / p.aired) * 100)) : null;
-                  return (
-                    <div key={w.tmdb_id} className="card mq-row" onClick={() => openTitle(w.tmdb_id)}>
-                      <MiniArt poster={w.poster_path} name={w.name} style={{ width: 52, height: 76 }} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{w.name}</div>
-                        <div className="dim" style={{ fontSize: 12.5 }}>
-                          On S{w.season_number} · E{w.episode_number}
-                          {w.last_watched_at ? <span className="mute"> · watched {relativeTime(w.last_watched_at)}</span> : null}
-                        </div>
-                        {pct != null && (
-                          <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
-                            <div className="fr-matchbar" style={{ flex: 1, height: 5 }}><i style={{ width: `${pct}%` }} /></div>
-                            <span className="mute" style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", flex: "0 0 auto" }}>{p!.watched}/{p!.aired}</span>
-                          </div>
-                        )}
-                      </div>
-                      {w.network && <NetworkLogo network={w.network} size={11} />}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        )}
-
         {section === "shows" && (
-          <>
-            {derived && derived.sharedFollows.length > 0 && (
-              <div className="flex flex-col gap-2.5">
-                <div className="eyebrow">You both follow · {derived.sharedFollows.length}</div>
+          <section className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="segmented scroll">
+                {filters.map((f) => (
+                  <div key={f.v} className={`seg ${showFilter === f.v ? "seg-active" : ""}`} onClick={() => setShowFilter(f.v)}>
+                    {f.label}
+                  </div>
+                ))}
+              </div>
+              <select className="year-select" value={showSort} onChange={(e) => setShowSort(e.target.value as ShowSort)} aria-label="Sort">
+                <option value="their">Their rating</option>
+                <option value="critic">Critic rating</option>
+                <option value="air">Air date</option>
+              </select>
+            </div>
+            {browseFollows.length === 0 ? (
+              <p className="dim" style={{ fontSize: 13, margin: 0 }}>Nothing here.</p>
+            ) : (
+              <>
+                <div className="eyebrow">{browseFollows.length} shows</div>
                 <div className="fr-grid">
-                  {derived.sharedFollows.map((f) => (
-                    <div key={f.tmdb_id} className="fr-show">
-                      <div className="fr-mini fr-common" style={{ background: posterBg(f.name) }} title={f.name} onClick={() => openTitle(f.tmdb_id)}>
-                        {tmdbImg(f.poster_path, "w342") && <img src={tmdbImg(f.poster_path, "w342")} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
-                        <span className="fr-mini-name">{f.name}</span>
-                      </div>
-                      {(() => { const p = progressMap?.get(f.tmdb_id); return p && p.aired > 0 ? <ProgressStrip watched={p.watched} aired={p.aired} /> : null; })()}
-                    </div>
+                  {browseFollows.map((f) => (
+                    <FollowTile
+                      key={f.tmdb_id}
+                      f={f}
+                      theirScore={theirScoreByTmdb.get(f.tmdb_id)}
+                      progress={progressMap?.get(f.tmdb_id)}
+                      added={myFollowIds.has(f.tmdb_id)}
+                      onOpen={() => openTitle(f.tmdb_id)}
+                      onAdd={() => follow.mutate(toTitleRow(f))}
+                    />
                   ))}
                 </div>
-              </div>
-            )}
-
-            {fp && fp.follows.length > 0 && (
-              <section className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="eyebrow">Everything they follow · {fp.follows.length}</div>
-                  <div className="flex items-center gap-2">
-                    <select className="year-select" value={genre} onChange={(e) => setGenre(e.target.value)} aria-label="Filter by genre">
-                      <option value="">All genres</option>
-                      {followGenres.map((g) => <option key={g} value={g}>{g}</option>)}
-                    </select>
-                    <select className="year-select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sort">
-                      <option value="name">A–Z</option>
-                      <option value="year">Newest</option>
-                      <option value="rating">Top rated</option>
-                    </select>
-                  </div>
-                </div>
-                {browseFollows.length === 0 ? (
-                  <p className="dim" style={{ fontSize: 13, margin: 0 }}>Nothing in that genre.</p>
-                ) : (
-                  <div className="fr-grid">
-                    {browseFollows.map((f) => (
-                      <FollowTile
-                        key={f.tmdb_id}
-                        f={f}
-                        theirScore={theirScoreByTmdb.get(f.tmdb_id)}
-                        progress={progressMap?.get(f.tmdb_id)}
-                        added={myFollowIds.has(f.tmdb_id)}
-                        onOpen={() => openTitle(f.tmdb_id)}
-                        onAdd={() => follow.mutate(toTitleRow(f))}
-                      />
-                    ))}
-                  </div>
-                )}
                 <span className="mute" style={{ fontSize: 11.5 }}>Ring = you follow it too · <Plus size={11} style={{ verticalAlign: "-1px" }} /> adds to your library · bar = their progress.</span>
-              </section>
+              </>
             )}
-          </>
+          </section>
         )}
 
         {section === "activity" && (
           <section className="flex flex-col gap-1.5">
             <div className="eyebrow flex items-center gap-1.5"><Activity size={13} />Recent activity</div>
-            {!derived || derived.activity.length === 0 ? (
+            {activity.length === 0 ? (
               <div className="card" style={{ padding: "24px" }}>
                 <p className="dim" style={{ margin: 0, fontSize: 14 }}>No activity yet.</p>
               </div>
             ) : (
               <div className="card" style={{ padding: 6 }}>
-                {derived.activity.map((a, i) => (
+                {activity.map((a, i) => (
                   <div key={`${a.kind}-${a.tmdb_id}-${i}`} className="fr-activity" onClick={() => openTitle(a.tmdb_id)} style={{ cursor: "pointer" }}>
                     <span className="badge badge-soft btn-icon" style={{ width: 30, height: 30, flex: "0 0 auto" }}>
-                      {a.kind === "rated" ? <Star size={14} style={{ color: "var(--accent)" }} /> : <Plus size={14} />}
+                      {a.kind === "rated" ? <Star size={14} style={{ color: "var(--accent)" }} />
+                        : a.kind === "watched" ? <Eye size={14} style={{ color: "var(--accent)" }} />
+                        : <Plus size={14} />}
                     </span>
                     <div className="min-w-0 flex-1" style={{ fontSize: 13.5 }}>
-                      <span className="mute">{a.kind === "rated" ? "Rated" : "Added"} </span>
-                      <b style={{ fontWeight: 700 }}>{a.name}</b>
-                      {a.kind === "rated" && a.score != null && <span className="mute"> · {a.score}/10</span>}
+                      {a.kind === "watched" ? (
+                        <>
+                          <span className="mute">Watched </span>
+                          {(a.count ?? 1) > 1
+                            ? <><b style={{ fontWeight: 700 }}>{a.count} episodes</b><span className="mute"> of </span></>
+                            : <><b style={{ fontWeight: 700 }}>S{a.season_number} · E{a.episode_number}</b><span className="mute"> of </span></>}
+                          <b style={{ fontWeight: 700 }}>{a.name}</b>
+                        </>
+                      ) : (
+                        <>
+                          <span className="mute">{a.kind === "rated" ? "Rated" : "Added"} </span>
+                          <b style={{ fontWeight: 700 }}>{a.name}</b>
+                          {a.kind === "rated" && a.score != null && <span className="mute"> · {a.score}/10</span>}
+                        </>
+                      )}
                     </div>
                     <span className="mute" style={{ fontSize: 12, flex: "0 0 auto" }}>{relativeTime(a.at)}</span>
                   </div>

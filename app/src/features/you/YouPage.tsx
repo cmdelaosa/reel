@@ -85,7 +85,7 @@ export default function YouPage() {
     <div className="screen mq-page">
       <div className="card overflow-hidden">
         <div className="profile-cover" />
-        <div className="px-6 pb-6" style={{ marginTop: -44 }}>
+        <div className="px-6 pb-6" style={{ marginTop: -30 }}>
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <div className="flex items-end gap-4">
               <div className="profile-avatar grid place-items-center overflow-hidden">

@@ -69,6 +69,48 @@ export interface FriendProfileData {
   ratings: FriendRating[];
 }
 
+/** The friend's most recent watch events (episode + show), for the activity
+ *  feed. Friend-read RLS on watch_events gates it like everything else. */
+const watchRowSchema = z.object({
+  watched_at: z.string(),
+  episodes: z.object({
+    season_number: z.number().int(),
+    episode_number: z.number().int(),
+    titles: z.object({ tmdb_id: z.number().int(), name: z.string(), poster_path: z.string().nullable() }),
+  }),
+});
+
+export interface FriendWatch {
+  watched_at: string;
+  season_number: number;
+  episode_number: number;
+  tmdb_id: number;
+  name: string;
+  poster_path: string | null;
+}
+
+export function useFriendWatchHistory(friendId: string, limit = 60) {
+  return useQuery({
+    queryKey: ["friendWatchHistory", friendId, limit],
+    enabled: Boolean(friendId),
+    queryFn: async (): Promise<FriendWatch[]> => {
+      const { data, error } = await supabase
+        .from("watch_events")
+        .select("watched_at, episodes!inner(season_number, episode_number, titles!inner(tmdb_id, name, poster_path))")
+        .eq("user_id", friendId)
+        .order("watched_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return z.array(watchRowSchema).parse(data).map((r) => ({
+        watched_at: r.watched_at,
+        season_number: r.episodes.season_number,
+        episode_number: r.episodes.episode_number,
+        ...r.episodes.titles,
+      }));
+    },
+  });
+}
+
 /** Per-followed-title progress (watched/aired) for a friend, keyed by tmdb id.
  *  rpc_friend_progress is security invoker — 0015 friend-read RLS gates it, so
  *  a non-friend / private profile just yields an empty map. */

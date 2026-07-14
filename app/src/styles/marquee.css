@@ -233,9 +233,11 @@
 
 /* Profile header */
 .profile-cover {
-  height: 120px;
-  background: linear-gradient(120deg, var(--accent), var(--accent-2));
-  opacity: 0.9;
+  height: 64px;
+  background: linear-gradient(105deg,
+    color-mix(in srgb, var(--accent) 80%, transparent),
+    color-mix(in srgb, var(--accent-2) 45%, transparent) 45%,
+    transparent 85%);
 }
 .profile-avatar {
   width: 88px;
@@ -521,20 +523,34 @@
 .cal-page > * { width: 100%; max-width: 780px; margin-inline: auto; }
 
 /* View switcher pinned under the top bar — always reachable while scrolling */
-.fr-tabsbar {
-  position: sticky; top: 66px; z-index: 30;
-  display: flex; justify-content: center;
-  padding: 8px 0;
-  background: transparent;
-  pointer-events: none;
-}
-.fr-tabsbar .segmented {
-  width: auto;
-  pointer-events: auto;
-  background: color-mix(in srgb, var(--bg) 84%, transparent);
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+/* Friend header — identity + section tabs in one slim bar, pinned under the
+   top bar while scrolling. The hue gradient fades out to the right for a
+   softer, more modern wash than the old solid banner. */
+.fr-hero {
+  position: sticky; top: 58px; z-index: 30;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(105deg,
+      hsl(var(--fr-hue) 62% 40% / .55),
+      hsl(calc(var(--fr-hue) + 50) 65% 30% / .28) 42%,
+      transparent 78%),
+    color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   box-shadow: var(--shadow);
 }
+.fr-hero-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.fr-hero-tabs { margin-left: auto; }
+@media (max-width: 700px) {
+  .fr-hero { top: 54px; padding: 8px 10px; }
+  .fr-hero-tabs { margin-left: 0; width: 100%; }
+}
+
+/* Friend stats — 2 columns on phones instead of a ragged auto-fit */
+.fr-stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+@media (max-width: 560px) { .fr-stats { grid-template-columns: repeat(2, 1fr); } }
 
 .cal-tabsbar {
   position: sticky; top: 66px; z-index: 30;
