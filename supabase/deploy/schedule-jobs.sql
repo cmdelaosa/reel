@@ -51,6 +51,19 @@ select cron.schedule(
   $$
 );
 
+-- 3c. One-time backfill: fire episode-refresh NOW with ?force=1 so every
+--     followed title gets its derivations (aired_count, upcoming_season_number)
+--     recomputed immediately, bypassing the staleness gate — instead of waiting
+--     up to ~a day for the daily cron to reach it. Safe to omit or re-run.
+select net.http_post(
+  url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/episode-refresh?force=1',
+  headers := jsonb_build_object(
+    'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'),
+    'Content-Type', 'application/json'
+  ),
+  body    := '{}'::jsonb
+);
+
 -- 4. Verify. Both jobs should be listed; after the first fire, job_run_details
 --    shows status='succeeded'.
 --   select jobname, schedule, active from cron.job;

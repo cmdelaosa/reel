@@ -179,6 +179,12 @@ Deno.serve(async (req) => {
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
 
+  // Opt-in full refresh (manual runs only): bypass the staleness gate so every
+  // followed title is recomputed now — used to backfill after a derivation
+  // change (e.g. upcoming_season_number). The daily cron omits it and keeps
+  // respecting staleness to stay within the TMDB budget.
+  const force = new URL(req.url).searchParams.get("force") === "1";
+
   // One queryable row per run/exit (job_runs, migration 0029) so a silently-
   // failing daily job is visible (edge logs are console-only + ~1 day on free
   // tier). Best-effort — never fail the run on the log write.
@@ -224,7 +230,7 @@ Deno.serve(async (req) => {
   const now = Date.now();
   const ENDED_STALE_MS = 30 * 24 * 60 * 60 * 1000; // 30d
   const isDone = (s: string | null) => s === "Ended" || s === "Canceled";
-  const stale = titles.filter((t: Any) => {
+  const stale = force ? titles : titles.filter((t: Any) => {
     const age = t.last_refreshed_at ? now - new Date(t.last_refreshed_at).getTime() : Infinity;
     return age > (isDone(t.status) ? ENDED_STALE_MS : STALE_MS);
   });
