@@ -128,6 +128,25 @@ export function useMarkUpTo(titleId: string) {
   });
 }
 
+/** Bulk "mark the whole series" — every aired, unwatched, regular-season
+ *  episode in one RPC; resolves with the created event ids (for Undo). */
+export function useMarkSeries(titleId: string) {
+  const qc = useQueryClient();
+  const { session } = useAuth();
+  return useMutation({
+    mutationFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase.rpc("rpc_mark_series", { p_title_id: titleId });
+      if (error) throw error;
+      await ensureFollowed(qc, session!.user.id, titleId).catch(() => {});
+      return idsSchema.parse(data ?? []);
+    },
+    onSettled: () => {
+      invalidateDetail(qc, titleId);
+      invalidateDerived(qc);
+    },
+  });
+}
+
 /** Undo a bulk mark: delete exactly the created events. */
 export function useUndoMarks(titleId: string) {
   const qc = useQueryClient();

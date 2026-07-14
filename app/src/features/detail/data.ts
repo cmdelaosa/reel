@@ -55,6 +55,9 @@ export function useSeasonEpisodes(tmdbId: number | null, season: number | null, 
 const detailProgressSchema = z.object({
   recommended_season: z.number().int().nullable(),
   unseen_before: z.record(z.string(), z.number().int().nonnegative()),
+  // Present once migration 0044 lands; optional so the sheet keeps parsing
+  // against the older RPC shape (no count → no "Mark all watched" button).
+  unwatched_aired: z.number().int().nonnegative().optional(),
 });
 export type DetailProgress = z.infer<typeof detailProgressSchema>;
 

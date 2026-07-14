@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Pause, Play, Plus, Star, X } from "lucide-react";
+import { Bell, Check, CheckCheck, ChevronLeft, ChevronRight, Eye, EyeOff, Pause, Play, Plus, Star, X } from "lucide-react";
 import { tmdbImg } from "@/lib/tmdb";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
 import { useIgnored, useIgnore, useUnignore } from "@/lib/ignore";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
-import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useUndoMarks } from "@/lib/watch";
+import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useMarkSeries, useUndoMarks } from "@/lib/watch";
 import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
@@ -170,6 +170,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const markWatched = useMarkWatched(titleId);
   const unmarkWatched = useUnmarkWatched(titleId);
   const markUpTo = useMarkUpTo(titleId);
+  const markSeries = useMarkSeries(titleId);
   const undoMarks = useUndoMarks(titleId);
   const [pending, setPending] = useState<EpisodeRow | null>(null);
   const [toast, setToast] = useState<{ ids: string[]; count: number } | null>(null);
@@ -217,6 +218,12 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
     const ids = await markUpTo.mutateAsync(e.id);
     setToast({ ids, count: ids.length });
   };
+
+  const markWholeSeries = async () => {
+    const ids = await markSeries.mutateAsync();
+    setToast({ ids, count: ids.length });
+  };
+  const unwatchedAired = progress?.unwatched_aired ?? 0;
 
   const entry = library.find((r) => r.tmdb_id === tmdbId);
   const added = Boolean(entry);
@@ -328,6 +335,16 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       title={entry.stopped ? "Resume — back in Tonight & calendar" : "Stop watching — keeps history, hides from Tonight"}
                     >
                       {entry.stopped ? <><Play size={16} />Resume</> : <><Pause size={16} />Stop watching</>}
+                    </button>
+                  )}
+                  {unwatchedAired > 0 && (
+                    <button
+                      className="btn btn-outline"
+                      disabled={markSeries.isPending}
+                      onClick={markWholeSeries}
+                      title={`Mark all ${unwatchedAired} aired episodes as seen — for shows you've already watched`}
+                    >
+                      <CheckCheck size={16} />{markSeries.isPending ? "Marking…" : "Mark all watched"}
                     </button>
                   )}
                 </div>
