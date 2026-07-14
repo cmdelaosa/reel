@@ -491,9 +491,14 @@
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
 }
 .fr-grid {
-  display: grid; gap: 8px;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  display: grid; gap: 12px 10px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
+/* Tile + progress strip below it (TV-Time style) */
+.fr-show { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fr-progress { display: flex; align-items: center; gap: 7px; padding: 0 2px; }
+.fr-progress .fr-matchbar { flex: 1; }
+.fr-progress > span { flex: 0 0 auto; }
 .fr-mini {
   position: relative; aspect-ratio: 2/3; border-radius: var(--r-md);
   overflow: hidden; cursor: pointer; display: flex; align-items: flex-end;
@@ -516,6 +521,21 @@
 .cal-page > * { width: 100%; max-width: 780px; margin-inline: auto; }
 
 /* View switcher pinned under the top bar — always reachable while scrolling */
+.fr-tabsbar {
+  position: sticky; top: 66px; z-index: 30;
+  display: flex; justify-content: center;
+  padding: 8px 0;
+  background: transparent;
+  pointer-events: none;
+}
+.fr-tabsbar .segmented {
+  width: auto;
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+}
+
 .cal-tabsbar {
   position: sticky; top: 66px; z-index: 30;
   display: flex; justify-content: center;

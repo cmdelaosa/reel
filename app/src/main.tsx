@@ -19,6 +19,7 @@ import ImportPage from "@/features/import/ImportPage";
 import KitPage from "@/features/kit/KitPage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
+import FriendsPage from "@/features/social/FriendsPage";
 import TonightPage from "@/features/tonight/TonightPage";
 import YouPage from "@/features/you/YouPage";
 import { Shell } from "@/ui/shell/Shell";
@@ -90,6 +91,7 @@ const router = createBrowserRouter([
       { path: "calendar", element: <CalendarPage /> },
       { path: "history", element: <HistoryPage /> },
       { path: "you", element: <YouPage /> },
+      { path: "friends", element: <FriendsPage /> },
       { path: "friend/:id", element: <FriendPage /> },
       { path: "import", element: <ImportPage /> },
       { path: "settings/import", element: <ImportPage /> },

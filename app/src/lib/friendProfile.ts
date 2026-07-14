@@ -69,6 +69,35 @@ export interface FriendProfileData {
   ratings: FriendRating[];
 }
 
+/** Per-followed-title progress (watched/aired) for a friend, keyed by tmdb id.
+ *  rpc_friend_progress is security invoker — 0015 friend-read RLS gates it, so
+ *  a non-friend / private profile just yields an empty map. */
+const progressRowSchema = z.object({
+  tmdb_id: z.number().int(),
+  watched: z.number().int(),
+  aired: z.number().int(),
+  last_watched_at: z.string().nullable(),
+});
+export type FriendProgress = z.infer<typeof progressRowSchema>;
+
+export function useFriendProgress(friendId: string) {
+  return useQuery({
+    queryKey: ["friendProgress", friendId],
+    enabled: Boolean(friendId),
+    queryFn: async (): Promise<Map<number, FriendProgress>> => {
+      const { data, error } = await supabase.rpc("rpc_friend_progress", { p_friend: friendId });
+      // PGRST202 = function not deployed yet (migration 0038); progress bars
+      // are an enhancement, so degrade to "no bars" instead of erroring.
+      if (error) {
+        if ((error as { code?: string }).code === "PGRST202") return new Map();
+        throw error;
+      }
+      const rows = z.array(progressRowSchema).parse(data ?? []);
+      return new Map(rows.map((r) => [r.tmdb_id, r]));
+    },
+  });
+}
+
 export function useFriendProfile(friendId: string) {
   return useQuery({
     queryKey: ["friendProfile", friendId],
