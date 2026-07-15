@@ -408,8 +408,23 @@ export async function importShow(
   const firstAir = (detail.first_air_date as string) || null;
   const addedAt = followedAt ?? earliestWatch ?? (firstAir ? `${firstAir}T00:00:00Z` : undefined);
 
+  // TV Time's "stop watching" clears is_followed, so a show the user watched but
+  // no longer follows arrives with show.followed=false. Dropping it from the
+  // library (followed=false) hides it entirely — the library only lists followed
+  // rows. Instead keep it IN the library, flagged stopped (out of Tonight/up-next
+  // /calendar, in the "Stopped" bucket), which is what "stop watching" means here.
+  // Genuinely-finished shows (caught up on an ended/canceled series) stay
+  // un-stopped so they read "finished" rather than "stopped". Mirrors the smart
+  // split used to backfill the 2026-07 import.
+  const watchedCount = watches?.length ?? show.seen;
+  const aired = airedCount(detail.seasons as Json[] | undefined, detail.last_episode_to_air as Json | null) ?? 0;
+  const ended = detail.status === "Ended" || detail.status === "Canceled";
+  const finished = watchedCount >= aired && ended;
+  const followed = show.followed || watchedCount > 0;
+  const isStopped = stopped || (!show.followed && watchedCount > 0 && !finished);
+
   await admin.from("library_entries").upsert(
-    { user_id: userId, title_id: titleId, followed: show.followed, favorite: show.favorite, stopped, ...(addedAt ? { added_at: addedAt } : {}) },
+    { user_id: userId, title_id: titleId, followed, favorite: show.favorite, stopped: isStopped, ...(addedAt ? { added_at: addedAt } : {}) },
     { onConflict: "user_id,title_id" },
   );
 
