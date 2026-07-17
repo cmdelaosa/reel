@@ -40,18 +40,19 @@ export default function ShowsPage() {
   const [sort, setSort] = useState<SortKey>("lastwatched");
   const [, setSearchParams] = useSearchParams();
 
-  // Stopped shows live only in the Stopped bucket; every other bucket (and All)
-  // shows active follows.
+  // All includes every follow (stopped too); the status buckets show active
+  // follows only, and Stopped collects the stopped ones.
   const inBucket = (s: LibraryShow) => {
+    if (f === "all") return true;
     if (f === "stopped") return s.stopped;
     if (s.stopped) return false;
-    return f === "all" || s.status === f;
+    return s.status === f;
   };
   const count = (key: Bucket) =>
-    key === "stopped"
-      ? library.filter((s) => s.stopped).length
-      : key === "all"
-        ? library.filter((s) => !s.stopped).length
+    key === "all"
+      ? library.length
+      : key === "stopped"
+        ? library.filter((s) => s.stopped).length
         : library.filter((s) => !s.stopped && s.status === key).length;
   const items = library.filter(inBucket).sort(COMPARATORS[sort]);
 
@@ -80,7 +81,7 @@ export default function ShowsPage() {
             </button>
           ))}
         </div>
-        <div className="segmented">
+        <div className="segmented scroll no-scrollbar">
           {SORTS.map((s) => (
             <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => setSort(s.key)}>
               {s.label}
