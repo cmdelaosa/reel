@@ -10,7 +10,6 @@ export const NOTIFICATION_TYPES = [
   { type: "new_episode", label: "New episodes", sub: "When a show you follow airs" },
   { type: "premiere", label: "Premieres", sub: "When a followed upcoming show gets a date" },
   { type: "friend_request", label: "Friend requests", sub: "When someone adds you" },
-  { type: "import_done", label: "Imports", sub: "When a TV Time import finishes" },
 ] as const;
 
 export interface Pref {

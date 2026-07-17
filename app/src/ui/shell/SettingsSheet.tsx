@@ -1,20 +1,17 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Bell, Check, Download, EyeOff, Mail, RotateCcw, Sparkles, Undo2, Upload, X } from "lucide-react";
+import { Bell, Download, Mail, RotateCcw, Settings as SettingsIcon, Upload, X } from "lucide-react";
 import { useFocusTrap } from "@/ui/useFocusTrap";
 import {
   useSettings, setSetting, resetSettings,
-  type AccentName, type DensityName, type ThemeName,
+  type ThemeName,
 } from "@/lib/settings";
 import {
   NOTIFICATION_TYPES, prefFor, useNotificationPrefs, useSetPref,
 } from "@/lib/notificationPrefs";
-import { useIgnored, useUnignore } from "@/lib/ignore";
-import { tmdbImg } from "@/lib/tmdb";
 
 /* Settings sheet — the prototype's DesignLab stripped to production scope:
-   theme (system/dark/oled/light), accent, density. Look/concept/radius were
-   prototype-only experiments. */
+   theme (system/dark/oled/light) + notification prefs + data actions. */
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -31,7 +28,7 @@ function Seg<T extends string>({ value, options, onPick }: {
   onPick: (v: T) => void;
 }) {
   return (
-    <div className="segmented" style={{ flexWrap: "wrap" }}>
+    <div className="segmented scroll no-scrollbar">
       {options.map((o) => (
         <div key={o.v} className={`seg ${value === o.v ? "seg-active" : ""}`} onClick={() => onPick(o.v)}>
           {o.label}
@@ -40,13 +37,6 @@ function Seg<T extends string>({ value, options, onPick }: {
     </div>
   );
 }
-
-const ACCENTS: { v: AccentName; c: string }[] = [
-  { v: "coral", c: "#ff6a5c" },
-  { v: "violet", c: "#8b7cff" },
-  { v: "emerald", c: "#35d39a" },
-  { v: "amber", c: "#fbbf3c" },
-];
 
 function Toggle({ on, onClick, icon: Icon, label }: { on: boolean; onClick: () => void; icon: typeof Bell; label: string }) {
   return (
@@ -87,39 +77,6 @@ function NotificationsSection() {
   );
 }
 
-function IgnoredSection() {
-  const { ignored } = useIgnored();
-  const unignore = useUnignore();
-  return (
-    <Row label="Ignored suggestions">
-      {ignored.length === 0 ? (
-        <p className="dim" style={{ fontSize: 13, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
-          <EyeOff size={14} /> Shows you hide from Explore appear here to restore.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          {ignored.map((t) => (
-            <div key={t.titleId} className="flex items-center gap-2.5">
-              <div
-                className="mq-row-art"
-                style={{ width: 30, height: 44, flex: "0 0 auto", background: "var(--surface-3)" }}
-              >
-                {tmdbImg(t.posterPath, "w92") && (
-                  <img src={tmdbImg(t.posterPath, "w92")!} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                )}
-              </div>
-              <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5 }}>{t.name}</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => unignore.mutate(t.titleId)} title="Restore to suggestions">
-                <Undo2 size={14} />Restore
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </Row>
-  );
-}
-
 export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const settings = useSettings();
   const navigate = useNavigate();
@@ -146,7 +103,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
       >
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
           <div className="flex items-center gap-2.5">
-            <Sparkles size={18} style={{ color: "var(--accent)" }} />
+            <SettingsIcon size={18} style={{ color: "var(--accent)" }} />
             <div style={{ fontWeight: 800, fontSize: 16 }}>Settings</div>
           </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
@@ -166,39 +123,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             />
           </Row>
 
-          <Row label="Accent color">
-            <div className="flex gap-3">
-              {ACCENTS.map((a) => (
-                <button
-                  key={a.v}
-                  onClick={() => setSetting("accent", a.v)}
-                  className="grid place-items-center"
-                  style={{
-                    width: 46, height: 46, borderRadius: "var(--r)", background: a.c, cursor: "pointer",
-                    border: settings.accent === a.v ? "3px solid var(--text)" : "3px solid transparent",
-                    boxShadow: "0 6px 16px -8px rgba(0,0,0,.5)",
-                  }}
-                >
-                  {settings.accent === a.v && <Check size={20} color="#fff" strokeWidth={3} />}
-                </button>
-              ))}
-            </div>
-          </Row>
-
-          <Row label="Density">
-            <Seg<DensityName>
-              value={settings.density}
-              onPick={(v) => setSetting("density", v)}
-              options={[
-                { v: "comfortable", label: "Comfortable" },
-                { v: "compact", label: "Compact" },
-              ]}
-            />
-          </Row>
-
           <NotificationsSection />
-
-          <IgnoredSection />
 
           <Row label="Your data">
             <div className="flex flex-col gap-2">
@@ -210,16 +135,6 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           </Row>
-
-          <div className="card p-4 flex flex-col gap-2" style={{ background: "var(--surface-2)" }}>
-            <div style={{ fontWeight: 700, fontSize: 13.5 }}>Live preview</div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <button className="btn btn-accent btn-sm">Primary</button>
-              <button className="btn btn-outline btn-sm">Outline</button>
-              <span className="chip chip-active">Active chip</span>
-              <span className="badge badge-accent">Badge</span>
-            </div>
-          </div>
         </div>
 
         <div className="px-5 py-4 flex items-center gap-2" style={{ borderTop: "1px solid var(--border)" }}>
