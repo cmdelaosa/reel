@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router";
 import { Bell, Check, CheckCheck, ChevronLeft, ChevronRight, Eye, EyeOff, Pause, Play, Plus, Star, X } from "lucide-react";
 import { tmdbImg } from "@/lib/tmdb";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
 import { useIgnored, useIgnore, useUnignore } from "@/lib/ignore";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
+import { useFriendships } from "@/lib/friends";
+import { useFriendsRatings } from "@/lib/taste";
+import { FriendAvatar } from "@/ui/FriendAvatar";
 import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useMarkSeries, useUndoMarks } from "@/lib/watch";
 import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
 import { NetworkLogo } from "@/ui";
@@ -117,6 +121,7 @@ function SeasonTabs({ seasons, active, onPick }: { seasons: SeasonRow[]; active:
 export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () => void }) {
   const trapRef = useFocusTrap<HTMLDivElement>();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data, isPending } = useTitle(tmdbId);
   const { data: library = [] } = useLibrary();
   const follow = useFollow();
@@ -224,6 +229,26 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
     setToast({ ids, count: ids.length });
   };
   const unwatchedAired = progress?.unwatched_aired ?? 0;
+
+  // Every accepted friend's rating for this show (shares the taste page's
+  // one-round-trip ratings query; the friend-read RLS scopes the rows).
+  const { data: friendships = [] } = useFriendships();
+  const acceptedFriends = useMemo(
+    () => friendships.filter((f) => f.status === "accepted"),
+    [friendships],
+  );
+  const { data: allFriendRatings = [] } = useFriendsRatings(
+    useMemo(() => acceptedFriends.map((f) => f.other_id), [acceptedFriends]),
+  );
+  const friendRaters = useMemo(() => {
+    const scores = new Map(
+      allFriendRatings.filter((r) => r.tmdb_id === tmdbId).map((r) => [r.user_id, r.score]),
+    );
+    return acceptedFriends
+      .filter((f) => scores.has(f.other_id))
+      .map((f) => ({ id: f.other_id, name: f.display_name, avatarUrl: f.avatar_url, score: scores.get(f.other_id)! }))
+      .sort((a, b) => b.score - a.score);
+  }, [acceptedFriends, allFriendRatings, tmdbId]);
 
   const entry = library.find((r) => r.tmdb_id === tmdbId);
   const added = Boolean(entry);
@@ -370,6 +395,43 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
 
               {title.overview && (
                 <p className="dim" style={{ fontSize: 14.5, lineHeight: 1.6, margin: 0 }}>{title.overview}</p>
+              )}
+
+              {/* Friend ratings — each friend's score, not just an average */}
+              {friendRaters.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+                    <div className="eyebrow">Friend ratings</div>
+                    {friendRaters.length > 1 && (
+                      <span className="mute" style={{ fontSize: 12.5, fontWeight: 700 }}>
+                        avg {(friendRaters.reduce((sum, r) => sum + r.score, 0) / friendRaters.length).toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {friendRaters.map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex items-center gap-2.5"
+                        role="button"
+                        tabIndex={0}
+                        style={{ cursor: "pointer" }}
+                        title={`Open ${r.name}'s profile`}
+                        onClick={() => { onClose(); navigate(`/friend/${r.id}`); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClose(); navigate(`/friend/${r.id}`); }
+                        }}
+                      >
+                        <FriendAvatar f={r} size={28} />
+                        <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 650 }}>{r.name}</span>
+                        <span className="flex items-center gap-1.5" style={{ fontWeight: 800, fontSize: 14 }}>
+                          <Star size={13} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                          {r.score}/10
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
 
               {/* Episodes */}
