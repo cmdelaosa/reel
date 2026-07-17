@@ -28,7 +28,7 @@ export default function CalendarPage() {
   return (
     <div className="screen mq-page cal-page">
       <div className="cal-tabsbar">
-        <div className="segmented" style={{ flexWrap: "wrap" }}>
+        <div className="segmented scroll no-scrollbar">
           {tabs.map(([v, label]) => (
             <div key={v} className={`seg ${view === v ? "seg-active" : ""}`} onClick={() => setView(v)}>{label}</div>
           ))}

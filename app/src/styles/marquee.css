@@ -129,7 +129,7 @@
 /* Scrollable variant: keeps every pill on one row, extras reachable by scroll
    (used for shows with many seasons). */
 .segmented.scroll { display: flex; max-width: 100%; overflow-x: auto; }
-.segmented.scroll .seg { flex: 0 0 auto; min-width: 30px; text-align: center; }
+.segmented.scroll .seg { flex: 0 0 auto; min-width: 30px; text-align: center; white-space: nowrap; }
 .seg { padding: 7px 14px; border-radius: calc(var(--r) - 4px); font-size: 13px; font-weight: 600; color: var(--text-dim); cursor: pointer; transition: all .15s ease; }
 .seg:hover { color: var(--text); }
 .seg-active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
@@ -359,7 +359,7 @@
 .mq-header { display: block; }
 .mq-h1 { font-size: clamp(26px, 3.4vw, 34px); font-weight: 800; letter-spacing: -0.02em; margin: 0; }
 .mq-sub { font-size: 14.5px; margin: 4px 0 0; max-width: 62ch; }
-.mq-sechead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.mq-sechead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
 /* ---- Bento (Tonight) ---- */
 .mq-bento { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
