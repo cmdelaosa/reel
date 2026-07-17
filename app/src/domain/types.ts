@@ -12,4 +12,6 @@ export interface TitleCard {
   voteAverage: number;
   /** Watch progress 0–100; the poster progress bar shows for 0 < progress < 100. */
   progress?: number;
+  /** Stopped-watching flag; shows a pause badge on the poster. */
+  stopped?: boolean;
 }

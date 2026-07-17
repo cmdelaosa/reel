@@ -63,6 +63,7 @@ export function toTitleCard(s: LibraryShow): TitleCard {
     posterPath: tmdbImg(s.poster_path),
     voteAverage: s.vote_average ?? 0,
     progress: s.status === "watching" ? s.progress : undefined,
+    stopped: s.stopped,
   };
 }
 
