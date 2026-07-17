@@ -18,7 +18,7 @@ repeating decisions. If something here conflicts with code, this doc wins until 
 ## Repo layout
 
 ```
-tvtime/
+reel/
 ├── DESIGN.md               product decisions (what)
 ├── PLAN.md                 master execution plan (status table)
 ├── docs/

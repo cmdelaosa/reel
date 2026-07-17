@@ -6,7 +6,7 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "--prefix",
-        "/Users/cmo/Projects/tvtime/prototype",
+        "/Users/cmo/Projects/reel/prototype",
         "run",
         "dev"
       ],
@@ -18,7 +18,7 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "--prefix",
-        "/Users/cmo/Projects/tvtime/app",
+        "/Users/cmo/Projects/reel/app",
         "run",
         "dev"
       ],
@@ -30,7 +30,7 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "--prefix",
-        "/Users/cmo/Projects/tvtime/app",
+        "/Users/cmo/Projects/reel/app",
         "run",
         "dev",
         "--",
@@ -45,7 +45,7 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "--prefix",
-        "/Users/cmo/Projects/tvtime/app",
+        "/Users/cmo/Projects/reel/app",
         "run",
         "dev",
         "--",
