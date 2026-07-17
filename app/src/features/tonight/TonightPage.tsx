@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { CalendarClock, Check, ChevronRight, Clapperboard, Flame, Tv } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import { orderByActivity, soonPremieres, recentlyAired } from "@/domain/tonight";
-import { useLibrary } from "@/lib/library";
 import { useCalendarFeed } from "@/lib/calendar";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { useUpNext, type UpNextRow } from "@/lib/upnext";
@@ -30,7 +29,6 @@ function airLabel(iso: string | null): string | null {
 
 export default function TonightPage() {
   const { data: upNext = [], isPending } = useUpNext();
-  const { data: library = [] } = useLibrary();
   const { data: feed = [] } = useCalendarFeed(1);
   const [, setSearchParams] = useSearchParams();
   // bumped after marking from the continue rail → smooth-scroll it back to the
@@ -38,9 +36,6 @@ export default function TonightPage() {
   const [followKey, setFollowKey] = useState(0);
 
   const now = new Date();
-  // stopped shows are hidden from Tonight (up-next already excludes them; filter
-  // them from the library-derived stats + premieres too).
-  const activeLibrary = library.filter((s) => !s.stopped);
   // One continue-watching order by effective activity (most recent watch OR
   // newly-aired next episode). The top of that list is the hero; the rest fill
   // the rail.
@@ -64,13 +59,6 @@ export default function TonightPage() {
 
   const dateLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   const heroProgress = hero && hero.aired_count > 0 ? Math.round((hero.watched_count / hero.aired_count) * 100) : 0;
-
-  const stats = [
-    { icon: Clapperboard, label: "Fresh (5 days)", value: freshFeed.length },
-    { icon: Tv, label: "Following", value: activeLibrary.length },
-    { icon: Flame, label: "Shows in progress", value: upNext.length },
-    { icon: CalendarClock, label: "Premieres soon", value: soon.length },
-  ];
 
   return (
     <div className="screen mq-page">
@@ -112,16 +100,6 @@ export default function TonightPage() {
                 <button className="btn btn-outline" onClick={() => open(hero.tmdb_id)}>Details</button>
               </div>
             </div>
-          </section>
-
-          <section className="mq-statgrid">
-            {stats.map((s) => (
-              <div key={s.label} className="card mq-stat">
-                <div className="mq-stat-ico"><s.icon size={17} /></div>
-                <div className="mq-stat-val">{s.value}</div>
-                <div className="mq-stat-label mute">{s.label}</div>
-              </div>
-            ))}
           </section>
         </div>
       )}

@@ -378,17 +378,6 @@
 .mq-hero-meta { font-size: 12.5px; }
 .mq-hero-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 
-/* Stat tiles only render when they fit BESIDE the hero (two-column bento,
-   ≥1024px — see Responsive). Below that they'd stack under it: hide instead. */
-.mq-statgrid { display: none; grid-template-columns: repeat(2, 1fr); gap: var(--gap); }
-.mq-stat { padding: 16px; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
-.mq-stat-ico {
-  display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent);
-  margin-bottom: 4px;
-}
-.mq-stat-val { font-size: 21px; font-weight: 800; }
-.mq-stat-label { font-size: 11.5px; }
 
 .mq-cols { display: grid; gap: clamp(28px, 4vw, 44px); grid-template-columns: 1fr; align-items: start; }
 
@@ -717,8 +706,6 @@
   .mq-tabs { display: inline-flex; }
   .mq-dock { display: none; }
   .mq-main { padding-bottom: 48px; }
-  .mq-bento { grid-template-columns: 1.7fr 1fr; }
-  .mq-statgrid { display: grid; }
   .mq-cols { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 560px) {
