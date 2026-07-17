@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useSearchParams } from "react-router";
 import {
-  Bell, CalendarClock, Clapperboard, Compass, History, LayoutGrid, Play, Search, Sliders, Users,
+  Bell, CalendarClock, Clapperboard, Compass, Play, Search, Sliders, Users,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
@@ -17,10 +17,8 @@ import { QueryErrorToast } from "@/ui/shell/QueryErrorToast";
 
 const TABS = [
   { path: "/tonight", label: "Tonight", icon: Clapperboard },
-  { path: "/shows", label: "My Shows", icon: LayoutGrid },
   { path: "/explore", label: "Explore", icon: Compass },
   { path: "/calendar", label: "Calendar", icon: CalendarClock },
-  { path: "/history", label: "History", icon: History },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
-import { CalendarClock, ChevronLeft, ChevronRight, Clock, Eye, Share2, Star, Tv, Users } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router";
+import { CalendarClock, ChevronLeft, ChevronRight, Clock, Eye, History, LayoutGrid, Share2, Star, Tv, Users } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useLibrary } from "@/lib/library";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
@@ -53,6 +53,7 @@ export default function YouPage() {
   const [sort, setSort] = useState<RateSort>("new");
   const [page, setPage] = useState(0);
   const [, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const byNew = (a: RatedRow, b: RatedRow) => b.created_at.localeCompare(a.created_at);
   const rated = [...ratings].sort((a, b) => {
@@ -121,6 +122,36 @@ export default function YouPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* My Shows + History moved off the top tabs — they live here now */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+        {[
+          { icon: LayoutGrid, label: "My Shows", sub: `${library.length} in your library`, path: "/shows" },
+          { icon: History, label: "History", sub: "Everything you've watched", path: "/history" },
+        ].map((l) => (
+          <button
+            key={l.path}
+            className="card p-4 flex items-center gap-3 text-left"
+            style={{ cursor: "pointer" }}
+            onClick={() => navigate(l.path)}
+          >
+            <span
+              className="grid place-items-center"
+              style={{
+                width: 38, height: 38, borderRadius: "var(--r-sm)", flex: "0 0 auto",
+                background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)",
+              }}
+            >
+              <l.icon size={18} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span style={{ display: "block", fontWeight: 750, fontSize: 15 }}>{l.label}</span>
+              <span className="mute" style={{ display: "block", fontSize: 12.5 }}>{l.sub}</span>
+            </span>
+            <ChevronRight size={17} className="mute" />
+          </button>
+        ))}
       </div>
 
       {!stats && <StatsSkeleton />}
