@@ -21,6 +21,7 @@ import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
 import KpisPage from "@/features/social/KpisPage";
+import PersonPage from "@/features/social/PersonPage";
 import TastePage from "@/features/social/TastePage";
 import TonightPage from "@/features/tonight/TonightPage";
 import YouPage from "@/features/you/YouPage";
@@ -97,6 +98,7 @@ const router = createBrowserRouter([
       { path: "friends/taste", element: <TastePage /> },
       { path: "friends/kpis", element: <KpisPage /> },
       { path: "friend/:id", element: <FriendPage /> },
+      { path: "person/:id", element: <PersonPage /> },
       { path: "import", element: <ImportPage /> },
       { path: "settings/import", element: <ImportPage /> },
       { path: "export", element: <ExportPage /> },
