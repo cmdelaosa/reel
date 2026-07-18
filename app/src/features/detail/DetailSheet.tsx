@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { Bell, Check, CheckCheck, ChevronLeft, ChevronRight, Eye, EyeOff, Pause, Play, Plus, Star, User, X } from "lucide-react";
+import { Bell, Check, CheckCheck, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, User, X } from "lucide-react";
 import { getCredits, tmdbImg } from "@/lib/tmdb";
 import { dateLocale, isEs, t as tr, tGenre } from "@/lib/i18n";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
@@ -180,6 +180,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const undoMarks = useUndoMarks(titleId);
   const [pending, setPending] = useState<EpisodeRow | null>(null);
   const [toast, setToast] = useState<{ ids: string[]; count: number } | null>(null);
+  const [friendsOpen, setFriendsOpen] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -250,6 +251,9 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
       .map((f) => ({ id: f.other_id, name: f.display_name, avatarUrl: f.avatar_url, score: scores.get(f.other_id)! }))
       .sort((a, b) => b.score - a.score);
   }, [acceptedFriends, allFriendRatings, tmdbId]);
+  const friendsAvg = friendRaters.length
+    ? friendRaters.reduce((sum, r) => sum + r.score, 0) / friendRaters.length
+    : null;
 
   // Top-billed cast (proxy /credits) — best-effort, hidden while loading/failed.
   const { data: cast = [] } = useQuery({
@@ -352,7 +356,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <button className={`btn ${added ? "btn-outline" : "btn-accent"}`} onClick={toggleFollow}>
-                    {added ? <><Check size={16} />{tr("Remove")}</> : <><Plus size={16} />{tr("Add")}</>}
+                    {added ? <><Minus size={16} />{tr("Remove")}</> : <><Plus size={16} />{tr("Add")}</>}
                   </button>
                   {!added && (
                     <button
@@ -387,7 +391,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       onClick={markWholeSeries}
                       title={`Mark all ${unwatchedAired} aired episodes as seen — for shows you've already watched`}
                     >
-                      <CheckCheck size={16} />{markSeries.isPending ? tr("Marking…") : tr("Mark all watched")}
+                      <CheckCheck size={16} />{markSeries.isPending ? tr("Marking…") : tr("Mark watched")}
                     </button>
                   )}
                 </div>
@@ -408,48 +412,32 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       </span>
                     </div>
                   </div>
+                  {friendsAvg != null && (
+                    <>
+                      <div style={{ width: 1, height: 40, background: "var(--border)", flex: "0 0 auto" }} />
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        style={{ textAlign: "center", cursor: "pointer" }}
+                        title={tr("Friend ratings")}
+                        onClick={() => setFriendsOpen(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFriendsOpen(true); }
+                        }}
+                      >
+                        <div className="eyebrow" style={{ marginBottom: 5 }}>{tr("Friends")}</div>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                          <span style={{ fontWeight: 850, fontSize: 17 }}>{friendsAvg.toFixed(1)}</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
               {displayOverview && (
                 <p className="dim" style={{ fontSize: 14.5, lineHeight: 1.6, margin: 0 }}>{displayOverview}</p>
-              )}
-
-              {/* Friend ratings — each friend's score, not just an average */}
-              {friendRaters.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
-                    <div className="eyebrow">{tr("Friend ratings")}</div>
-                    {friendRaters.length > 1 && (
-                      <span className="mute" style={{ fontSize: 12.5, fontWeight: 700 }}>
-                        {tr("avg")} {(friendRaters.reduce((sum, r) => sum + r.score, 0) / friendRaters.length).toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {friendRaters.map((r) => (
-                      <div
-                        key={r.id}
-                        className="flex items-center gap-2.5"
-                        role="button"
-                        tabIndex={0}
-                        style={{ cursor: "pointer" }}
-                        title={`Open ${r.name}'s profile`}
-                        onClick={() => { onClose(); navigate(`/friend/${r.id}`); }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClose(); navigate(`/friend/${r.id}`); }
-                        }}
-                      >
-                        <FriendAvatar f={r} size={28} />
-                        <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 650 }}>{r.name}</span>
-                        <span className="flex items-center gap-1.5" style={{ fontWeight: 800, fontSize: 14 }}>
-                          <Star size={13} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                          {r.score}/10
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               )}
 
               {/* Cast — top billed; tapping an actor opens their page */}
@@ -533,6 +521,55 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
           </>
         )}
       </div>
+
+      {/* Friend ratings detail — small modal opened from the header average */}
+      {friendsOpen && (
+        <>
+          <div className="backdrop" style={{ zIndex: 80 }} onClick={() => setFriendsOpen(false)} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={tr("Friend ratings")}
+            className="sheet-center fixed card flex flex-col"
+            style={{ zIndex: 81, left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(360px, 92vw)", padding: 22, gap: 12, borderRadius: "var(--r-lg)", maxHeight: "70vh" }}
+          >
+            <div className="flex items-center justify-between">
+              <div style={{ fontWeight: 800, fontSize: 16 }}>{tr("Friend ratings")}</div>
+              <button className="btn btn-icon btn-ghost" onClick={() => setFriendsOpen(false)} aria-label={tr("Close")}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-2 overflow-y-auto">
+              {friendRaters.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center gap-2.5"
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: "pointer" }}
+                  title={`Open ${r.name}'s profile`}
+                  onClick={() => { setFriendsOpen(false); onClose(); navigate(`/friend/${r.id}`); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFriendsOpen(false); onClose(); navigate(`/friend/${r.id}`); }
+                  }}
+                >
+                  <FriendAvatar f={r} size={28} />
+                  <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 650 }}>{r.name}</span>
+                  <span className="flex items-center gap-1.5" style={{ fontWeight: 800, fontSize: 14 }}>
+                    <Star size={13} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                    {r.score}/10
+                  </span>
+                </div>
+              ))}
+            </div>
+            {friendRaters.length > 1 && friendsAvg != null && (
+              <div className="mute" style={{ fontSize: 12.5, fontWeight: 700, textAlign: "right" }}>
+                {tr("avg")} {friendsAvg.toFixed(1)}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* "Mark all up to here" confirmation */}
       {pending && (

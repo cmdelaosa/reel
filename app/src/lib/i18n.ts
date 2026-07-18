@@ -124,7 +124,7 @@ const DICT: Record<string, string> = {
   "Tracking": "Siguiendo",
   "Not interested": "No me interesa",
   "Un-ignore": "Restaurar",
-  "Mark all watched": "Marcar todo visto",
+  "Close": "Cerrar",
   "Marking…": "Marcando…",
   "No episodes available yet.": "Aún no hay episodios disponibles.",
   "Mark earlier episodes as seen?": "¿Marcar los episodios anteriores como vistos?",
