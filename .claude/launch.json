@@ -50,12 +50,10 @@
         "dev",
         "--",
         "--mode",
-        "verify",
-        "--port",
-        "4323",
-        "--strictPort"
+        "verify"
       ],
-      "port": 4323
+      "port": 4323,
+      "autoPort": true
     }
   ]
 }
