@@ -43,7 +43,7 @@ export default function CalendarPage() {
 
 function MyShowsFeed() {
   const [weeksBack, setWeeksBack] = useState(3);
-  const { data: rows = [], isPending } = useCalendarFeed(weeksBack);
+  const { data: rows = [], isPending, isPlaceholderData } = useCalendarFeed(weeksBack);
   const now = useMemo(() => new Date(), []);
 
   const topRef = useRef<HTMLDivElement | null>(null);
@@ -108,8 +108,17 @@ function MyShowsFeed() {
   }, [rows]);
 
   // land on "Today" once the first page is in
+  const hasAired = days.some(([off]) => off <= 0);
   useEffect(() => {
-    if (anchored.current || isPending) return;
+    if (anchored.current || isPending || isPlaceholderData) return;
+    // If the initial window came back all-future (nothing aired in the last
+    // `weeksBack` weeks — common mid-hiatus), widen until the last aired day
+    // is actually loaded; anchoring now would throw the user at the next
+    // premiere, possibly weeks away.
+    if (!hasAired && rows.length > 0 && weeksBack < 60) {
+      setWeeksBack((w) => Math.min(60, w + 12));
+      return;
+    }
     // setTimeout, not rAF: frames don't run while the tab is hidden, so an
     // rAF-gated anchor silently never lands when the calendar is restored in a
     // background tab. Latch only after the scroll actually happened, so a
@@ -121,7 +130,7 @@ function MyShowsFeed() {
       anchored.current = true;
     }, 0);
     return () => clearTimeout(id);
-  }, [isPending]);
+  }, [isPending, isPlaceholderData, hasAired, rows.length, weeksBack]);
 
   if (!isPending && rows.length === 0) {
     return (
