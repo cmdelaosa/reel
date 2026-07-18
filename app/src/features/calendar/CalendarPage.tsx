@@ -120,6 +120,9 @@ function MyShowsFeed() {
     // is actually loaded; anchoring now would throw the user at the next
     // premiere, possibly weeks away.
     if (!hasAired && rows.length > 0 && weeksBack < 60) {
+      // Not a render cascade: each widen changes the query key, so the loop
+      // advances only as fetches settle, and the cap bounds it (see aceeae0).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setWeeksBack((w) => Math.min(60, w + 12));
       return;
     }
