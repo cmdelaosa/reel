@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Eye, EyeOff, LayoutGrid, List, Plus, Star, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eye, EyeOff, List, Plus, SlidersHorizontal, Star, X } from "lucide-react";
 import { useTrending, usePopular, usePopularNow, useTopRated, usePopularWithFriends } from "@/lib/explore";
 import { useFriendships } from "@/lib/friends";
 import { useLibrary, useFollow, useUnfollow } from "@/lib/library";
@@ -12,11 +12,14 @@ import { Rail } from "@/ui";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
+import { useFocusTrap } from "@/ui/useFocusTrap";
 
 /* Trending rail (ranked) + a single tabbed discover section: Popular now,
-   Top rated, and With friends share one header, filter row, view toggle and
-   pager — you pick which pool to browse. Each keeps 18 cards per page with the
-   arrows and the genre/year filters. */
+   Top rated, and With friends share one toolbar row — pool tabs on the left,
+   a Filters chip (genres + year range in an anchored popover on desktop, a
+   bottom sheet on phones) and the mosaic/list toggle on the right. Active
+   filters echo as removable chips under the toolbar, and the grid grows in
+   PAGE_SIZE steps via a "Show more" button instead of a pager. */
 
 function TitlePoster({ t, rank, score, onOpen, onIgnore }: { t: TitleRow; rank?: number; score?: number | null; onOpen: () => void; onIgnore?: () => void }) {
   const art = tmdbImg(t.poster_path);
@@ -35,7 +38,7 @@ function TitlePoster({ t, rank, score, onOpen, onIgnore }: { t: TitleRow; rank?:
       )}
       {onIgnore && (
         <button
-          className="btn btn-icon badge-glass absolute"
+          className="btn btn-icon badge-glass absolute disc-hide"
           style={{ top: 8, right: 8, color: "#fff", zIndex: 3 }}
           title="Not interested — hide from suggestions"
           aria-label={`Hide ${t.name} from suggestions`}
@@ -86,11 +89,12 @@ function FriendRow({ friends, count }: { friends: FriendLike[]; count: number })
 const THIS_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: THIS_YEAR - 1970 + 1 }, (_, i) => THIS_YEAR - i);
 
-/* First-air-year bound picker, shared by the discover tabs. */
-function YearSelect({ value, onChange, label }: { value: number | null; onChange: (y: number | null) => void; label: string }) {
+/* First-air-year bound picker inside the filters panel: label stacked over the
+   select so From/To sit side by side. */
+function YearField({ value, onChange, label }: { value: number | null; onChange: (y: number | null) => void; label: string }) {
   return (
-    <label className="flex items-center gap-1.5">
-      <span className="mute" style={{ fontSize: 13 }}>{label}</span>
+    <label className="disc-yearfield">
+      <span className="mute" style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
       <select
         className="year-select"
         value={value ?? ""}
@@ -103,8 +107,7 @@ function YearSelect({ value, onChange, label }: { value: number | null; onChange
   );
 }
 
-/* Cards shown per page, constant across tabs. The arrows page through the
-   ranked pool PAGE_SIZE at a time. */
+/* Cards revealed per "Show more" press, constant across tabs. */
 const PAGE_SIZE = 18;
 
 /* Discover view mode (mosaic of posters vs compact rows), persisted so the
@@ -162,39 +165,55 @@ function TitleListRow({ t, score, friends, friendCount, onOpen, onIgnore }: { t:
   );
 }
 
-/* Multi-select genre dropdown: pick any number of genres via checkboxes. Empty
-   selection means "all". Closes on outside click. */
-function GenreDropdown({ options, selected, onToggle }: { options: string[]; selected: string[]; onToggle: (g: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
+/* Combined filters panel behind the Filters chip: genre checkboxes (empty
+   selection means "all") plus the year range, with a Clear footer. One markup,
+   two shapes via CSS — anchored glass popover ≥768px, bottom sheet below.
+   Closes on Escape here; backdrop tap (mobile) and outside click (desktop)
+   are handled by the anchor wrapper. */
+function FilterPanel({ selected, onToggleGenre, fromYear, toYear, onFromYear, onToYear, hasFilters, onClear, onClose }: {
+  selected: string[];
+  onToggleGenre: (g: string) => void;
+  fromYear: number | null;
+  toYear: number | null;
+  onFromYear: (y: number | null) => void;
+  onToYear: (y: number | null) => void;
+  hasFilters: boolean;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  const ref = useFocusTrap<HTMLDivElement>();
   useEffect(() => {
-    if (!open) return;
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [open]);
-  const label = selected.length === 0
-    ? tr("All genres")
-    : selected.length === 1
-      ? tGenre(selected[0])
-      : `${selected.length} ${isEs() ? "géneros" : "genres"}`;
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [onClose]);
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button className={`chip ${selected.length ? "chip-active" : ""}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        {label}
-        <ChevronDown size={14} />
-      </button>
-      {open && (
-        <div className="filter-menu">
-          {options.map((g) => (
+    <>
+      <div className="backdrop disc-sheet-backdrop" onClick={onClose} />
+      <div ref={ref} className="disc-panel" role="dialog" aria-modal="true" aria-label={tr("Filters")} tabIndex={-1}>
+        <div className="disc-handle" aria-hidden />
+        <div className="disc-sec-label">{tr("Genres")}</div>
+        <div className="disc-genres">
+          {GENRE_NAMES.map((g) => (
             <label key={g} className="filter-opt">
-              <input type="checkbox" checked={selected.includes(g)} onChange={() => onToggle(g)} />
+              <input type="checkbox" checked={selected.includes(g)} onChange={() => onToggleGenre(g)} />
               <span>{tGenre(g)}</span>
             </label>
           ))}
         </div>
-      )}
-    </div>
+        <div className="disc-sec-label">{tr("Years")}</div>
+        <div className="disc-years">
+          <YearField value={fromYear} onChange={onFromYear} label={tr("From")} />
+          <YearField value={toYear} onChange={onToYear} label={tr("To")} />
+        </div>
+        <div className="disc-panel-foot">
+          <button className="chip" disabled={!hasFilters} onClick={onClear}>
+            <X size={13} />
+            {tr("Clear filters")}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -232,7 +251,8 @@ export function DiscoverSections() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [fromYear, setFromYear] = useState<number | null>(null);
   const [toYear, setToYear] = useState<number | null>(null);
-  const [page, setPage] = useState(0);
+  const [shown, setShown] = useState(PAGE_SIZE);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [view, setView] = useState<ViewMode>(loadView);
   const switchView = (v: ViewMode) => {
@@ -255,14 +275,27 @@ export function DiscoverSections() {
 
   const [, setSearchParams] = useSearchParams();
 
-  const goTab = (t: Tab) => { setTab(t); setPage(0); };
+  // Any tab or filter change restarts the visible slice at one page.
+  const goTab = (t: Tab) => { setTab(t); setShown(PAGE_SIZE); };
   const toggleGenre = (g: string) => {
     setSelectedGenres((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]));
-    setPage(0);
+    setShown(PAGE_SIZE);
   };
-  const changeYear = (set: (y: number | null) => void) => (y: number | null) => { set(y); setPage(0); };
+  const changeYear = (set: (y: number | null) => void) => (y: number | null) => { set(y); setShown(PAGE_SIZE); };
   const hasFilters = selectedGenres.length > 0 || fromYear != null || toYear != null;
-  const clearFilters = () => { setSelectedGenres([]); setFromYear(null); setToYear(null); setPage(0); };
+  const filterCount = selectedGenres.length + (fromYear != null || toYear != null ? 1 : 0);
+  const clearFilters = () => { setSelectedGenres([]); setFromYear(null); setToYear(null); setShown(PAGE_SIZE); };
+  const clearYears = () => { setFromYear(null); setToYear(null); setShown(PAGE_SIZE); };
+
+  // Desktop popover: close on any click outside the chip + panel. On mobile the
+  // panel is a fixed sheet whose backdrop intercepts those clicks instead.
+  const filtersRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const h = (e: MouseEvent) => { if (filtersRef.current && !filtersRef.current.contains(e.target as Node)) setFiltersOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [filtersOpen]);
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -313,9 +346,12 @@ export function DiscoverSections() {
       }));
   }
 
-  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
-  const current = Math.min(page, pageCount - 1); // clamp when the pool shrinks
-  const visible = items.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
+  const visible = items.slice(0, shown);
+  const yearChipLabel = fromYear != null && toYear != null
+    ? `${fromYear} – ${toYear}`
+    : fromYear != null
+      ? `${tr("From")} ${fromYear}`
+      : `${tr("To")} ${toYear}`;
 
   const emptyMsg = tr(
     tab === "popular"
@@ -342,7 +378,7 @@ export function DiscoverSections() {
       )}
 
       <section className="flex flex-col gap-4">
-        <div className="mq-sechead">
+        <div className="disc-toolbar">
           <div className="segmented scroll no-scrollbar" role="tablist" aria-label="Discover">
             {TABS.map((tb) => (
               <div
@@ -356,50 +392,61 @@ export function DiscoverSections() {
               </div>
             ))}
           </div>
-          <div className="flex items-center gap-1.5" style={{ marginLeft: "auto" }}>
-            <div className="flex items-center gap-1.5" role="group" aria-label="Pagination">
-              <span className="mute" style={{ fontSize: 12.5 }}>{current + 1} / {pageCount}</span>
-              <button className="chip" disabled={current === 0} onClick={() => setPage(current - 1)} aria-label="Previous page">
-                <ChevronLeft size={14} />
-              </button>
-              <button className="chip" disabled={current >= pageCount - 1} onClick={() => setPage(current + 1)} aria-label="Next page">
-                <ChevronRight size={14} />
-              </button>
-            </div>
-            <div className="flex items-center gap-1.5" role="group" aria-label="View mode">
+          <div className="disc-tools">
+            <div className="disc-filters" ref={filtersRef}>
               <button
-                className={`chip ${view === "mosaic" ? "chip-active" : ""}`}
-                onClick={() => switchView("mosaic")}
-                title="Mosaic view"
-                aria-pressed={view === "mosaic"}
+                className={`chip ${hasFilters ? "chip-active" : ""}`}
+                onClick={() => setFiltersOpen((o) => !o)}
+                aria-expanded={filtersOpen}
+                aria-haspopup="dialog"
               >
-                <LayoutGrid size={14} />
+                <SlidersHorizontal size={14} />
+                {tr("Filters")}
+                {filterCount > 0 && <span className="disc-count">{filterCount}</span>}
               </button>
-              <button
-                className={`chip ${view === "list" ? "chip-active" : ""}`}
-                onClick={() => switchView("list")}
-                title="List view"
-                aria-pressed={view === "list"}
-              >
-                <List size={14} />
-              </button>
+              {filtersOpen && (
+                <FilterPanel
+                  selected={selectedGenres}
+                  onToggleGenre={toggleGenre}
+                  fromYear={fromYear}
+                  toYear={toYear}
+                  onFromYear={changeYear(setFromYear)}
+                  onToYear={changeYear(setToYear)}
+                  hasFilters={hasFilters}
+                  onClear={clearFilters}
+                  onClose={() => setFiltersOpen(false)}
+                />
+              )}
             </div>
+            <button
+              className={`chip ${view === "list" ? "chip-active" : ""}`}
+              onClick={() => switchView(view === "list" ? "mosaic" : "list")}
+              title={tr("List view")}
+              aria-label={tr("List view")}
+              aria-pressed={view === "list"}
+            >
+              <List size={14} />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <GenreDropdown options={GENRE_NAMES} selected={selectedGenres} onToggle={toggleGenre} />
-          <div className="flex items-center gap-2.5 flex-wrap" style={{ marginLeft: "auto" }}>
-            <YearSelect value={fromYear} onChange={changeYear(setFromYear)} label={tr("From:")} />
-            <YearSelect value={toYear} onChange={changeYear(setToYear)} label={tr("To:")} />
-            {hasFilters && (
-              <button className="chip" onClick={clearFilters} title="Clear all filters">
-                <X size={13} />
-                {tr("Clear filters")}
+        {hasFilters && (
+          <div className="disc-active">
+            {selectedGenres.map((g) => (
+              <button key={g} className="chip chip-active" onClick={() => toggleGenre(g)} aria-label={`${tr("Clear filters")}: ${tGenre(g)}`}>
+                {tGenre(g)}
+                <X size={12} />
+              </button>
+            ))}
+            {(fromYear != null || toYear != null) && (
+              <button className="chip chip-active" onClick={clearYears} aria-label={`${tr("Clear filters")}: ${yearChipLabel}`}>
+                {yearChipLabel}
+                <X size={12} />
               </button>
             )}
+            <button className="chip" onClick={clearFilters}>{tr("Clear filters")}</button>
           </div>
-        </div>
+        )}
 
         {visible.length === 0 ? (
           <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{emptyMsg}</p>
@@ -426,6 +473,19 @@ export function DiscoverSections() {
                 <AddButton t={it.t} />
               </div>
             ))}
+          </div>
+        )}
+
+        {items.length > PAGE_SIZE && (
+          <div className="disc-more">
+            {shown < items.length && (
+              <button className="btn btn-outline" onClick={() => setShown((s) => s + PAGE_SIZE)}>
+                {tr("Show more")}
+              </button>
+            )}
+            <span className="mute" style={{ fontSize: 12.5 }}>
+              {visible.length} {tr("of")} {items.length}
+            </span>
           </div>
         )}
 

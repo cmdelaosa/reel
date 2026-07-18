@@ -84,6 +84,75 @@
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
+/* ---- Discover toolbar (Explore) ---- */
+/* One row, always: tabs shrink and scroll internally (.segmented.scroll) so the
+   Filters chip + view toggle never wrap under them, even at 375px. */
+.disc-toolbar { display: flex; align-items: center; gap: 10px; }
+.disc-toolbar .segmented { flex: 0 1 auto; min-width: 0; }
+.disc-tools { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: 0 0 auto; }
+/* Active-filter count on the Filters chip */
+.disc-count {
+  display: inline-grid; place-items: center;
+  min-width: 17px; height: 17px; padding: 0 4px; margin: -2px 0;
+  border-radius: 999px; font-size: 10.5px; font-weight: 800; line-height: 1;
+  background: var(--accent); color: var(--on-accent);
+}
+
+/* Removable-chip echo of the active filters; the row is absent when none. */
+.disc-active { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Filters panel: same markup, two shapes. ≥768px an anchored glass popover
+   (roomier .filter-menu); <768px a fixed bottom sheet with backdrop. Opaque
+   glass mix, not var(--surface) — see .filter-menu. */
+.disc-filters { position: relative; }
+.disc-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 70;
+  width: 344px;
+  background: color-mix(in srgb, var(--bg) 90%, #ffffff 5%);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r); box-shadow: var(--shadow-lg);
+  padding: 14px; display: flex; flex-direction: column; gap: 8px;
+  animation: friends-pop-in 0.12s ease;
+}
+.disc-handle { display: none; }
+.disc-sec-label {
+  font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--text-mute); padding: 2px 2px 0;
+}
+.disc-genres { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+.disc-years { display: flex; gap: 10px; padding: 2px; }
+.disc-yearfield { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.disc-yearfield .year-select { width: 100%; border-radius: var(--r-sm); }
+.disc-panel-foot { display: flex; justify-content: flex-end; padding-top: 6px; border-top: 1px solid var(--border); }
+@media (min-width: 768px) {
+  .disc-sheet-backdrop { display: none; }
+}
+@media (max-width: 767px) {
+  .disc-panel {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto;
+    max-height: 78dvh; overflow-y: auto;
+    border-radius: var(--r-lg) var(--r-lg) 0 0; border-bottom: none;
+    padding: 8px 18px calc(16px + env(safe-area-inset-bottom));
+    animation: disc-sheet-up .28s cubic-bezier(.16,1,.3,1);
+  }
+  .disc-handle {
+    display: block; width: 40px; height: 4px; flex: 0 0 auto;
+    border-radius: 999px; background: var(--border-strong); margin: 4px auto 8px;
+  }
+}
+@keyframes disc-sheet-up { from { opacity: 0; transform: translateY(28px); } }
+@media (prefers-reduced-motion: reduce) { .disc-panel { animation: none; } }
+
+/* "Show more" + progress counter under the discover grid */
+.disc-more { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 2px; }
+
+/* Hide-from-suggestions: hover-reveal where hover exists; always on for touch */
+@media (hover: hover) and (pointer: fine) {
+  .poster .disc-hide { opacity: 0; transition: opacity .15s ease; }
+  .poster:hover .disc-hide, .poster .disc-hide:focus-visible { opacity: 1; }
+}
+
 /* Badges */
 .badge {
   display: inline-flex; align-items: center; gap: 5px;
