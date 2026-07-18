@@ -672,7 +672,7 @@ Deno.serve(async (req) => {
     // enough to matter; the client resolves library status / your rating.
     const mPerson = path.match(/^\/person\/(\d+)$/);
     if (mPerson) {
-      const d = await fetchTmdb(apiKey, `/person/${mPerson[1]}?append_to_response=tv_credits`);
+      const d = await fetchTmdb(apiKey, `/person/${mPerson[1]}?append_to_response=tv_credits,translations`);
       const seen = new Set<number>();
       const shows: Any[] = [];
       const credits = [...((d.tv_credits?.cast ?? []) as Any[])]
@@ -693,6 +693,12 @@ Deno.serve(async (req) => {
           episode_count: c.episode_count ?? null,
         });
       }
+      // es-ES biography from the translation set (plain es as fallback) — the
+      // default-language fetch always carries the English one.
+      const pTrans: Any[] = d.translations?.translations ?? [];
+      const esT =
+        pTrans.find((x) => x.iso_639_1 === "es" && x.iso_3166_1 === "ES") ??
+        pTrans.find((x) => x.iso_639_1 === "es");
       return json(
         {
           person: {
@@ -701,7 +707,10 @@ Deno.serve(async (req) => {
             profile_path: d.profile_path ?? null,
             known_for_department: d.known_for_department ?? null,
             birthday: d.birthday ?? null,
+            deathday: d.deathday ?? null,
             place_of_birth: d.place_of_birth ?? null,
+            biography: d.biography || null,
+            biography_es: esT?.data?.biography || null,
           },
           shows,
         },

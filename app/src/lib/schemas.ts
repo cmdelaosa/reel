@@ -131,6 +131,11 @@ export const personResponseSchema = z.object({
     known_for_department: z.string().nullable(),
     birthday: z.string().nullable(),
     place_of_birth: z.string().nullable(),
+    // Optional: a deployed proxy that predates these fields must not fail the
+    // parse — the page just renders without them.
+    deathday: z.string().nullish(),
+    biography: z.string().nullish(),
+    biography_es: z.string().nullish(),
   }),
   shows: z.array(personShowSchema),
 });

@@ -250,6 +250,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const [pending, setPending] = useState<EpisodeRow | null>(null);
   const [toast, setToast] = useState<{ ids: string[]; count: number } | null>(null);
   const [friendsOpen, setFriendsOpen] = useState(false);
+  const [posterOpen, setPosterOpen] = useState(false);
   const friendsRef = useRef<HTMLDivElement | null>(null);
 
   // Dropdown niceties: click-away closes it, Escape closes it before the sheet.
@@ -377,12 +378,13 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (friendsOpen) setFriendsOpen(false);
+      if (posterOpen) setPosterOpen(false);
+      else if (friendsOpen) setFriendsOpen(false);
       else onClose();
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onClose, friendsOpen]);
+  }, [onClose, friendsOpen, posterOpen]);
 
   const toggleFollow = () => {
     if (!title) return;
@@ -392,6 +394,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
 
   const backdrop = tmdbImg(title?.backdrop_path ?? null, "w780");
   const poster = tmdbImg(title?.poster_path ?? null, "w342");
+  const posterFull = tmdbImg(title?.poster_path ?? null, "w780");
   const now = new Date().toISOString();
 
   return (
@@ -427,7 +430,15 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 <X size={18} />
               </button>
               <div className="absolute flex items-end gap-4" style={{ left: 24, right: 24, bottom: 16 }}>
-                <div className="poster" style={{ width: 96, height: 144, flex: "0 0 auto", background: posterBg(title.name + "x") }}>
+                <div
+                  className="poster"
+                  role={poster ? "button" : undefined}
+                  tabIndex={poster ? 0 : undefined}
+                  aria-label={poster ? tr("View poster") : undefined}
+                  onClick={poster ? () => setPosterOpen(true) : undefined}
+                  onKeyDown={poster ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPosterOpen(true); } } : undefined}
+                  style={{ width: 96, height: 144, flex: "0 0 auto", background: posterBg(title.name + "x"), cursor: poster ? "zoom-in" : undefined }}
+                >
                   {poster && <img className="poster-img" src={poster} alt="" />}
                   <div className="poster-sheen" />
                 </div>
@@ -662,6 +673,38 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 {tr("Only this one")}
               </button>
             </div>
+          </div>
+        </>
+      )}
+
+      {/* Full-size poster lightbox (poster click in the hero) */}
+      {posterOpen && posterFull && (
+        <>
+          <div className="backdrop" style={{ zIndex: 90 }} onClick={() => setPosterOpen(false)} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={displayName ? `${displayName} — ${tr("View poster")}` : tr("View poster")}
+            className="fixed"
+            style={{ zIndex: 91, left: "50%", top: "50%", transform: "translate(-50%,-50%)" }}
+          >
+            <img
+              src={posterFull}
+              alt=""
+              onClick={() => setPosterOpen(false)}
+              style={{
+                display: "block", maxWidth: "92vw", maxHeight: "88vh", cursor: "zoom-out",
+                borderRadius: "var(--r-lg)", border: "1px solid var(--border)", boxShadow: "0 24px 80px rgba(0,0,0,.6)",
+              }}
+            />
+            <button
+              className="btn btn-icon badge-glass absolute"
+              style={{ top: 10, right: 10, color: "#fff" }}
+              aria-label={tr("Close")}
+              onClick={() => setPosterOpen(false)}
+            >
+              <X size={18} />
+            </button>
           </div>
         </>
       )}

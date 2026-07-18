@@ -267,6 +267,17 @@ const DICT: Record<string, string> = {
   "Known for": "Conocido por",
   "Not in your library": "No está en tu biblioteca",
   "Your score": "Tu nota",
+  "Read more": "Ver más",
+  "Show less": "Ver menos",
+  // TMDB known_for_department values (English in the API payload).
+  "Acting": "Interpretación",
+  "Directing": "Dirección",
+  "Writing": "Guion",
+  "Production": "Producción",
+
+  // ---- Poster lightbox ----
+  "View poster": "Ver el póster",
+  "Close": "Cerrar",
 };
 
 /** Translate a UI string (identity in English / unknown strings). */

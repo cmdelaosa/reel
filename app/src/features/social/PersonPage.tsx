@@ -1,11 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { User } from "lucide-react";
 import { getPerson, tmdbImg } from "@/lib/tmdb";
 import { useLibrary } from "@/lib/library";
 import { useMyRatings } from "@/lib/ratings";
-import { dateLocale, locName, t as tr, useEsNames } from "@/lib/i18n";
+import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { useOpenTitle, useTitleIntent } from "@/lib/useOpenTitle";
 import { deriveStatus } from "@/domain/status";
 import type { PersonShow } from "@/lib/schemas";
@@ -96,37 +96,80 @@ export default function PersonPage() {
   }, [data, byTmdb, scoreByTmdb]);
 
   const person = data?.person;
-  const photo = tmdbImg(person?.profile_path, "w342");
+  const photo = tmdbImg(person?.profile_path, "h632");
+  const [bioOpen, setBioOpen] = useState(false);
+  const [bioClamped, setBioClamped] = useState(false);
+
+  const fmtLong = (iso: string) =>
+    new Date(iso).toLocaleDateString(dateLocale(), { year: "numeric", month: "long", day: "numeric" });
+  // Age today, or at death when there's a deathday.
+  const age = person?.birthday ? (() => {
+    const b = new Date(person.birthday!);
+    const end = person.deathday ? new Date(person.deathday) : new Date();
+    let a = end.getFullYear() - b.getFullYear();
+    if (end.getMonth() - b.getMonth() < 0 || (end.getMonth() === b.getMonth() && end.getDate() < b.getDate())) a--;
+    return a;
+  })() : null;
+  const bio = person ? ((isEs() && person.biography_es) || person.biography || null) : null;
 
   return (
     <div className="screen mq-page">
       {isPending && <div className="dim">{tr("Loading…")}</div>}
       {person && (
         <>
-          <div className="card p-5 flex items-center gap-4">
-            <span
+          <div className="card p-5 flex items-start gap-5">
+            <div
               className="grid place-items-center overflow-hidden"
               style={{
-                width: 84, height: 84, borderRadius: "50%", background: "var(--surface-3)",
-                border: "1px solid var(--border)", flex: "0 0 auto", color: "var(--text-dim)",
+                width: "min(170px, 32vw)", aspectRatio: "2 / 3", borderRadius: "var(--r-lg)",
+                background: "var(--surface-3)", border: "1px solid var(--border)",
+                flex: "0 0 auto", color: "var(--text-dim)",
               }}
             >
               {photo ? (
-                <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img src={photo} alt={person.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               ) : (
-                <User size={34} />
+                <User size={44} />
               )}
-            </span>
-            <div className="min-w-0">
+            </div>
+            <div className="min-w-0 flex-1">
               <h1 className="mq-h1" style={{ fontSize: 24 }}>{person.name}</h1>
-              <p className="dim" style={{ fontSize: 13, margin: "3px 0 0" }}>
+              {person.known_for_department && (
+                <p className="mute" style={{ fontSize: 12.5, fontWeight: 650, margin: "2px 0 0" }}>
+                  {tr("Known for")}: {tr(person.known_for_department)}
+                </p>
+              )}
+              <p className="dim" style={{ fontSize: 13, margin: "4px 0 0" }}>
                 {[
                   person.birthday
-                    ? new Date(person.birthday).toLocaleDateString(dateLocale(), { year: "numeric", month: "long", day: "numeric" })
+                    ? person.deathday
+                      ? `${fmtLong(person.birthday)} – ${fmtLong(person.deathday)}`
+                      : fmtLong(person.birthday)
                     : null,
+                  age != null && !person.deathday ? (isEs() ? `${age} años` : `${age} years old`) : null,
                   person.place_of_birth,
                 ].filter(Boolean).join(" · ")}
               </p>
+              {bio && (
+                <div style={{ marginTop: 12 }}>
+                  <p
+                    className="dim"
+                    // The toggle only shows when the clamp actually cut something.
+                    ref={(el) => { if (el && !bioOpen) setBioClamped(el.scrollHeight > el.clientHeight + 1); }}
+                    style={{
+                      fontSize: 13.5, lineHeight: 1.6, margin: 0, whiteSpace: "pre-line",
+                      ...(bioOpen ? {} : { display: "-webkit-box", WebkitLineClamp: 6, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
+                    }}
+                  >
+                    {bio}
+                  </p>
+                  {(bioClamped || bioOpen) && (
+                    <button className="btn btn-ghost btn-sm" style={{ marginTop: 6, marginLeft: -10 }} onClick={() => setBioOpen((v) => !v)}>
+                      {bioOpen ? tr("Show less") : tr("Read more")}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
