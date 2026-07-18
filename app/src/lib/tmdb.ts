@@ -69,7 +69,10 @@ export async function getCredits(tmdbId: number): Promise<CastMember[]> {
 
 /** An actor plus their TV credits, shaped for the person page. */
 export async function getPerson(personId: number): Promise<PersonResponse> {
-  const json = await call(`/person/${personId}`);
+  // v2: cache-buster — the proxy caches /person for 24h in the browser
+  // (private, max-age) and v1 responses predate the biography fields. Bump
+  // when the response shape grows again.
+  const json = await call(`/person/${personId}?v=2`);
   return personResponseSchema.parse(json);
 }
 
