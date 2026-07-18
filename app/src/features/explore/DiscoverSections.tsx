@@ -19,7 +19,8 @@ import { useFocusTrap } from "@/ui/useFocusTrap";
    a Filters chip (genres + year range in an anchored popover on desktop, a
    bottom sheet on phones) and the mosaic/list toggle on the right. Active
    filters echo as removable chips under the toolbar, and the grid grows in
-   PAGE_SIZE steps via a "Show more" button instead of a pager. */
+   PAGE_SIZE steps via a "Show more" button instead of a pager, up to the
+   MAX_ITEMS ceiling every tab shares. */
 
 function TitlePoster({ t, rank, score, onOpen, onIgnore }: { t: TitleRow; rank?: number; score?: number | null; onOpen: () => void; onIgnore?: () => void }) {
   const art = tmdbImg(t.poster_path);
@@ -109,6 +110,12 @@ function YearField({ value, onChange, label }: { value: number | null; onChange:
 
 /* Cards revealed per "Show more" press, constant across tabs. */
 const PAGE_SIZE = 18;
+
+/* Hard ceiling on a tab's pool: three "Show more" pages. Every tab browses the
+   same fixed depth, so the button always disappears after the third press. The
+   friend tab (and a heavily filtered pool) can hold fewer — this is a cap, not
+   a quota. */
+const MAX_ITEMS = 3 * PAGE_SIZE;
 
 /* Discover view mode (mosaic of posters vs compact rows), persisted so the
    choice sticks across visits. */
@@ -346,6 +353,10 @@ export function DiscoverSections() {
       }));
   }
 
+  // Trim to the shared ceiling before paging so every tab tops out at the same
+  // depth and "Show more" is spent in exactly three presses.
+  items = items.slice(0, MAX_ITEMS);
+
   const visible = items.slice(0, shown);
   const yearChipLabel = fromYear != null && toYear != null
     ? `${fromYear} – ${toYear}`
@@ -476,16 +487,11 @@ export function DiscoverSections() {
           </div>
         )}
 
-        {items.length > PAGE_SIZE && (
+        {shown < items.length && (
           <div className="disc-more">
-            {shown < items.length && (
-              <button className="btn btn-outline" onClick={() => setShown((s) => s + PAGE_SIZE)}>
-                {tr("Show more")}
-              </button>
-            )}
-            <span className="mute" style={{ fontSize: 12.5 }}>
-              {visible.length} {tr("of")} {items.length}
-            </span>
+            <button className="btn btn-outline" onClick={() => setShown((s) => s + PAGE_SIZE)}>
+              {tr("Show more")}
+            </button>
           </div>
         )}
 
