@@ -70,13 +70,18 @@ export default function TonightPage() {
   const heroAir = hero ? airLabel(hero.air_datetime) : null;
   // Landscape still for the banner; the portrait poster is the fallback for the
   // ~3% of titles TMDB has no backdrop for (cropped hard, but never a blank box).
-  const heroArt = hero ? (tmdbImg(hero.backdrop_path, "w780") ?? tmdbImg(hero.poster_path, "w780")) : undefined;
+  // w1280 for the still — the banner renders ~1224px wide, so w780 was visibly
+  // soft on a 2× display. The fallback stays at w780: TMDB's poster ladder has
+  // no w1280 rung and would 404.
+  const heroArt = hero ? (tmdbImg(hero.backdrop_path, "w1280") ?? tmdbImg(hero.poster_path, "w780")) : undefined;
 
   return (
     <div className="screen mq-page">
-      <header className="mq-header">
-        <h1 className="mq-h1">{tr("Tonight")}</h1>
-      </header>
+      {/* Tonight is the only page that drops the visible mq-h1: the banner below
+          already names the show, and the active nav tab already says "Tonight",
+          so the heading was ~190px of pure repetition above the fold. Kept in the
+          a11y tree so the document still has an h1 like every other screen. */}
+      <h1 className="sr-only">{tr("Tonight")}</h1>
 
       {hero && (
         <div className="mq-bento">

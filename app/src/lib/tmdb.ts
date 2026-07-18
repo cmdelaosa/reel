@@ -23,8 +23,10 @@ const FRESH_MS = 24 * 60 * 60 * 1000;
 /** Full TMDB image URL for a cached *_path column (null-safe).
     `w180_and_h180_face` is TMDB's face-detected square crop (what themoviedb.org
     itself uses for circular cast avatars) — use it instead of CSS-cropping a 2:3
-    portrait, which cuts heads off. */
-export function tmdbImg(path: string | null | undefined, size: "w92" | "w185" | "w342" | "w780" | "h632" | "w180_and_h180_face" | "original" = "w342"): string | undefined {
+    portrait, which cuts heads off.
+    `w1280` is a BACKDROP-only size: TMDB's poster ladder stops at w780, so asking
+    for a w1280 poster 404s. Tonight's banner is the only caller. */
+export function tmdbImg(path: string | null | undefined, size: "w92" | "w185" | "w342" | "w780" | "w1280" | "h632" | "w180_and_h180_face" | "original" = "w342"): string | undefined {
   return path ? `https://image.tmdb.org/t/p/${size}${path}` : undefined;
 }
 
