@@ -379,7 +379,9 @@
 .mq-hero-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 
 
-.mq-cols { display: grid; gap: clamp(28px, 4vw, 44px); grid-template-columns: 1fr; align-items: start; }
+/* minmax(0, 1fr), not 1fr: a 1fr track's min size is the content's min-content,
+   so one long show pill would blow the column past the viewport on mobile. */
+.mq-cols { display: grid; gap: clamp(28px, 4vw, 44px); grid-template-columns: minmax(0, 1fr); align-items: start; }
 
 /* ---- Rows (fresh / soon / calendar) ---- */
 .mq-row { display: flex; align-items: center; gap: 14px; padding: 12px; cursor: pointer; transition: border-color .15s ease; }
@@ -706,7 +708,7 @@
   .mq-tabs { display: inline-flex; }
   .mq-dock { display: none; }
   .mq-main { padding-bottom: 48px; }
-  .mq-cols { grid-template-columns: 1fr 1fr; }
+  .mq-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
   .mq-searchbtn-label, .mq-searchbtn .mq-kbd { display: none; }

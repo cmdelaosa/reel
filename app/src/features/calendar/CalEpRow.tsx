@@ -43,7 +43,7 @@ export function CalEpRow({ ep, now, later = false, sub = false }: { ep: FeedRow;
         <div className="poster-sheen" />
       </div>
       <div className="cal-ep-main">
-        <span className="cal-showpill">{showName}<ChevronRight size={12} /></span>
+        <span className="cal-showpill"><span className="truncate">{showName}</span><ChevronRight size={12} style={{ flex: "0 0 auto" }} /></span>
         <div className="cal-ep-se">
           S{pad2(ep.season_number)} · E{pad2(ep.episode_number)}
           {tag && <span className="badge badge-soft" style={{ marginLeft: 8 }}>{tr(tag)}</span>}

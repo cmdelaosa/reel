@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Star, User } from "lucide-react";
+import { User } from "lucide-react";
 import { getPerson, tmdbImg } from "@/lib/tmdb";
 import { useLibrary } from "@/lib/library";
 import { useMyRatings } from "@/lib/ratings";
@@ -135,7 +135,7 @@ export default function PersonPage() {
               <div>
                 <h2 className="section-title">{tr("shows").replace(/^./, (c) => c.toUpperCase())}</h2>
                 <p className="mute" style={{ fontSize: 13 }}>
-                  <Star size={12} style={{ verticalAlign: "-1.5px", color: "var(--accent)" }} /> {shows.filter((r) => r.status).length} {tr("in your library")}
+                  {shows.filter((r) => r.status).length} {tr("in your library")}
                 </p>
               </div>
             </div>
