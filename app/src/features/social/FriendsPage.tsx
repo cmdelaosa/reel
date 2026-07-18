@@ -1,4 +1,4 @@
-import { ChevronRight, Heart, Star } from "lucide-react";
+import { BarChart3, ChevronRight, Heart, Star } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useFriendships } from "@/lib/friends";
 import { useTaste } from "@/lib/taste";
@@ -33,7 +33,12 @@ export default function FriendsPage() {
         <p className="dim mq-sub">Who you watch with — their activity, their favorites.</p>
       </header>
 
-      {hasFriends && <TasteCard />}
+      {hasFriends && (
+        <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+          <TasteCard />
+          <KpisCard />
+        </div>
+      )}
 
       <FriendsSection />
 
@@ -77,6 +82,25 @@ function TasteCard() {
           {best
             ? <>Closest match: <b style={{ fontWeight: 650 }}>{best.name}</b> · {best.affinity!.pct}%</>
             : "See how your ratings line up with your friends'"}
+        </div>
+      </div>
+      <ChevronRight size={16} className="mute" />
+    </div>
+  );
+}
+
+/* Teaser for the group scoreboard at /friends/kpis. */
+function KpisCard() {
+  const navigate = useNavigate();
+  return (
+    <div className="card mq-row" onClick={() => navigate("/friends/kpis")}>
+      <span className="badge badge-soft btn-icon" style={{ width: 40, height: 40, flex: "0 0 auto" }}>
+        <BarChart3 size={18} style={{ color: "var(--accent)" }} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>Group stats</div>
+        <div className="dim truncate" style={{ fontSize: 12.5 }}>
+          What to watch next, score comparisons, shared stinkers
         </div>
       </div>
       <ChevronRight size={16} className="mute" />
