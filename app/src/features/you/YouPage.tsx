@@ -178,9 +178,9 @@ export default function YouPage() {
         </div>
       )}
 
-      <section className="taste-grid">
+      <>
         {taste.topGenres.length > 0 && (
-          <div className="taste-col">
+          <section className="flex flex-col gap-3">
             <div className="eyebrow">{tr("Taste profile")}</div>
             <div className="card p-4 flex flex-col gap-2">
               {taste.topGenres.slice(0, 8).map((g) => (
@@ -198,10 +198,10 @@ export default function YouPage() {
                 ))}
               </div>
             )}
-          </div>
+          </section>
         )}
         <WatchHeatmap />
-      </section>
+      </>
 
       <section className="flex flex-col gap-4">
         <div className="mq-sechead">

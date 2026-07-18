@@ -408,10 +408,10 @@ export default function FriendPage() {
               </div>
             )}
 
-            {/* Taste profile + their watch activity, side by side and height-matched */}
-            <section className="taste-grid">
+            {/* Taste profile, then their watch activity — each full width */}
+            <>
               {derived && derived.topGenres.length > 0 && (
-                <div className="taste-col">
+                <section className="flex flex-col gap-3">
                   <div className="eyebrow">{tr("Taste profile")}</div>
                   <div className="card p-4 flex flex-col gap-2">
                     {derived.topGenres.slice(0, 8).map((g) => (
@@ -429,10 +429,10 @@ export default function FriendPage() {
                       ))}
                     </div>
                   )}
-                </div>
+                </section>
               )}
               <WatchHeatmap userId={friendId} />
-            </section>
+            </>
           </>
         )}
 

@@ -837,36 +837,35 @@
 .friends-pop-row:hover, .friends-pop-row:focus-visible { background: var(--surface-2); }
 
 /* ---- You page: taste profile + watch heatmap side by side on web ---- */
-/* Taste profile + watch activity, side by side from 900px (your profile and a
-   friend's). The two panels must line up exactly, so each column is a *subgrid*
-   of a shared eyebrow / panel / extras row track: both .card boxes land in the
-   same 1fr row and therefore end up identical in height, whatever their natural
-   content height. Plain columns (align-items) can't guarantee that — the taste
-   column carries an extra badge row under its card. */
-.taste-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
-.taste-grid:empty { display: none; } /* both halves absent → no stray gap */
-.taste-col { display: grid; gap: 12px; grid-template-rows: auto 1fr auto; align-content: start; }
-@media (min-width: 900px) {
-  .taste-grid { grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr auto; gap: 12px 20px; }
-  .taste-col { grid-row: span 3; grid-template-rows: subgrid; align-content: stretch; }
-  /* Only one half present (friend follows nothing, or the heatmap is hidden):
-     span both columns instead of sitting in a half-width column. */
-  .taste-col:only-child { grid-column: 1 / -1; }
-}
-/* Whichever panel is the shorter of the two gets the leftover height; centre
-   its contents instead of leaving it all pooled at the bottom. */
-.taste-grid .card { justify-content: center; }
+/* Taste profile and watch activity each take the full width and stack. They used
+   to sit side by side (height-matched via subgrid), but a rolling year is 53
+   columns: in half a row that's ~7px cells at 1440px and ~4px at 900px, plus a
+   mostly empty panel next to the taller taste card. Full width buys ~20px cells. */
 
-/* GitHub-style contribution grid: weeks as columns, Monday-first rows */
-.heatmap { display: flex; gap: 8px; }
+/* GitHub-style contribution grid: weeks as columns, Monday-first rows.
+   A rolling year is 53 columns, so cells get a floor (--heat-min) and the whole
+   board scrolls sideways when the container is too narrow to honour it (mobile)
+   — months, weekday gutter and cells live in one scroller so they can't drift
+   apart. Rows are auto-sized rather than 1fr: with 1fr the cells stretch to
+   whatever height the card has and stop being squares. */
+.heatmap { --heat-gap: 3px; --heat-min: 9px; overflow-x: auto; overflow-y: hidden; }
+.heatmap-board {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px; row-gap: 4px;
+  min-width: min-content;
+}
 .heatmap-wd {
-  display: grid; grid-template-rows: repeat(7, 1fr); gap: 3px; width: 18px;
-  font-size: 9.5px; color: var(--text-mute); text-align: right; flex: 0 0 auto;
+  grid-area: 2 / 1;
+  display: grid; grid-template-rows: repeat(7, 1fr); gap: var(--heat-gap); width: 18px;
+  font-size: 9.5px; color: var(--text-mute); text-align: right;
 }
 .heatmap-wd span { display: flex; align-items: center; justify-content: flex-end; }
 .heatmap-grid {
-  flex: 1; display: grid; grid-auto-flow: column;
-  grid-template-rows: repeat(7, 1fr); gap: 3px; min-width: 0;
+  grid-area: 2 / 2;
+  display: grid; grid-auto-flow: column;
+  grid-template-rows: repeat(7, auto); gap: var(--heat-gap); min-width: 0;
 }
 .heatmap-cell { aspect-ratio: 1; border-radius: 3px; background: var(--surface-3); min-width: 0; }
 .heatmap-cell.future { background: transparent; }
@@ -875,7 +874,8 @@
 .heatmap-cell.l3 { background: color-mix(in srgb, var(--accent) 76%, var(--surface-3)); }
 .heatmap-cell.l4 { background: var(--accent); }
 .heatmap-months {
-  display: grid; overflow: hidden;
+  grid-area: 1 / 2;
+  display: grid; column-gap: var(--heat-gap);
   font-size: 10px; color: var(--text-mute);
 }
 .heatmap-months span { white-space: nowrap; }

@@ -1,21 +1,26 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useWatchHeatmap } from "@/lib/stats";
 import { dateLocale, isEs, t as tr } from "@/lib/i18n";
 
 /* GitHub-style contribution grid of the days you watched episodes — weeks as
-   columns, Monday-first rows, ~6 months back. Hidden entirely while loading or
-   if the RPC is missing (e.g. hosted DB behind on migrations).
+   columns, Monday-first rows. Hidden entirely while loading or if the RPC is
+   missing (e.g. hosted DB behind on migrations).
 
    Pass `userId` to render a friend's grid instead of your own (friend profile);
    the friend-read RLS on watch_events is what gates it. */
 
-const WEEKS = 26;
+/* A rolling year, not year-to-date: 53 columns is the smallest count that can
+   hold 365 days once they're snapped to Monday-first weeks (52 weeks = 364 days
+   plus the partial current week). The RPC window below is WEEKS * 7, which must
+   stay >= the span the grid walks or the leftmost column loses its data. */
+const WEEKS = 53;
 
 const localIso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export function WatchHeatmap({ userId }: { userId?: string }) {
   const { data, isPending, isError } = useWatchHeatmap(WEEKS * 7, userId);
+  const scrollerRef = useRef<HTMLDivElement>(null);
 
   const grid = useMemo(() => {
     if (!data) return null;
@@ -55,6 +60,13 @@ export function WatchHeatmap({ userId }: { userId?: string }) {
     return { cells, months };
   }, [data]);
 
+  // When the year is too wide to fit (narrow screens), open on the current week
+  // rather than a year ago — the recent end is the part worth seeing.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [grid]);
+
   if (isPending || isError || !grid) return null;
 
   const weekdays = isEs() ? ["L", "", "X", "", "V", "", ""] : ["M", "", "W", "", "F", "", ""];
@@ -62,29 +74,35 @@ export function WatchHeatmap({ userId }: { userId?: string }) {
   // way ("Their top ratings") and a bare "Watch activity" would be ambiguous.
   const heading = userId ? tr("Their watch activity") : tr("Watch activity");
 
+  // Month labels share the grid's column track so each one sits over the week
+  // it names, gaps included.
+  const weekColumns = `repeat(${WEEKS}, minmax(var(--heat-min), 1fr))`;
+
   return (
-    // .taste-col: subgrid column, so this card height-matches the taste profile
-    // panel it sits next to (see .taste-grid).
-    <div className="taste-col">
+    <div className="flex flex-col gap-3">
       <div className="eyebrow">{heading}</div>
       <div className="card p-4 flex flex-col gap-2">
-        <div className="heatmap-months" style={{ gridTemplateColumns: `repeat(${WEEKS}, 1fr)`, marginLeft: 26 }}>
-          {grid.months.map((m) => (
-            <span key={m.week} style={{ gridRowStart: 1, gridColumnStart: m.week + 1 }}>{m.label}</span>
-          ))}
-        </div>
-        <div className="heatmap">
-          <div className="heatmap-wd" aria-hidden>
-            {weekdays.map((d, i) => <span key={i}>{d}</span>)}
-          </div>
-          <div className="heatmap-grid" role="img" aria-label={heading}>
-            {grid.cells.map((c) => (
-              <div
-                key={c.key}
-                className={`heatmap-cell${c.future ? " future" : c.level ? ` l${c.level}` : ""}`}
-                title={c.future ? undefined : c.label}
-              />
-            ))}
+        {/* One scroll container around months + gutter + cells, so they can
+            never drift out of sync when a year is too wide to fit. */}
+        <div className="heatmap" ref={scrollerRef}>
+          <div className="heatmap-board">
+            <div className="heatmap-months" style={{ gridTemplateColumns: weekColumns }}>
+              {grid.months.map((m) => (
+                <span key={m.week} style={{ gridColumnStart: m.week + 1 }}>{m.label}</span>
+              ))}
+            </div>
+            <div className="heatmap-wd" aria-hidden>
+              {weekdays.map((d, i) => <span key={i}>{d}</span>)}
+            </div>
+            <div className="heatmap-grid" role="img" aria-label={heading} style={{ gridTemplateColumns: weekColumns }}>
+              {grid.cells.map((c) => (
+                <div
+                  key={c.key}
+                  className={`heatmap-cell${c.future ? " future" : c.level ? ` l${c.level}` : ""}`}
+                  title={c.future ? undefined : c.label}
+                />
+              ))}
+            </div>
           </div>
         </div>
         <div className="heatmap-legend">
