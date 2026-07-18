@@ -110,12 +110,17 @@ function MyShowsFeed() {
   // land on "Today" once the first page is in
   useEffect(() => {
     if (anchored.current || isPending) return;
-    anchored.current = true;
-    const id = requestAnimationFrame(() => {
-      todayRef.current?.scrollIntoView({ block: "start" });
+    // setTimeout, not rAF: frames don't run while the tab is hidden, so an
+    // rAF-gated anchor silently never lands when the calendar is restored in a
+    // background tab. Latch only after the scroll actually happened, so a
+    // cancelled callback doesn't swallow the anchor for good.
+    const id = setTimeout(() => {
+      if (!todayRef.current) return;
+      todayRef.current.scrollIntoView({ block: "start" });
       window.scrollBy(0, -76);
-    });
-    return () => cancelAnimationFrame(id);
+      anchored.current = true;
+    }, 0);
+    return () => clearTimeout(id);
   }, [isPending]);
 
   if (!isPending && rows.length === 0) {
@@ -128,7 +133,13 @@ function MyShowsFeed() {
     );
   }
 
-  const todayOffset = days.find(([off]) => off >= 0)?.[0];
+  // Anchor on today when it has episodes; otherwise on the last day that does,
+  // so you land at the edge of what has already aired rather than being thrown
+  // forward to the next premiere (which can be weeks away).
+  const todayOffset =
+    days.find(([off]) => off === 0)?.[0] ??
+    [...days].reverse().find(([off]) => off < 0)?.[0] ??
+    days.find(([off]) => off > 0)?.[0];
 
   return (
     <>
@@ -176,6 +187,16 @@ function MyShowsFeed() {
 function PremieresList({ kind }: { kind: "returning" | "new" }) {
   const { data: library = [] } = useLibrary();
   const now = new Date();
+
+  // Land at the top whenever this view opens. The feed we came from leaves the
+  // window scrolled deep into its history, and a plain scrollTo in the tab's
+  // click handler can be undone by the feed's own scroll anchoring as it
+  // unmounts — so re-assert it after the browser has laid this list out.
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+    const id = setTimeout(() => window.scrollTo(0, 0), 0);
+    return () => clearTimeout(id);
+  }, [kind]);
 
   // New = never aired (aired_count 0). Returning = the show finished a season
   // and a NEW season is announced beyond it (upcoming_season_*, authoritative
