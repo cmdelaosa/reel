@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate, useSearchParams } from "react-router";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import {
   Bell, CalendarClock, Clapperboard, Compass, Play, Search, Sliders, Users,
 } from "lucide-react";
@@ -26,6 +26,7 @@ const TABS = [
 export function Shell() {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const titleParam = searchParams.get("title");
   const detailTmdbId = titleParam && /^\d+$/.test(titleParam) ? Number(titleParam) : null;
@@ -52,6 +53,20 @@ export function Shell() {
       return next;
     });
   };
+
+  /* Land at the top of every screen. Route changes otherwise inherit the window
+     offset, and the calendar anchors itself thousands of pixels into its own
+     feed — so leaving it dropped you into the middle of the next page, clamped
+     to whatever that page's height allowed.
+     Keyed on pathname, not the whole location: ?title= is modal state here, and
+     resetting on it would yank the page to the top behind an opening sheet.
+     Re-asserted after layout because the outgoing view's scroll anchoring can
+     undo a single scrollTo — same reason PremieresList does it. */
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+    const id = setTimeout(() => window.scrollTo(0, 0), 0);
+    return () => clearTimeout(id);
+  }, [pathname]);
 
   /* ⌘K / Ctrl-K opens the palette from anywhere */
   useEffect(() => {
