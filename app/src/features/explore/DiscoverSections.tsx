@@ -317,13 +317,6 @@ export function DiscoverSections() {
   const current = Math.min(page, pageCount - 1); // clamp when the pool shrinks
   const visible = items.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
 
-  const subtitle = tr(
-    tab === "popular"
-      ? (catalogMode ? "Most popular for the selected years" : "New shows and fresh seasons, ranked by buzz")
-      : tab === "rated"
-        ? "The best of the catalog, ranked by TMDB score"
-        : "Shows your friends are watching, most friends first",
-  );
   const emptyMsg = tr(
     tab === "popular"
       ? "No popular shows match these filters."
@@ -338,7 +331,7 @@ export function DiscoverSections() {
     <>
       {trending.length > 0 && (
         <section className="flex flex-col gap-4">
-          <Rail title={tr("Trending this week")} subtitle={tr("What everyone's watching, via TMDB")}>
+          <Rail title={tr("Trending this week")}>
             {trending.map((t, i) => (
               <div key={t.tmdb_id} style={{ width: "var(--rail-pw)" }}>
                 <TitlePoster t={t} rank={i + 1} onOpen={() => open(t.tmdb_id)} />
@@ -393,7 +386,6 @@ export function DiscoverSections() {
             </div>
           </div>
         </div>
-        <p className="mute" style={{ fontSize: 13, margin: "-8px 0 0" }}>{subtitle}</p>
 
         <div className="flex items-center gap-3 flex-wrap">
           <GenreDropdown options={GENRE_NAMES} selected={selectedGenres} onToggle={toggleGenre} />

@@ -33,11 +33,6 @@ export default function HistoryPage() {
     <div className="screen mq-page cal-page">
       <header className="mq-header">
         <h1 className="mq-h1">{tr("History")}</h1>
-        <p className="dim mq-sub">
-          {isEs()
-            ? "Todo lo que has visto, lo más reciente primero — con la hora exacta en que lo marcaste."
-            : "Everything you've watched, newest first — with the exact time you marked it."}
-        </p>
       </header>
 
       {isPending ? (

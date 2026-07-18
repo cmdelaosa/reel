@@ -7,7 +7,7 @@ import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { useUpNext, type UpNextRow } from "@/lib/upnext";
 import { useMarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
-import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
+import { isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { Poster, Rail } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
@@ -45,7 +45,6 @@ export default function TonightPage() {
   // Fresh episodes = everything a followed show aired in the last 5 days (from
   // the calendar feed), newest first — independent of the per-show up-next.
   const freshFeed = recentlyAired(feed, now);
-  const freshUnseen = freshFeed.filter((e) => e.watch_event_id == null).length;
   const hero = ordered[0];
   const heroMark = useMarkWatched(hero?.title_id ?? "");
   const rest = ordered.slice(1);
@@ -59,20 +58,12 @@ export default function TonightPage() {
       return next;
     });
 
-  const dateLabel = now.toLocaleDateString(dateLocale(), { weekday: "long", month: "long", day: "numeric" });
   const heroProgress = hero && hero.aired_count > 0 ? Math.round((hero.watched_count / hero.aired_count) * 100) : 0;
 
   return (
     <div className="screen mq-page">
       <header className="mq-header">
         <h1 className="mq-h1">{tr("Tonight")}</h1>
-        <p className="dim mq-sub">
-          {isPending
-            ? tr("Working out what's next…")
-            : isEs()
-              ? `${dateLabel} — ${freshUnseen} ${freshUnseen === 1 ? "episodio nuevo" : "episodios nuevos"} por ver, ${soon.length} estrenos en camino.`
-              : `${dateLabel} — ${freshUnseen} new ${freshUnseen === 1 ? "episode" : "episodes"} waiting, ${soon.length} premieres on the way.`}
-        </p>
       </header>
 
       {hero && (
@@ -120,7 +111,7 @@ export default function TonightPage() {
 
       {rest.length > 0 && (
         <section className="flex flex-col gap-4">
-          <Rail title={tr("Continue watching")} subtitle={tr("Pick up where you left off")} scrollToStartKey={followKey}>
+          <Rail title={tr("Continue watching")} scrollToStartKey={followKey}>
             {rest.map((r) => (
               <ContinueCard key={r.title_id} r={r} onOpen={() => open(r.tmdb_id)} onMarked={() => setFollowKey((k) => k + 1)} />
             ))}
@@ -131,10 +122,7 @@ export default function TonightPage() {
       <div className="mq-cols">
         <section className="flex flex-col gap-4">
           <div className="mq-sechead">
-            <div>
-              <h2 className="section-title">{tr("Fresh episodes")}</h2>
-              <p className="mute" style={{ fontSize: 13 }}>{tr("Just aired from shows you follow")}</p>
-            </div>
+            <h2 className="section-title">{tr("Fresh episodes")}</h2>
             <Link to="/calendar" className="btn btn-ghost btn-sm">{tr("See all")} <ChevronRight size={14} /></Link>
           </div>
           <div className="flex flex-col gap-3">
@@ -147,10 +135,7 @@ export default function TonightPage() {
 
         <section className="flex flex-col gap-4">
           <div className="mq-sechead">
-            <div>
-              <h2 className="section-title">{tr("Premieres soon")}</h2>
-              <p className="mute" style={{ fontSize: 13 }}>{tr("Dated within the next 60 days")}</p>
-            </div>
+            <h2 className="section-title">{tr("Premieres soon")}</h2>
             <Link to="/calendar" className="btn btn-ghost btn-sm">{tr("See all")} <ChevronRight size={14} /></Link>
           </div>
           <div className="flex flex-col gap-3">

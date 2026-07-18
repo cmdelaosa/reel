@@ -65,11 +65,6 @@ export default function ImportPage() {
     <div className="screen mq-page" style={{ maxWidth: 640, marginInline: "auto" }}>
       <header className="mq-header">
         <h1 className="mq-h1">{tr("Import from TV Time")}</h1>
-        <p className="dim mq-sub">
-          {isEs()
-            ? <>Sube tu export GDPR de TV Time (un <code>.zip</code>). Cruzaremos tus series con TMDB y traeremos tus seguimientos e historial. Las notas no vienen incluidas.</>
-            : <>Upload your TV Time GDPR export (a <code>.zip</code>). We'll match your shows to TMDB and bring over your follows and watch history. Ratings aren't included.</>}
-        </p>
       </header>
 
       <button

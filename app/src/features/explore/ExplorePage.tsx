@@ -1,4 +1,3 @@
-import { Search } from "lucide-react";
 import { t as tr } from "@/lib/i18n";
 import { DiscoverSections } from "@/features/explore/DiscoverSections";
 import { CollectionsSection } from "@/features/explore/CollectionsSection";
@@ -12,14 +11,7 @@ export default function ExplorePage() {
     <div className="screen mq-page">
       <header className="mq-header">
         <h1 className="mq-h1">{tr("Explore")}</h1>
-        <p className="dim mq-sub">{tr("Find your next show — starting with what your friends love.")}</p>
       </header>
-
-      <button className="card mq-searchrow" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}>
-        <Search size={18} className="mute" />
-        <span className="mute">{tr("Search shows, genres, networks…")}</span>
-        <kbd className="mq-kbd" style={{ marginLeft: "auto" }}>⌘K</kbd>
-      </button>
 
       <DiscoverSections />
 

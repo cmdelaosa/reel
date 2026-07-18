@@ -35,7 +35,6 @@ export default function CollectionPage() {
       </Link>
       <header className="mq-header">
         <h1 className="mq-h1">{data?.collection.name ?? (isEs() ? "Colección" : "Collection")}</h1>
-        <p className="dim mq-sub">{data?.collection.sub ?? (isPending ? tr("Loading…") : "")}</p>
       </header>
 
       {!isPending && data && titles.length === 0 && (

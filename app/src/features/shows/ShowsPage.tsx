@@ -68,9 +68,6 @@ export default function ShowsPage() {
     <div className="screen mq-page">
       <header className="mq-header">
         <h1 className="mq-h1">{tr("My Shows")}</h1>
-        <p className="dim mq-sub">
-          {isPending ? tr("Loading your shows…") : `${library.length} ${tr("shows in your library.")}`}
-        </p>
       </header>
 
       <div className="mq-toolbar">

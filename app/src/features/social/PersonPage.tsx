@@ -134,9 +134,6 @@ export default function PersonPage() {
             <div className="mq-sechead">
               <div>
                 <h2 className="section-title">{tr("shows").replace(/^./, (c) => c.toUpperCase())}</h2>
-                <p className="mute" style={{ fontSize: 13 }}>
-                  {shows.filter((r) => r.status).length} {tr("in your library")}
-                </p>
               </div>
             </div>
             <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>

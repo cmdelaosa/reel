@@ -204,17 +204,16 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() ? "month" : "later";
   };
 
-  const monthLabel = now.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" });
-  const groups: { key: "month" | "later" | "tba"; title: string; sub: string }[] = isEs()
+  const groups: { key: "month" | "later" | "tba"; title: string }[] = isEs()
     ? [
-        { key: "month", title: "Este mes", sub: monthLabel },
-        { key: "later", title: "Más adelante", sub: "Estrenos con fecha" },
-        { key: "tba", title: "Anunciadas · sin fecha", sub: "Te avisaremos en cuanto tengan fecha" },
+        { key: "month", title: "Este mes" },
+        { key: "later", title: "Más adelante" },
+        { key: "tba", title: "Anunciadas · sin fecha" },
       ]
     : [
-        { key: "month", title: "This month", sub: monthLabel },
-        { key: "later", title: `Later`, sub: "Dated premieres" },
-        { key: "tba", title: "Announced · no date yet", sub: "We'll tell you the moment it's dated" },
+        { key: "month", title: "This month" },
+        { key: "later", title: `Later` },
+        { key: "tba", title: "Announced · no date yet" },
       ];
 
   if (items.length === 0) {
@@ -236,7 +235,6 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
           <div key={g.key} className="flex flex-col gap-3">
             <div className="flex items-baseline gap-3">
               <h2 className="section-title">{g.title}</h2>
-              <span className="mute" style={{ fontSize: 13 }}>{g.sub}</span>
             </div>
             <div className="flex flex-col gap-3">
               {rows.map((s) => (

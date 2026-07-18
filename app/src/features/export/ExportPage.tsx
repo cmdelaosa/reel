@@ -43,9 +43,6 @@ export default function ExportPage() {
     <div className="screen mq-page" style={{ maxWidth: 640, marginInline: "auto" }}>
       <header className="mq-header">
         <h1 className="mq-h1">{tr("Export my data")}</h1>
-        <p className="dim mq-sub">
-          {isEs() ? "Descarga todo lo que Reel guarda de ti en un zip. Tus datos son tuyos." : "Download everything Reel holds for you as a zip. Your data is yours."}
-        </p>
       </header>
 
       <div className="card" style={{ padding: 22, display: "flex", flexDirection: "column", gap: 16 }}>

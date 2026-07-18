@@ -152,7 +152,6 @@ export default function KpisPage() {
     <div className="screen mq-page">
       <header className="mq-header">
         <h1 className="mq-h1">{tr("Group stats")}</h1>
-        <p className="dim mq-sub">{tr("The friend-group scoreboard — what to watch next, how your scores compare, and the shows everyone regrets.")}</p>
       </header>
 
       {kpis.loading ? (

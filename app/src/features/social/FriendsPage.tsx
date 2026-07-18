@@ -31,7 +31,6 @@ export default function FriendsPage() {
     <div className="screen mq-page">
       <header className="mq-header">
         <h1 className="mq-h1">{tr("Friends")}</h1>
-        <p className="dim mq-sub">{tr("Who you watch with — their activity, their favorites.")}</p>
       </header>
 
       {hasFriends && (
@@ -48,10 +47,7 @@ export default function FriendsPage() {
       {hasFriends && bestRated.length > 0 && (
         <section className="flex flex-col gap-4">
           <div className="mq-sechead">
-            <div>
-              <h2 className="section-title">{tr("Best rated by friends")}</h2>
-              <p className="mute" style={{ fontSize: 13 }}>{tr("Their highest-scored shows")}</p>
-            </div>
+            <h2 className="section-title">{tr("Best rated by friends")}</h2>
           </div>
           <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
             {bestRated.map((b) => (

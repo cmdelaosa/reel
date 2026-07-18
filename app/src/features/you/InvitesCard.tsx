@@ -38,11 +38,6 @@ export function InvitesCard() {
       <div className="mq-sechead">
         <div>
           <h2 className="section-title">{isEs() ? "Invitaciones" : "Invites"}</h2>
-          <p className="mute" style={{ fontSize: 13 }}>
-            {isEs()
-              ? `Reel es solo con invitación — trae a un amigo. ${unused}/10 sin usar.`
-              : `Reel is invite-only — bring a friend. ${unused}/10 unused.`}
-          </p>
         </div>
         <button
           className="btn btn-accent btn-sm"

@@ -204,7 +204,6 @@ export default function YouPage() {
         <div className="mq-sechead">
           <div>
             <h2 className="section-title">{tr("Your ratings")}</h2>
-            <p className="mute" style={{ fontSize: 13 }}>{rated.length} {tr("shows scored")}</p>
           </div>
         </div>
 

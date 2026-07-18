@@ -39,9 +39,6 @@ export function FriendsSection() {
       <div className="mq-sechead">
         <div>
           <h2 className="section-title">{tr("Friends")}</h2>
-          <p className="mute" style={{ fontSize: 13 }}>
-            {friends.length} {tr("friends")} · {isEs() ? "añade por @usuario" : "add by @handle"}
-          </p>
         </div>
       </div>
 

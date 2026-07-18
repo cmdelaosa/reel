@@ -96,7 +96,6 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
       <div className="mq-sechead">
         <div>
           <h2 className="section-title">{isEs() ? "Actividad de amigos" : "Friend activity"}</h2>
-          <p className="mute" style={{ fontSize: 13 }}>{isEs() ? "Qué están viendo y puntuando tus amigos" : "What your friends are watching and rating"}</p>
         </div>
       </div>
       <div className="card" style={{ padding: 6 }}>

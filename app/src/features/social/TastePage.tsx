@@ -91,7 +91,6 @@ export default function TastePage() {
     <div className="screen mq-page">
       <header className="mq-header">
         <h1 className="mq-h1">{tr("Taste match")}</h1>
-        <p className="dim mq-sub">{tr("How your ratings line up with your friends' — who scores like you, and which shows split you.")}</p>
       </header>
 
       {taste.loading ? (
