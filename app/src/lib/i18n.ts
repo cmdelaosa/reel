@@ -178,7 +178,7 @@ const DICT: Record<string, string> = {
   "Who you watch with — their activity, their favorites.": "Con quién ves series — su actividad y sus favoritas.",
   "Friend activity": "Actividad de amigos",
   "Taste match": "Afinidad de gustos",
-  "Group stats": "Stats del grupo",
+  "Friends stats": "Estadísticas de amigos",
   "What to watch next, score comparisons, shared stinkers": "Qué ver, comparativa de notas y los truños compartidos",
   "See how your ratings line up with your friends'": "Mira cómo encajan tus notas con las de tus amigos",
   "Closest match:": "Mayor afinidad:",
@@ -199,8 +199,8 @@ const DICT: Record<string, string> = {
   "No shared stinkers yet — lucky you.": "Aún no hay truños compartidos — suerte la tuya.",
   "The friend-group scoreboard — what to watch next, how your scores compare, and the shows everyone regrets.":
     "El marcador del grupo — qué ver, cómo comparan tus notas y las series de las que todos os arrepentís.",
-  "No friends yet — add someone on the Friends tab to unlock the group stats.":
-    "Aún no tienes amigos — añade a alguien en la pestaña Amigos para desbloquear las stats.",
+  "No friends yet — add someone on the Friends tab to unlock the friends stats.":
+    "Aún no tienes amigos — añade a alguien en la pestaña Amigos para desbloquear las estadísticas.",
   "friend rated it": "amigo la puntuó",
   "friends rated it": "amigos la puntuaron",
   "You": "Tú",

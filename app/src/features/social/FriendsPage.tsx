@@ -97,7 +97,7 @@ function KpisCard() {
         <BarChart3 size={18} style={{ color: "var(--accent)" }} />
       </span>
       <div className="flex-1 min-w-0">
-        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{tr("Group stats")}</div>
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{tr("Friends stats")}</div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>
           {tr("What to watch next, score comparisons, shared stinkers")}
         </div>
