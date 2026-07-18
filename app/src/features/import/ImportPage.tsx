@@ -63,9 +63,7 @@ export default function ImportPage() {
 
   return (
     <div className="screen mq-page" style={{ maxWidth: 640, marginInline: "auto" }}>
-      <header className="mq-header">
-        <h1 className="mq-h1">{tr("Import from TV Time")}</h1>
-      </header>
+      <h1 className="sr-only">{tr("Import from TV Time")}</h1>
 
       <button
         type="button"

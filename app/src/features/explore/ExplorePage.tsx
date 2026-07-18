@@ -9,9 +9,7 @@ import { CollectionsSection } from "@/features/explore/CollectionsSection";
 export default function ExplorePage() {
   return (
     <div className="screen mq-page">
-      <header className="mq-header">
-        <h1 className="mq-h1">{tr("Explore")}</h1>
-      </header>
+      <h1 className="sr-only">{tr("Explore")}</h1>
 
       <DiscoverSections />
 

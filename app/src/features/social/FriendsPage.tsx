@@ -30,9 +30,7 @@ export default function FriendsPage() {
 
   return (
     <div className="screen mq-page">
-      <header className="mq-header">
-        <h1 className="mq-h1">{tr("Friends")}</h1>
-      </header>
+      <h1 className="sr-only">{tr("Friends")}</h1>
 
       {hasFriends && (
         <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>

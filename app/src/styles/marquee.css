@@ -654,7 +654,9 @@
 .fr-activity + .fr-activity { margin-top: 2px; }
 
 /* Calendar reads best as a centered column, not full desktop width */
-.cal-page > * { width: 100%; max-width: 780px; margin-inline: auto; }
+/* :not(.sr-only) — Tailwind's utilities sit in a layer, so this unlayered rule
+   outranks them and would stretch a visually-hidden heading to 780px wide. */
+.cal-page > *:not(.sr-only) { width: 100%; max-width: 780px; margin-inline: auto; }
 
 /* View switcher pinned under the top bar — always reachable while scrolling */
 /* Friend header — identity + section tabs in one slim bar, pinned under the
@@ -949,6 +951,14 @@
   .mq-dock { display: none; }
   .mq-main { padding-bottom: 48px; }
   .mq-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Cap the banner on desktop. The page container already stops the frame at
+     1224px, so 21/9 plateaus at 523px rather than growing forever — but 523px is
+     still over half a laptop viewport for one episode. 420px takes it to ~2.9:1
+     at full width. The cap only starts biting around 1035px, where the natural
+     height crosses 420, so there is no jump at the breakpoint.
+     Safe here only because width is explicit above: on an auto-width grid item
+     a max-height feeds back into the width and shrinks the whole frame. */
+  .mq-hero { max-height: 420px; }
 }
 @media (max-width: 560px) {
   .mq-searchbtn-label, .mq-searchbtn .mq-kbd { display: none; }

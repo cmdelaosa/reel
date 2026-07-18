@@ -41,9 +41,7 @@ export default function ExportPage() {
 
   return (
     <div className="screen mq-page" style={{ maxWidth: 640, marginInline: "auto" }}>
-      <header className="mq-header">
-        <h1 className="mq-h1">{tr("Export my data")}</h1>
-      </header>
+      <h1 className="sr-only">{tr("Export my data")}</h1>
 
       <div className="card" style={{ padding: 22, display: "flex", flexDirection: "column", gap: 16 }}>
         <div className="flex flex-col gap-2.5">

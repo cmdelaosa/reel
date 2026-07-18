@@ -77,10 +77,11 @@ export default function TonightPage() {
 
   return (
     <div className="screen mq-page">
-      {/* Tonight is the only page that drops the visible mq-h1: the banner below
-          already names the show, and the active nav tab already says "Tonight",
-          so the heading was ~190px of pure repetition above the fold. Kept in the
-          a11y tree so the document still has an h1 like every other screen. */}
+      {/* Page headings are sr-only across the app now — the nav tab or the route
+          you came from already says where you are, and here the banner names the
+          show as well. Kept in the a11y tree so every screen still opens at an
+          h1. CollectionPage and PersonPage are the exceptions: their heading is
+          the subject of the page, not a label for it. */}
       <h1 className="sr-only">{tr("Tonight")}</h1>
 
       {hero && (

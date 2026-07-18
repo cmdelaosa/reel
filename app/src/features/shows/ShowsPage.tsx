@@ -66,9 +66,7 @@ export default function ShowsPage() {
 
   return (
     <div className="screen mq-page">
-      <header className="mq-header">
-        <h1 className="mq-h1">{tr("My Shows")}</h1>
-      </header>
+      <h1 className="sr-only">{tr("My Shows")}</h1>
 
       <div className="mq-toolbar">
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ flex: 1 }}>

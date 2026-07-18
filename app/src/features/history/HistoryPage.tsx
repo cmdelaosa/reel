@@ -31,9 +31,7 @@ export default function HistoryPage() {
 
   return (
     <div className="screen mq-page cal-page">
-      <header className="mq-header">
-        <h1 className="mq-h1">{tr("History")}</h1>
-      </header>
+      <h1 className="sr-only">{tr("History")}</h1>
 
       {isPending ? (
         <p className="dim">{tr("Loading…")}</p>

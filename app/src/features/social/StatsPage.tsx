@@ -156,9 +156,7 @@ export default function StatsPage() {
 
   return (
     <div className="screen mq-page">
-      <header className="mq-header">
-        <h1 className="mq-h1">{tr("Friends stats")}</h1>
-      </header>
+      <h1 className="sr-only">{tr("Friends stats")}</h1>
 
       {stats.loading ? (
         <div className="dim">{tr("Loading…")}</div>

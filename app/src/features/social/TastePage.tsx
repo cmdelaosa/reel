@@ -94,9 +94,7 @@ export default function TastePage() {
 
   return (
     <div className="screen mq-page">
-      <header className="mq-header">
-        <h1 className="mq-h1">{tr("Taste match")}</h1>
-      </header>
+      <h1 className="sr-only">{tr("Taste match")}</h1>
 
       {taste.loading ? (
         <div className="dim">{tr("Loading…")}</div>
