@@ -83,8 +83,12 @@ function MyShowsFeed() {
       (ents) => {
         // Only auto-extend when the page actually scrolls — otherwise a short
         // feed keeps the sentinel visible and would loop straight to the cap.
+        // And never before the initial today-anchor has landed: on a remount
+        // with warm cache the feed mounts at scroll 0 with the sentinel in
+        // view, and a widen racing the anchor prepends content that shifts
+        // the viewport weeks off target.
         const scrollable = document.documentElement.scrollHeight > window.innerHeight + 200;
-        if (ents[0].isIntersecting && scrollable && weeksBack < 60 && !isPending) {
+        if (ents[0].isIntersecting && anchored.current && scrollable && weeksBack < 60 && !isPending) {
           prevH.current = document.documentElement.scrollHeight;
           setWeeksBack((w) => w + 3);
         }

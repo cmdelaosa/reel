@@ -564,7 +564,10 @@
 }
 
 /* ---- Calendar · TV-Time-style episode feed ---- */
-.cal-feed { display: flex; flex-direction: column; }
+/* overflow-anchor off: lazy history compensates prepends with an explicit
+   scrollBy; the browser's native scroll anchoring doing it too doubles the
+   correction and throws the viewport weeks forward. */
+.cal-feed { display: flex; flex-direction: column; overflow-anchor: none; }
 .cal-sentinel { text-align: center; font-size: 12px; color: var(--text-mute); padding: 10px 0; }
 .cal-day { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 148px; }
 .cal-daysep { display: flex; justify-content: center; margin: 16px 0 6px; }
