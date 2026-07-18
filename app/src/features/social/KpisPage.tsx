@@ -9,6 +9,7 @@ import { useOpenTitle } from "@/lib/useOpenTitle";
 import { locName, t as tr, useEsNames } from "@/lib/i18n";
 import { tmdbImg } from "@/lib/tmdb";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
+import { usePager } from "@/ui/Pager";
 import { posterBg } from "@/ui/posterBg";
 
 /* Group KPIs (route /friends/kpis) — the friend-group scoreboard Krauser asked
@@ -58,11 +59,10 @@ function useKpis() {
     }));
 
     // (a) Unseen by you, recommended by friends: not in your library, best
-    // friend average first (rater count breaks ties), curated to 10.
+    // friend average first (rater count breaks ties).
     const recommended = all
       .filter((t) => !inLibrary.has(t.tmdb_id) && t.mine == null && !isIgnored(t.tmdb_id))
-      .sort((a, b) => b.friendAvg - a.friendAvg || b.raters.length - a.raters.length)
-      .slice(0, 10);
+      .sort((a, b) => b.friendAvg - a.friendAvg || b.raters.length - a.raters.length);
 
     // (b) Head-to-head: every show you and at least one friend both rated.
     const compared = all
@@ -79,8 +79,7 @@ function useKpis() {
           (t.friendAvg * t.raters.length + (t.mine ?? 0)) /
           (t.raters.length + (t.mine != null ? 1 : 0)),
       }))
-      .sort((a, b) => a.groupAvg - b.groupAvg)
-      .slice(0, 10);
+      .sort((a, b) => a.groupAvg - b.groupAvg);
 
     return {
       loading: friendsPending || (friendIds.length > 0 && ratingsPending),
@@ -128,14 +127,17 @@ function KpiRow({ t, groupAvg, onOpen }: { t: KpiTitle; groupAvg?: number; onOpe
   );
 }
 
-function Section({ icon: Icon, title, sub, children }: {
-  icon: typeof Star; title: string; sub: string; children: React.ReactNode;
+function Section({ icon: Icon, title, sub, pager, children }: {
+  icon: typeof Star; title: string; sub: string; pager?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-2.5">
-      <div>
-        <div className="eyebrow flex items-center gap-1.5"><Icon size={13} />{title}</div>
-        <p className="mute" style={{ fontSize: 12.5, margin: "3px 0 0" }}>{sub}</p>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0">
+          <div className="eyebrow flex items-center gap-1.5"><Icon size={13} />{title}</div>
+          <p className="mute" style={{ fontSize: 12.5, margin: "3px 0 0" }}>{sub}</p>
+        </div>
+        {pager}
       </div>
       {children}
     </section>
@@ -148,46 +150,50 @@ export default function KpisPage() {
   const kpis = useKpis();
   const open = useOpenTitle();
 
+  const recommended = usePager(kpis.recommended, 12);
+  const compared = usePager(kpis.compared, 12);
+  const worst = usePager(kpis.worst, 12);
+
   return (
     <div className="screen mq-page">
       <header className="mq-header">
-        <h1 className="mq-h1">{tr("Group stats")}</h1>
+        <h1 className="mq-h1">{tr("Friends stats")}</h1>
       </header>
 
       {kpis.loading ? (
         <div className="dim">{tr("Loading…")}</div>
       ) : !kpis.hasFriends ? (
         <div className="card" style={{ padding: "24px" }}>
-          <p className="dim" style={{ margin: 0, fontSize: 14 }}>{tr("No friends yet — add someone on the Friends tab to unlock the group stats.")}</p>
+          <p className="dim" style={{ margin: 0, fontSize: 14 }}>{tr("No friends yet — add someone on the Friends tab to unlock the friends stats.")}</p>
         </div>
       ) : (
         <>
-          <Section icon={TrendingUp} title={tr("Recommended by friends")} sub={tr("Shows you haven't started, ranked by your friends' average score")}>
+          <Section icon={TrendingUp} title={tr("Recommended by friends")} sub={tr("Shows you haven't started, ranked by your friends' average score")} pager={recommended.pager}>
             {kpis.recommended.length === 0 ? (
               <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("Nothing to recommend — you've seen everything your friends rated.")}</p>
             ) : (
               <div style={GRID}>
-                {kpis.recommended.map((t) => <KpiRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
+                {recommended.shown.map((t) => <KpiRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
               </div>
             )}
           </Section>
 
-          <Section icon={Award} title={tr("Your scores vs theirs")} sub={tr("Every show you and at least one friend both rated")}>
+          <Section icon={Award} title={tr("Your scores vs theirs")} sub={tr("Every show you and at least one friend both rated")} pager={compared.pager}>
             {kpis.compared.length === 0 ? (
               <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No overlap yet — rate a few shows your friends also scored.")}</p>
             ) : (
               <div style={GRID}>
-                {kpis.compared.map((t) => <KpiRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
+                {compared.shown.map((t) => <KpiRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
               </div>
             )}
           </Section>
 
-          <Section icon={ThumbsDown} title={tr("Worst watched together")} sub={tr("Lowest group averages among shows two or more of you scored")}>
+          <Section icon={ThumbsDown} title={tr("Worst watched together")} sub={tr("Lowest group averages among shows two or more of you scored")} pager={worst.pager}>
             {kpis.worst.length === 0 ? (
               <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No shared stinkers yet — lucky you.")}</p>
             ) : (
               <div style={GRID}>
-                {kpis.worst.map((t) => <KpiRow key={t.tmdb_id} t={t} groupAvg={t.groupAvg} onOpen={() => open(t.tmdb_id)} />)}
+                {worst.shown.map((t) => <KpiRow key={t.tmdb_id} t={t} groupAvg={t.groupAvg} onOpen={() => open(t.tmdb_id)} />)}
               </div>
             )}
           </Section>

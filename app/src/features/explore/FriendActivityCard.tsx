@@ -4,6 +4,7 @@ import { relativeTime } from "@/domain/time";
 import { tmdbImg } from "@/lib/tmdb";
 import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { FriendAvatar } from "@/ui/FriendAvatar";
+import { usePager } from "@/ui/Pager";
 import { posterBg } from "@/ui/posterBg";
 
 /* Friend activity feed (P4-C4) — every episode watched, plus adds and ratings.
@@ -81,6 +82,10 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
   const navigate = useNavigate();
   const esNames = useEsNames();
 
+  // 10 events per page, arrow through up to 30.
+  const rows = groupWatched(items).slice(0, 30);
+  const { shown, pager } = usePager(rows, 10);
+
   if (!enabled || items.length === 0) return null;
 
   const openTitle = (tmdbId: number) =>
@@ -97,14 +102,15 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
         <div>
           <h2 className="section-title">{isEs() ? "Actividad de amigos" : "Friend activity"}</h2>
         </div>
+        {pager}
       </div>
       <div className="card" style={{ padding: 6 }}>
-        {groupWatched(items).map((r, i) => {
+        {shown.map((r) => {
           const a = r.a;
           const art = tmdbImg(a.poster_path, "w92");
           const titleName = locName(esNames, a.tmdb_id, a.title_name);
           return (
-            <div key={i} className="fr-activity" onClick={() => openTitle(a.tmdb_id)}>
+            <div key={`${a.friend_id}|${a.tmdb_id}|${a.at}`} className="fr-activity" onClick={() => openTitle(a.tmdb_id)}>
               <span onClick={(e) => { e.stopPropagation(); openFriend(a.friend_id); }} style={{ flex: "0 0 auto" }}>
                 <FriendAvatar f={{ id: a.friend_id, name: a.friend_name, avatarUrl: a.friend_avatar }} size={38} />
               </span>

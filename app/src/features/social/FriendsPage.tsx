@@ -5,7 +5,7 @@ import { useTaste } from "@/lib/taste";
 import { useBestRatedByFriends, type BestRatedByFriends } from "@/lib/explore";
 import { useIgnored } from "@/lib/ignore";
 import { tmdbImg } from "@/lib/tmdb";
-import { NetworkLogo } from "@/ui";
+import { NetworkLogo, usePager } from "@/ui";
 import { FriendStack } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 import { FriendActivityCard } from "@/features/explore/FriendActivityCard";
@@ -25,6 +25,7 @@ export default function FriendsPage() {
   const { isIgnored } = useIgnored();
   const { data: bestRatedRaw = [] } = useBestRatedByFriends(hasFriends);
   const bestRated = bestRatedRaw.filter((b) => !isIgnored(b.tmdb_id));
+  const { shown: bestShown, pager: bestPager } = usePager(bestRated, 12);
   const open = useOpenTitle();
 
   return (
@@ -48,9 +49,10 @@ export default function FriendsPage() {
         <section className="flex flex-col gap-4">
           <div className="mq-sechead">
             <h2 className="section-title">{tr("Best rated by friends")}</h2>
+            {bestPager}
           </div>
           <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
-            {bestRated.map((b) => (
+            {bestShown.map((b) => (
               <BestRatedRow key={b.tmdb_id} b={b} onOpen={() => open(b.tmdb_id)} />
             ))}
           </div>
