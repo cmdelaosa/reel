@@ -285,6 +285,56 @@ const DICT: Record<string, string> = {
   // ---- Poster lightbox ----
   "View poster": "Ver el póster",
   "Close": "Cerrar",
+
+  // ---- Landing (public marketing page) ----
+  "Features": "Funciones",
+  "Import": "Importar",
+  "Log in": "Inicia sesión",
+  "Sign up": "Regístrate",
+  "Always know what to watch": "Siempre sabrás qué ver",
+  "tonight": "esta noche",
+  "Reel keeps every show you follow in one place — what's next, when it returns, and what your friends thought of it. Fast, beautiful, and yours.":
+    "Reel guarda todas las series que sigues en un solo sitio: qué toca ver, cuándo vuelven y qué les parecieron a tus amigos. Rápido, bonito y tuyo.",
+  "Create your account": "Crea tu cuenta",
+  "I already have an account": "Ya tengo cuenta",
+  "TONIGHT FOR YOU": "ESTA NOCHE PARA TI",
+  "Up next": "Siguientes",
+  "The essentials": "Lo esencial",
+  "Everything a tracker": "Todo lo que un tracker",
+  "should": "debería",
+  "be.": "ser.",
+  // "Pick up where you left off" already exists in the Tonight section above.
+  "Reel tracks every episode you watch and lines up the next one — per show, per season, automatically.":
+    "Reel registra cada episodio que ves y te prepara el siguiente: por serie y por temporada, automáticamente.",
+  "Never miss a premiere": "No te pierdas ningún estreno",
+  "A calendar of returns and new episodes for the shows you follow, in your timezone.":
+    "Un calendario con regresos y episodios nuevos de tus series, en tu zona horaria.",
+  "THU": "JUE",
+  "FRI": "VIE",
+  "SUN": "DOM",
+  "Premiere": "Estreno",
+  "Watch with your people": "Ve series con los tuyos",
+  "taste match": "afinidad",
+  "Compare ratings with friends, see what the group is into, and steal your next show.":
+    "Compara notas con tus amigos, mira qué engancha al grupo y róbales tu próxima serie.",
+  "Your year in television": "Tu año en series",
+  "Heatmap, streaks, hours and top networks — stats that make your watching a story.":
+    "Mapa de calor, rachas, horas y cadenas top: estadísticas que convierten lo que ves en una historia.",
+  "day streak": "días seguidos",
+  "Build your canon": "Construye tu canon",
+  "Half-star ratings on episodes and seasons. Your history becomes the best recommendation engine.":
+    "Notas con medias estrellas en episodios y temporadas. Tu historial se convierte en el mejor recomendador.",
+  "“The Wire” · S4 — rated 4.5": "«The Wire» · T4 — nota 4,5",
+  "TV Time refugee?": "¿Refugiado de TV Time?",
+  "Bring your whole": "Tráete todo tu",
+  "history": "historial",
+  "with you.": "contigo.",
+  "Upload your TV Time export and Reel rebuilds your library — shows, seen episodes and every rating. Years of watching, nothing lost.":
+    "Sube tu exportación de TV Time y Reel reconstruye tu biblioteca: series, episodios vistos y todas tus notas. Años de historial, sin perder nada.",
+  "Your watchlist is": "Tu lista de pendientes te está",
+  "waiting": "esperando",
+  "Reel is in invite-only beta. Got a code from a friend? You're two minutes away from tonight's episode.":
+    "Reel está en beta solo con invitación. ¿Tienes un código de un amigo? Estás a dos minutos del episodio de esta noche.",
 };
 
 /** Translate a UI string (identity in English / unknown strings). */

@@ -1,6 +1,6 @@
 import { Play } from "lucide-react";
 
-export function Logo({ compact = false }: { compact?: boolean }) {
+export function Logo({ compact = false, tagline = true }: { compact?: boolean; tagline?: boolean }) {
   return (
     <div className="flex items-center gap-2.5 select-none">
       <div
@@ -16,7 +16,9 @@ export function Logo({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <div className="leading-none">
           <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.02em" }}>Reel</div>
-          <div style={{ fontSize: 10.5, color: "var(--text-mute)", fontWeight: 600, letterSpacing: ".14em" }}>TRACKER</div>
+          {tagline && (
+            <div style={{ fontSize: 10.5, color: "var(--text-mute)", fontWeight: 600, letterSpacing: ".14em" }}>TRACKER</div>
+          )}
         </div>
       )}
     </div>

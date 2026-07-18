@@ -10,6 +10,7 @@ import { RequireAuth } from "@/features/auth/RequireAuth";
 import { RequireInvited } from "@/features/auth/RequireInvited";
 import { RequireOnboarded } from "@/features/auth/RequireOnboarded";
 import WelcomePage from "@/features/auth/WelcomePage";
+import { LandingGate } from "@/features/landing/LandingGate";
 import CalendarPage from "@/features/calendar/CalendarPage";
 import ExplorePage from "@/features/explore/ExplorePage";
 import CollectionPage from "@/features/explore/CollectionPage";
@@ -74,8 +75,10 @@ const router = createBrowserRouter([
   },
   {
     path: "/",
+    // LandingGate replaces RequireAuth here only: signed-out visitors see the
+    // public landing at "/", while deep links still bounce to /login.
     element: (
-      <RequireAuth>
+      <LandingGate>
         <RequireInvited>
           <RequireOnboarded>
             <ErrorBoundary>
@@ -83,7 +86,7 @@ const router = createBrowserRouter([
             </ErrorBoundary>
           </RequireOnboarded>
         </RequireInvited>
-      </RequireAuth>
+      </LandingGate>
     ),
     children: [
       { index: true, element: <Navigate to="/tonight" replace /> },

@@ -3,6 +3,7 @@
 @import "./tokens.css";
 @import "./glass.css";
 @import "./marquee.css";
+@import "./landing.css";
 
 @theme {
   --font-sans: "Inter Variable", Inter, system-ui, sans-serif;

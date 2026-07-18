@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useLocation } from "react-router";
+import { Link, Navigate, useLocation } from "react-router";
 import { MailCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { readStashedInvite, stashInvite } from "@/lib/invites";
@@ -39,8 +39,12 @@ export default function LoginPage() {
   // it after the auth redirect. This also runs on the return leg of the magic
   // link (which lands back on /login?invite=CODE), covering redemption on a
   // different device or browser from where the link was requested.
-  const inviteParam = new URLSearchParams(location.search).get("invite");
+  const params = new URLSearchParams(location.search);
+  const inviteParam = params.get("invite");
   if (inviteParam) stashInvite(inviteParam);
+  // The landing page links here with ?mode=signup. Same magic-link flow either
+  // way (signInWithOtp creates the account on first use) — only the copy changes.
+  const signup = params.get("mode") === "signup";
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -113,9 +117,13 @@ export default function LoginPage() {
           </div>
         ) : (
           <>
-            <h1 className="section-title" style={{ margin: 0, textAlign: "center" }}>Welcome back</h1>
+            <h1 className="section-title" style={{ margin: 0, textAlign: "center" }}>
+              {signup ? "Create your account" : "Welcome back"}
+            </h1>
             <p className="dim" style={{ fontSize: 13.5, textAlign: "center", margin: "6px 0 22px" }}>
-              Track what you watch. Invite-only beta.
+              {signup
+                ? "One magic link away — no password needed. Invite-only beta."
+                : "Track what you watch. Invite-only beta."}
             </p>
 
             <form onSubmit={sendLink} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -129,7 +137,7 @@ export default function LoginPage() {
                 autoComplete="email"
               />
               <button className="btn btn-accent" type="submit" disabled={busy || !email}>
-                {busy ? "Sending…" : "Email me a sign-in link"}
+                {busy ? "Sending…" : signup ? "Email me a sign-up link" : "Email me a sign-in link"}
               </button>
             </form>
 
@@ -156,6 +164,14 @@ export default function LoginPage() {
                 {error}
               </p>
             )}
+
+            <p className="mute" style={{ fontSize: 12.5, textAlign: "center", margin: "20px 0 0" }}>
+              {signup ? (
+                <>Already have an account? <Link to="/login" style={{ color: "var(--accent)" }}>Log in</Link></>
+              ) : (
+                <>New to Reel? <Link to="/login?mode=signup" style={{ color: "var(--accent)" }}>Sign up</Link></>
+              )}
+            </p>
           </>
         )}
       </div>
