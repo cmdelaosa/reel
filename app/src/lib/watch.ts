@@ -14,6 +14,7 @@ function invalidateDerived(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: qk.library });
   qc.invalidateQueries({ queryKey: qk.upNext });
   qc.invalidateQueries({ queryKey: qk.stats });
+  qc.invalidateQueries({ queryKey: qk.watchHeatmap });
   qc.invalidateQueries({ queryKey: ["calendarFeed"] });
   qc.invalidateQueries({ queryKey: qk.history });
 }

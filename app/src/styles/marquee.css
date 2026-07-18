@@ -706,6 +706,46 @@
 }
 .mq-pal-foot > :last-child { margin-left: auto; }
 
+/* ---- Friends average (detail header) — chevron marks it as expandable ---- */
+.btn-reset { border: 0; background: none; padding: 0; font: inherit; color: inherit; }
+.friends-avg { text-align: center; cursor: pointer; border-radius: var(--r-sm); }
+.friends-avg .friends-avg-chev { transition: transform 0.15s ease, color 0.15s ease; }
+@media (hover: hover) {
+  .friends-avg:hover .friends-avg-chev { transform: translateY(2px); color: var(--text); }
+}
+
+/* ---- You page: taste profile + watch heatmap side by side on web ---- */
+.you-taste-grid { display: grid; gap: 16px; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 900px) { .you-taste-grid { grid-template-columns: 1fr 1fr; gap: 20px; } }
+
+/* GitHub-style contribution grid: weeks as columns, Monday-first rows */
+.heatmap { display: flex; gap: 8px; }
+.heatmap-wd {
+  display: grid; grid-template-rows: repeat(7, 1fr); gap: 3px; width: 18px;
+  font-size: 9.5px; color: var(--text-mute); text-align: right; flex: 0 0 auto;
+}
+.heatmap-wd span { display: flex; align-items: center; justify-content: flex-end; }
+.heatmap-grid {
+  flex: 1; display: grid; grid-auto-flow: column;
+  grid-template-rows: repeat(7, 1fr); gap: 3px; min-width: 0;
+}
+.heatmap-cell { aspect-ratio: 1; border-radius: 3px; background: var(--surface-3); min-width: 0; }
+.heatmap-cell.future { background: transparent; }
+.heatmap-cell.l1 { background: color-mix(in srgb, var(--accent) 28%, var(--surface-3)); }
+.heatmap-cell.l2 { background: color-mix(in srgb, var(--accent) 52%, var(--surface-3)); }
+.heatmap-cell.l3 { background: color-mix(in srgb, var(--accent) 76%, var(--surface-3)); }
+.heatmap-cell.l4 { background: var(--accent); }
+.heatmap-months {
+  display: grid; overflow: hidden;
+  font-size: 10px; color: var(--text-mute);
+}
+.heatmap-months span { white-space: nowrap; }
+.heatmap-legend {
+  display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+  font-size: 10.5px; color: var(--text-mute);
+}
+.heatmap-legend i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+
 /* ---- Responsive ---- */
 @media (min-width: 1024px) {
   .mq-tabs { display: inline-flex; }

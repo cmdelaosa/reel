@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { Bell, Check, CheckCheck, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, User, X } from "lucide-react";
+import { Bell, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, User, X } from "lucide-react";
 import { getCredits, tmdbImg } from "@/lib/tmdb";
 import { dateLocale, isEs, t as tr, tGenre } from "@/lib/i18n";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
@@ -415,22 +415,20 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                   {friendsAvg != null && (
                     <>
                       <div style={{ width: 1, height: 40, background: "var(--border)", flex: "0 0 auto" }} />
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        style={{ textAlign: "center", cursor: "pointer" }}
+                      <button
+                        className="btn-reset friends-avg"
                         title={tr("Friend ratings")}
+                        aria-haspopup="dialog"
+                        aria-expanded={friendsOpen}
                         onClick={() => setFriendsOpen(true)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFriendsOpen(true); }
-                        }}
                       >
                         <div className="eyebrow" style={{ marginBottom: 5 }}>{tr("Friends")}</div>
                         <div className="flex items-center justify-center gap-1.5">
                           <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
                           <span style={{ fontWeight: 850, fontSize: 17 }}>{friendsAvg.toFixed(1)}</span>
+                          <ChevronDown size={15} className="mute friends-avg-chev" aria-hidden />
                         </div>
-                      </div>
+                      </button>
                     </>
                   )}
                 </div>

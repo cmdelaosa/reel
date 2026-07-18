@@ -10,6 +10,7 @@ import { dateLocale, isEs, locName, t as tr, tGenre, useEsNames } from "@/lib/i1
 import { Stars } from "@/ui";
 import { StatsSkeleton } from "@/ui/Skeleton";
 import { posterBg } from "@/ui/posterBg";
+import { WatchHeatmap } from "@/features/you/WatchHeatmap";
 
 /* You — profile header + your ratings (sort + 15/page). Port of prototype
    marquee.tsx → You; the stats grid lands in P2-C9. */
@@ -177,28 +178,30 @@ export default function YouPage() {
         </div>
       )}
 
-      {taste.topGenres.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <div className="eyebrow">{tr("Taste profile")}</div>
-          <div className="card p-4 flex flex-col gap-2">
-            {taste.topGenres.slice(0, 8).map((g) => (
-              <div key={g.name} className="flex items-center gap-2.5">
-                <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{tGenre(g.name)}</span>
-                <div className="fr-matchbar" style={{ flex: 1 }}><i style={{ width: `${(g.count / taste.topGenres[0].count) * 100}%` }} /></div>
-                <span className="mute" style={{ fontSize: 11.5, width: 24, textAlign: "right", flex: "0 0 auto" }}>{g.count}</span>
-              </div>
-            ))}
-          </div>
-          {taste.topNetworks.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="mute" style={{ fontSize: 11.5 }}>{tr("Top networks:")}</span>
-              {taste.topNetworks.map((n) => (
-                <span key={n.name} className="badge badge-soft" style={{ fontSize: 11 }}>{n.name} · {n.count}</span>
+      <section className="you-taste-grid">
+        {taste.topGenres.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <div className="eyebrow">{tr("Taste profile")}</div>
+            <div className="card p-4 flex flex-col gap-2">
+              {taste.topGenres.slice(0, 8).map((g) => (
+                <div key={g.name} className="flex items-center gap-2.5">
+                  <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{tGenre(g.name)}</span>
+                  <div className="fr-matchbar" style={{ flex: 1 }}><i style={{ width: `${(g.count / taste.topGenres[0].count) * 100}%` }} /></div>
+                  <span className="mute" style={{ fontSize: 11.5, width: 24, textAlign: "right", flex: "0 0 auto" }}>{g.count}</span>
+                </div>
               ))}
             </div>
-          )}
-        </section>
-      )}
+            {taste.topNetworks.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {taste.topNetworks.map((n) => (
+                  <span key={n.name} className="badge badge-soft" style={{ fontSize: 11 }}>{n.name} · {n.count}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <WatchHeatmap />
+      </section>
 
       <section className="flex flex-col gap-4">
         <div className="mq-sechead">

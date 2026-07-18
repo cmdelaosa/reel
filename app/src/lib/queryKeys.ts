@@ -16,6 +16,7 @@ export const qk = {
   history: ["history"] as const,
   ratings: ["ratings"] as const,
   stats: ["stats"] as const,
+  watchHeatmap: ["watchHeatmap"] as const,
   notifications: ["notifications"] as const,
   ignored: ["ignored"] as const,
   networkLogos: ["networkLogos"] as const,

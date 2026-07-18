@@ -26,6 +26,22 @@ export function useUserStats() {
   });
 }
 
+const heatmapSchema = z.array(z.object({ day: z.string(), n: z.number().int() }));
+export type HeatmapDay = z.infer<typeof heatmapSchema>[number];
+
+/** Per-day watch counts for the profile heatmap, bucketed in the local tz. */
+export function useWatchHeatmap(days: number) {
+  return useQuery({
+    queryKey: qk.watchHeatmap,
+    queryFn: async (): Promise<HeatmapDay[]> => {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
+      const { data, error } = await supabase.rpc("rpc_watch_heatmap", { days, tz });
+      if (error) throw error;
+      return heatmapSchema.parse(data ?? []);
+    },
+  });
+}
+
 /** "77 days" style label for a minute total. */
 export function timeSpentLabel(minutes: number): string {
   const days = minutes / 60 / 24;

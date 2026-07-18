@@ -422,7 +422,6 @@ export default function FriendPage() {
                 </div>
                 {derived.topNetworks.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="mute" style={{ fontSize: 11.5 }}>{tr("Top networks:")}</span>
                     {derived.topNetworks.map((n) => (
                       <span key={n.name} className="badge badge-soft" style={{ fontSize: 11 }}>{n.name} · {n.count}</span>
                     ))}
