@@ -90,6 +90,7 @@ const DICT: Record<string, string> = {
   "Dated within the next 60 days": "Con fecha en los próximos 60 días",
   "No dated premieres yet.": "Aún no hay estrenos con fecha.",
   "% done": "% visto",
+  "min": "min", // same abbreviation in es — routed through t() so the hero meta has no raw string
 
   // ---- Shows ----
   "Watching": "Viendo",

@@ -466,20 +466,60 @@
 
 /* ---- Bento (Tonight) ---- */
 .mq-bento { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
-.mq-hero { display: flex; gap: clamp(16px, 2.5vw, 26px); padding: clamp(16px, 2.5vw, 24px); cursor: pointer; }
-.mq-hero-art {
-  width: clamp(104px, 14vw, 150px); aspect-ratio: 2 / 3;
-  border-radius: var(--r); position: relative; overflow: hidden;
-  border: 1px solid var(--border); box-shadow: var(--shadow);
-  flex: 0 0 auto; padding: 8px;
+/* Cinematic banner: the landscape still IS the hero, copy overlaid bottom-left.
+   Everything inside is white in every theme — it sits on a photo, not on
+   --surface — so the theme tokens deliberately stop at the frame. */
+.mq-hero {
+  position: relative; overflow: hidden; cursor: pointer; padding: 0;
+  aspect-ratio: 21 / 9; min-height: 240px;
+  /* width must be explicit: a grid item with an aspect-ratio resolves `normal`
+     alignment as start, not stretch, so without this it sizes itself from
+     min-height × the ratio (560px) and overflows a phone viewport. */
+  width: 100%;
 }
-.mq-hero-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
-.mq-hero-ep { font-size: clamp(22px, 3vw, 30px); font-weight: 800; letter-spacing: -0.02em; margin: 0; line-height: 1.12; }
-.mq-hero-show { color: var(--text-dim); font-weight: 600; font-size: 14.5px; display: flex; align-items: center; flex-wrap: wrap; }
-.mq-hero-track { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; margin-top: 10px; }
+.mq-hero-still { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* Double scrim — bottom-up for the copy, left-to-right so a bright still can't
+   wash out the start of each line. */
+.mq-hero::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(6,8,12,0) 18%, rgba(6,8,12,.86) 84%),
+              linear-gradient(90deg, rgba(6,8,12,.6), transparent 58%);
+}
+.mq-hero-flag {
+  position: absolute; top: 12px; left: 12px; z-index: 1;
+  padding: 4px 9px; border-radius: 8px;
+  background: rgba(10, 12, 18, 0.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  color: #fff; font-size: 11px; font-weight: 700;
+}
+.mq-hero-body {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
+  padding: clamp(14px, 3vw, 26px);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 7px;
+  color: #fff;
+}
+.mq-hero-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-2); }
+.mq-hero-title { font-size: clamp(22px, 3.4vw, 34px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; margin: 0; }
+.mq-hero-meta {
+  font-size: 13.5px; color: rgba(255, 255, 255, 0.78);
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Progress stays a footnote, not a headline: a short thin track beside its own
+   count, rather than the full-width bar this hero used to lead with. */
+.mq-hero-progress { display: flex; align-items: center; gap: 10px; }
+.mq-hero-track {
+  width: clamp(80px, 13vw, 130px); height: 3px; flex: 0 0 auto;
+  border-radius: 999px; background: rgba(255, 255, 255, 0.28); overflow: hidden;
+}
 .mq-hero-track > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
-.mq-hero-meta { font-size: 12.5px; }
-.mq-hero-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.mq-hero-count { font-size: 11.5px; color: rgba(255, 255, 255, 0.62); }
+.mq-hero-actions { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
+/* .btn-ghost is surface-tinted: muddy over a photo in dark, and dark-on-light in
+   the light theme. Glass keeps it legible on both. */
+.mq-hero-actions .btn-ghost {
+  background: rgba(255, 255, 255, 0.16); color: #fff;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.mq-hero-actions .btn-ghost:hover { background: rgba(255, 255, 255, 0.26); }
 
 
 /* minmax(0, 1fr), not 1fr: a 1fr track's min size is the content's min-content,
@@ -912,8 +952,11 @@
 }
 @media (max-width: 560px) {
   .mq-searchbtn-label, .mq-searchbtn .mq-kbd { display: none; }
-  .mq-hero { flex-direction: row; }
-  .mq-hero-art { width: 96px; }
+  /* 21/9 collapses to a letterbox strip on a phone, so min-height takes over and
+     the frame goes near-square — the overlaid copy needs that height anyway. */
+  .mq-hero { min-height: 262px; }
+  .mq-hero-title { font-size: 21px; }
+  .mq-hero-meta { font-size: 12.5px; }
   .mq-index { display: none; }
   .mq-index.sm { display: none; }
 }

@@ -17,6 +17,14 @@ import { useTitleIntent } from "@/lib/useOpenTitle";
 
 const seLabel = (r: UpNextRow) => `S${r.season_number} · E${r.episode_number}`;
 
+/** One line in the shape `S2 · E1 — “Future Days” · HBO · 54 min`, minus
+ *  whatever the row is missing — episode name, network and runtime are each
+ *  nullable, so drop empty pieces rather than leaving a dangling separator. */
+function metaLine(r: UpNextRow): string {
+  const ep = r.episode_name ? `${seLabel(r)} — “${r.episode_name}”` : seLabel(r);
+  return [ep, r.network, r.runtime ? `${r.runtime} ${tr("min")}` : null].filter(Boolean).join(" · ");
+}
+
 function airLabel(iso: string | null): string | null {
   if (!iso) return null;
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -59,6 +67,10 @@ export default function TonightPage() {
     });
 
   const heroProgress = hero && hero.aired_count > 0 ? Math.round((hero.watched_count / hero.aired_count) * 100) : 0;
+  const heroAir = hero ? airLabel(hero.air_datetime) : null;
+  // Landscape still for the banner; the portrait poster is the fallback for the
+  // ~3% of titles TMDB has no backdrop for (cropped hard, but never a blank box).
+  const heroArt = hero ? (tmdbImg(hero.backdrop_path, "w780") ?? tmdbImg(hero.poster_path, "w780")) : undefined;
 
   return (
     <div className="screen mq-page">
@@ -68,31 +80,24 @@ export default function TonightPage() {
 
       {hero && (
         <div className="mq-bento">
-          <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} {...heroIntent}>
-            <div className="mq-hero-art" style={{ background: posterBg(hero.name) }}>
-              {tmdbImg(hero.poster_path) && (
-                <img src={tmdbImg(hero.poster_path)} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-              )}
-              <div className="poster-sheen" />
-            </div>
+          <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} {...heroIntent} style={{ background: posterBg(hero.name) }}>
+            {heroArt && <img className="mq-hero-still" src={heroArt} alt="" />}
+            {heroAir && <span className="mq-hero-flag">{heroAir}</span>}
             <div className="mq-hero-body">
-              <div className="eyebrow">{tr("Up next for you")}</div>
-              <h2 className="mq-hero-ep">{hero.episode_name ?? seLabel(hero)}</h2>
-              <div className="mq-hero-show">
-                {locName(heroEsNames, hero.tmdb_id, hero.name)} — {seLabel(hero)}
-                {airLabel(hero.air_datetime) && (
-                  <span className="badge badge-accent" style={{ marginLeft: 10 }}>{airLabel(hero.air_datetime)}</span>
-                )}
-              </div>
-              <div className="mq-hero-track"><i style={{ width: `${heroProgress}%` }} /></div>
-              <div className="mq-hero-meta mute">
-                {hero.watched_count}/{hero.aired_count} {tr("episodes")} · {heroProgress}{tr("% done")}
+              <div className="mq-hero-eyebrow">{tr("Up next for you")}</div>
+              <h2 className="mq-hero-title">{locName(heroEsNames, hero.tmdb_id, hero.name)}</h2>
+              <div className="mq-hero-meta">{metaLine(hero)}</div>
+              <div className="mq-hero-progress">
+                <span className="mq-hero-track"><i style={{ width: `${heroProgress}%` }} /></span>
+                <span className="mq-hero-count">
+                  {hero.watched_count}/{hero.aired_count} {tr("episodes")} · {heroProgress}{tr("% done")}
+                </span>
               </div>
               <div className="mq-hero-actions" onClick={(e) => e.stopPropagation()}>
-                <button className="btn btn-accent" onClick={() => heroMark.mutate(hero.episode_id)}>
-                  <Check size={16} />{tr("Mark watched")}
+                <button className="btn btn-accent btn-sm" onClick={() => heroMark.mutate(hero.episode_id)}>
+                  <Check size={14} />{tr("Mark watched")}
                 </button>
-                <button className="btn btn-outline" onClick={() => open(hero.tmdb_id)}>{tr("Details")}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => open(hero.tmdb_id)}>{tr("Details")}</button>
               </div>
             </div>
           </section>
