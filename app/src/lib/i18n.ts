@@ -162,6 +162,7 @@ const DICT: Record<string, string> = {
   "Avg. rating": "Nota media",
   "Taste profile": "Perfil de gustos",
   "Watch activity": "Actividad de visionado",
+  "Their watch activity": "Su actividad de visionado",
   "Less": "Menos",
   "More": "Más",
   "Your ratings": "Tus notas",

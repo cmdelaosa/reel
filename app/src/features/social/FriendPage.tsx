@@ -17,6 +17,7 @@ import { useLibrary, useFollow } from "@/lib/library";
 import { useMyRatings } from "@/lib/ratings";
 import { tasteAffinity } from "@/lib/taste";
 import { timeSpentLabel } from "@/lib/stats";
+import { WatchHeatmap } from "@/features/you/WatchHeatmap";
 import { dateLocale, isEs, locName, t as tr, tGenre, useEsNames } from "@/lib/i18n";
 import type { TitleRow } from "@/lib/schemas";
 
@@ -407,28 +408,31 @@ export default function FriendPage() {
               </div>
             )}
 
-            {/* Taste profile */}
-            {derived && derived.topGenres.length > 0 && (
-              <section className="flex flex-col gap-3">
-                <div className="eyebrow">{tr("Taste profile")}</div>
-                <div className="card p-4 flex flex-col gap-2">
-                  {derived.topGenres.slice(0, 8).map((g) => (
-                    <div key={g.name} className="flex items-center gap-2.5">
-                      <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{tGenre(g.name)}</span>
-                      <div className="fr-matchbar" style={{ flex: 1 }}><i style={{ width: `${(g.count / derived.topGenres[0].count) * 100}%` }} /></div>
-                      <span className="mute" style={{ fontSize: 11.5, width: 24, textAlign: "right", flex: "0 0 auto" }}>{g.count}</span>
-                    </div>
-                  ))}
-                </div>
-                {derived.topNetworks.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {derived.topNetworks.map((n) => (
-                      <span key={n.name} className="badge badge-soft" style={{ fontSize: 11 }}>{n.name} · {n.count}</span>
+            {/* Taste profile + their watch activity, side by side and height-matched */}
+            <section className="taste-grid">
+              {derived && derived.topGenres.length > 0 && (
+                <div className="taste-col">
+                  <div className="eyebrow">{tr("Taste profile")}</div>
+                  <div className="card p-4 flex flex-col gap-2">
+                    {derived.topGenres.slice(0, 8).map((g) => (
+                      <div key={g.name} className="flex items-center gap-2.5">
+                        <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{tGenre(g.name)}</span>
+                        <div className="fr-matchbar" style={{ flex: 1 }}><i style={{ width: `${(g.count / derived.topGenres[0].count) * 100}%` }} /></div>
+                        <span className="mute" style={{ fontSize: 11.5, width: 24, textAlign: "right", flex: "0 0 auto" }}>{g.count}</span>
+                      </div>
                     ))}
                   </div>
-                )}
-              </section>
-            )}
+                  {derived.topNetworks.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {derived.topNetworks.map((n) => (
+                        <span key={n.name} className="badge badge-soft" style={{ fontSize: 11 }}>{n.name} · {n.count}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <WatchHeatmap userId={friendId} />
+            </section>
           </>
         )}
 

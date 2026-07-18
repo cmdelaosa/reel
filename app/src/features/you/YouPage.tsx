@@ -178,9 +178,9 @@ export default function YouPage() {
         </div>
       )}
 
-      <section className="you-taste-grid">
+      <section className="taste-grid">
         {taste.topGenres.length > 0 && (
-          <div className="flex flex-col gap-3">
+          <div className="taste-col">
             <div className="eyebrow">{tr("Taste profile")}</div>
             <div className="card p-4 flex flex-col gap-2">
               {taste.topGenres.slice(0, 8).map((g) => (

@@ -29,14 +29,27 @@ export function useUserStats() {
 const heatmapSchema = z.array(z.object({ day: z.string(), n: z.number().int() }));
 export type HeatmapDay = z.infer<typeof heatmapSchema>[number];
 
-/** Per-day watch counts for the profile heatmap, bucketed in the local tz. */
-export function useWatchHeatmap(days: number) {
+/** Per-day watch counts for the profile heatmap, bucketed in the local tz.
+ *  Omit `userId` for your own history; pass a friend's id for theirs — the RPC
+ *  is security invoker, so the 0015 friend-read policy on watch_events decides
+ *  what comes back (a non-friend or private profile yields nothing). */
+export function useWatchHeatmap(days: number, userId?: string) {
   return useQuery({
-    queryKey: qk.watchHeatmap,
-    queryFn: async (): Promise<HeatmapDay[]> => {
+    queryKey: [...qk.watchHeatmap, userId ?? "me"],
+    queryFn: async (): Promise<HeatmapDay[] | null> => {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
-      const { data, error } = await supabase.rpc("rpc_watch_heatmap", { days, tz });
-      if (error) throw error;
+      // Only send p_user when targeting someone else, so the own-profile call
+      // still matches the pre-0048 two-arg signature on a database that hasn't
+      // had the migration applied yet.
+      const args = userId ? { days, tz, p_user: userId } : { days, tz };
+      const { data, error } = await supabase.rpc("rpc_watch_heatmap", args);
+      // PGRST202 = this signature isn't deployed yet. The grid is an extra, so
+      // null (→ the component renders nothing) beats throwing, which would also
+      // fire the global query-error toast on every friend page.
+      if (error) {
+        if ((error as { code?: string }).code === "PGRST202") return null;
+        throw error;
+      }
       return heatmapSchema.parse(data ?? []);
     },
   });

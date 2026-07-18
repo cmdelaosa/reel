@@ -4,15 +4,18 @@ import { dateLocale, isEs, t as tr } from "@/lib/i18n";
 
 /* GitHub-style contribution grid of the days you watched episodes — weeks as
    columns, Monday-first rows, ~6 months back. Hidden entirely while loading or
-   if the RPC is missing (e.g. hosted DB behind on migrations). */
+   if the RPC is missing (e.g. hosted DB behind on migrations).
+
+   Pass `userId` to render a friend's grid instead of your own (friend profile);
+   the friend-read RLS on watch_events is what gates it. */
 
 const WEEKS = 26;
 
 const localIso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-export function WatchHeatmap() {
-  const { data, isPending, isError } = useWatchHeatmap(WEEKS * 7);
+export function WatchHeatmap({ userId }: { userId?: string }) {
+  const { data, isPending, isError } = useWatchHeatmap(WEEKS * 7, userId);
 
   const grid = useMemo(() => {
     if (!data) return null;
@@ -55,10 +58,15 @@ export function WatchHeatmap() {
   if (isPending || isError || !grid) return null;
 
   const weekdays = isEs() ? ["L", "", "X", "", "V", "", ""] : ["M", "", "W", "", "F", "", ""];
+  // Third person on a friend's profile, where every other heading reads that
+  // way ("Their top ratings") and a bare "Watch activity" would be ambiguous.
+  const heading = userId ? tr("Their watch activity") : tr("Watch activity");
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="eyebrow">{tr("Watch activity")}</div>
+    // .taste-col: subgrid column, so this card height-matches the taste profile
+    // panel it sits next to (see .taste-grid).
+    <div className="taste-col">
+      <div className="eyebrow">{heading}</div>
       <div className="card p-4 flex flex-col gap-2">
         <div className="heatmap-months" style={{ gridTemplateColumns: `repeat(${WEEKS}, 1fr)`, marginLeft: 26 }}>
           {grid.months.map((m) => (
@@ -69,7 +77,7 @@ export function WatchHeatmap() {
           <div className="heatmap-wd" aria-hidden>
             {weekdays.map((d, i) => <span key={i}>{d}</span>)}
           </div>
-          <div className="heatmap-grid" role="img" aria-label={tr("Watch activity")}>
+          <div className="heatmap-grid" role="img" aria-label={heading}>
             {grid.cells.map((c) => (
               <div
                 key={c.key}

@@ -837,8 +837,25 @@
 .friends-pop-row:hover, .friends-pop-row:focus-visible { background: var(--surface-2); }
 
 /* ---- You page: taste profile + watch heatmap side by side on web ---- */
-.you-taste-grid { display: grid; gap: 16px; grid-template-columns: 1fr; align-items: start; }
-@media (min-width: 900px) { .you-taste-grid { grid-template-columns: 1fr 1fr; gap: 20px; } }
+/* Taste profile + watch activity, side by side from 900px (your profile and a
+   friend's). The two panels must line up exactly, so each column is a *subgrid*
+   of a shared eyebrow / panel / extras row track: both .card boxes land in the
+   same 1fr row and therefore end up identical in height, whatever their natural
+   content height. Plain columns (align-items) can't guarantee that — the taste
+   column carries an extra badge row under its card. */
+.taste-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+.taste-grid:empty { display: none; } /* both halves absent → no stray gap */
+.taste-col { display: grid; gap: 12px; grid-template-rows: auto 1fr auto; align-content: start; }
+@media (min-width: 900px) {
+  .taste-grid { grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr auto; gap: 12px 20px; }
+  .taste-col { grid-row: span 3; grid-template-rows: subgrid; align-content: stretch; }
+  /* Only one half present (friend follows nothing, or the heatmap is hidden):
+     span both columns instead of sitting in a half-width column. */
+  .taste-col:only-child { grid-column: 1 / -1; }
+}
+/* Whichever panel is the shorter of the two gets the leftover height; centre
+   its contents instead of leaving it all pooled at the bottom. */
+.taste-grid .card { justify-content: center; }
 
 /* GitHub-style contribution grid: weeks as columns, Monday-first rows */
 .heatmap { display: flex; gap: 8px; }
