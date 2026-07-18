@@ -88,3 +88,12 @@
 [data-look="glass"] .mq-pal {
   -webkit-backdrop-filter: blur(26px) saturate(1.6); backdrop-filter: blur(26px) saturate(1.6);
 }
+
+/* Friends dropdown: frosted-opaque like the avatar — it floats over sheet text,
+   and a nested backdrop-filter inside the sheet's own frost doesn't blur it. */
+[data-look="glass"] .friends-pop {
+  background: color-mix(in srgb, var(--bg) 80%, #ffffff 6%);
+}
+[data-look="glass"][data-theme="light"] .friends-pop {
+  background: rgba(255, 255, 255, 0.92);
+}

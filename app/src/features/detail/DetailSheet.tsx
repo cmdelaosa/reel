@@ -11,7 +11,7 @@ import { useFriendships } from "@/lib/friends";
 import { useFriendsRatings } from "@/lib/taste";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useMarkSeries, useUndoMarks } from "@/lib/watch";
-import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
+import type { SeasonRow, EpisodeRow, CastMember } from "@/lib/schemas";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useFocusTrap } from "@/ui/useFocusTrap";
@@ -74,7 +74,7 @@ function RatingStars({ value, onRate }: { value: number; onRate: (v: number) => 
           );
         })}
       </div>
-      <span className={previewing ? "dim" : ""} style={{ fontWeight: 800, fontSize: 15, minWidth: 42 }}>
+      <span className={`rating-num${previewing ? " dim" : ""}`}>
         {shown ? `${shown}/10` : "—"}
       </span>
     </div>
@@ -115,6 +115,75 @@ function SeasonTabs({ seasons, active, onPick }: { seasons: SeasonRow[]; active:
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* Top-billed cast on one scrollable row. Arrows float over the row's edges
+   (hidden on touch, where you swipe) and only render when there's more to
+   scroll on that side. */
+function CastRail({ cast, onPick }: { cast: CastMember[]; onPick: (id: number) => void }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [canL, setCanL] = useState(false);
+  const [canR, setCanR] = useState(false);
+  const update = () => {
+    const el = ref.current;
+    if (!el) return;
+    setCanL(el.scrollLeft > 4);
+    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+  useEffect(update); // re-measure on every render (cast load / width change)
+  const nudge = (dir: number) => ref.current?.scrollBy({ left: dir * ref.current.clientWidth * 0.8, behavior: "smooth" });
+  return (
+    <div className="cast-rail">
+      <div className="flex gap-3 overflow-x-auto no-scrollbar" ref={ref} onScroll={update} style={{ paddingBottom: 4 }}>
+        {cast.map((c) => (
+          <div
+            key={c.id}
+            role="button"
+            tabIndex={0}
+            className="flex flex-col items-center gap-1.5"
+            style={{ width: 96, flex: "0 0 auto", cursor: "pointer", textAlign: "center" }}
+            title={c.name}
+            onClick={() => onPick(c.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(c.id); }
+            }}
+          >
+            <span
+              className="grid place-items-center overflow-hidden"
+              style={{
+                width: 88, height: 88, borderRadius: "50%", background: "var(--surface-3)",
+                border: "1px solid var(--border)", flex: "0 0 auto", color: "var(--text-dim)",
+              }}
+            >
+              {tmdbImg(c.profile_path, "w185") ? (
+                <img
+                  src={tmdbImg(c.profile_path, "w185")}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "50% 20%" }}
+                />
+              ) : (
+                <User size={32} />
+              )}
+            </span>
+            <span className="truncate" style={{ fontSize: 12, fontWeight: 650, width: "100%" }}>{c.name}</span>
+            {c.character && (
+              <span className="mute truncate" style={{ fontSize: 11, width: "100%", marginTop: -4 }}>{c.character}</span>
+            )}
+          </div>
+        ))}
+      </div>
+      {canL && (
+        <button className="rail-arrow cast-edge left" onClick={() => nudge(-1)} aria-label="Earlier cast">
+          <ChevronLeft size={18} />
+        </button>
+      )}
+      {canR && (
+        <button className="rail-arrow cast-edge right" onClick={() => nudge(1)} aria-label="More cast">
+          <ChevronRight size={18} />
+        </button>
+      )}
     </div>
   );
 }
@@ -181,6 +250,17 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const [pending, setPending] = useState<EpisodeRow | null>(null);
   const [toast, setToast] = useState<{ ids: string[]; count: number } | null>(null);
   const [friendsOpen, setFriendsOpen] = useState(false);
+  const friendsRef = useRef<HTMLDivElement | null>(null);
+
+  // Dropdown niceties: click-away closes it, Escape closes it before the sheet.
+  useEffect(() => {
+    if (!friendsOpen) return;
+    const h = (e: PointerEvent) => {
+      if (friendsRef.current && !friendsRef.current.contains(e.target as Node)) setFriendsOpen(false);
+    };
+    document.addEventListener("pointerdown", h);
+    return () => document.removeEventListener("pointerdown", h);
+  }, [friendsOpen]);
 
   useEffect(() => {
     if (!toast) return;
@@ -190,6 +270,29 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
 
   const nowIso = new Date().toISOString();
   const episodes = seasonData?.episodes ?? [];
+
+  // First aired-but-unwatched episode, for the prominent "mark watched" button.
+  // recommended_season is that episode's season whenever something is pending
+  // (unwatched_aired > 0), so one season fetch — shared with the episode list
+  // when it's the season on screen — is enough to pin down the exact episode.
+  // Cold titles (never followed) have no episodes ingested yet, so the RPC
+  // reports nothing pending; with no watch history the first pending episode
+  // is simply the first aired one of season 1, known client-side.
+  const pendingSeasonNum =
+    (progress?.unwatched_aired ?? 0) > 0
+      ? (progress?.recommended_season ?? null)
+      : watched && watched.size === 0
+        ? firstSeason
+        : null;
+  const { data: pendingSeasonData } = useSeasonEpisodes(tmdbId, pendingSeasonNum, data);
+  const nextPending =
+    pendingSeasonNum != null &&
+    pendingSeasonData?.season.number === pendingSeasonNum &&
+    watched
+      ? pendingSeasonData.episodes.find(
+          (e) => e.air_datetime && e.air_datetime <= nowIso && !watched.has(e.id),
+        ) ?? null
+      : null;
   const changingSeason = Boolean(
     isPlaceholderData ||
     (activeSeason != null && seasonData && seasonData.season.number !== activeSeason),
@@ -272,10 +375,14 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
     title?.original_name && title.original_name !== displayName ? title.original_name : null;
 
   useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (friendsOpen) setFriendsOpen(false);
+      else onClose();
+    };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+  }, [onClose, friendsOpen]);
 
   const toggleFollow = () => {
     if (!title) return;
@@ -352,86 +459,127 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
 
             {/* Body */}
             <div className="overflow-y-auto p-6 flex flex-col gap-6">
-              {/* Actions on the left, ratings tucked to the right at the same height */}
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <button className={`btn ${added ? "btn-outline" : "btn-accent"}`} onClick={toggleFollow}>
-                    {added ? <><Minus size={16} />{tr("Remove")}</> : <><Plus size={16} />{tr("Add")}</>}
+              {/* Up next — the first pending episode, one tap to mark it seen.
+                  Marking auto-follows the title, so it also shows on unfollowed
+                  shows; a stopped show keeps its explicit pause instead. */}
+              {nextPending && !entry?.stopped && (
+                <div className="flex justify-center">
+                  <button
+                    className="btn btn-accent"
+                    disabled={markWatched.isPending}
+                    onClick={() => markWatched.mutate(nextPending.id)}
+                    title={nextPending.name ?? undefined}
+                  >
+                    <Check size={16} />
+                    {tr("Mark watched")} · S{nextPending.season_number} E{nextPending.episode_number}
                   </button>
-                  {!added && (
-                    <button
-                      className={`btn ${isIgnored(title.tmdb_id) ? "btn-accent" : "btn-outline"}`}
-                      onClick={() => (isIgnored(title.tmdb_id) ? unignore.mutate(title.id) : ignore.mutate(title.id))}
-                      title={isIgnored(title.tmdb_id) ? "Un-ignore — show in suggestions again" : "Not interested — hide from suggestions"}
-                    >
-                      {isIgnored(title.tmdb_id) ? <><Eye size={16} />{tr("Un-ignore")}</> : <><EyeOff size={16} />{tr("Not interested")}</>}
-                    </button>
-                  )}
-                  {added && entry && isUpcoming && !entry.stopped && (
-                    <button
-                      className={`btn ${entry.notify ? "btn-accent" : "btn-outline"}`}
-                      onClick={() => toggleNotify.mutate({ titleId: entry.title_id, notify: !entry.notify })}
-                    >
-                      <Bell size={16} />{entry.notify ? tr("Tracking") : tr("Notify me")}
-                    </button>
-                  )}
-                  {added && entry && (
-                    <button
-                      className="btn btn-outline"
-                      onClick={() => setStopped.mutate({ titleId: entry.title_id, stopped: !entry.stopped })}
-                      title={entry.stopped ? "Resume — back in Tonight & calendar" : "Stop watching — keeps history, hides from Tonight"}
-                    >
-                      {entry.stopped ? <><Play size={16} />{tr("Resume")}</> : <><Pause size={16} />{tr("Stop watching")}</>}
-                    </button>
-                  )}
-                  {unwatchedAired > 0 && (
-                    <button
-                      className="btn btn-outline"
-                      disabled={markSeries.isPending}
-                      onClick={markWholeSeries}
-                      title={`Mark all ${unwatchedAired} aired episodes as seen — for shows you've already watched`}
-                    >
-                      <CheckCheck size={16} />{markSeries.isPending ? tr("Marking…") : tr("Mark watched")}
-                    </button>
-                  )}
                 </div>
+              )}
 
-                {/* Ratings — yours (persisted in P2-C5) + TMDB community */}
-                <div className="flex items-center gap-4">
-                  <div>
-                    <div className="eyebrow" style={{ marginBottom: 5 }}>{tr("Your rating")}</div>
-                    <RatingStars value={rating} onRate={(v) => rateTitle.mutate(v)} />
+              {/* Actions — one balanced line, every button sharing the width */}
+              <div className="action-row">
+                <button className={`btn ${added ? "btn-outline" : "btn-accent"}`} onClick={toggleFollow}>
+                  {added ? <><Minus size={16} />{tr("Remove")}</> : <><Plus size={16} />{tr("Add")}</>}
+                </button>
+                {!added && (
+                  <button
+                    className={`btn ${isIgnored(title.tmdb_id) ? "btn-accent" : "btn-outline"}`}
+                    onClick={() => (isIgnored(title.tmdb_id) ? unignore.mutate(title.id) : ignore.mutate(title.id))}
+                    title={isIgnored(title.tmdb_id) ? "Un-ignore — show in suggestions again" : "Not interested — hide from suggestions"}
+                  >
+                    {isIgnored(title.tmdb_id) ? <><Eye size={16} />{tr("Un-ignore")}</> : <><EyeOff size={16} />{tr("Not interested")}</>}
+                  </button>
+                )}
+                {added && entry && isUpcoming && !entry.stopped && (
+                  <button
+                    className={`btn ${entry.notify ? "btn-accent" : "btn-outline"}`}
+                    onClick={() => toggleNotify.mutate({ titleId: entry.title_id, notify: !entry.notify })}
+                  >
+                    <Bell size={16} />{entry.notify ? tr("Tracking") : tr("Notify me")}
+                  </button>
+                )}
+                {added && entry && (
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => setStopped.mutate({ titleId: entry.title_id, stopped: !entry.stopped })}
+                    title={entry.stopped ? "Resume — back in Tonight & calendar" : "Stop watching — keeps history, hides from Tonight"}
+                  >
+                    {entry.stopped ? <><Play size={16} />{tr("Resume")}</> : <><Pause size={16} />{tr("Stop")}</>}
+                  </button>
+                )}
+                {unwatchedAired > 0 && (
+                  <button
+                    className="btn btn-outline"
+                    disabled={markSeries.isPending}
+                    onClick={markWholeSeries}
+                    title={`Mark all ${unwatchedAired} aired episodes as seen — for shows you've already watched`}
+                  >
+                    <CheckCheck size={16} />{markSeries.isPending ? tr("Marking…") : tr("All watched")}
+                  </button>
+                )}
+              </div>
+
+              {/* Ratings — own balanced line: yours | TMDB | friends */}
+              <div className="ratings-row">
+                <div className="ratings-cell">
+                  <div className="eyebrow">{tr("Your rating")}</div>
+                  <RatingStars value={rating} onRate={(v) => rateTitle.mutate(v)} />
+                </div>
+                <div className="ratings-divider" />
+                <div className="ratings-cell">
+                  <div className="eyebrow">TMDB</div>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                    <span style={{ fontWeight: 850, fontSize: 17 }}>
+                      {title.vote_average ? title.vote_average.toFixed(1) : "—"}
+                    </span>
                   </div>
-                  <div style={{ width: 1, height: 40, background: "var(--border)", flex: "0 0 auto" }} />
-                  <div style={{ textAlign: "center" }}>
-                    <div className="eyebrow" style={{ marginBottom: 5 }}>TMDB</div>
-                    <div className="flex items-center justify-center gap-1.5">
-                      <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                      <span style={{ fontWeight: 850, fontSize: 17 }}>
-                        {title.vote_average ? title.vote_average.toFixed(1) : "—"}
-                      </span>
-                    </div>
-                  </div>
-                  {friendsAvg != null && (
-                    <>
-                      <div style={{ width: 1, height: 40, background: "var(--border)", flex: "0 0 auto" }} />
+                </div>
+                {friendsAvg != null && (
+                  <>
+                    <div className="ratings-divider" />
+                    <div className="relative" ref={friendsRef}>
                       <button
-                        className="btn-reset friends-avg"
+                        className="btn-reset friends-avg ratings-cell"
                         title={tr("Friend ratings")}
-                        aria-haspopup="dialog"
+                        aria-haspopup="true"
                         aria-expanded={friendsOpen}
-                        onClick={() => setFriendsOpen(true)}
+                        onClick={() => setFriendsOpen((o) => !o)}
                       >
-                        <div className="eyebrow" style={{ marginBottom: 5 }}>{tr("Friends")}</div>
+                        <div className="eyebrow">{tr("Friends")}</div>
                         <div className="flex items-center justify-center gap-1.5">
                           <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
                           <span style={{ fontWeight: 850, fontSize: 17 }}>{friendsAvg.toFixed(1)}</span>
                           <ChevronDown size={15} className="mute friends-avg-chev" aria-hidden />
                         </div>
                       </button>
-                    </>
-                  )}
-                </div>
+                      {friendsOpen && (
+                        <div className="card friends-pop" aria-label={tr("Friend ratings")}>
+                          {friendRaters.map((r) => (
+                            <div
+                              key={r.id}
+                              className="friends-pop-row"
+                              role="button"
+                              tabIndex={0}
+                              title={`Open ${r.name}'s profile`}
+                              onClick={() => { setFriendsOpen(false); onClose(); navigate(`/friend/${r.id}`); }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFriendsOpen(false); onClose(); navigate(`/friend/${r.id}`); }
+                              }}
+                            >
+                              <FriendAvatar f={r} size={26} />
+                              <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13, fontWeight: 650 }}>{r.name}</span>
+                              <span className="flex items-center gap-1" style={{ fontWeight: 800, fontSize: 13 }}>
+                                <Star size={12} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                                {r.score}/10
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
               {displayOverview && (
@@ -442,40 +590,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
               {cast.length > 0 && (
                 <div>
                   <div className="eyebrow" style={{ marginBottom: 10 }}>{tr("Cast")}</div>
-                  <div className="flex gap-3 overflow-x-auto no-scrollbar" style={{ paddingBottom: 4 }}>
-                    {cast.map((c) => (
-                      <div
-                        key={c.id}
-                        role="button"
-                        tabIndex={0}
-                        className="flex flex-col items-center gap-1.5"
-                        style={{ width: 76, flex: "0 0 auto", cursor: "pointer", textAlign: "center" }}
-                        title={c.name}
-                        onClick={() => { onClose(); navigate(`/person/${c.id}`); }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClose(); navigate(`/person/${c.id}`); }
-                        }}
-                      >
-                        <span
-                          className="grid place-items-center overflow-hidden"
-                          style={{
-                            width: 64, height: 64, borderRadius: "50%", background: "var(--surface-3)",
-                            border: "1px solid var(--border)", flex: "0 0 auto", color: "var(--text-dim)",
-                          }}
-                        >
-                          {tmdbImg(c.profile_path, "w92") ? (
-                            <img src={tmdbImg(c.profile_path, "w92")} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          ) : (
-                            <User size={26} />
-                          )}
-                        </span>
-                        <span className="truncate" style={{ fontSize: 11.5, fontWeight: 650, width: "100%" }}>{c.name}</span>
-                        {c.character && (
-                          <span className="mute truncate" style={{ fontSize: 10.5, width: "100%", marginTop: -4 }}>{c.character}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <CastRail cast={cast} onPick={(id) => { onClose(); navigate(`/person/${id}`); }} />
                 </div>
               )}
 
@@ -519,55 +634,6 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
           </>
         )}
       </div>
-
-      {/* Friend ratings detail — small modal opened from the header average */}
-      {friendsOpen && (
-        <>
-          <div className="backdrop" style={{ zIndex: 80 }} onClick={() => setFriendsOpen(false)} />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={tr("Friend ratings")}
-            className="sheet-center fixed card flex flex-col"
-            style={{ zIndex: 81, left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(360px, 92vw)", padding: 22, gap: 12, borderRadius: "var(--r-lg)", maxHeight: "70vh" }}
-          >
-            <div className="flex items-center justify-between">
-              <div style={{ fontWeight: 800, fontSize: 16 }}>{tr("Friend ratings")}</div>
-              <button className="btn btn-icon btn-ghost" onClick={() => setFriendsOpen(false)} aria-label={tr("Close")}>
-                <X size={16} />
-              </button>
-            </div>
-            <div className="flex flex-col gap-2 overflow-y-auto">
-              {friendRaters.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex items-center gap-2.5"
-                  role="button"
-                  tabIndex={0}
-                  style={{ cursor: "pointer" }}
-                  title={`Open ${r.name}'s profile`}
-                  onClick={() => { setFriendsOpen(false); onClose(); navigate(`/friend/${r.id}`); }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFriendsOpen(false); onClose(); navigate(`/friend/${r.id}`); }
-                  }}
-                >
-                  <FriendAvatar f={r} size={28} />
-                  <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 650 }}>{r.name}</span>
-                  <span className="flex items-center gap-1.5" style={{ fontWeight: 800, fontSize: 14 }}>
-                    <Star size={13} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                    {r.score}/10
-                  </span>
-                </div>
-              ))}
-            </div>
-            {friendRaters.length > 1 && friendsAvg != null && (
-              <div className="mute" style={{ fontSize: 12.5, fontWeight: 700, textAlign: "right" }}>
-                {tr("avg")} {friendsAvg.toFixed(1)}
-              </div>
-            )}
-          </div>
-        </>
-      )}
 
       {/* "Mark all up to here" confirmation */}
       {pending && (

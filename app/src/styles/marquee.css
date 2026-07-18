@@ -202,6 +202,40 @@
   to   { opacity: 1; transform: translate(-50%, -50%); }
 }
 
+/* Detail sheet — actions on one balanced line, ratings on their own line */
+.action-row { display: flex; gap: 10px; }
+.action-row .btn { flex: 1 1 0; min-width: 0; padding-left: 10px; padding-right: 10px; }
+.action-row .btn svg { flex: 0 0 auto; }
+@media (max-width: 640px) {
+  .action-row { gap: 8px; }
+  .action-row .btn { font-size: 12.5px; gap: 5px; padding: 10px 6px; }
+  .action-row .btn svg { width: 14px; height: 14px; }
+}
+
+.ratings-row { display: flex; align-items: stretch; justify-content: space-evenly; gap: 8px; }
+.ratings-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; text-align: center; }
+.ratings-divider { width: 1px; background: var(--border); flex: 0 0 auto; }
+.rating-num { font-weight: 800; font-size: 15px; min-width: 42px; }
+/* Narrow phones: smaller stars so yours | TMDB | friends still share one line */
+@media (max-width: 480px) {
+  .ratings-row { justify-content: space-between; gap: 6px; }
+  .ratings-row .rating-stars { gap: 2px; }
+  .ratings-row .rating-star,
+  .ratings-row .rating-star svg { width: 19px; height: 19px; }
+  .ratings-row .rating-num { font-size: 13.5px; min-width: 34px; }
+  .ratings-row .eyebrow { font-size: 10.5px; }
+}
+
+/* Cast rail — arrows floating over the row's edges; swipe instead on touch */
+.cast-rail { position: relative; }
+.cast-edge {
+  position: absolute; top: 44px; transform: translateY(-50%); z-index: 2;
+  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, .45);
+}
+.cast-edge.left { left: 2px; }
+.cast-edge.right { right: 2px; }
+@media (hover: none) { .cast-edge { display: none; } }
+
 /* Episode row */
 .ep-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--r); transition: background .15s ease; cursor: pointer; }
 .ep-row:hover { background: var(--surface-2); }
@@ -710,9 +744,28 @@
 .btn-reset { border: 0; background: none; padding: 0; font: inherit; color: inherit; }
 .friends-avg { text-align: center; cursor: pointer; border-radius: var(--r-sm); }
 .friends-avg .friends-avg-chev { transition: transform 0.15s ease, color 0.15s ease; }
+.friends-avg[aria-expanded="true"] .friends-avg-chev { transform: rotate(180deg); }
 @media (hover: hover) {
   .friends-avg:hover .friends-avg-chev { transform: translateY(2px); color: var(--text); }
+  .friends-avg[aria-expanded="true"]:hover .friends-avg-chev { transform: rotate(180deg); }
 }
+
+/* Per-friend dropdown anchored under the average */
+.friends-pop {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 5;
+  width: 230px; max-height: 264px; overflow-y: auto;
+  padding: 8px; display: flex; flex-direction: column; gap: 2px;
+  border-radius: var(--r); box-shadow: var(--shadow-lg);
+  border-color: var(--border-strong);
+  animation: friends-pop-in 0.12s ease;
+}
+@keyframes friends-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .friends-pop { animation: none; } }
+.friends-pop-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px; border-radius: var(--r-sm); cursor: pointer;
+}
+.friends-pop-row:hover, .friends-pop-row:focus-visible { background: var(--surface-2); }
 
 /* ---- You page: taste profile + watch heatmap side by side on web ---- */
 .you-taste-grid { display: grid; gap: 16px; grid-template-columns: 1fr; align-items: start; }

@@ -21,7 +21,7 @@ const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tmdb-pro
 const FRESH_MS = 24 * 60 * 60 * 1000;
 
 /** Full TMDB image URL for a cached *_path column (null-safe). */
-export function tmdbImg(path: string | null | undefined, size: "w92" | "w342" | "w780" | "original" = "w342"): string | undefined {
+export function tmdbImg(path: string | null | undefined, size: "w92" | "w185" | "w342" | "w780" | "original" = "w342"): string | undefined {
   return path ? `https://image.tmdb.org/t/p/${size}${path}` : undefined;
 }
 
