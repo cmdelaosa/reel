@@ -55,10 +55,16 @@ export async function searchShows(q: string): Promise<TitleRow[]> {
   return searchResponseSchema.parse(json).results;
 }
 
-/** Aggregate TV cast for a show (top-billed, from the proxy). */
+/** Aggregate TV cast for a show (top-billed, from the proxy). Silent-fail:
+ *  against a proxy that predates the /credits route the sheet simply renders
+ *  without a cast rail — never a toast. */
 export async function getCredits(tmdbId: number): Promise<CastMember[]> {
-  const json = await call(`/title/${tmdbId}/credits`);
-  return creditsResponseSchema.parse(json).cast;
+  try {
+    const json = await call(`/title/${tmdbId}/credits`);
+    return creditsResponseSchema.parse(json).cast;
+  } catch {
+    return [];
+  }
 }
 
 /** An actor plus their TV credits, shaped for the person page. */

@@ -307,11 +307,13 @@ export function useEsNames(): Map<number, string> {
     enabled: isEs() && Boolean(session?.user.id),
     staleTime: 60 * 60 * 1000,
     queryFn: async (): Promise<[number, string][]> => {
+      // Silent-fail: against a DB that predates migration 0046 the column is
+      // missing — canonical names are a fine fallback, never toast about it.
       const { data, error } = await supabase
         .from("titles")
         .select("tmdb_id, name_es")
         .not("name_es", "is", null);
-      if (error) throw error;
+      if (error) return [];
       return (data ?? [])
         .filter((r): r is { tmdb_id: number; name_es: string } => Boolean(r.name_es))
         .map((r) => [r.tmdb_id, r.name_es]);
