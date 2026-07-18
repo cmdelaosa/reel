@@ -157,11 +157,11 @@ function CastRail({ cast, onPick }: { cast: CastMember[]; onPick: (id: number) =
                 border: "1px solid var(--border)", flex: "0 0 auto", color: "var(--text-dim)",
               }}
             >
-              {tmdbImg(c.profile_path, "w185") ? (
+              {tmdbImg(c.profile_path, "w180_and_h180_face") ? (
                 <img
-                  src={tmdbImg(c.profile_path, "w185")}
+                  src={tmdbImg(c.profile_path, "w180_and_h180_face")}
                   alt=""
-                  style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "50% 20%" }}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
               ) : (
                 <User size={32} />

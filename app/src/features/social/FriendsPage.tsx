@@ -37,7 +37,7 @@ export default function FriendsPage() {
       {hasFriends && (
         <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
           <TasteCard />
-          <KpisCard />
+          <StatsCard />
         </div>
       )}
 
@@ -88,11 +88,11 @@ function TasteCard() {
   );
 }
 
-/* Teaser for the group scoreboard at /friends/kpis. */
-function KpisCard() {
+/* Teaser for the group scoreboard at /friends/stats. */
+function StatsCard() {
   const navigate = useNavigate();
   return (
-    <div className="card mq-row" onClick={() => navigate("/friends/kpis")}>
+    <div className="card mq-row" onClick={() => navigate("/friends/stats")}>
       <span className="badge badge-soft btn-icon" style={{ width: 40, height: 40, flex: "0 0 auto" }}>
         <BarChart3 size={18} style={{ color: "var(--accent)" }} />
       </span>

@@ -20,7 +20,7 @@ import KitPage from "@/features/kit/KitPage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
-import KpisPage from "@/features/social/KpisPage";
+import StatsPage from "@/features/social/StatsPage";
 import PersonPage from "@/features/social/PersonPage";
 import TastePage from "@/features/social/TastePage";
 import TonightPage from "@/features/tonight/TonightPage";
@@ -96,7 +96,9 @@ const router = createBrowserRouter([
       { path: "you", element: <YouPage /> },
       { path: "friends", element: <FriendsPage /> },
       { path: "friends/taste", element: <TastePage /> },
-      { path: "friends/kpis", element: <KpisPage /> },
+      { path: "friends/stats", element: <StatsPage /> },
+      // Old URL, kept as a redirect so shared/bookmarked links keep working.
+      { path: "friends/kpis", element: <Navigate to="/friends/stats" replace /> },
       { path: "friend/:id", element: <FriendPage /> },
       { path: "person/:id", element: <PersonPage /> },
       { path: "import", element: <ImportPage /> },

@@ -20,8 +20,11 @@ import {
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tmdb-proxy`;
 const FRESH_MS = 24 * 60 * 60 * 1000;
 
-/** Full TMDB image URL for a cached *_path column (null-safe). */
-export function tmdbImg(path: string | null | undefined, size: "w92" | "w185" | "w342" | "w780" | "h632" | "original" = "w342"): string | undefined {
+/** Full TMDB image URL for a cached *_path column (null-safe).
+    `w180_and_h180_face` is TMDB's face-detected square crop (what themoviedb.org
+    itself uses for circular cast avatars) — use it instead of CSS-cropping a 2:3
+    portrait, which cuts heads off. */
+export function tmdbImg(path: string | null | undefined, size: "w92" | "w185" | "w342" | "w780" | "h632" | "w180_and_h180_face" | "original" = "w342"): string | undefined {
   return path ? `https://image.tmdb.org/t/p/${size}${path}` : undefined;
 }
 

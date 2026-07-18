@@ -9,7 +9,9 @@ import {
 const DB_NAME = "reel-query-cache";
 const STORE_NAME = "cache";
 const SNAPSHOT_KEY = "metadata-v1";
-const BUSTER = "metadata-v1";
+// Bump to drop every client's persisted snapshot on next load (fresh poster/
+// still paths et al). v2: 2026-07-18 photo-cache refresh.
+const BUSTER = "metadata-v2";
 const MAX_AGE_MS = 30 * 24 * 60 * 60_000;
 
 interface Snapshot {
