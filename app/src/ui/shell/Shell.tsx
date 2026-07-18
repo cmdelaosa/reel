@@ -11,6 +11,7 @@ import { Palette } from "@/ui/shell/Palette";
 import { SettingsSheet } from "@/ui/shell/SettingsSheet";
 import { OfflineToast } from "@/ui/shell/OfflineToast";
 import { QueryErrorToast } from "@/ui/shell/QueryErrorToast";
+import { t } from "@/lib/i18n";
 
 /* Marquee shell — top tab navigation, floating dock on mobile, ⌘K palette.
    Markup/classes ported verbatim from prototype/src/marquee.tsx. */
@@ -77,10 +78,10 @@ export function Shell() {
           </div>
 
           <nav className="mq-tabs">
-            {TABS.map((t) => (
-              <NavLink key={t.path} to={t.path} className={({ isActive }) => `mq-tab ${isActive ? "on" : ""}`}>
-                <t.icon size={16} />
-                <span>{t.label}</span>
+            {TABS.map((tab) => (
+              <NavLink key={tab.path} to={tab.path} className={({ isActive }) => `mq-tab ${isActive ? "on" : ""}`}>
+                <tab.icon size={16} />
+                <span>{t(tab.label)}</span>
               </NavLink>
             ))}
           </nav>
@@ -88,17 +89,17 @@ export function Shell() {
           <div className="mq-top-actions">
             <button className="mq-searchbtn" onClick={() => setPaletteOpen(true)}>
               <Search size={15} />
-              <span className="mq-searchbtn-label">Search</span>
+              <span className="mq-searchbtn-label">{t("Search")}</span>
               <kbd className="mq-kbd">⌘K</kbd>
             </button>
-            <button className="btn btn-ghost btn-icon relative" title="Notifications" onClick={() => setNotifOpen((v) => !v)}>
+            <button className="btn btn-ghost btn-icon relative" title={t("Notifications")} onClick={() => setNotifOpen((v) => !v)}>
               <Bell size={18} />
               {unread > 0 && <span className="mq-belldot" />}
             </button>
-            <button className="btn btn-ghost btn-icon" title="Settings" onClick={() => setSettingsOpen(true)}>
+            <button className="btn btn-ghost btn-icon" title={t("Settings")} onClick={() => setSettingsOpen(true)}>
               <Sliders size={18} />
             </button>
-            <button className="mq-avatar" title="Your profile" onClick={() => navigate("/you")} style={{ overflow: "hidden", padding: 0 }}>
+            <button className="mq-avatar" title={t("Your profile")} onClick={() => navigate("/you")} style={{ overflow: "hidden", padding: 0 }}>
               {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               ) : (
@@ -116,10 +117,10 @@ export function Shell() {
 
       {/* ---- Floating dock (mobile) ---- */}
       <nav className="mq-dock">
-        {TABS.map((t) => (
-          <NavLink key={t.path} to={t.path} className={({ isActive }) => `mq-dockbtn ${isActive ? "on" : ""}`} title={t.label}>
-            <t.icon size={19} />
-            <span className="mq-docklabel">{t.label}</span>
+        {TABS.map((tab) => (
+          <NavLink key={tab.path} to={tab.path} className={({ isActive }) => `mq-dockbtn ${isActive ? "on" : ""}`} title={t(tab.label)}>
+            <tab.icon size={19} />
+            <span className="mq-docklabel">{t(tab.label)}</span>
           </NavLink>
         ))}
       </nav>

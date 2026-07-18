@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router";
 import { useCollections } from "@/lib/collections";
+import { isEs, t as tr } from "@/lib/i18n";
 
 /* Explore collection tiles — 16:9 gradient cards → /collection/:slug. */
 export function CollectionsSection() {
@@ -12,8 +13,8 @@ export function CollectionsSection() {
     <section className="flex flex-col gap-4">
       <div className="mq-sechead">
         <div>
-          <h2 className="section-title">Collections</h2>
-          <p className="mute" style={{ fontSize: 13 }}>Hand-picked corners to dig into</p>
+          <h2 className="section-title">{tr("Collections")}</h2>
+          <p className="mute" style={{ fontSize: 13 }}>{isEs() ? "Rincones seleccionados a mano" : "Hand-picked corners to dig into"}</p>
         </div>
       </div>
       <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>

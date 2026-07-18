@@ -9,6 +9,7 @@ import { tmdbImg } from "@/lib/tmdb";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useOpenTitle } from "@/lib/useOpenTitle";
+import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { CalEpGroup } from "@/features/calendar/CalEpGroup";
 
@@ -20,9 +21,9 @@ import { CalEpGroup } from "@/features/calendar/CalEpGroup";
 export default function CalendarPage() {
   const [view, setView] = useState<"shows" | "returning" | "new">("shows");
   const tabs: [typeof view, string][] = [
-    ["shows", "My shows"],
-    ["returning", "Returning series"],
-    ["new", "New & announced"],
+    ["shows", tr("My shows")],
+    ["returning", isEs() ? "Series que regresan" : "Returning series"],
+    ["new", tr("New & announced")],
   ];
 
   return (
@@ -118,7 +119,13 @@ function MyShowsFeed() {
   }, [isPending]);
 
   if (!isPending && rows.length === 0) {
-    return <p className="dim">No dated episodes from the shows you follow in this window.</p>;
+    return (
+      <p className="dim">
+        {isEs()
+          ? "No hay episodios con fecha de las series que sigues en esta ventana."
+          : "No dated episodes from the shows you follow in this window."}
+      </p>
+    );
   }
 
   const todayOffset = days.find(([off]) => off >= 0)?.[0];
@@ -127,19 +134,21 @@ function MyShowsFeed() {
     <>
       <div className="cal-feed">
         <div ref={topRef} className="cal-sentinel">
-          {weeksBack < 60 ? "Loading earlier episodes…" : "That's the start of your history."}
+          {weeksBack < 60
+            ? (isEs() ? "Cargando episodios anteriores…" : "Loading earlier episodes…")
+            : tr("That's the start of your history.")}
         </div>
 
         {days.map(([off, list]) => (
           <div key={off} ref={off === todayOffset ? todayRef : undefined} className="cal-day">
-            <div className="cal-daysep"><span>{dayLabel(off, list[0].air_datetime)}</span></div>
+            <div className="cal-daysep"><span>{dayLabel(off, list[0].air_datetime, dateLocale())}</span></div>
             {clusterFeed(list, now).map((c) => renderCluster(c, false))}
           </div>
         ))}
 
         {later.length > 0 && (
           <div className="cal-day">
-            <div className="cal-daysep"><span>Later</span></div>
+            <div className="cal-daysep"><span>{isEs() ? "Más adelante" : "Later"}</span></div>
             {clusterFeed(later, now).map((c) => renderCluster(c, true))}
           </div>
         )}
@@ -151,10 +160,12 @@ function MyShowsFeed() {
           style={{ zIndex: 85, left: "50%", bottom: 26, transform: "translateX(-50%)", padding: "12px 16px", borderRadius: 999 }}
         >
           <span style={{ fontSize: 13.5, fontWeight: 650 }}>
-            Marked {toast.count} {toast.count === 1 ? "episode" : "episodes"} as seen
+            {isEs()
+              ? `${toast.count} ${toast.count === 1 ? "episodio marcado" : "episodios marcados"} como vistos`
+              : `Marked ${toast.count} ${toast.count === 1 ? "episode" : "episodes"} as seen`}
           </span>
           <button className="btn btn-ghost btn-sm" onClick={() => { undoMarks.mutate(toast.ids); setToast(null); }}>
-            Undo
+            {tr("Undo")}
           </button>
         </div>
       )}
@@ -193,17 +204,25 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() ? "month" : "later";
   };
 
-  const monthLabel = now.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  const groups: { key: "month" | "later" | "tba"; title: string; sub: string }[] = [
-    { key: "month", title: "This month", sub: monthLabel },
-    { key: "later", title: `Later`, sub: "Dated premieres" },
-    { key: "tba", title: "Announced · no date yet", sub: "We'll tell you the moment it's dated" },
-  ];
+  const monthLabel = now.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" });
+  const groups: { key: "month" | "later" | "tba"; title: string; sub: string }[] = isEs()
+    ? [
+        { key: "month", title: "Este mes", sub: monthLabel },
+        { key: "later", title: "Más adelante", sub: "Estrenos con fecha" },
+        { key: "tba", title: "Anunciadas · sin fecha", sub: "Te avisaremos en cuanto tengan fecha" },
+      ]
+    : [
+        { key: "month", title: "This month", sub: monthLabel },
+        { key: "later", title: `Later`, sub: "Dated premieres" },
+        { key: "tba", title: "Announced · no date yet", sub: "We'll tell you the moment it's dated" },
+      ];
 
   if (items.length === 0) {
     return (
       <p className="dim" style={{ fontSize: 14 }}>
-        Nothing {kind === "returning" ? "returning" : "new"} from the shows you follow right now.
+        {isEs()
+          ? `Nada ${kind === "returning" ? "que regrese" : "nuevo"} de las series que sigues ahora mismo.`
+          : `Nothing ${kind === "returning" ? "returning" : "new"} from the shows you follow right now.`}
       </p>
     );
   }
@@ -236,23 +255,27 @@ function UpcomingRow({ s, at, announced }: { s: LibraryShow; at: number | null; 
   const toggleNotify = useToggleNotify();
   const notify = s.notify; // persisted flag (optimistic via the library cache)
   const art = tmdbImg(s.poster_path, "w92");
+  const esNames = useEsNames();
+  const name = locName(esNames, s.tmdb_id, s.name);
 
   return (
     <div className="card mq-row" onClick={() => open(s.tmdb_id)}>
-      <div className="mq-row-art tall" style={art ? undefined : { background: posterBg(s.name) }}>
+      <div className="mq-row-art tall" style={art ? undefined : { background: posterBg(name) }}>
         {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
         <div className="poster-sheen" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`badge ${announced ? "badge-soft" : "badge-accent"}`}>
-            {announced ? "Announced" : at ? new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "TBA"}
+            {announced ? tr("Announced") : at ? new Date(at).toLocaleDateString(dateLocale(), { month: "short", day: "numeric" }) : tr("TBA")}
           </span>
           {s.network && <NetworkLogo network={s.network} />}
         </div>
-        <div className="mq-row-title truncate" style={{ fontSize: 16 }}>{s.name}</div>
+        <div className="mq-row-title truncate" style={{ fontSize: 16 }}>{name}</div>
         {s.upcoming_season_number != null ? (
-          <div className="truncate" style={{ fontSize: 13, fontWeight: 650 }}>Season {s.upcoming_season_number}</div>
+          <div className="truncate" style={{ fontSize: 13, fontWeight: 650 }}>
+            {isEs() ? "Temporada" : "Season"} {s.upcoming_season_number}
+          </div>
         ) : (
           <div className="dim truncate" style={{ fontSize: 13 }}>{s.genres.slice(0, 2).join(", ") || "—"}</div>
         )}
@@ -261,7 +284,7 @@ function UpcomingRow({ s, at, announced }: { s: LibraryShow; at: number | null; 
         className={`btn btn-sm ${notify ? "btn-accent" : "btn-outline"}`}
         onClick={(e) => { e.stopPropagation(); toggleNotify.mutate({ titleId: s.title_id, notify: !notify }); }}
       >
-        <Bell size={15} />{notify ? "Tracking" : "Notify me"}
+        <Bell size={15} />{notify ? tr("Tracking") : tr("Notify me")}
       </button>
     </div>
   );

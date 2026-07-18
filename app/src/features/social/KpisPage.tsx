@@ -6,6 +6,7 @@ import { useFriendships } from "@/lib/friends";
 import { useFriendsRatings, type FriendRatingRow } from "@/lib/taste";
 import { useIgnored } from "@/lib/ignore";
 import { useOpenTitle } from "@/lib/useOpenTitle";
+import { locName, t as tr, useEsNames } from "@/lib/i18n";
 import { tmdbImg } from "@/lib/tmdb";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
@@ -97,24 +98,26 @@ function fmt(n: number): string {
 
 function KpiRow({ t, groupAvg, onOpen }: { t: KpiTitle; groupAvg?: number; onOpen: () => void }) {
   const art = tmdbImg(t.poster_path, "w92");
+  const esNames = useEsNames();
+  const name = locName(esNames, t.tmdb_id, t.name);
   return (
     <div className="card mq-row" onClick={onOpen}>
-      <div className="mq-row-art" style={art ? undefined : { background: posterBg(t.name) }}>
+      <div className="mq-row-art" style={art ? undefined : { background: posterBg(name) }}>
         {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
         <div className="poster-sheen" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name}</div>
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{name}</div>
         <div className="flex items-center gap-2" style={{ marginTop: 3 }}>
           <FriendStack fans={t.raters} size={20} />
           <span className="mute" style={{ fontSize: 12 }}>
-            {t.raters.length === 1 ? "1 friend rated it" : `${t.raters.length} friends rated it`}
+            {t.raters.length === 1 ? `1 ${tr("friend rated it")}` : `${t.raters.length} ${tr("friends rated it")}`}
           </span>
         </div>
       </div>
       <div className="flex items-center gap-1.5" style={{ flex: "0 0 auto" }}>
         {t.mine != null && (
-          <span className="badge badge-soft" title="Your score" style={{ fontWeight: 800 }}>You {t.mine}</span>
+          <span className="badge badge-soft" title="Your score" style={{ fontWeight: 800 }}>{tr("You")} {t.mine}</span>
         )}
         <span className="badge badge-soft" title={groupAvg != null ? "Group average (yours included)" : "Friends' average"} style={{ fontWeight: 800 }}>
           <Star size={11} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
@@ -148,21 +151,21 @@ export default function KpisPage() {
   return (
     <div className="screen mq-page">
       <header className="mq-header">
-        <h1 className="mq-h1">Group stats</h1>
-        <p className="dim mq-sub">The friend-group scoreboard — what to watch next, how your scores compare, and the shows everyone regrets.</p>
+        <h1 className="mq-h1">{tr("Group stats")}</h1>
+        <p className="dim mq-sub">{tr("The friend-group scoreboard — what to watch next, how your scores compare, and the shows everyone regrets.")}</p>
       </header>
 
       {kpis.loading ? (
-        <div className="dim">Loading…</div>
+        <div className="dim">{tr("Loading…")}</div>
       ) : !kpis.hasFriends ? (
         <div className="card" style={{ padding: "24px" }}>
-          <p className="dim" style={{ margin: 0, fontSize: 14 }}>No friends yet — add someone on the Friends tab to unlock the group stats.</p>
+          <p className="dim" style={{ margin: 0, fontSize: 14 }}>{tr("No friends yet — add someone on the Friends tab to unlock the group stats.")}</p>
         </div>
       ) : (
         <>
-          <Section icon={TrendingUp} title="Recommended by friends" sub="Shows you haven't started, ranked by your friends' average score">
+          <Section icon={TrendingUp} title={tr("Recommended by friends")} sub={tr("Shows you haven't started, ranked by your friends' average score")}>
             {kpis.recommended.length === 0 ? (
-              <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>Nothing to recommend — you've seen everything your friends rated.</p>
+              <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("Nothing to recommend — you've seen everything your friends rated.")}</p>
             ) : (
               <div style={GRID}>
                 {kpis.recommended.map((t) => <KpiRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
@@ -170,9 +173,9 @@ export default function KpisPage() {
             )}
           </Section>
 
-          <Section icon={Award} title="Your scores vs theirs" sub="Every show you and at least one friend both rated">
+          <Section icon={Award} title={tr("Your scores vs theirs")} sub={tr("Every show you and at least one friend both rated")}>
             {kpis.compared.length === 0 ? (
-              <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>No overlap yet — rate a few shows your friends also scored.</p>
+              <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No overlap yet — rate a few shows your friends also scored.")}</p>
             ) : (
               <div style={GRID}>
                 {kpis.compared.map((t) => <KpiRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
@@ -180,9 +183,9 @@ export default function KpisPage() {
             )}
           </Section>
 
-          <Section icon={ThumbsDown} title="Worst watched together" sub="Lowest group averages among shows two or more of you scored">
+          <Section icon={ThumbsDown} title={tr("Worst watched together")} sub={tr("Lowest group averages among shows two or more of you scored")}>
             {kpis.worst.length === 0 ? (
-              <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>No shared stinkers yet — lucky you.</p>
+              <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No shared stinkers yet — lucky you.")}</p>
             ) : (
               <div style={GRID}>
                 {kpis.worst.map((t) => <KpiRow key={t.tmdb_id} t={t} groupAvg={t.groupAvg} onOpen={() => open(t.tmdb_id)} />)}

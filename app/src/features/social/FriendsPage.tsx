@@ -12,6 +12,7 @@ import { FriendActivityCard } from "@/features/explore/FriendActivityCard";
 import { FriendsSection } from "@/features/social/FriendsSection";
 import { InvitesCard } from "@/features/you/InvitesCard";
 import { useOpenTitle, useTitleIntent } from "@/lib/useOpenTitle";
+import { locName, t as tr, useEsNames } from "@/lib/i18n";
 
 /* Friends — the social hub (top-nav tab). Your friends list + requests, the
    activity feed (moved here from Explore), what they rate highest, and invites.
@@ -29,8 +30,8 @@ export default function FriendsPage() {
   return (
     <div className="screen mq-page">
       <header className="mq-header">
-        <h1 className="mq-h1">Friends</h1>
-        <p className="dim mq-sub">Who you watch with — their activity, their favorites.</p>
+        <h1 className="mq-h1">{tr("Friends")}</h1>
+        <p className="dim mq-sub">{tr("Who you watch with — their activity, their favorites.")}</p>
       </header>
 
       {hasFriends && (
@@ -48,8 +49,8 @@ export default function FriendsPage() {
         <section className="flex flex-col gap-4">
           <div className="mq-sechead">
             <div>
-              <h2 className="section-title">Best rated by friends</h2>
-              <p className="mute" style={{ fontSize: 13 }}>Their highest-scored shows</p>
+              <h2 className="section-title">{tr("Best rated by friends")}</h2>
+              <p className="mute" style={{ fontSize: 13 }}>{tr("Their highest-scored shows")}</p>
             </div>
           </div>
           <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
@@ -77,11 +78,11 @@ function TasteCard() {
         <Heart size={18} style={{ color: "var(--accent)" }} />
       </span>
       <div className="flex-1 min-w-0">
-        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>Taste match</div>
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{tr("Taste match")}</div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>
           {best
-            ? <>Closest match: <b style={{ fontWeight: 650 }}>{best.name}</b> · {best.affinity!.pct}%</>
-            : "See how your ratings line up with your friends'"}
+            ? <>{tr("Closest match:")} <b style={{ fontWeight: 650 }}>{best.name}</b> · {best.affinity!.pct}%</>
+            : tr("See how your ratings line up with your friends'")}
         </div>
       </div>
       <ChevronRight size={16} className="mute" />
@@ -98,9 +99,9 @@ function KpisCard() {
         <BarChart3 size={18} style={{ color: "var(--accent)" }} />
       </span>
       <div className="flex-1 min-w-0">
-        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>Group stats</div>
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{tr("Group stats")}</div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>
-          What to watch next, score comparisons, shared stinkers
+          {tr("What to watch next, score comparisons, shared stinkers")}
         </div>
       </div>
       <ChevronRight size={16} className="mute" />
@@ -111,17 +112,19 @@ function KpisCard() {
 function BestRatedRow({ b, onOpen }: { b: BestRatedByFriends; onOpen: () => void }) {
   const art = tmdbImg(b.poster_path, "w92");
   const intent = useTitleIntent(b.tmdb_id);
+  const esNames = useEsNames();
+  const name = locName(esNames, b.tmdb_id, b.name);
   return (
     <div className="card mq-row" onClick={onOpen} {...intent}>
-      <div className="mq-row-art" style={art ? undefined : { background: posterBg(b.name) }}>
+      <div className="mq-row-art" style={art ? undefined : { background: posterBg(name) }}>
         {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
         <div className="poster-sheen" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{b.name}</div>
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{name}</div>
         <div className="flex items-center gap-2" style={{ marginTop: 3 }}>
           <FriendStack fans={b.raters.map((r) => ({ id: r.id, name: r.name, avatarUrl: r.avatar_url }))} size={20} />
-          <span className="mute" style={{ fontSize: 12 }}>{b.count} {b.count === 1 ? "friend" : "friends"}</span>
+          <span className="mute" style={{ fontSize: 12 }}>{b.count} {b.count === 1 ? tr("friend") : tr("friends")}</span>
         </div>
       </div>
       {b.network && <NetworkLogo network={b.network} size={11} />}

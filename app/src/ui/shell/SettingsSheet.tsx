@@ -4,11 +4,12 @@ import { Bell, Download, Mail, RotateCcw, Settings as SettingsIcon, Upload, X } 
 import { useFocusTrap } from "@/ui/useFocusTrap";
 import {
   useSettings, setSetting, resetSettings,
-  type ThemeName,
+  type LanguageName, type ThemeName,
 } from "@/lib/settings";
 import {
   NOTIFICATION_TYPES, prefFor, useNotificationPrefs, useSetPref,
 } from "@/lib/notificationPrefs";
+import { t } from "@/lib/i18n";
 
 /* Settings sheet — the prototype's DesignLab stripped to production scope:
    theme (system/dark/oled/light) + notification prefs + data actions. */
@@ -55,19 +56,19 @@ function NotificationsSection() {
   const { data: prefs } = useNotificationPrefs();
   const setPref = useSetPref();
   return (
-    <Row label="Notifications">
+    <Row label={t("Notifications")}>
       <div className="flex flex-col gap-3">
-        {NOTIFICATION_TYPES.map((t) => {
-          const p = prefFor(prefs, t.type);
+        {NOTIFICATION_TYPES.map((n) => {
+          const p = prefFor(prefs, n.type);
           return (
-            <div key={t.type} className="flex items-center justify-between gap-3">
+            <div key={n.type} className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div style={{ fontSize: 13.5, fontWeight: 650 }}>{t.label}</div>
-                <div className="mute truncate" style={{ fontSize: 12 }}>{t.sub}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 650 }}>{t(n.label)}</div>
+                <div className="mute truncate" style={{ fontSize: 12 }}>{t(n.sub)}</div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <Toggle on={p.inapp} icon={Bell} label="App" onClick={() => setPref.mutate({ type: t.type, pref: { ...p, inapp: !p.inapp } })} />
-                <Toggle on={p.email} icon={Mail} label="Email" onClick={() => setPref.mutate({ type: t.type, pref: { ...p, email: !p.email } })} />
+                <Toggle on={p.inapp} icon={Bell} label={t("App")} onClick={() => setPref.mutate({ type: n.type, pref: { ...p, inapp: !p.inapp } })} />
+                <Toggle on={p.email} icon={Mail} label={t("Email")} onClick={() => setPref.mutate({ type: n.type, pref: { ...p, email: !p.email } })} />
               </div>
             </div>
           );
@@ -104,42 +105,60 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
           <div className="flex items-center gap-2.5">
             <SettingsIcon size={18} style={{ color: "var(--accent)" }} />
-            <div style={{ fontWeight: 800, fontSize: 16 }}>Settings</div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>{t("Settings")}</div>
           </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col gap-7">
-          <Row label="Theme">
+          <Row label={t("Theme")}>
             <Seg<ThemeName>
               value={settings.theme}
               onPick={(v) => setSetting("theme", v)}
               options={[
-                { v: "system", label: "System" },
-                { v: "dark", label: "Dark" },
-                { v: "oled", label: "OLED black" },
-                { v: "light", label: "Light" },
+                { v: "system", label: t("System") },
+                { v: "dark", label: t("Dark") },
+                { v: "oled", label: t("OLED black") },
+                { v: "light", label: t("Light") },
+              ]}
+            />
+          </Row>
+
+          <Row label={t("Language")}>
+            <Seg<LanguageName>
+              value={settings.language}
+              onPick={(v) => {
+                if (v === settings.language) return;
+                setSetting("language", v);
+                // The language is read once per render with no subscription
+                // plumbing (see lib/i18n.ts) — a reload applies it everywhere,
+                // dates and search language included.
+                window.location.reload();
+              }}
+              options={[
+                { v: "en", label: "English" },
+                { v: "es", label: "Español" },
               ]}
             />
           </Row>
 
           <NotificationsSection />
 
-          <Row label="Your data">
+          <Row label={t("Your data")}>
             <div className="flex flex-col gap-2">
               <button className="btn btn-ghost" style={{ justifyContent: "flex-start" }} onClick={() => go("/import")}>
-                <Upload size={16} />Import from TV Time
+                <Upload size={16} />{t("Import from TV Time")}
               </button>
               <button className="btn btn-ghost" style={{ justifyContent: "flex-start" }} onClick={() => go("/export")}>
-                <Download size={16} />Export my data
+                <Download size={16} />{t("Export my data")}
               </button>
             </div>
           </Row>
         </div>
 
         <div className="px-5 py-4 flex items-center gap-2" style={{ borderTop: "1px solid var(--border)" }}>
-          <button className="btn btn-ghost flex-1" onClick={resetSettings}><RotateCcw size={15} />Reset</button>
-          <button className="btn btn-accent flex-1" onClick={onClose}>Done</button>
+          <button className="btn btn-ghost flex-1" onClick={resetSettings}><RotateCcw size={15} />{t("Reset")}</button>
+          <button className="btn btn-accent flex-1" onClick={onClose}>{t("Done")}</button>
         </div>
       </div>
     </>

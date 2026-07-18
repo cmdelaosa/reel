@@ -4,6 +4,7 @@ import { ArrowRight, Clock, Search } from "lucide-react";
 import { qk } from "@/lib/queryKeys";
 import { usePrefetchTitle } from "@/lib/useOpenTitle";
 import { searchShows, tmdbImg } from "@/lib/tmdb";
+import { isEs, t as tr, tGenre } from "@/lib/i18n";
 import { posterBg } from "@/ui/posterBg";
 
 /* ⌘K command palette — TMDB search via the edge proxy. Markup/classes ported
@@ -96,7 +97,7 @@ export function Palette({ onClose, onOpen }: {
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search shows on TMDB…"
+            placeholder={tr("Search TV shows…")}
           />
           <kbd className="mq-kbd">esc</kbd>
         </div>
@@ -112,36 +113,39 @@ export function Palette({ onClose, onOpen }: {
             </>
           )}
           {debounced.length < 2 && recent.length === 0 && (
-            <div className="mq-pal-empty">Type at least 2 characters to search TMDB.</div>
+            <div className="mq-pal-empty">{tr("Type to search TMDB.")}</div>
           )}
           {debounced.length >= 2 && rows.length === 0 && (
             <div className="mq-pal-empty">
-              {isFetching ? "Searching…" : `No matches for “${debounced}”.`}
+              {isFetching ? tr("Searching…") : `${tr("No results.")} (“${debounced}”)`}
             </div>
           )}
-          {rows.map((t, i) => (
-            <div
-              key={t.id}
-              className={`mq-pal-row ${i === sel ? "on" : ""}`}
-              onMouseEnter={() => setSel(i)}
-              onClick={() => open(t.tmdb_id)}
-            >
-              {tmdbImg(t.poster_path, "w92") ? (
-                <img className="mq-pal-art" src={tmdbImg(t.poster_path, "w92")} alt="" style={{ objectFit: "cover" }} />
-              ) : (
-                <div className="mq-pal-art" style={{ background: posterBg(t.name) }} />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="mq-pal-title">{t.name}</div>
-                <div className="mq-pal-sub">
-                  {[t.first_air_date?.slice(0, 4), t.genres.slice(0, 2).join(" · "), t.network]
-                    .filter(Boolean)
-                    .join(" · ")}
+          {rows.map((r, i) => {
+            const display = (isEs() && r.name_es) || r.name;
+            return (
+              <div
+                key={r.id}
+                className={`mq-pal-row ${i === sel ? "on" : ""}`}
+                onMouseEnter={() => setSel(i)}
+                onClick={() => open(r.tmdb_id)}
+              >
+                {tmdbImg(r.poster_path, "w92") ? (
+                  <img className="mq-pal-art" src={tmdbImg(r.poster_path, "w92")} alt="" style={{ objectFit: "cover" }} />
+                ) : (
+                  <div className="mq-pal-art" style={{ background: posterBg(display) }} />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="mq-pal-title">{display}</div>
+                  <div className="mq-pal-sub">
+                    {[r.first_air_date?.slice(0, 4), r.genres.slice(0, 2).map(tGenre).join(" · "), r.network]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
                 </div>
+                <ArrowRight size={14} className="mute" />
               </div>
-              <ArrowRight size={14} className="mute" />
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="mq-pal-foot">
           <span><kbd className="mq-kbd">↑↓</kbd> navigate</span>

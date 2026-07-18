@@ -96,12 +96,26 @@ async function cacheNetworkLogos(admin: SupabaseClient, networks: Any) {
   if (error) console.error(`network_logos upsert: ${error.message}`);
 }
 
+// es-ES translation (plain es fallback) from a payload fetched with
+// append_to_response=translations. Mirrors tmdb-proxy.
+function esTranslation(d: Any): { name: string | null; overview: string | null } {
+  const all: Any[] = d?.translations?.translations ?? [];
+  const t =
+    all.find((x) => x.iso_639_1 === "es" && x.iso_3166_1 === "ES") ??
+    all.find((x) => x.iso_639_1 === "es");
+  return { name: t?.data?.name || null, overview: t?.data?.overview || null };
+}
+
 async function refreshTitle(admin: SupabaseClient, key: string, row: { id: string; tmdb_id: number }) {
-  const d = await tmdb(key, `/tv/${row.tmdb_id}`);
+  const d = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations`);
+  const es = esTranslation(d);
   const { error: te } = await admin
     .from("titles")
     .update({
       name: d.name ?? "Untitled",
+      original_name: d.original_name ?? null,
+      name_es: es.name,
+      overview_es: es.overview,
       overview: d.overview ?? null,
       poster_path: d.poster_path ?? null,
       backdrop_path: d.backdrop_path ?? null,

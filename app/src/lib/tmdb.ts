@@ -1,8 +1,13 @@
 import { supabase } from "@/lib/supabase";
+import { isEs } from "@/lib/i18n";
 import {
   searchResponseSchema,
   titleResponseSchema,
   seasonResponseSchema,
+  creditsResponseSchema,
+  personResponseSchema,
+  type CastMember,
+  type PersonResponse,
   type TitleRow,
   type TitleResponse,
   type SeasonResponse,
@@ -43,8 +48,23 @@ function isFresh(iso: string | null | undefined): boolean {
 }
 
 export async function searchShows(q: string): Promise<TitleRow[]> {
-  const json = await call(`/search?q=${encodeURIComponent(q)}`);
+  // lang=es asks the proxy to patch name_es/original_name from the es-ES
+  // translation set so the palette can display Spanish titles.
+  const lang = isEs() ? "&lang=es" : "";
+  const json = await call(`/search?q=${encodeURIComponent(q)}${lang}`);
   return searchResponseSchema.parse(json).results;
+}
+
+/** Aggregate TV cast for a show (top-billed, from the proxy). */
+export async function getCredits(tmdbId: number): Promise<CastMember[]> {
+  const json = await call(`/title/${tmdbId}/credits`);
+  return creditsResponseSchema.parse(json).cast;
+}
+
+/** An actor plus their TV credits, shaped for the person page. */
+export async function getPerson(personId: number): Promise<PersonResponse> {
+  const json = await call(`/person/${personId}`);
+  return personResponseSchema.parse(json);
 }
 
 export async function getTrending(): Promise<TitleRow[]> {

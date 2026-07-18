@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { useFriendActivity, type ActivityItem } from "@/lib/explore";
 import { relativeTime } from "@/domain/time";
 import { tmdbImg } from "@/lib/tmdb";
+import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 
@@ -46,25 +47,29 @@ function epRange({ from, to }: FeedRow): string {
   return `S${from.season_number} · E${from.episode_number} – S${to.season_number} · E${to.episode_number}`;
 }
 
-function phrase(r: FeedRow): React.ReactNode {
+function phrase(r: FeedRow, titleName: string): React.ReactNode {
   const a = r.a;
+  const name = <b style={{ fontWeight: 700 }}>{titleName}</b>;
+  const eps = a.season_number != null && a.episode_number != null && (
+    <b style={{ fontWeight: 700 }}>
+      {r.count > 1 ? epRange(r) : <>S{a.season_number} · E{a.episode_number}</>}
+    </b>
+  );
+  if (isEs()) {
+    switch (a.verb) {
+      case "rated": return <>puntuó {name}</>;
+      case "added": return <>añadió {name} a su lista</>;
+      case "watched": return <>vio {eps} de {name}</>;
+      case "started": return <>empezó a ver {name}</>;
+      case "finished_season": return <>terminó la temporada {a.season_number} de {name}</>;
+    }
+  }
   switch (a.verb) {
-    case "rated": return <>rated <b style={{ fontWeight: 700 }}>{a.title_name}</b></>;
-    case "added": return <>added <b style={{ fontWeight: 700 }}>{a.title_name}</b> to their watchlist</>;
-    case "watched":
-      return (
-        <>
-          watched{" "}
-          {a.season_number != null && a.episode_number != null && (
-            <b style={{ fontWeight: 700 }}>
-              {r.count > 1 ? epRange(r) : <>S{a.season_number} · E{a.episode_number}</>}
-            </b>
-          )}{" "}
-          of <b style={{ fontWeight: 700 }}>{a.title_name}</b>
-        </>
-      );
-    case "started": return <>started watching <b style={{ fontWeight: 700 }}>{a.title_name}</b></>;
-    case "finished_season": return <>finished season {a.season_number} of <b style={{ fontWeight: 700 }}>{a.title_name}</b></>;
+    case "rated": return <>rated {name}</>;
+    case "added": return <>added {name} to their watchlist</>;
+    case "watched": return <>watched {eps} of {name}</>;
+    case "started": return <>started watching {name}</>;
+    case "finished_season": return <>finished season {a.season_number} of {name}</>;
   }
 }
 
@@ -74,6 +79,7 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
   const { data: items = [] } = useFriendActivity(enabled, 60);
   const [, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const esNames = useEsNames();
 
   if (!enabled || items.length === 0) return null;
 
@@ -89,14 +95,15 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
     <section className="flex flex-col gap-4">
       <div className="mq-sechead">
         <div>
-          <h2 className="section-title">Friend activity</h2>
-          <p className="mute" style={{ fontSize: 13 }}>What your friends are watching and rating</p>
+          <h2 className="section-title">{isEs() ? "Actividad de amigos" : "Friend activity"}</h2>
+          <p className="mute" style={{ fontSize: 13 }}>{isEs() ? "Qué están viendo y puntuando tus amigos" : "What your friends are watching and rating"}</p>
         </div>
       </div>
       <div className="card" style={{ padding: 6 }}>
         {groupWatched(items).map((r, i) => {
           const a = r.a;
           const art = tmdbImg(a.poster_path, "w92");
+          const titleName = locName(esNames, a.tmdb_id, a.title_name);
           return (
             <div key={i} className="fr-activity" onClick={() => openTitle(a.tmdb_id)}>
               <span onClick={(e) => { e.stopPropagation(); openFriend(a.friend_id); }} style={{ flex: "0 0 auto" }}>
@@ -104,16 +111,16 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
               </span>
               <div className="flex-1 min-w-0">
                 <div style={{ fontSize: 13.5 }} className="truncate">
-                  <b style={{ fontWeight: 700 }}>{a.friend_name}</b> {phrase(r)}
+                  <b style={{ fontWeight: 700 }}>{a.friend_name}</b> {phrase(r, titleName)}
                 </div>
                 <div className="mute" style={{ fontSize: 11.5 }}>
-                  {relativeTime(a.at)}{r.count > 1 && <> · {r.count} episodes</>}
+                  {relativeTime(a.at, new Date(), dateLocale())}{r.count > 1 && <> · {r.count} {tr("episodes")}</>}
                 </div>
               </div>
               {a.verb === "rated" && a.score != null && (
                 <span className="badge badge-soft" style={{ fontWeight: 800 }}>{a.score}/10</span>
               )}
-              <div className="mq-row-art" style={{ width: 34, height: 50, ...(art ? {} : { background: posterBg(a.title_name) }) }}>
+              <div className="mq-row-art" style={{ width: 34, height: 50, ...(art ? {} : { background: posterBg(titleName) }) }}>
                 {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
               </div>
             </div>

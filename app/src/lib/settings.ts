@@ -8,17 +8,20 @@ import { useSyncExternalStore } from "react";
 export type ThemeName = "system" | "dark" | "oled" | "light";
 export type AccentName = "coral" | "violet" | "emerald" | "amber";
 export type DensityName = "comfortable" | "compact";
+export type LanguageName = "en" | "es";
 
 export interface Settings {
   theme: ThemeName;
   accent: AccentName;
   density: DensityName;
+  language: LanguageName;
 }
 
 const DEFAULTS: Settings = {
   theme: "dark",
   accent: "coral",
   density: "comfortable",
+  language: "en",
 };
 
 const KEY = "reel.settings";
@@ -44,6 +47,7 @@ function apply(s: Settings) {
     s.theme === "system" ? (lightQuery?.matches ? "light" : "dark") : s.theme;
   el.dataset.accent = s.accent;
   el.dataset.density = s.density;
+  el.lang = s.language;
 }
 
 let settings = load();

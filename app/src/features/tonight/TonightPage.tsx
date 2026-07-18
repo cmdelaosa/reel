@@ -7,6 +7,7 @@ import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { useUpNext, type UpNextRow } from "@/lib/upnext";
 import { useMarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
+import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { Poster, Rail } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
@@ -20,9 +21,9 @@ function airLabel(iso: string | null): string | null {
   if (!iso) return null;
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
   if (days < 0) return null;
-  if (days === 0) return "New today";
-  if (days === 1) return "Aired yesterday";
-  if (days <= 7) return `Aired ${days} days ago`;
+  if (days === 0) return tr("New today");
+  if (days === 1) return tr("Aired yesterday");
+  if (days <= 7) return isEs() ? `Emitido hace ${days} días` : `Aired ${days} days ago`;
   return null;
 }
 
@@ -49,6 +50,7 @@ export default function TonightPage() {
   const heroMark = useMarkWatched(hero?.title_id ?? "");
   const rest = ordered.slice(1);
   const heroIntent = useTitleIntent(hero?.tmdb_id);
+  const heroEsNames = useEsNames();
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -57,17 +59,19 @@ export default function TonightPage() {
       return next;
     });
 
-  const dateLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  const dateLabel = now.toLocaleDateString(dateLocale(), { weekday: "long", month: "long", day: "numeric" });
   const heroProgress = hero && hero.aired_count > 0 ? Math.round((hero.watched_count / hero.aired_count) * 100) : 0;
 
   return (
     <div className="screen mq-page">
       <header className="mq-header">
-        <h1 className="mq-h1">Tonight</h1>
+        <h1 className="mq-h1">{tr("Tonight")}</h1>
         <p className="dim mq-sub">
           {isPending
-            ? "Working out what's next…"
-            : `${dateLabel} — ${freshUnseen} new ${freshUnseen === 1 ? "episode" : "episodes"} waiting, ${soon.length} premieres on the way.`}
+            ? tr("Working out what's next…")
+            : isEs()
+              ? `${dateLabel} — ${freshUnseen} ${freshUnseen === 1 ? "episodio nuevo" : "episodios nuevos"} por ver, ${soon.length} estrenos en camino.`
+              : `${dateLabel} — ${freshUnseen} new ${freshUnseen === 1 ? "episode" : "episodes"} waiting, ${soon.length} premieres on the way.`}
         </p>
       </header>
 
@@ -81,23 +85,23 @@ export default function TonightPage() {
               <div className="poster-sheen" />
             </div>
             <div className="mq-hero-body">
-              <div className="eyebrow">Up next for you</div>
+              <div className="eyebrow">{tr("Up next for you")}</div>
               <h2 className="mq-hero-ep">{hero.episode_name ?? seLabel(hero)}</h2>
               <div className="mq-hero-show">
-                {hero.name} — {seLabel(hero)}
+                {locName(heroEsNames, hero.tmdb_id, hero.name)} — {seLabel(hero)}
                 {airLabel(hero.air_datetime) && (
                   <span className="badge badge-accent" style={{ marginLeft: 10 }}>{airLabel(hero.air_datetime)}</span>
                 )}
               </div>
               <div className="mq-hero-track"><i style={{ width: `${heroProgress}%` }} /></div>
               <div className="mq-hero-meta mute">
-                {hero.watched_count}/{hero.aired_count} episodes · {heroProgress}% done
+                {hero.watched_count}/{hero.aired_count} {tr("episodes")} · {heroProgress}{tr("% done")}
               </div>
               <div className="mq-hero-actions" onClick={(e) => e.stopPropagation()}>
                 <button className="btn btn-accent" onClick={() => heroMark.mutate(hero.episode_id)}>
-                  <Check size={16} />Mark watched
+                  <Check size={16} />{tr("Mark watched")}
                 </button>
-                <button className="btn btn-outline" onClick={() => open(hero.tmdb_id)}>Details</button>
+                <button className="btn btn-outline" onClick={() => open(hero.tmdb_id)}>{tr("Details")}</button>
               </div>
             </div>
           </section>
@@ -107,14 +111,16 @@ export default function TonightPage() {
       {!isPending && !hero && (
         <div className="card" style={{ padding: "28px 24px" }}>
           <p className="dim" style={{ margin: 0, fontSize: 14 }}>
-            Nothing in progress — add a show with <kbd className="mq-kbd">⌘K</kbd> and mark where you are.
+            {isEs()
+              ? <>Nada en marcha — añade una serie con <kbd className="mq-kbd">⌘K</kbd> y marca por dónde vas.</>
+              : <>Nothing in progress — add a show with <kbd className="mq-kbd">⌘K</kbd> and mark where you are.</>}
           </p>
         </div>
       )}
 
       {rest.length > 0 && (
         <section className="flex flex-col gap-4">
-          <Rail title="Continue watching" subtitle="Pick up where you left off" scrollToStartKey={followKey}>
+          <Rail title={tr("Continue watching")} subtitle={tr("Pick up where you left off")} scrollToStartKey={followKey}>
             {rest.map((r) => (
               <ContinueCard key={r.title_id} r={r} onOpen={() => open(r.tmdb_id)} onMarked={() => setFollowKey((k) => k + 1)} />
             ))}
@@ -126,13 +132,13 @@ export default function TonightPage() {
         <section className="flex flex-col gap-4">
           <div className="mq-sechead">
             <div>
-              <h2 className="section-title">Fresh episodes</h2>
-              <p className="mute" style={{ fontSize: 13 }}>Just aired from shows you follow</p>
+              <h2 className="section-title">{tr("Fresh episodes")}</h2>
+              <p className="mute" style={{ fontSize: 13 }}>{tr("Just aired from shows you follow")}</p>
             </div>
-            <Link to="/calendar" className="btn btn-ghost btn-sm">See all <ChevronRight size={14} /></Link>
+            <Link to="/calendar" className="btn btn-ghost btn-sm">{tr("See all")} <ChevronRight size={14} /></Link>
           </div>
           <div className="flex flex-col gap-3">
-            {freshFeed.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>Nothing new in the last 5 days.</p>}
+            {freshFeed.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("Nothing new in the last 5 days.")}</p>}
             {freshFeed.map((ep) => (
               <CalEpRow key={ep.episode_id} ep={ep} now={now} />
             ))}
@@ -142,13 +148,13 @@ export default function TonightPage() {
         <section className="flex flex-col gap-4">
           <div className="mq-sechead">
             <div>
-              <h2 className="section-title">Premieres soon</h2>
-              <p className="mute" style={{ fontSize: 13 }}>Dated within the next 60 days</p>
+              <h2 className="section-title">{tr("Premieres soon")}</h2>
+              <p className="mute" style={{ fontSize: 13 }}>{tr("Dated within the next 60 days")}</p>
             </div>
-            <Link to="/calendar" className="btn btn-ghost btn-sm">See all <ChevronRight size={14} /></Link>
+            <Link to="/calendar" className="btn btn-ghost btn-sm">{tr("See all")} <ChevronRight size={14} /></Link>
           </div>
           <div className="flex flex-col gap-3">
-            {soon.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>No dated premieres yet.</p>}
+            {soon.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No dated premieres yet.")}</p>}
             {soon.map((ep) => (
               <CalEpRow key={ep.episode_id} ep={ep} now={now} later />
             ))}
@@ -199,6 +205,8 @@ function MarkCheck({ episodeId, mark, label, onMarked }: {
  *  via the upNext refetch). */
 function ContinueCard({ r, onOpen, onMarked }: { r: UpNextRow; onOpen: () => void; onMarked?: () => void }) {
   const mark = useMarkWatched(r.title_id);
+  const esNames = useEsNames();
+  const showName = locName(esNames, r.tmdb_id, r.name);
   return (
     <div style={{ width: "var(--rail-pw)" }} className="flex flex-col gap-2">
       <Poster
@@ -222,10 +230,10 @@ function ContinueCard({ r, onOpen, onMarked }: { r: UpNextRow; onOpen: () => voi
             {r.episode_name ?? seLabel(r)}
           </div>
           <div className="mute truncate" style={{ fontSize: 12 }}>
-            {r.name} · {seLabel(r)}
+            {showName} · {seLabel(r)}
           </div>
         </div>
-        <MarkCheck episodeId={r.episode_id} mark={mark} label={`Mark ${r.name} ${seLabel(r)} watched`} onMarked={onMarked} />
+        <MarkCheck episodeId={r.episode_id} mark={mark} label={`Mark ${showName} ${seLabel(r)} watched`} onMarked={onMarked} />
       </div>
     </div>
   );

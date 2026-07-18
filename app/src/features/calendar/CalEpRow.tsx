@@ -4,6 +4,7 @@ import type { FeedRow } from "@/lib/calendar";
 import { useMarkWatched, useUnmarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { useOpenTitle } from "@/lib/useOpenTitle";
+import { dateLocale, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 
@@ -14,8 +15,8 @@ import { posterBg } from "@/ui/posterBg";
    a past child keeps its own watched-check. */
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
-const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-const fmtShort = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
+const fmtShort = (iso: string) => new Date(iso).toLocaleDateString(dateLocale(), { month: "short", day: "numeric" });
 
 export function CalEpRow({ ep, now, later = false, sub = false }: { ep: FeedRow; now: Date; later?: boolean; sub?: boolean }) {
   const open = useOpenTitle();
@@ -26,6 +27,8 @@ export function CalEpRow({ ep, now, later = false, sub = false }: { ep: FeedRow;
   const tag = episodeBadge(ep);
   const seen = ep.watch_event_id != null;
   const art = tmdbImg(ep.poster_path, "w92");
+  const esNames = useEsNames();
+  const showName = locName(esNames, ep.tmdb_id, ep.show_name);
 
   const toggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -35,26 +38,26 @@ export function CalEpRow({ ep, now, later = false, sub = false }: { ep: FeedRow;
 
   return (
     <div className={sub ? "cal-ep cal-ep-sub" : "cal-ep"} onClick={() => open(ep.tmdb_id)}>
-      <div className="cal-ep-art" style={art ? undefined : { background: posterBg(ep.show_name) }}>
+      <div className="cal-ep-art" style={art ? undefined : { background: posterBg(showName) }}>
         {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
         <div className="poster-sheen" />
       </div>
       <div className="cal-ep-main">
-        <span className="cal-showpill">{ep.show_name}<ChevronRight size={12} /></span>
+        <span className="cal-showpill">{showName}<ChevronRight size={12} /></span>
         <div className="cal-ep-se">
           S{pad2(ep.season_number)} · E{pad2(ep.episode_number)}
-          {tag && <span className="badge badge-soft" style={{ marginLeft: 8 }}>{tag}</span>}
+          {tag && <span className="badge badge-soft" style={{ marginLeft: 8 }}>{tr(tag)}</span>}
         </div>
         <div className="cal-ep-name mute">{ep.episode_name}</div>
       </div>
       <div className="cal-ep-right">
         {sub && !past ? null : later ? (
           <>
-            <div className="cal-days">{days}<span>days</span></div>
+            <div className="cal-days">{days}<span>{tr("days")}</span></div>
             <div className="cal-when mute">{fmtShort(ep.air_datetime)} · {fmtTime(ep.air_datetime)}</div>
           </>
         ) : past ? (
-          <button className={`check ${seen ? "on" : ""}`} onClick={toggle} title={seen ? "Watched" : "Mark watched"}>
+          <button className={`check ${seen ? "on" : ""}`} onClick={toggle} title={seen ? tr("Watched") : tr("Mark watched")}>
             <Check size={15} strokeWidth={3} />
           </button>
         ) : (

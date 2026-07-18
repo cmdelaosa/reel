@@ -9,6 +9,11 @@ export const titleRowSchema = z.object({
   tmdb_id: z.number().int(),
   kind: z.enum(["tv", "movie"]),
   name: z.string(),
+  // Localization columns (0046). Optional so rows from a DB that predates the
+  // migration — or older persisted cache entries — still validate.
+  original_name: z.string().nullable().optional(),
+  name_es: z.string().nullable().optional(),
+  overview_es: z.string().nullable().optional(),
   overview: z.string().nullable(),
   poster_path: z.string().nullable(),
   backdrop_path: z.string().nullable(),
@@ -93,6 +98,43 @@ export type LibraryRow = z.infer<typeof libraryRowSchema>;
 
 export const searchResponseSchema = z.object({ results: z.array(titleRowSchema) });
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
+
+/* ---- tmdb-proxy credits/person shapes (no DB cache behind them) ---- */
+
+export const castMemberSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  profile_path: z.string().nullable(),
+  character: z.string().nullable(),
+  episode_count: z.number().int().nullable(),
+});
+export type CastMember = z.infer<typeof castMemberSchema>;
+
+export const creditsResponseSchema = z.object({ cast: z.array(castMemberSchema) });
+
+export const personShowSchema = z.object({
+  tmdb_id: z.number().int(),
+  name: z.string(),
+  poster_path: z.string().nullable(),
+  first_air_date: z.string().nullable(),
+  vote_average: z.number().nullable(),
+  character: z.string().nullable(),
+  episode_count: z.number().int().nullable(),
+});
+export type PersonShow = z.infer<typeof personShowSchema>;
+
+export const personResponseSchema = z.object({
+  person: z.object({
+    id: z.number().int(),
+    name: z.string(),
+    profile_path: z.string().nullable(),
+    known_for_department: z.string().nullable(),
+    birthday: z.string().nullable(),
+    place_of_birth: z.string().nullable(),
+  }),
+  shows: z.array(personShowSchema),
+});
+export type PersonResponse = z.infer<typeof personResponseSchema>;
 
 export const titleResponseSchema = z.object({
   title: titleRowSchema,

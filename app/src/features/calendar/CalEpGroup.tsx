@@ -5,6 +5,7 @@ import type { FeedRow } from "@/lib/calendar";
 import { useMarkUpTo, useUnmarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { useOpenTitle } from "@/lib/useOpenTitle";
+import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
@@ -15,8 +16,8 @@ import { CalEpRow } from "@/features/calendar/CalEpRow";
    drop (reusing rpc_mark_up_to) — one tap to clear a binged season. */
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
-const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-const fmtShort = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
+const fmtShort = (iso: string) => new Date(iso).toLocaleDateString(dateLocale(), { month: "short", day: "numeric" });
 
 export function CalEpGroup({
   cluster,
@@ -39,6 +40,8 @@ export function CalEpGroup({
   const days = dayOffset(lead.air_datetime, now);
   const tag = episodeBadge(lead);
   const art = tmdbImg(lead.poster_path, "w92");
+  const esNames = useEsNames();
+  const showName = locName(esNames, lead.tmdb_id, lead.show_name);
 
   const eps = [lead, ...rest];
   const seenCount = eps.reduce((n, e) => n + (e.watch_event_id != null ? 1 : 0), 0);
@@ -58,22 +61,22 @@ export function CalEpGroup({
   return (
     <div className="cal-group">
       <div className="cal-ep cal-group-head" onClick={() => openTitle(lead.tmdb_id)}>
-        <div className="cal-ep-art" style={art ? undefined : { background: posterBg(lead.show_name) }}>
+        <div className="cal-ep-art" style={art ? undefined : { background: posterBg(showName) }}>
           {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
           <div className="poster-sheen" />
         </div>
         <div className="cal-ep-main">
-          <span className="cal-showpill">{lead.show_name}<ChevronRight size={12} /></span>
+          <span className="cal-showpill">{showName}<ChevronRight size={12} /></span>
           <div className="cal-ep-se">
             S{pad2(lead.season_number)} · E{pad2(lead.episode_number)}
-            {tag && <span className="badge badge-soft" style={{ marginLeft: 8 }}>{tag}</span>}
+            {tag && <span className="badge badge-soft" style={{ marginLeft: 8 }}>{tr(tag)}</span>}
           </div>
           <div className="cal-ep-name mute">{lead.episode_name}</div>
         </div>
         <div className="cal-ep-right">
           {later ? (
             <>
-              <div className="cal-days">{days}<span>days</span></div>
+              <div className="cal-days">{days}<span>{tr("days")}</span></div>
               <div className="cal-when mute">{fmtShort(lead.air_datetime)} · {fmtTime(lead.air_datetime)}</div>
             </>
           ) : past ? (
@@ -99,8 +102,8 @@ export function CalEpGroup({
         aria-expanded={open}
       >
         <span>
-          {count} episodes
-          {past && someSeen && !allSeen ? ` · ${seenCount} watched` : ""}
+          {count} {tr("episodes")}
+          {past && someSeen && !allSeen ? ` · ${seenCount} ${isEs() ? "vistos" : "watched"}` : ""}
         </span>
         <ChevronDown size={16} className={open ? "cal-chev-open" : ""} />
       </button>

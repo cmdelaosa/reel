@@ -39,14 +39,16 @@ export function groupFeed<T extends FeedEpish>(rows: T[], now: Date): GroupedFee
   return { days: [...map.entries()].sort((a, b) => a[0] - b[0]), later };
 }
 
-/** Today / Tomorrow / weekday for 0..6; FULL DATE (upper) in the past. */
-export function dayLabel(off: number, iso: string): string {
+/** Today / Tomorrow / weekday for 0..6; FULL DATE (upper) in the past.
+ *  `locale` follows the UI language (undefined = browser default English). */
+export function dayLabel(off: number, iso: string, locale?: string): string {
+  const es = locale?.startsWith("es") ?? false;
   const d = new Date(iso);
-  if (off === 0) return "Today";
-  if (off === 1) return "Tomorrow";
-  if (off > 1) return d.toLocaleDateString(undefined, { weekday: "long" });
+  if (off === 0) return es ? "Hoy" : "Today";
+  if (off === 1) return es ? "Mañana" : "Tomorrow";
+  if (off > 1) return d.toLocaleDateString(locale, { weekday: "long" });
   return d
-    .toLocaleDateString(undefined, { weekday: "short", month: "long", day: "numeric", year: "numeric" })
+    .toLocaleDateString(locale, { weekday: "short", month: "long", day: "numeric", year: "numeric" })
     .toUpperCase();
 }
 

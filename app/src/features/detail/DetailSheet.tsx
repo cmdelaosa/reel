@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { Bell, Check, CheckCheck, ChevronLeft, ChevronRight, Eye, EyeOff, Pause, Play, Plus, Star, X } from "lucide-react";
-import { tmdbImg } from "@/lib/tmdb";
+import { Bell, Check, CheckCheck, ChevronLeft, ChevronRight, Eye, EyeOff, Pause, Play, Plus, Star, User, X } from "lucide-react";
+import { getCredits, tmdbImg } from "@/lib/tmdb";
+import { dateLocale, isEs, t as tr, tGenre } from "@/lib/i18n";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
 import { useIgnored, useIgnore, useUnignore } from "@/lib/ignore";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
@@ -27,7 +28,7 @@ import {
    rating persistence in P2-C5. */
 
 const fmtDate = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "TBA";
+  iso ? new Date(iso).toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" }) : tr("TBA");
 
 function Skeleton() {
   return (
@@ -97,7 +98,7 @@ function SeasonTabs({ seasons, active, onPick }: { seasons: SeasonRow[]; active:
   return (
     <div>
       <div className="rail-head" style={{ marginBottom: 10 }}>
-        <div className="eyebrow">Seasons</div>
+        <div className="eyebrow">{tr("Seasons")}</div>
         <div className="rail-nav">
           <button className="rail-arrow" onClick={() => nudge(-1)} disabled={!canL} aria-label="Earlier seasons">
             <ChevronLeft size={18} />
@@ -250,9 +251,21 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
       .sort((a, b) => b.score - a.score);
   }, [acceptedFriends, allFriendRatings, tmdbId]);
 
+  // Top-billed cast (proxy /credits) — best-effort, hidden while loading/failed.
+  const { data: cast = [] } = useQuery({
+    queryKey: ["credits", tmdbId],
+    enabled: Boolean(title),
+    staleTime: 24 * 60 * 60 * 1000,
+    queryFn: () => getCredits(tmdbId),
+  });
+
   const entry = library.find((r) => r.tmdb_id === tmdbId);
   const added = Boolean(entry);
   const isUpcoming = !title?.first_air_date || title.first_air_date > new Date().toISOString().slice(0, 10);
+  const displayName = title ? (isEs() && title.name_es) || title.name : "";
+  const displayOverview = title ? (isEs() && title.overview_es) || title.overview : null;
+  const originalTitle =
+    title?.original_name && title.original_name !== displayName ? title.original_name : null;
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -277,7 +290,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
         ref={trapRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title ? `${title.name} details` : "Show details"}
+        aria-label={title ? `${displayName} details` : "Show details"}
         tabIndex={-1}
         className="detail-sheet sheet-center fixed z-[70] card overflow-hidden flex flex-col"
         style={{
@@ -312,18 +325,23 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                     {title.network && <NetworkLogo network={title.network} size={12} />}
                     {isUpcoming && (
                       <span className="badge badge-accent">
-                        {title.first_air_date ? `Premieres ${fmtDate(title.first_air_date)}` : "Announced"}
+                        {title.first_air_date ? `${tr("Premieres ")}${fmtDate(title.first_air_date)}` : tr("Announced")}
                       </span>
                     )}
                   </div>
                   <h2 style={{ fontSize: 26, fontWeight: 850, letterSpacing: "-0.02em", textShadow: "0 2px 12px rgba(0,0,0,.5)", color: "#fff", margin: 0 }}>
-                    {title.name}
+                    {displayName}
                   </h2>
                   <div style={{ fontSize: 13.5, color: "rgba(255,255,255,.85)" }}>
-                    {[title.first_air_date?.slice(0, 4) ?? "TBA", title.genres.join(" · "), title.episode_run_time ? `${title.episode_run_time} min` : null]
+                    {[title.first_air_date?.slice(0, 4) ?? tr("TBA"), title.genres.map(tGenre).join(" · "), title.episode_run_time ? `${title.episode_run_time} min` : null]
                       .filter(Boolean)
                       .join(" · ")}
                   </div>
+                  {originalTitle && (
+                    <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.65)", marginTop: 2 }}>
+                      {tr("Original title")}: {originalTitle}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -334,7 +352,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <button className={`btn ${added ? "btn-outline" : "btn-accent"}`} onClick={toggleFollow}>
-                    {added ? <><Check size={16} />Remove</> : <><Plus size={16} />Add</>}
+                    {added ? <><Check size={16} />{tr("Remove")}</> : <><Plus size={16} />{tr("Add")}</>}
                   </button>
                   {!added && (
                     <button
@@ -342,7 +360,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       onClick={() => (isIgnored(title.tmdb_id) ? unignore.mutate(title.id) : ignore.mutate(title.id))}
                       title={isIgnored(title.tmdb_id) ? "Un-ignore — show in suggestions again" : "Not interested — hide from suggestions"}
                     >
-                      {isIgnored(title.tmdb_id) ? <><Eye size={16} />Un-ignore</> : <><EyeOff size={16} />Not interested</>}
+                      {isIgnored(title.tmdb_id) ? <><Eye size={16} />{tr("Un-ignore")}</> : <><EyeOff size={16} />{tr("Not interested")}</>}
                     </button>
                   )}
                   {added && entry && isUpcoming && !entry.stopped && (
@@ -350,7 +368,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       className={`btn ${entry.notify ? "btn-accent" : "btn-outline"}`}
                       onClick={() => toggleNotify.mutate({ titleId: entry.title_id, notify: !entry.notify })}
                     >
-                      <Bell size={16} />{entry.notify ? "Tracking" : "Notify me"}
+                      <Bell size={16} />{entry.notify ? tr("Tracking") : tr("Notify me")}
                     </button>
                   )}
                   {added && entry && (
@@ -359,7 +377,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       onClick={() => setStopped.mutate({ titleId: entry.title_id, stopped: !entry.stopped })}
                       title={entry.stopped ? "Resume — back in Tonight & calendar" : "Stop watching — keeps history, hides from Tonight"}
                     >
-                      {entry.stopped ? <><Play size={16} />Resume</> : <><Pause size={16} />Stop watching</>}
+                      {entry.stopped ? <><Play size={16} />{tr("Resume")}</> : <><Pause size={16} />{tr("Stop watching")}</>}
                     </button>
                   )}
                   {unwatchedAired > 0 && (
@@ -369,7 +387,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       onClick={markWholeSeries}
                       title={`Mark all ${unwatchedAired} aired episodes as seen — for shows you've already watched`}
                     >
-                      <CheckCheck size={16} />{markSeries.isPending ? "Marking…" : "Mark all watched"}
+                      <CheckCheck size={16} />{markSeries.isPending ? tr("Marking…") : tr("Mark all watched")}
                     </button>
                   )}
                 </div>
@@ -377,7 +395,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 {/* Ratings — yours (persisted in P2-C5) + TMDB community */}
                 <div className="flex items-center gap-4">
                   <div>
-                    <div className="eyebrow" style={{ marginBottom: 5 }}>Your rating</div>
+                    <div className="eyebrow" style={{ marginBottom: 5 }}>{tr("Your rating")}</div>
                     <RatingStars value={rating} onRate={(v) => rateTitle.mutate(v)} />
                   </div>
                   <div style={{ width: 1, height: 40, background: "var(--border)", flex: "0 0 auto" }} />
@@ -393,18 +411,18 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 </div>
               </div>
 
-              {title.overview && (
-                <p className="dim" style={{ fontSize: 14.5, lineHeight: 1.6, margin: 0 }}>{title.overview}</p>
+              {displayOverview && (
+                <p className="dim" style={{ fontSize: 14.5, lineHeight: 1.6, margin: 0 }}>{displayOverview}</p>
               )}
 
               {/* Friend ratings — each friend's score, not just an average */}
               {friendRaters.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
-                    <div className="eyebrow">Friend ratings</div>
+                    <div className="eyebrow">{tr("Friend ratings")}</div>
                     {friendRaters.length > 1 && (
                       <span className="mute" style={{ fontSize: 12.5, fontWeight: 700 }}>
-                        avg {(friendRaters.reduce((sum, r) => sum + r.score, 0) / friendRaters.length).toFixed(1)}
+                        {tr("avg")} {(friendRaters.reduce((sum, r) => sum + r.score, 0) / friendRaters.length).toFixed(1)}
                       </span>
                     )}
                   </div>
@@ -434,6 +452,47 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 </div>
               )}
 
+              {/* Cast — top billed; tapping an actor opens their page */}
+              {cast.length > 0 && (
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: 10 }}>{tr("Cast")}</div>
+                  <div className="flex gap-3 overflow-x-auto no-scrollbar" style={{ paddingBottom: 4 }}>
+                    {cast.map((c) => (
+                      <div
+                        key={c.id}
+                        role="button"
+                        tabIndex={0}
+                        className="flex flex-col items-center gap-1.5"
+                        style={{ width: 76, flex: "0 0 auto", cursor: "pointer", textAlign: "center" }}
+                        title={c.name}
+                        onClick={() => { onClose(); navigate(`/person/${c.id}`); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClose(); navigate(`/person/${c.id}`); }
+                        }}
+                      >
+                        <span
+                          className="grid place-items-center overflow-hidden"
+                          style={{
+                            width: 64, height: 64, borderRadius: "50%", background: "var(--surface-3)",
+                            border: "1px solid var(--border)", flex: "0 0 auto", color: "var(--text-dim)",
+                          }}
+                        >
+                          {tmdbImg(c.profile_path, "w92") ? (
+                            <img src={tmdbImg(c.profile_path, "w92")} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          ) : (
+                            <User size={26} />
+                          )}
+                        </span>
+                        <span className="truncate" style={{ fontSize: 11.5, fontWeight: 650, width: "100%" }}>{c.name}</span>
+                        {c.character && (
+                          <span className="mute truncate" style={{ fontSize: 10.5, width: "100%", marginTop: -4 }}>{c.character}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Episodes */}
               {regularSeasons.length > 0 && (
                 <div>
@@ -441,7 +500,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                   <div style={{ position: "relative", minHeight: episodes.length ? undefined : 310 }}>
                     {episodes.length === 0 && seasonFetching && <EpisodeSkeleton />}
                     {episodes.length === 0 && !seasonFetching && (
-                      <div className="dim" style={{ fontSize: 13.5, padding: "12px 0" }}>No episodes available yet.</div>
+                      <div className="dim" style={{ fontSize: 13.5, padding: "12px 0" }}>{tr("No episodes available yet.")}</div>
                     )}
                     <div
                       className="flex flex-col"
@@ -483,20 +542,23 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
             className="sheet-center fixed card flex flex-col"
             style={{ zIndex: 81, left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(400px, 92vw)", padding: 22, gap: 6, borderRadius: "var(--r-lg)" }}
           >
-            <div style={{ fontWeight: 800, fontSize: 16 }}>Mark earlier episodes as seen?</div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>{tr("Mark earlier episodes as seen?")}</div>
             <p className="dim" style={{ fontSize: 14, lineHeight: 1.55, margin: "2px 0 14px" }}>
-              You still have {unseenPriors(pending)} unwatched {unseenPriors(pending) === 1 ? "episode" : "episodes"} up to
-              {" "}S{pending.season_number} · E{pending.episode_number}. Mark them all as seen?
+              {isEs()
+                ? <>Aún tienes {unseenPriors(pending)} {unseenPriors(pending) === 1 ? "episodio sin ver" : "episodios sin ver"} hasta
+                  {" "}S{pending.season_number} · E{pending.episode_number}. ¿Marcarlos todos como vistos?</>
+                : <>You still have {unseenPriors(pending)} unwatched {unseenPriors(pending) === 1 ? "episode" : "episodes"} up to
+                  {" "}S{pending.season_number} · E{pending.episode_number}. Mark them all as seen?</>}
             </p>
             <div className="flex items-center gap-2.5">
               <button className="btn btn-accent flex-1" onClick={() => confirmMarkUpTo(pending)}>
-                <Check size={16} />Mark all {unseenPriors(pending) + 1}
+                <Check size={16} />{tr("Mark all")} {unseenPriors(pending) + 1}
               </button>
               <button
                 className="btn btn-outline flex-1"
                 onClick={() => { markWatched.mutate(pending.id); setPending(null); }}
               >
-                Only this one
+                {tr("Only this one")}
               </button>
             </div>
           </div>
@@ -510,13 +572,15 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
           style={{ zIndex: 85, left: "50%", bottom: 26, transform: "translateX(-50%)", padding: "12px 16px", borderRadius: 999 }}
         >
           <span style={{ fontSize: 13.5, fontWeight: 650 }}>
-            Marked {toast.count} {toast.count === 1 ? "episode" : "episodes"} as seen
+            {isEs()
+              ? `${toast.count} ${toast.count === 1 ? "episodio marcado" : "episodios marcados"} como vistos`
+              : `Marked ${toast.count} ${toast.count === 1 ? "episode" : "episodes"} as seen`}
           </span>
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => { undoMarks.mutate(toast.ids); setToast(null); }}
           >
-            Undo
+            {tr("Undo")}
           </button>
         </div>
       )}

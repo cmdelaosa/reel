@@ -182,12 +182,28 @@ function upcomingSeason(seasons: Any[], last: Any, next: Any): { number: number;
   return best;
 }
 
+// Spain-Spanish translation from a detail payload fetched with
+// append_to_response=translations (es-ES preferred, plain es as fallback).
+function esTranslation(d: Any): { name: string | null; overview: string | null } {
+  const all: Any[] = d?.translations?.translations ?? [];
+  const t =
+    all.find((x) => x.iso_639_1 === "es" && x.iso_3166_1 === "ES") ??
+    all.find((x) => x.iso_639_1 === "es");
+  return { name: t?.data?.name || null, overview: t?.data?.overview || null };
+}
+
 function titleRow(d: Any) {
   const up = upcomingSeason(d.seasons, d.last_episode_to_air, d.next_episode_to_air);
+  // Localized columns ride along only when the payload actually carried
+  // translations — other callers (popular-now detail checks) must not null
+  // out values a full refresh already wrote.
+  const es = d.translations ? esTranslation(d) : null;
   return {
     tmdb_id: d.id,
     kind: "tv",
     name: d.name ?? d.original_name ?? "Untitled",
+    original_name: d.original_name ?? null,
+    ...(es ? { name_es: es.name, overview_es: es.overview } : {}),
     overview: d.overview ?? null,
     poster_path: d.poster_path ?? null,
     backdrop_path: d.backdrop_path ?? null,
@@ -285,7 +301,7 @@ function inBackground(work: Promise<unknown>) {
 /** TMDB → cache refresh of a title and its season list; returns the
  *  GET /title/:id response shape. Network logos are cached off the hot path. */
 async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: number) {
-  const d = await fetchTmdb(apiKey, `/tv/${tmdbId}`);
+  const d = await fetchTmdb(apiKey, `/tv/${tmdbId}?append_to_response=translations`);
   const [title] = await upsertReturning(admin, "titles", titleRow(d), "tmdb_id");
   inBackground(cacheNetworkLogos(admin, d.networks));
   const seasons = (d.seasons ?? []).length
@@ -356,14 +372,43 @@ Deno.serve(async (req) => {
   });
 
   try {
-    // GET /search?q=
+    // GET /search?q=&lang=es — TMDB matches translated names/AKAs regardless of
+    // the language param (a query in Spanish already finds the show); lang=es
+    // additionally fetches the es-ES translation set and patches name_es/
+    // original_name so the palette can display Spanish titles. The canonical
+    // columns always come from the default-language fetch.
     if (path === "/search") {
       const q = url.searchParams.get("q")?.trim();
       if (!q) return json({ results: [] });
-      const data = await fetchTmdb(apiKey, `/search/tv?query=${encodeURIComponent(q)}&include_adult=false`);
+      const wantEs = url.searchParams.get("lang") === "es";
+      const [data, esData] = await Promise.all([
+        fetchTmdb(apiKey, `/search/tv?query=${encodeURIComponent(q)}&include_adult=false`),
+        wantEs
+          ? fetchTmdb(apiKey, `/search/tv?query=${encodeURIComponent(q)}&include_adult=false&language=es-ES`).catch(() => null)
+          : Promise.resolve(null),
+      ]);
       const results: Any[] = data.results ?? [];
       if (results.length === 0) return json({ results: [] });
-      const saved = await upsertReturning(admin, "titles", results.map(searchRow), "tmdb_id");
+      let saved = await upsertReturning(admin, "titles", results.map(searchRow), "tmdb_id");
+      const esById = new Map(((esData?.results ?? []) as Any[]).map((r) => [r.id, r]));
+      if (wantEs && esById.size > 0) {
+        const patches = results
+          .map((r) => {
+            const es = esById.get(r.id);
+            if (!es) return null;
+            return {
+              tmdb_id: r.id,
+              kind: "tv",
+              name: r.name ?? r.original_name ?? "Untitled",
+              original_name: es.original_name ?? r.original_name ?? null,
+              // es fetch falls back to the original name when no translation
+              // exists — only store a real Spanish title.
+              name_es: es.name && es.name !== es.original_name ? es.name : null,
+            };
+          })
+          .filter(Boolean);
+        if (patches.length) saved = await upsertReturning(admin, "titles", patches, "tmdb_id");
+      }
       // preserve TMDB relevance order
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
       return json({ results: results.map((r) => byTmdb.get(r.id)).filter(Boolean) });
@@ -602,6 +647,67 @@ Deno.serve(async (req) => {
       const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
       return json({ results: uniq.map((r) => byTmdb.get(r.id)).filter(Boolean) });
+    }
+
+    // GET /title/:id/credits — aggregate TV cast straight from TMDB (no DB
+    // cache: credits change rarely and the response is small; the browser
+    // caches it via max-age below and React Query holds it per session).
+    const mCredits = path.match(/^\/title\/(\d+)\/credits$/);
+    if (mCredits) {
+      const d = await fetchTmdb(apiKey, `/tv/${mCredits[1]}/aggregate_credits`);
+      const cast = ((d.cast ?? []) as Any[])
+        .slice(0, 24)
+        .map((c) => ({
+          id: c.id,
+          name: c.name ?? "",
+          profile_path: c.profile_path ?? null,
+          character: c.roles?.[0]?.character ?? null,
+          episode_count: c.total_episode_count ?? null,
+        }));
+      return json({ cast }, 200, { "Cache-Control": "private, max-age=86400" });
+    }
+
+    // GET /person/:id — actor header + their TV credits, shaped for the person
+    // page. Self/talk-show guest spots are dropped unless the run was long
+    // enough to matter; the client resolves library status / your rating.
+    const mPerson = path.match(/^\/person\/(\d+)$/);
+    if (mPerson) {
+      const d = await fetchTmdb(apiKey, `/person/${mPerson[1]}?append_to_response=tv_credits`);
+      const seen = new Set<number>();
+      const shows: Any[] = [];
+      const credits = [...((d.tv_credits?.cast ?? []) as Any[])]
+        .sort((a, b) => (b.episode_count ?? 0) - (a.episode_count ?? 0));
+      for (const c of credits) {
+        if (c?.id == null || seen.has(c.id)) continue;
+        const character: string = c.character ?? "";
+        const selfish = /^(self|himself|herself|themselves)\b/i.test(character.trim());
+        if ((selfish || !character) && (c.episode_count ?? 0) < 5) continue;
+        seen.add(c.id);
+        shows.push({
+          tmdb_id: c.id,
+          name: c.name ?? c.original_name ?? "Untitled",
+          poster_path: c.poster_path ?? null,
+          first_air_date: c.first_air_date || null,
+          vote_average: c.vote_average ?? null,
+          character: character || null,
+          episode_count: c.episode_count ?? null,
+        });
+      }
+      return json(
+        {
+          person: {
+            id: d.id,
+            name: d.name ?? "",
+            profile_path: d.profile_path ?? null,
+            known_for_department: d.known_for_department ?? null,
+            birthday: d.birthday ?? null,
+            place_of_birth: d.place_of_birth ?? null,
+          },
+          shows,
+        },
+        200,
+        { "Cache-Control": "private, max-age=86400" },
+      );
     }
 
     // GET /title/:id — cache-first. A cached title WITH season rows is served

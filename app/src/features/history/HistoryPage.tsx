@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { groupHistory, historyDayLabel } from "@/domain/history";
 import { useWatchHistory } from "@/lib/history";
+import { dateLocale, isEs, t as tr } from "@/lib/i18n";
 import { HistoryEpRow } from "@/features/history/HistoryEpRow";
 
 /* History — every watched episode, newest first, grouped by the local day it
@@ -31,26 +32,34 @@ export default function HistoryPage() {
   return (
     <div className="screen mq-page cal-page">
       <header className="mq-header">
-        <h1 className="mq-h1">History</h1>
-        <p className="dim mq-sub">Everything you've watched, newest first — with the exact time you marked it.</p>
+        <h1 className="mq-h1">{tr("History")}</h1>
+        <p className="dim mq-sub">
+          {isEs()
+            ? "Todo lo que has visto, lo más reciente primero — con la hora exacta en que lo marcaste."
+            : "Everything you've watched, newest first — with the exact time you marked it."}
+        </p>
       </header>
 
       {isPending ? (
-        <p className="dim">Loading…</p>
+        <p className="dim">{tr("Loading…")}</p>
       ) : rows.length === 0 ? (
-        <p className="dim">Nothing watched yet. Episodes you mark as watched show up here.</p>
+        <p className="dim">
+          {isEs()
+            ? "Aún no has visto nada. Los episodios que marques como vistos aparecen aquí."
+            : "Nothing watched yet. Episodes you mark as watched show up here."}
+        </p>
       ) : (
         <div className="cal-feed">
           {days.map(([off, list]) => (
             <div key={off} className="cal-day">
-              <div className="cal-daysep"><span>{historyDayLabel(off, list[0].watched_at)}</span></div>
+              <div className="cal-daysep"><span>{historyDayLabel(off, list[0].watched_at, dateLocale())}</span></div>
               {list.map((ep) => (
                 <HistoryEpRow key={ep.watch_event_id} ep={ep} />
               ))}
             </div>
           ))}
           <div ref={sentinel} className="cal-sentinel">
-            {hasNextPage || isFetchingNextPage ? "Loading more…" : "That's the start of your history."}
+            {hasNextPage || isFetchingNextPage ? tr("Loading more…") : tr("That's the start of your history.")}
           </div>
         </div>
       )}

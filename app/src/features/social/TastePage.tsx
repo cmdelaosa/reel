@@ -3,6 +3,7 @@ import { ChevronRight, Flame, Heart, ThumbsUp } from "lucide-react";
 import { tmdbImg } from "@/lib/tmdb";
 import { useTaste, type TasteFriend, type TasteTitle } from "@/lib/taste";
 import { useOpenTitle } from "@/lib/useOpenTitle";
+import { isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { FriendAvatar, FriendStack } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 
@@ -47,8 +48,8 @@ function FriendRow({ rank, f, onOpen }: { rank: number; f: TasteFriend; onOpen: 
       <div className="flex-1 min-w-0">
         <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{f.name}</div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>
-          {a.common} rated in common
-          {f.clashTitle ? <> · clash on <b style={{ fontWeight: 650 }}>{f.clashTitle}</b></> : a.avgDiff <= 1 ? " · you basically agree" : ""}
+          {a.common} {tr("rated in common")}
+          {f.clashTitle ? <> · {tr("clash on")} <b style={{ fontWeight: 650 }}>{f.clashTitle}</b></> : a.avgDiff <= 1 ? ` · ${tr("you basically agree")}` : ""}
         </div>
       </div>
       <AffinityRing pct={a.pct} />
@@ -57,22 +58,24 @@ function FriendRow({ rank, f, onOpen }: { rank: number; f: TasteFriend; onOpen: 
 }
 
 function TitleRow({ t, onOpen }: { t: TasteTitle; onOpen: () => void }) {
+  const esNames = useEsNames();
+  const name = locName(esNames, t.tmdb_id, t.name);
   return (
     <div className="card mq-row" onClick={onOpen}>
-      <TitleArt poster={t.poster_path} name={t.name} />
+      <TitleArt poster={t.poster_path} name={name} />
       <div className="flex-1 min-w-0">
-        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name}</div>
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{name}</div>
         <div className="flex items-center gap-2" style={{ marginTop: 3 }}>
           <FriendStack fans={t.raters.map((r) => ({ id: r.id, name: r.name, avatarUrl: r.avatarUrl }))} size={20} />
           <span className="mute" style={{ fontSize: 12 }}>
-            {t.raters.length === 1 ? `${t.raters[0].name} rated it` : `${t.raters.length} friends rated it`}
+            {t.raters.length === 1 ? `${t.raters[0].name} ${tr("rated it")}` : `${t.raters.length} ${tr("friends rated it")}`}
           </span>
         </div>
       </div>
       <div className="flex items-center gap-1.5" style={{ flex: "0 0 auto" }}>
-        <span className="badge badge-soft" title="Your score" style={{ fontWeight: 800 }}>You {t.mine}</span>
+        <span className="badge badge-soft" title="Your score" style={{ fontWeight: 800 }}>{tr("You")} {t.mine}</span>
         <span className="badge badge-soft" title="Friends' average" style={{ fontWeight: 800 }}>
-          Them {Number.isInteger(t.friendAvg) ? t.friendAvg : t.friendAvg.toFixed(1)}
+          {tr("Them")} {Number.isInteger(t.friendAvg) ? t.friendAvg : t.friendAvg.toFixed(1)}
         </span>
       </div>
     </div>
@@ -87,27 +90,27 @@ export default function TastePage() {
   return (
     <div className="screen mq-page">
       <header className="mq-header">
-        <h1 className="mq-h1">Taste match</h1>
-        <p className="dim mq-sub">How your ratings line up with your friends' — who scores like you, and which shows split you.</p>
+        <h1 className="mq-h1">{tr("Taste match")}</h1>
+        <p className="dim mq-sub">{tr("How your ratings line up with your friends' — who scores like you, and which shows split you.")}</p>
       </header>
 
       {taste.loading ? (
-        <div className="dim">Loading…</div>
+        <div className="dim">{tr("Loading…")}</div>
       ) : !taste.hasFriends ? (
         <div className="card" style={{ padding: "24px" }}>
-          <p className="dim" style={{ margin: 0, fontSize: 14 }}>No friends yet — add someone on the Friends tab to compare taste.</p>
+          <p className="dim" style={{ margin: 0, fontSize: 14 }}>{tr("No friends yet — add someone on the Friends tab to compare taste.")}</p>
         </div>
       ) : taste.myRatedCount === 0 ? (
         <div className="card" style={{ padding: "24px" }}>
-          <p className="dim" style={{ margin: 0, fontSize: 14 }}>Rate a few shows first — your taste match is built from the shows you and your friends both scored.</p>
+          <p className="dim" style={{ margin: 0, fontSize: 14 }}>{tr("Rate a few shows first — your taste match is built from the shows you and your friends both scored.")}</p>
         </div>
       ) : (
         <>
           <section className="flex flex-col gap-2.5">
-            <div className="eyebrow flex items-center gap-1.5"><Heart size={13} />Affinity ranking</div>
+            <div className="eyebrow flex items-center gap-1.5"><Heart size={13} />{tr("Affinity ranking")}</div>
             {taste.ranked.length === 0 ? (
               <div className="card" style={{ padding: "24px" }}>
-                <p className="dim" style={{ margin: 0, fontSize: 14 }}>None of your friends rated a show you rated — yet. Nudge them to score something.</p>
+                <p className="dim" style={{ margin: 0, fontSize: 14 }}>{tr("None of your friends rated a show you rated — yet. Nudge them to score something.")}</p>
               </div>
             ) : (
               <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
@@ -118,19 +121,21 @@ export default function TastePage() {
             )}
             {taste.unranked.length > 0 && (
               <p className="mute" style={{ fontSize: 12.5, margin: 0 }}>
-                No shared ratings yet with {taste.unranked.map((f) => f.name).join(", ")}.
+                {isEs()
+                  ? `Aún no hay notas compartidas con ${taste.unranked.map((f) => f.name).join(", ")}.`
+                  : `No shared ratings yet with ${taste.unranked.map((f) => f.name).join(", ")}.`}
               </p>
             )}
             {taste.ranked.length > 0 && (
               <p className="mute" style={{ fontSize: 11.5, margin: 0 }}>
-                Based on the shows you both rated — the more you share, the more the score trusts it.
+                {tr("Based on the shows you both rated — the more you share, the more the score trusts it.")}
               </p>
             )}
           </section>
 
           {taste.clash.length > 0 && (
             <section className="flex flex-col gap-2.5">
-              <div className="eyebrow flex items-center gap-1.5"><Flame size={13} />Where you clash</div>
+              <div className="eyebrow flex items-center gap-1.5"><Flame size={13} />{tr("Where you clash")}</div>
               <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
                 {taste.clash.map((t) => <TitleRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
               </div>
@@ -139,7 +144,7 @@ export default function TastePage() {
 
           {taste.agree.length > 0 && (
             <section className="flex flex-col gap-2.5">
-              <div className="eyebrow flex items-center gap-1.5"><ThumbsUp size={13} />Where you agree</div>
+              <div className="eyebrow flex items-center gap-1.5"><ThumbsUp size={13} />{tr("Where you agree")}</div>
               <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
                 {taste.agree.map((t) => <TitleRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
               </div>
@@ -148,7 +153,7 @@ export default function TastePage() {
 
           {taste.ranked.length > 0 && (
             <p className="mute" style={{ fontSize: 12.5, margin: 0 }}>
-              Tap a friend for the full 1-on-1 comparison <ChevronRight size={11} style={{ verticalAlign: "-1px" }} />
+              {tr("Tap a friend for the full 1-on-1 comparison")} <ChevronRight size={11} style={{ verticalAlign: "-1px" }} />
             </p>
           )}
         </>

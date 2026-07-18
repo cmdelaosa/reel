@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { useLibrary, toTitleCard, type LibraryShow } from "@/lib/library";
 import type { ShowStatus } from "@/domain/status";
+import { dateLocale, isEs, t as tr } from "@/lib/i18n";
 import { Poster } from "@/ui";
 import { PosterGridSkeleton } from "@/ui/Skeleton";
 
@@ -66,9 +67,9 @@ export default function ShowsPage() {
   return (
     <div className="screen mq-page">
       <header className="mq-header">
-        <h1 className="mq-h1">My Shows</h1>
+        <h1 className="mq-h1">{tr("My Shows")}</h1>
         <p className="dim mq-sub">
-          {isPending ? "Loading your shows…" : `${library.length} shows in your library.`}
+          {isPending ? tr("Loading your shows…") : `${library.length} ${tr("shows in your library.")}`}
         </p>
       </header>
 
@@ -76,7 +77,7 @@ export default function ShowsPage() {
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ flex: 1 }}>
           {FILTERS.map((x) => (
             <button key={x.key} className={`chip ${f === x.key ? "chip-active" : ""}`} onClick={() => setF(x.key)}>
-              {x.label}
+              {tr(x.label)}
               <span className="mute" style={{ fontWeight: 700 }}>{count(x.key)}</span>
             </button>
           ))}
@@ -84,7 +85,7 @@ export default function ShowsPage() {
         <div className="segmented scroll no-scrollbar">
           {SORTS.map((s) => (
             <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => setSort(s.key)}>
-              {s.label}
+              {tr(s.label)}
             </div>
           ))}
         </div>
@@ -92,7 +93,7 @@ export default function ShowsPage() {
 
       {f === "caughtup" && (
         <p className="dim" style={{ fontSize: 13.5, margin: "-8px 0 0" }}>
-          Watched everything that's aired — just waiting on the next season.
+          {tr("Watched everything that's aired — just waiting on the next season.")}
         </p>
       )}
 
@@ -102,8 +103,12 @@ export default function ShowsPage() {
         <div className="card" style={{ padding: "28px 24px" }}>
           <p className="dim" style={{ margin: 0, fontSize: 14 }}>
             {f === "all"
-              ? <>Nothing here yet — hit <kbd className="mq-kbd">⌘K</kbd> and add a show.</>
-              : `Nothing in ${FILTERS.find((x) => x.key === f)?.label} right now.`}
+              ? isEs()
+                ? <>Aún no hay nada — pulsa <kbd className="mq-kbd">⌘K</kbd> y añade una serie.</>
+                : <>Nothing here yet — hit <kbd className="mq-kbd">⌘K</kbd> and add a show.</>
+              : isEs()
+                ? `Nada en ${tr(FILTERS.find((x) => x.key === f)?.label ?? "")} ahora mismo.`
+                : `Nothing in ${FILTERS.find((x) => x.key === f)?.label} right now.`}
           </p>
         </div>
       )}
@@ -114,7 +119,7 @@ export default function ShowsPage() {
             <Poster t={toTitleCard(s)} prefetchTmdbId={s.tmdb_id} onClick={() => open(s.tmdb_id)} />
             {s.status === "caughtup" && s.next_air_datetime && (
               <div className="mute" style={{ fontSize: 11.5, paddingLeft: 2 }}>
-                ⏳ Next episode {new Date(s.next_air_datetime).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                ⏳ {tr("Next episode")} {new Date(s.next_air_datetime).toLocaleDateString(dateLocale(), { month: "short", day: "numeric" })}
               </div>
             )}
           </div>

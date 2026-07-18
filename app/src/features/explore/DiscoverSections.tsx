@@ -7,6 +7,7 @@ import { useLibrary, useFollow, useUnfollow } from "@/lib/library";
 import { useIgnore, useIgnored, useUnignore } from "@/lib/ignore";
 import type { TitleRow } from "@/lib/schemas";
 import { tmdbImg } from "@/lib/tmdb";
+import { isEs, locName, t as tr, tGenre, useEsNames } from "@/lib/i18n";
 import { Rail } from "@/ui";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
@@ -20,8 +21,10 @@ import { useTitleIntent } from "@/lib/useOpenTitle";
 function TitlePoster({ t, rank, score, onOpen, onIgnore }: { t: TitleRow; rank?: number; score?: number | null; onOpen: () => void; onIgnore?: () => void }) {
   const art = tmdbImg(t.poster_path);
   const intent = useTitleIntent(t.tmdb_id);
+  const esNames = useEsNames();
+  const name = (isEs() && t.name_es) || locName(esNames, t.tmdb_id, t.name);
   return (
-    <div className="poster" style={{ background: posterBg(t.name) }} onClick={onOpen} {...intent}>
+    <div className="poster" style={{ background: posterBg(name) }} onClick={onOpen} {...intent}>
       {art && <img className="poster-img" src={art} alt="" loading="lazy" />}
       <div className="poster-sheen" />
       {rank != null && <span className="mq-rank">{rank}</span>}
@@ -42,8 +45,8 @@ function TitlePoster({ t, rank, score, onOpen, onIgnore }: { t: TitleRow; rank?:
         </button>
       )}
       <div className="poster-body">
-        <div className="poster-title">{t.name}</div>
-        <div className="poster-sub">{[t.first_air_date?.slice(0, 4), t.genres[0]].filter(Boolean).join(" · ")}</div>
+        <div className="poster-title">{name}</div>
+        <div className="poster-sub">{[t.first_air_date?.slice(0, 4), tGenre(t.genres[0] ?? "")].filter(Boolean).join(" · ")}</div>
       </div>
     </div>
   );
@@ -65,7 +68,7 @@ function AddButton({ t }: { t: TitleRow }) {
         else follow.mutate(t);
       }}
     >
-      {added ? <><Check size={14} />Added</> : <><Plus size={14} />Add</>}
+      {added ? <><Check size={14} />{tr("Added")}</> : <><Plus size={14} />{tr("Add")}</>}
     </button>
   );
 }
@@ -75,7 +78,7 @@ function FriendRow({ friends, count }: { friends: FriendLike[]; count: number })
   return (
     <div className="flex items-center gap-2 px-0.5">
       <FriendStack fans={friends} size={20} />
-      <span className="mute" style={{ fontSize: 12 }}>{count} {count === 1 ? "friend" : "friends"}</span>
+      <span className="mute" style={{ fontSize: 12 }}>{count} {count === 1 ? tr("friend") : tr("friends")}</span>
     </div>
   );
 }
@@ -93,7 +96,7 @@ function YearSelect({ value, onChange, label }: { value: number | null; onChange
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
       >
-        <option value="">Any</option>
+        <option value="">{tr("Any")}</option>
         {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
       </select>
     </label>
@@ -118,22 +121,24 @@ const loadView = (): ViewMode => {
 function TitleListRow({ t, score, friends, friendCount, onOpen, onIgnore }: { t: TitleRow; score?: number | null; friends?: FriendLike[] | null; friendCount?: number; onOpen: () => void; onIgnore: () => void }) {
   const art = tmdbImg(t.poster_path, "w92");
   const intent = useTitleIntent(t.tmdb_id);
+  const esNames = useEsNames();
+  const name = (isEs() && t.name_es) || locName(esNames, t.tmdb_id, t.name);
   return (
     <div className="card mq-row" onClick={onOpen} {...intent}>
-      <div className="mq-row-art" style={art ? undefined : { background: posterBg(t.name) }}>
+      <div className="mq-row-art" style={art ? undefined : { background: posterBg(name) }}>
         {art && <img src={art} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
         <div className="poster-sheen" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name}</div>
+        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{name}</div>
         {friends && friends.length > 0 ? (
           <div className="flex items-center gap-2" style={{ marginTop: 3 }}>
             <FriendStack fans={friends} size={20} />
-            <span className="mute" style={{ fontSize: 12 }}>{friendCount} {friendCount === 1 ? "friend" : "friends"}</span>
+            <span className="mute" style={{ fontSize: 12 }}>{friendCount} {friendCount === 1 ? tr("friend") : tr("friends")}</span>
           </div>
         ) : (
           <div className="mute truncate" style={{ fontSize: 12.5, marginTop: 3 }}>
-            {[t.first_air_date?.slice(0, 4), ...t.genres.slice(0, 2)].filter(Boolean).join(" · ")}
+            {[t.first_air_date?.slice(0, 4), ...t.genres.slice(0, 2).map(tGenre)].filter(Boolean).join(" · ")}
           </div>
         )}
       </div>
@@ -168,7 +173,11 @@ function GenreDropdown({ options, selected, onToggle }: { options: string[]; sel
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [open]);
-  const label = selected.length === 0 ? "All genres" : selected.length === 1 ? selected[0] : `${selected.length} genres`;
+  const label = selected.length === 0
+    ? tr("All genres")
+    : selected.length === 1
+      ? tGenre(selected[0])
+      : `${selected.length} ${isEs() ? "géneros" : "genres"}`;
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button className={`chip ${selected.length ? "chip-active" : ""}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -180,7 +189,7 @@ function GenreDropdown({ options, selected, onToggle }: { options: string[]; sel
           {options.map((g) => (
             <label key={g} className="filter-opt">
               <input type="checkbox" checked={selected.includes(g)} onChange={() => onToggle(g)} />
-              <span>{g}</span>
+              <span>{tGenre(g)}</span>
             </label>
           ))}
         </div>
@@ -205,7 +214,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "popular", label: "Popular now" },
   { key: "rated", label: "Top rated" },
   { key: "friends", label: "Popular with friends" },
-];
+]; // labels run through tr() at render
 
 /* Normalised discover card: a title plus the per-tab extras (TMDB score on the
    Top-rated tab, the friend stack on the With-friends tab). */
@@ -308,24 +317,28 @@ export function DiscoverSections() {
   const current = Math.min(page, pageCount - 1); // clamp when the pool shrinks
   const visible = items.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
 
-  const subtitle = tab === "popular"
-    ? (catalogMode ? "Most popular for the selected years" : "New shows and fresh seasons, ranked by buzz")
-    : tab === "rated"
-      ? "The best of the catalog, ranked by TMDB score"
-      : "Shows your friends are watching, most friends first";
-  const emptyMsg = tab === "popular"
-    ? "No popular shows match these filters."
-    : tab === "rated"
-      ? "No top-rated shows match these filters."
-      : hasFriends
-        ? "No shows from your friends match these filters."
-        : "Add a friend to see what they're watching.";
+  const subtitle = tr(
+    tab === "popular"
+      ? (catalogMode ? "Most popular for the selected years" : "New shows and fresh seasons, ranked by buzz")
+      : tab === "rated"
+        ? "The best of the catalog, ranked by TMDB score"
+        : "Shows your friends are watching, most friends first",
+  );
+  const emptyMsg = tr(
+    tab === "popular"
+      ? "No popular shows match these filters."
+      : tab === "rated"
+        ? "No top-rated shows match these filters."
+        : hasFriends
+          ? "No shows from your friends match these filters."
+          : "Add a friend to see what they're watching.",
+  );
 
   return (
     <>
       {trending.length > 0 && (
         <section className="flex flex-col gap-4">
-          <Rail title="Trending this week" subtitle="What everyone's watching, via TMDB">
+          <Rail title={tr("Trending this week")} subtitle={tr("What everyone's watching, via TMDB")}>
             {trending.map((t, i) => (
               <div key={t.tmdb_id} style={{ width: "var(--rail-pw)" }}>
                 <TitlePoster t={t} rank={i + 1} onOpen={() => open(t.tmdb_id)} />
@@ -346,7 +359,7 @@ export function DiscoverSections() {
                 className={`seg ${tab === tb.key ? "seg-active" : ""}`}
                 onClick={() => goTab(tb.key)}
               >
-                {tb.label}
+                {tr(tb.label)}
               </div>
             ))}
           </div>
@@ -385,12 +398,12 @@ export function DiscoverSections() {
         <div className="flex items-center gap-3 flex-wrap">
           <GenreDropdown options={GENRE_NAMES} selected={selectedGenres} onToggle={toggleGenre} />
           <div className="flex items-center gap-2.5 flex-wrap" style={{ marginLeft: "auto" }}>
-            <YearSelect value={fromYear} onChange={changeYear(setFromYear)} label="From:" />
-            <YearSelect value={toYear} onChange={changeYear(setToYear)} label="To:" />
+            <YearSelect value={fromYear} onChange={changeYear(setFromYear)} label={tr("From:")} />
+            <YearSelect value={toYear} onChange={changeYear(setToYear)} label={tr("To:")} />
             {hasFilters && (
               <button className="chip" onClick={clearFilters} title="Clear all filters">
                 <X size={13} />
-                Clear filters
+                {tr("Clear filters")}
               </button>
             )}
           </div>
@@ -433,7 +446,7 @@ export function DiscoverSections() {
               aria-expanded={showHidden}
             >
               <EyeOff size={13} />
-              {ignored.length} hidden {ignored.length === 1 ? "show" : "shows"}
+              {ignored.length} {ignored.length === 1 ? tr("hidden show") : tr("hidden shows")}
               {showHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {showHidden && (

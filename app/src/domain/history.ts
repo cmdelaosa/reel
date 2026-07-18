@@ -22,11 +22,13 @@ export function groupHistory<T extends WatchedEpish>(rows: T[], now: Date): [num
   return [...map.entries()].sort((a, b) => b[0] - a[0]);
 }
 
-/** Today / Yesterday for the two most recent days; FULL DATE (upper) before. */
-export function historyDayLabel(off: number, iso: string): string {
-  if (off === 0) return "Today";
-  if (off === -1) return "Yesterday";
+/** Today / Yesterday for the two most recent days; FULL DATE (upper) before.
+ *  `locale` follows the UI language (undefined = browser default English). */
+export function historyDayLabel(off: number, iso: string, locale?: string): string {
+  const es = locale?.startsWith("es") ?? false;
+  if (off === 0) return es ? "Hoy" : "Today";
+  if (off === -1) return es ? "Ayer" : "Yesterday";
   return new Date(iso)
-    .toLocaleDateString(undefined, { weekday: "short", month: "long", day: "numeric", year: "numeric" })
+    .toLocaleDateString(locale, { weekday: "short", month: "long", day: "numeric", year: "numeric" })
     .toUpperCase();
 }

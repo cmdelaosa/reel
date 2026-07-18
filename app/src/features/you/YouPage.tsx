@@ -6,6 +6,7 @@ import { useLibrary } from "@/lib/library";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
 import { useUserStats, timeSpentLabel } from "@/lib/stats";
 import { tmdbImg } from "@/lib/tmdb";
+import { dateLocale, isEs, locName, t as tr, tGenre, useEsNames } from "@/lib/i18n";
 import { Stars } from "@/ui";
 import { StatsSkeleton } from "@/ui/Skeleton";
 import { posterBg } from "@/ui/posterBg";
@@ -18,25 +19,27 @@ type RateSort = "new" | "old" | "best" | "worst";
 
 function ratedAtLabel(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 30) return `${days} days ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  if (days <= 0) return isEs() ? "hoy" : "today";
+  if (days === 1) return isEs() ? "ayer" : "yesterday";
+  if (days < 30) return isEs() ? `hace ${days} días` : `${days} days ago`;
+  return new Date(iso).toLocaleDateString(dateLocale(), { month: "short", year: "numeric" });
 }
 
 function RatingRow({ r, onOpen }: { r: RatedRow; onOpen: () => void }) {
   const t = r.titles;
   const art = tmdbImg(t.poster_path, "w92");
+  const esNames = useEsNames();
+  const name = locName(esNames, t.tmdb_id, t.name);
   return (
     <div className="card mq-row" onClick={onOpen}>
-      <div className="mq-row-art" style={art ? undefined : { background: posterBg(t.name) }}>
+      <div className="mq-row-art" style={art ? undefined : { background: posterBg(name) }}>
         {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
         <div className="poster-sheen" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="mq-row-title truncate" style={{ marginTop: 0 }}>{t.name}</div>
+        <div className="mq-row-title truncate" style={{ marginTop: 0 }}>{name}</div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>
-          {[t.first_air_date?.slice(0, 4), t.genres[0], `rated ${ratedAtLabel(r.created_at)}`].filter(Boolean).join(" · ")}
+          {[t.first_air_date?.slice(0, 4), tGenre(t.genres[0] ?? ""), `${isEs() ? "puntuada" : "rated"} ${ratedAtLabel(r.created_at)}`].filter(Boolean).join(" · ")}
         </div>
         <div style={{ marginTop: 4 }}><Stars score={r.score} size={13} /></div>
       </div>
@@ -76,10 +79,10 @@ export default function YouPage() {
     });
 
   const sorts: { v: RateSort; label: string }[] = [
-    { v: "new", label: "Newest" },
-    { v: "old", label: "Oldest" },
-    { v: "best", label: "Best rated" },
-    { v: "worst", label: "Worst rated" },
+    { v: "new", label: tr("Newest") },
+    { v: "old", label: tr("Oldest") },
+    { v: "best", label: tr("Best rated") },
+    { v: "worst", label: tr("Worst rated") },
   ];
 
   // Your taste profile — genre + network mix across the shows you follow,
@@ -118,7 +121,7 @@ export default function YouPage() {
               </div>
             </div>
             <button className="btn btn-outline" title="Sharing lands with friends (Phase 4)">
-              <Share2 size={16} />Share profile
+              <Share2 size={16} />{tr("Share profile")}
             </button>
           </div>
         </div>
@@ -127,8 +130,8 @@ export default function YouPage() {
       {/* My Shows + History moved off the top tabs — they live here now */}
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
         {[
-          { icon: LayoutGrid, label: "My Shows", sub: `${library.length} in your library`, path: "/shows" },
-          { icon: History, label: "History", sub: "Everything you've watched", path: "/history" },
+          { icon: LayoutGrid, label: tr("My Shows"), sub: `${library.length} ${tr("in your library")}`, path: "/shows" },
+          { icon: History, label: tr("History"), sub: tr("Everything you've watched"), path: "/history" },
         ].map((l) => (
           <button
             key={l.path}
@@ -158,12 +161,12 @@ export default function YouPage() {
       {stats && (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
           {[
-            { icon: Eye, label: "Episodes watched", value: stats.episodes_watched.toLocaleString() },
-            { icon: Clock, label: "Time spent", value: timeSpentLabel(stats.minutes_watched) },
-            { icon: Tv, label: "Shows followed", value: String(stats.shows_followed) },
-            { icon: CalendarClock, label: "Coming soon", value: String(stats.coming_soon) },
-            { icon: Users, label: "Friends", value: String(stats.friends) },
-            { icon: Star, label: "Avg. rating", value: stats.avg_rating != null ? stats.avg_rating.toFixed(1) : "—" },
+            { icon: Eye, label: tr("Episodes watched"), value: stats.episodes_watched.toLocaleString() },
+            { icon: Clock, label: tr("Time spent"), value: timeSpentLabel(stats.minutes_watched) },
+            { icon: Tv, label: tr("Shows followed"), value: String(stats.shows_followed) },
+            { icon: CalendarClock, label: tr("Coming soon"), value: String(stats.coming_soon) },
+            { icon: Users, label: tr("Friends"), value: String(stats.friends) },
+            { icon: Star, label: tr("Avg. rating"), value: stats.avg_rating != null ? stats.avg_rating.toFixed(1) : "—" },
           ].map((s) => (
             <div key={s.label} className="card p-4 flex flex-col gap-1">
               <s.icon size={18} style={{ color: "var(--accent)" }} />
@@ -176,11 +179,11 @@ export default function YouPage() {
 
       {taste.topGenres.length > 0 && (
         <section className="flex flex-col gap-3">
-          <div className="eyebrow">Taste profile</div>
+          <div className="eyebrow">{tr("Taste profile")}</div>
           <div className="card p-4 flex flex-col gap-2">
             {taste.topGenres.slice(0, 8).map((g) => (
               <div key={g.name} className="flex items-center gap-2.5">
-                <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{g.name}</span>
+                <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{tGenre(g.name)}</span>
                 <div className="fr-matchbar" style={{ flex: 1 }}><i style={{ width: `${(g.count / taste.topGenres[0].count) * 100}%` }} /></div>
                 <span className="mute" style={{ fontSize: 11.5, width: 24, textAlign: "right", flex: "0 0 auto" }}>{g.count}</span>
               </div>
@@ -188,7 +191,7 @@ export default function YouPage() {
           </div>
           {taste.topNetworks.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="mute" style={{ fontSize: 11.5 }}>Top networks:</span>
+              <span className="mute" style={{ fontSize: 11.5 }}>{tr("Top networks:")}</span>
               {taste.topNetworks.map((n) => (
                 <span key={n.name} className="badge badge-soft" style={{ fontSize: 11 }}>{n.name} · {n.count}</span>
               ))}
@@ -200,8 +203,8 @@ export default function YouPage() {
       <section className="flex flex-col gap-4">
         <div className="mq-sechead">
           <div>
-            <h2 className="section-title">Your ratings</h2>
-            <p className="mute" style={{ fontSize: 13 }}>{rated.length} shows scored</p>
+            <h2 className="section-title">{tr("Your ratings")}</h2>
+            <p className="mute" style={{ fontSize: 13 }}>{rated.length} {tr("shows scored")}</p>
           </div>
         </div>
 
@@ -215,7 +218,7 @@ export default function YouPage() {
           </div>
           {rated.length > 0 && (
             <span className="mute" style={{ fontSize: 12.5 }}>
-              {start + 1}–{Math.min(start + RATE_PAGE, rated.length)} of {rated.length}
+              {start + 1}–{Math.min(start + RATE_PAGE, rated.length)} {tr("of")} {rated.length}
             </span>
           )}
         </div>
@@ -223,7 +226,7 @@ export default function YouPage() {
         {rated.length === 0 && (
           <div className="card" style={{ padding: "28px 24px" }}>
             <p className="dim" style={{ margin: 0, fontSize: 14 }}>
-              No ratings yet — open a show and tap the stars.
+              {tr("No ratings yet — open a show and tap the stars.")}
             </p>
           </div>
         )}
@@ -242,16 +245,16 @@ export default function YouPage() {
               style={{ opacity: clamped === 0 ? 0.4 : 1, pointerEvents: clamped === 0 ? "none" : "auto" }}
               onClick={() => setPage(clamped - 1)}
             >
-              <ChevronLeft size={15} />Prev
+              <ChevronLeft size={15} />{tr("Prev")}
             </button>
-            <span>Page {clamped + 1} of {pageCount}</span>
+            <span>{tr("Page")} {clamped + 1} {tr("of")} {pageCount}</span>
             <button
               className="btn btn-ghost btn-sm"
               disabled={clamped === pageCount - 1}
               style={{ opacity: clamped === pageCount - 1 ? 0.4 : 1, pointerEvents: clamped === pageCount - 1 ? "none" : "auto" }}
               onClick={() => setPage(clamped + 1)}
             >
-              Next<ChevronRight size={15} />
+              {tr("Next")}<ChevronRight size={15} />
             </button>
           </div>
         )}

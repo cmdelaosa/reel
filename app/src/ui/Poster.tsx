@@ -3,6 +3,7 @@ import type { TitleCard } from "@/domain/types";
 import { posterBg } from "@/ui/posterBg";
 import { NetworkLogo } from "@/ui/NetworkLogo";
 import { useTitleIntent } from "@/lib/useOpenTitle";
+import { locName, tGenre, useEsNames } from "@/lib/i18n";
 
 /* ---- Poster tile (overlaid title, TV-Time-like) ---- */
 export function Poster({ t, subtitle, showNetwork = true, onClick, prefetchTmdbId }: {
@@ -15,6 +16,10 @@ export function Poster({ t, subtitle, showNetwork = true, onClick, prefetchTmdbI
   const progress = t.progress ?? 0;
   const showProgress = progress > 0 && progress < 100;
   const intent = useTitleIntent(prefetchTmdbId);
+  // TitleCard.id is the tmdb id (stringified) — localize here so every grid
+  // and rail gets Spanish titles for free.
+  const esNames = useEsNames();
+  const name = locName(esNames, t.id, t.name);
 
   return (
     <div
@@ -26,7 +31,7 @@ export function Poster({ t, subtitle, showNetwork = true, onClick, prefetchTmdbI
         ? {
             role: "button",
             tabIndex: 0,
-            "aria-label": `${t.name} — open details`,
+            "aria-label": `${name} — open details`,
             onKeyDown: (e: React.KeyboardEvent) => {
               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); }
             },
@@ -52,8 +57,8 @@ export function Poster({ t, subtitle, showNetwork = true, onClick, prefetchTmdbI
         </span>
       </div>
       <div className="poster-body">
-        <div className="poster-title">{t.name}</div>
-        <div className="poster-sub">{subtitle ?? `${t.genres[0]} · ${t.year}`}</div>
+        <div className="poster-title">{name}</div>
+        <div className="poster-sub">{subtitle ?? `${tGenre(t.genres[0])} · ${t.year}`}</div>
       </div>
       {showProgress && (
         <div className="pbar">
