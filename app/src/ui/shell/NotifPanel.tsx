@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router";
 import { Bell, CalendarClock, Check, Download, Tv, Users } from "lucide-react";
 import { useNotifications, useMarkNotificationsRead, type Notification } from "@/lib/notifications";
+import { isEs, t as tr } from "@/lib/i18n";
 
 /* Bell popover — the in-app inbox. Styling ported from prototype overlays.tsx
    NotifPanel; rows are live (Realtime) and route by type. */
@@ -14,13 +15,22 @@ const ICONS: Record<string, typeof Bell> = {
 
 function relTime(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "now";
+  if (s < 60) return isEs() ? "ahora" : "now";
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86400)}d`;
 }
 
 function title(n: Notification): string {
+  if (isEs()) {
+    switch (n.type) {
+      case "new_episode": return "Nuevo episodio";
+      case "premiere": return "Estreno con fecha";
+      case "friend_request": return "Solicitud de amistad";
+      case "import_done": return "Importación terminada";
+      default: return n.type;
+    }
+  }
   switch (n.type) {
     case "new_episode": return "New episode";
     case "premiere": return "Premiere dated";
@@ -32,6 +42,18 @@ function title(n: Notification): string {
 
 function body(n: Notification): string {
   const p = n.payload as Record<string, unknown>;
+  if (isEs()) {
+    switch (n.type) {
+      case "new_episode":
+        return `${p.show_name ?? "Una serie"} S${p.season_number} · E${p.episode_number}${p.episode_name ? ` "${p.episode_name}"` : ""} acaba de emitirse`;
+      case "premiere":
+        return `${p.show_name ?? "Una serie"} ya tiene fecha de estreno`;
+      case "import_done":
+        return `${p.matched ?? 0} series importadas de TV Time`;
+      default:
+        return typeof p.message === "string" ? p.message : "";
+    }
+  }
   switch (n.type) {
     case "new_episode":
       return `${p.show_name ?? "A show"} S${p.season_number} · E${p.episode_number}${p.episode_name ? ` "${p.episode_name}"` : ""} just aired`;
@@ -74,10 +96,10 @@ export function NotifPanel({ onClose }: { onClose: () => void }) {
         style={{ top: 64, right: 16, width: "min(380px, 92vw)", borderRadius: "var(--r-lg)" }}
       >
         <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: "1px solid var(--border)" }}>
-          <div style={{ fontWeight: 750, fontSize: 15 }}>Notifications</div>
+          <div style={{ fontWeight: 750, fontSize: 15 }}>{tr("Notifications")}</div>
           {items.some((n) => !n.read_at) && (
             <button className="chip" onClick={() => markRead.mutate(undefined)}>
-              <Check size={13} />Mark all read
+              <Check size={13} />{isEs() ? "Marcar todo leído" : "Mark all read"}
             </button>
           )}
         </div>
@@ -85,7 +107,7 @@ export function NotifPanel({ onClose }: { onClose: () => void }) {
         <div className="flex flex-col" style={{ maxHeight: "min(60vh, 480px)", overflowY: "auto" }}>
           {items.length === 0 && (
             <div className="dim" style={{ padding: "28px 16px", textAlign: "center", fontSize: 13.5 }}>
-              You're all caught up.
+              {isEs() ? "Estás al día." : "You're all caught up."}
             </div>
           )}
           {items.map((n, i) => {

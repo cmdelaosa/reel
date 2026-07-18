@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download, FileJson, Loader2, Table2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { isEs, t as tr } from "@/lib/i18n";
 
 /* Export my data — downloads a zip (profile.json, library.json,
    watch_events.csv, ratings.csv) from the export edge function. */
@@ -41,17 +42,19 @@ export default function ExportPage() {
   return (
     <div className="screen mq-page" style={{ maxWidth: 640, marginInline: "auto" }}>
       <header className="mq-header">
-        <h1 className="mq-h1">Export my data</h1>
-        <p className="dim mq-sub">Download everything Reel holds for you as a zip. Your data is yours.</p>
+        <h1 className="mq-h1">{tr("Export my data")}</h1>
+        <p className="dim mq-sub">
+          {isEs() ? "Descarga todo lo que Reel guarda de ti en un zip. Tus datos son tuyos." : "Download everything Reel holds for you as a zip. Your data is yours."}
+        </p>
       </header>
 
       <div className="card" style={{ padding: 22, display: "flex", flexDirection: "column", gap: 16 }}>
         <div className="flex flex-col gap-2.5">
           {[
-            { icon: FileJson, name: "profile.json", desc: "Your profile" },
-            { icon: FileJson, name: "library.json", desc: "Shows you follow" },
-            { icon: Table2, name: "watch_events.csv", desc: "Every episode you've marked watched" },
-            { icon: Table2, name: "ratings.csv", desc: "Your show ratings" },
+            { icon: FileJson, name: "profile.json", desc: isEs() ? "Tu perfil" : "Your profile" },
+            { icon: FileJson, name: "library.json", desc: isEs() ? "Series que sigues" : "Shows you follow" },
+            { icon: Table2, name: "watch_events.csv", desc: isEs() ? "Cada episodio que marcaste como visto" : "Every episode you've marked watched" },
+            { icon: Table2, name: "ratings.csv", desc: isEs() ? "Tus notas de series" : "Your show ratings" },
           ].map((f) => (
             <div key={f.name} className="flex items-center gap-3">
               <f.icon size={18} className="mute" />
@@ -63,7 +66,7 @@ export default function ExportPage() {
           ))}
         </div>
         <button className="btn btn-accent" style={{ alignSelf: "flex-start" }} onClick={download} disabled={busy}>
-          {busy ? <><Loader2 size={16} className="spin" />Preparing…</> : <><Download size={16} />Download my data</>}
+          {busy ? <><Loader2 size={16} className="spin" />{isEs() ? "Preparando…" : "Preparing…"}</> : <><Download size={16} />{isEs() ? "Descargar mis datos" : "Download my data"}</>}
         </button>
         {error && <p role="alert" style={{ color: "#e5484d", fontSize: 13 }}>{error}</p>}
       </div>

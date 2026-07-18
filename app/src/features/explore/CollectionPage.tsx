@@ -8,6 +8,7 @@ import { tmdbImg } from "@/lib/tmdb";
 import { Check, Plus } from "lucide-react";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
+import { isEs, locName, t as tr, tGenre, useEsNames } from "@/lib/i18n";
 
 export default function CollectionPage() {
   const { slug } = useParams();
@@ -30,17 +31,19 @@ export default function CollectionPage() {
   return (
     <div className="screen mq-page">
       <Link to="/explore" className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start" }}>
-        <ChevronLeft size={15} />Explore
+        <ChevronLeft size={15} />{tr("Explore")}
       </Link>
       <header className="mq-header">
-        <h1 className="mq-h1">{data?.collection.name ?? "Collection"}</h1>
-        <p className="dim mq-sub">{data?.collection.sub ?? (isPending ? "Loading…" : "")}</p>
+        <h1 className="mq-h1">{data?.collection.name ?? (isEs() ? "Colección" : "Collection")}</h1>
+        <p className="dim mq-sub">{data?.collection.sub ?? (isPending ? tr("Loading…") : "")}</p>
       </header>
 
       {!isPending && data && titles.length === 0 && (
         <div className="card" style={{ padding: "28px 24px" }}>
           <p className="dim" style={{ margin: 0, fontSize: 14 }}>
-            {data.titles.length > 0 ? "You already follow (or hid) everything here." : "Nothing here yet."}
+            {data.titles.length > 0
+              ? (isEs() ? "Ya sigues (u ocultaste) todo lo de aquí." : "You already follow (or hid) everything here.")
+              : (isEs() ? "Aún no hay nada aquí." : "Nothing here yet.")}
           </p>
         </div>
       )}
@@ -60,22 +63,24 @@ export default function CollectionPage() {
 function CollectionPoster({ t, onOpen, onIgnore }: { t: TitleRow; onOpen: () => void; onIgnore: () => void }) {
   const art = tmdbImg(t.poster_path);
   const intent = useTitleIntent(t.tmdb_id);
+  const esNames = useEsNames();
+  const name = (isEs() && t.name_es) || locName(esNames, t.tmdb_id, t.name);
   return (
-    <div className="poster" style={{ background: posterBg(t.name) }} onClick={onOpen} {...intent}>
+    <div className="poster" style={{ background: posterBg(name) }} onClick={onOpen} {...intent}>
       {art && <img className="poster-img" src={art} alt="" loading="lazy" />}
       <div className="poster-sheen" />
       <button
         className="btn btn-icon badge-glass absolute"
         style={{ top: 8, right: 8, color: "#fff" }}
         title="Not interested — hide from suggestions"
-        aria-label={`Hide ${t.name} from suggestions`}
+        aria-label={`Hide ${name} from suggestions`}
         onClick={(e) => { e.stopPropagation(); onIgnore(); }}
       >
         <EyeOff size={15} />
       </button>
       <div className="poster-body">
-        <div className="poster-title">{t.name}</div>
-        <div className="poster-sub">{[t.first_air_date?.slice(0, 4), t.genres[0]].filter(Boolean).join(" · ")}</div>
+        <div className="poster-title">{name}</div>
+        <div className="poster-sub">{[t.first_air_date?.slice(0, 4), tGenre(t.genres[0] ?? "")].filter(Boolean).join(" · ")}</div>
       </div>
     </div>
   );
@@ -97,7 +102,7 @@ function AddButton({ t }: { t: TitleRow }) {
         else follow.mutate(t);
       }}
     >
-      {added ? <><Check size={14} />Added</> : <><Plus size={14} />Add</>}
+      {added ? <><Check size={14} />{tr("Added")}</> : <><Plus size={14} />{tr("Add")}</>}
     </button>
   );
 }

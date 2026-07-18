@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { AlertTriangle } from "lucide-react";
 import { subscribeQueryError, isQueryErrorVisible } from "@/ui/shell/queryErrorStore";
+import { isEs } from "@/lib/i18n";
 
 export function QueryErrorToast() {
   const shown = useSyncExternalStore(subscribeQueryError, isQueryErrorVisible, () => false);
@@ -12,7 +13,9 @@ export function QueryErrorToast() {
       role="alert"
     >
       <AlertTriangle size={16} style={{ color: "#e5484d" }} />
-      <span style={{ fontSize: 13.5, fontWeight: 650 }}>Couldn't load — check your connection and retry</span>
+      <span style={{ fontSize: 13.5, fontWeight: 650 }}>
+        {isEs() ? "No se pudo cargar — revisa tu conexión y reintenta" : "Couldn't load — check your connection and retry"}
+      </span>
     </div>
   );
 }

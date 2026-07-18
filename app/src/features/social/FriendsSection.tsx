@@ -5,6 +5,7 @@ import {
   useAcceptRequest, useFindProfile, useFriendships, useRemoveFriend, useSendRequest,
   type Friendship, type FoundProfile,
 } from "@/lib/friends";
+import { isEs, t as tr } from "@/lib/i18n";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 
 /* You → Friends: add by handle, incoming requests atop, then the friends list. */
@@ -37,8 +38,10 @@ export function FriendsSection() {
     <section className="flex flex-col gap-4">
       <div className="mq-sechead">
         <div>
-          <h2 className="section-title">Friends</h2>
-          <p className="mute" style={{ fontSize: 13 }}>{friends.length} friends · add by @handle</p>
+          <h2 className="section-title">{tr("Friends")}</h2>
+          <p className="mute" style={{ fontSize: 13 }}>
+            {friends.length} {tr("friends")} · {isEs() ? "añade por @usuario" : "add by @handle"}
+          </p>
         </div>
       </div>
 
@@ -49,7 +52,7 @@ export function FriendsSection() {
           <input
             value={handle}
             onChange={(e) => { setHandle(e.target.value); setFound(null); }}
-            placeholder="handle"
+            placeholder={isEs() ? "usuario" : "handle"}
             spellCheck={false}
             style={{
               width: "100%", padding: "9px 12px 9px 28px", borderRadius: "var(--r)",
@@ -59,11 +62,15 @@ export function FriendsSection() {
           />
         </div>
         <button className="btn btn-ghost btn-sm" type="submit" disabled={find.isPending || !handle.trim()}>
-          <UserPlus size={15} />Find
+          <UserPlus size={15} />{isEs() ? "Buscar" : "Find"}
         </button>
       </form>
 
-      {found === "none" && <p className="mute" style={{ fontSize: 13 }}>No one with that exact handle.</p>}
+      {found === "none" && (
+        <p className="mute" style={{ fontSize: 13 }}>
+          {isEs() ? "Nadie con ese usuario exacto." : "No one with that exact handle."}
+        </p>
+      )}
       {found && found !== "none" && (
         <div className="card mq-row" style={{ cursor: "default" }}>
           <FriendAvatar f={{ id: found.id, name: found.display_name, avatarUrl: found.avatar_url }} size={40} />
@@ -72,10 +79,10 @@ export function FriendsSection() {
             <div className="mute" style={{ fontSize: 12.5 }}>@{found.handle}</div>
           </div>
           {knownIds.has(found.id) ? (
-            <span className="badge badge-soft">Already connected</span>
+            <span className="badge badge-soft">{isEs() ? "Ya conectados" : "Already connected"}</span>
           ) : (
             <button className="btn btn-accent btn-sm" disabled={send.isPending} onClick={() => { send.mutate(found.id); setFound(null); setHandle(""); }}>
-              <UserPlus size={14} />Add
+              <UserPlus size={14} />{tr("Add")}
             </button>
           )}
         </div>
@@ -84,16 +91,16 @@ export function FriendsSection() {
       {/* Incoming requests */}
       {incoming.length > 0 && (
         <div className="flex flex-col gap-2.5">
-          <div className="eyebrow">Requests</div>
+          <div className="eyebrow">{isEs() ? "Solicitudes" : "Requests"}</div>
           {incoming.map((r) => (
             <div key={r.other_id} className="card mq-row" style={{ cursor: "default" }}>
               <FriendAvatar f={{ id: r.other_id, name: r.display_name, avatarUrl: r.avatar_url }} size={40} />
               <div className="flex-1 min-w-0">
                 <div style={{ fontWeight: 700, fontSize: 14.5 }} className="truncate">{r.display_name}</div>
-                <div className="mute" style={{ fontSize: 12.5 }}>@{r.handle} wants to connect</div>
+                <div className="mute" style={{ fontSize: 12.5 }}>@{r.handle} {isEs() ? "quiere conectar" : "wants to connect"}</div>
               </div>
-              <button className="btn btn-accent btn-sm" onClick={() => accept.mutate(r.other_id)}><Check size={14} />Accept</button>
-              <button className="btn btn-ghost btn-icon" title="Decline" onClick={() => remove.mutate(r.other_id)}><X size={16} /></button>
+              <button className="btn btn-accent btn-sm" onClick={() => accept.mutate(r.other_id)}><Check size={14} />{isEs() ? "Aceptar" : "Accept"}</button>
+              <button className="btn btn-ghost btn-icon" title={isEs() ? "Rechazar" : "Decline"} onClick={() => remove.mutate(r.other_id)}><X size={16} /></button>
             </div>
           ))}
         </div>
@@ -102,7 +109,11 @@ export function FriendsSection() {
       {/* Friends list */}
       {friends.length === 0 && incoming.length === 0 ? (
         <div className="card" style={{ padding: "24px" }}>
-          <p className="dim" style={{ margin: 0, fontSize: 14 }}>No friends yet — add someone by their @handle, or share an invite.</p>
+          <p className="dim" style={{ margin: 0, fontSize: 14 }}>
+            {isEs()
+              ? "Aún no tienes amigos — añade a alguien por su @usuario o comparte una invitación."
+              : "No friends yet — add someone by their @handle, or share an invite."}
+          </p>
         </div>
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
@@ -114,7 +125,9 @@ export function FriendsSection() {
 
       {outgoing.length > 0 && (
         <p className="mute" style={{ fontSize: 12.5 }}>
-          {outgoing.length} pending sent {outgoing.length === 1 ? "request" : "requests"}.
+          {isEs()
+            ? `${outgoing.length} ${outgoing.length === 1 ? "solicitud enviada pendiente" : "solicitudes enviadas pendientes"}.`
+            : `${outgoing.length} pending sent ${outgoing.length === 1 ? "request" : "requests"}.`}
         </p>
       )}
     </section>
@@ -128,7 +141,9 @@ function FriendCard({ r, onOpen }: { r: Friendship; onOpen: () => void }) {
       <div className="flex-1 min-w-0">
         <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{r.display_name}</div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>
-          {r.watching_title ? <>Watching <b style={{ fontWeight: 650 }}>{r.watching_title}</b></> : `@${r.handle}`}
+          {r.watching_title
+            ? <>{isEs() ? "Viendo" : "Watching"} <b style={{ fontWeight: 650 }}>{r.watching_title}</b></>
+            : `@${r.handle}`}
         </div>
       </div>
       <ChevronRight size={16} className="mute" />

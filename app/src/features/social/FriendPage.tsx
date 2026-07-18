@@ -17,6 +17,7 @@ import { useLibrary, useFollow } from "@/lib/library";
 import { useMyRatings } from "@/lib/ratings";
 import { tasteAffinity } from "@/lib/taste";
 import { timeSpentLabel } from "@/lib/stats";
+import { dateLocale, isEs, locName, t as tr, tGenre, useEsNames } from "@/lib/i18n";
 import type { TitleRow } from "@/lib/schemas";
 
 /* Friend profile page (route /friend/:id). rpc_friend_snapshot supplies the
@@ -90,6 +91,12 @@ function toTitleRow(f: FriendFollow): TitleRow {
 
 function agreementLabel(theirs: number, mine: number): string {
   const d = Math.abs(theirs - mine);
+  if (isEs()) {
+    if (d === 0) return "Misma nota";
+    if (d <= 1) return "Básicamente coincidís";
+    if (d >= 4) return "Discrepáis totalmente";
+    return "Opiniones algo distintas";
+  }
   if (d === 0) return "Same score";
   if (d <= 1) return "You basically agree";
   if (d >= 4) return "You strongly disagree";
@@ -110,13 +117,13 @@ function ProgressStrip({ watched, aired }: { watched: number; aired: number }) {
 /* Poster tile in the browsable "Shows" grid: their score (if rated), a
    common-ring when you follow it too, a one-tap Add, and their episode
    progress underneath. */
-function FollowTile({ f, theirScore, progress, added, onOpen, onAdd }: {
-  f: FriendFollow; theirScore?: number; progress?: FriendProgress; added: boolean; onOpen: () => void; onAdd: () => void;
+function FollowTile({ f, name, theirScore, progress, added, onOpen, onAdd }: {
+  f: FriendFollow; name: string; theirScore?: number; progress?: FriendProgress; added: boolean; onOpen: () => void; onAdd: () => void;
 }) {
   const art = tmdbImg(f.poster_path, "w342");
   return (
     <div className="fr-show">
-      <div className={`fr-mini ${added ? "fr-common" : ""}`} style={{ background: posterBg(f.name) }} title={f.name} onClick={onOpen}>
+      <div className={`fr-mini ${added ? "fr-common" : ""}`} style={{ background: posterBg(name) }} title={name} onClick={onOpen}>
         {art && <img src={art} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
         {theirScore != null && (
           <span className="badge badge-glass absolute" style={{ top: 6, left: 6, zIndex: 2, fontSize: 11, padding: "2px 6px" }}>
@@ -126,13 +133,13 @@ function FollowTile({ f, theirScore, progress, added, onOpen, onAdd }: {
         <button
           className="btn btn-icon badge-glass absolute"
           style={{ top: 6, right: 6, zIndex: 2, color: "#fff", width: 26, height: 26 }}
-          title={added ? "In your library" : "Add to your library"}
-          aria-label={added ? `${f.name} is in your library` : `Add ${f.name} to your library`}
+          title={added ? (isEs() ? "En tu biblioteca" : "In your library") : (isEs() ? "Añadir a tu biblioteca" : "Add to your library")}
+          aria-label={added ? `${name} is in your library` : `Add ${name} to your library`}
           onClick={(e) => { e.stopPropagation(); if (!added) onAdd(); }}
         >
           {added ? <Check size={14} /> : <Plus size={14} />}
         </button>
-        <span className="fr-mini-name">{f.name}</span>
+        <span className="fr-mini-name">{name}</span>
       </div>
       {progress && progress.aired > 0 && <ProgressStrip watched={progress.watched} aired={progress.aired} />}
     </div>
@@ -162,6 +169,7 @@ export default function FriendPage() {
   const follow = useFollow();
 
   const [section, setSection] = useState<SectionKey>("overview");
+  const esNames = useEsNames();
   const [showFilter, setShowFilter] = useState<ShowFilter>("all");
   const [showSort, setShowSort] = useState<ShowSort>("their");
 
@@ -251,45 +259,61 @@ export default function FriendPage() {
   const estMinutes = snap && derived ? Math.round(snap.stats.episodes * derived.avgRuntime) : 0;
 
   if (isPending) {
-    return <div className="screen mq-page"><div className="dim">Loading…</div></div>;
+    return <div className="screen mq-page"><div className="dim">{tr("Loading…")}</div></div>;
   }
   if (!snap) {
     return (
       <div className="screen mq-page">
         <div className="card" style={{ padding: "28px 24px", textAlign: "center" }}>
-          <div style={{ fontWeight: 750, fontSize: 16 }}>Profile not available</div>
-          <p className="dim" style={{ fontSize: 13.5, marginTop: 6 }}>This profile is private or not one of your friends.</p>
+          <div style={{ fontWeight: 750, fontSize: 16 }}>{isEs() ? "Perfil no disponible" : "Profile not available"}</div>
+          <p className="dim" style={{ fontSize: 13.5, marginTop: 6 }}>
+            {isEs() ? "Este perfil es privado o no es de uno de tus amigos." : "This profile is private or not one of your friends."}
+          </p>
         </div>
       </div>
     );
   }
 
-  const sections: { v: SectionKey; label: string; icon: typeof User }[] = [
-    { v: "overview", label: "Overview", icon: User },
-    { v: "shows", label: "Shows", icon: LayoutGrid },
-    { v: "activity", label: "Activity", icon: Activity },
-    { v: "ratings", label: "Ratings", icon: Star },
-  ];
+  const sections: { v: SectionKey; label: string; icon: typeof User }[] = isEs()
+    ? [
+        { v: "overview", label: "Resumen", icon: User },
+        { v: "shows", label: "Series", icon: LayoutGrid },
+        { v: "activity", label: "Actividad", icon: Activity },
+        { v: "ratings", label: "Notas", icon: Star },
+      ]
+    : [
+        { v: "overview", label: "Overview", icon: User },
+        { v: "shows", label: "Shows", icon: LayoutGrid },
+        { v: "activity", label: "Activity", icon: Activity },
+        { v: "ratings", label: "Ratings", icon: Star },
+      ];
 
-  const filters: { v: ShowFilter; label: string }[] = [
-    { v: "all", label: "All" },
-    { v: "both", label: "You both follow" },
-    { v: "not", label: "You don't follow" },
-  ];
+  const filters: { v: ShowFilter; label: string }[] = isEs()
+    ? [
+        { v: "all", label: "Todas" },
+        { v: "both", label: "Seguís los dos" },
+        { v: "not", label: "No la sigues" },
+      ]
+    : [
+        { v: "all", label: "All" },
+        { v: "both", label: "You both follow" },
+        { v: "not", label: "You don't follow" },
+      ];
 
   const watchingCards = snap.watching.map((w) => {
+    const wName = locName(esNames, w.tmdb_id, w.name);
     const p = w.watched != null && w.aired != null
       ? { watched: w.watched, aired: w.aired }
       : progressMap?.get(w.tmdb_id);
     const pct = p && p.aired > 0 ? Math.min(100, Math.round((p.watched / p.aired) * 100)) : null;
     return (
       <div key={w.tmdb_id} className="card mq-row" onClick={() => openTitle(w.tmdb_id)}>
-        <MiniArt poster={w.poster_path} name={w.name} style={{ width: 52, height: 76 }} />
+        <MiniArt poster={w.poster_path} name={wName} style={{ width: 52, height: 76 }} />
         <div className="min-w-0 flex-1">
-          <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{w.name}</div>
+          <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{wName}</div>
           <div className="dim" style={{ fontSize: 12.5 }}>
-            On S{w.season_number} · E{w.episode_number}
-            {w.last_watched_at ? <span className="mute"> · watched {relativeTime(w.last_watched_at)}</span> : null}
+            {isEs() ? "Por" : "On"} S{w.season_number} · E{w.episode_number}
+            {w.last_watched_at ? <span className="mute"> · {isEs() ? "visto" : "watched"} {relativeTime(w.last_watched_at, new Date(), dateLocale())}</span> : null}
           </div>
           {pct != null && (
             <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
@@ -329,7 +353,7 @@ export default function FriendPage() {
             {/* Watching now — the first thing you see */}
             {snap.watching.length > 0 && (
               <section className="flex flex-col gap-2.5">
-                <div className="eyebrow flex items-center gap-1.5"><Play size={13} />Watching now</div>
+                <div className="eyebrow flex items-center gap-1.5"><Play size={13} />{isEs() ? "Viendo ahora" : "Watching now"}</div>
                 <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
                   {watchingCards}
                 </div>
@@ -339,11 +363,11 @@ export default function FriendPage() {
             {/* Stats */}
             <div className="fr-stats">
               {[
-                { icon: Tv, label: "Shows", value: snap.stats.shows },
-                { icon: Eye, label: "Episodes", value: snap.stats.episodes.toLocaleString() },
-                { icon: Star, label: "Rated", value: snap.stats.rated },
-                { icon: Clock, label: "Est. watch time", value: derived ? `~${timeSpentLabel(estMinutes)}` : "—" },
-                { icon: Heart, label: "Avg. rating", value: derived?.avgRating != null ? derived.avgRating.toFixed(1) : "—" },
+                { icon: Tv, label: isEs() ? "Series" : "Shows", value: snap.stats.shows },
+                { icon: Eye, label: isEs() ? "Episodios" : "Episodes", value: snap.stats.episodes.toLocaleString() },
+                { icon: Star, label: isEs() ? "Puntuadas" : "Rated", value: snap.stats.rated },
+                { icon: Clock, label: isEs() ? "Tiempo estimado" : "Est. watch time", value: derived ? `~${timeSpentLabel(estMinutes)}` : "—" },
+                { icon: Heart, label: tr("Avg. rating"), value: derived?.avgRating != null ? derived.avgRating.toFixed(1) : "—" },
               ].map((st) => (
                 <div key={st.label} className="card p-3 flex flex-col gap-0.5">
                   <st.icon size={16} style={{ color: "var(--accent)" }} />
@@ -359,21 +383,25 @@ export default function FriendPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2" style={{ fontSize: 13.5, fontWeight: 700 }}>
                     <Heart size={15} style={{ color: "var(--accent)" }} />
-                    {derived.affinity ? `${derived.affinity.pct}% taste match` : "No taste match yet"}
+                    {derived.affinity
+                      ? `${derived.affinity.pct}% ${isEs() ? "de afinidad" : "taste match"}`
+                      : isEs() ? "Aún sin afinidad" : "No taste match yet"}
                   </div>
                   <span className="mute" style={{ fontSize: 12.5 }}>
-                    {derived.affinity ? `${derived.affinity.common} rated in common · ` : ""}
-                    {derived.sharedFollows.length} shows in common
+                    {derived.affinity ? `${derived.affinity.common} ${tr("rated in common")} · ` : ""}
+                    {derived.sharedFollows.length} {isEs() ? "series en común" : "shows in common"}
                   </span>
                 </div>
                 <div className="fr-matchbar"><i style={{ width: `${derived.affinity?.pct ?? 0}%` }} /></div>
                 {!derived.affinity && (
-                  <p className="mute" style={{ fontSize: 12, margin: 0 }}>Rate shows you've both seen and the match score appears.</p>
+                  <p className="mute" style={{ fontSize: 12, margin: 0 }}>
+                    {isEs() ? "Puntuad series que hayáis visto los dos y aparecerá la afinidad." : "Rate shows you've both seen and the match score appears."}
+                  </p>
                 )}
                 {derived.sharedGenres.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: 2 }}>
-                    <span className="mute" style={{ fontSize: 11.5 }}>Shared taste:</span>
-                    {derived.sharedGenres.map((g) => <span key={g} className="badge badge-soft" style={{ fontSize: 11 }}>{g}</span>)}
+                    <span className="mute" style={{ fontSize: 11.5 }}>{isEs() ? "Gustos compartidos:" : "Shared taste:"}</span>
+                    {derived.sharedGenres.map((g) => <span key={g} className="badge badge-soft" style={{ fontSize: 11 }}>{tGenre(g)}</span>)}
                   </div>
                 )}
               </div>
@@ -382,11 +410,11 @@ export default function FriendPage() {
             {/* Taste profile */}
             {derived && derived.topGenres.length > 0 && (
               <section className="flex flex-col gap-3">
-                <div className="eyebrow">Taste profile</div>
+                <div className="eyebrow">{tr("Taste profile")}</div>
                 <div className="card p-4 flex flex-col gap-2">
                   {derived.topGenres.slice(0, 8).map((g) => (
                     <div key={g.name} className="flex items-center gap-2.5">
-                      <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{g.name}</span>
+                      <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{tGenre(g.name)}</span>
                       <div className="fr-matchbar" style={{ flex: 1 }}><i style={{ width: `${(g.count / derived.topGenres[0].count) * 100}%` }} /></div>
                       <span className="mute" style={{ fontSize: 11.5, width: 24, textAlign: "right", flex: "0 0 auto" }}>{g.count}</span>
                     </div>
@@ -394,7 +422,7 @@ export default function FriendPage() {
                 </div>
                 {derived.topNetworks.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="mute" style={{ fontSize: 11.5 }}>Top networks:</span>
+                    <span className="mute" style={{ fontSize: 11.5 }}>{tr("Top networks:")}</span>
                     {derived.topNetworks.map((n) => (
                       <span key={n.name} className="badge badge-soft" style={{ fontSize: 11 }}>{n.name} · {n.count}</span>
                     ))}
@@ -416,21 +444,22 @@ export default function FriendPage() {
                 ))}
               </div>
               <select className="year-select" value={showSort} onChange={(e) => setShowSort(e.target.value as ShowSort)} aria-label="Sort">
-                <option value="their">Their rating</option>
-                <option value="critic">Critic rating</option>
-                <option value="air">Air date</option>
+                <option value="their">{isEs() ? "Su nota" : "Their rating"}</option>
+                <option value="critic">{isEs() ? "Nota TMDB" : "Critic rating"}</option>
+                <option value="air">{isEs() ? "Fecha de emisión" : "Air date"}</option>
               </select>
             </div>
             {browseFollows.length === 0 ? (
-              <p className="dim" style={{ fontSize: 13, margin: 0 }}>Nothing here.</p>
+              <p className="dim" style={{ fontSize: 13, margin: 0 }}>{isEs() ? "Nada por aquí." : "Nothing here."}</p>
             ) : (
               <>
-                <div className="eyebrow">{browseFollows.length} shows</div>
+                <div className="eyebrow">{browseFollows.length} {tr("shows")}</div>
                 <div className="fr-grid">
                   {browseFollows.map((f) => (
                     <FollowTile
                       key={f.tmdb_id}
                       f={f}
+                      name={locName(esNames, f.tmdb_id, f.name)}
                       theirScore={theirScoreByTmdb.get(f.tmdb_id)}
                       progress={progressMap?.get(f.tmdb_id)}
                       added={myFollowIds.has(f.tmdb_id)}
@@ -439,7 +468,11 @@ export default function FriendPage() {
                     />
                   ))}
                 </div>
-                <span className="mute" style={{ fontSize: 11.5 }}>Ring = you follow it too · <Plus size={11} style={{ verticalAlign: "-1px" }} /> adds to your library · bar = their progress.</span>
+                <span className="mute" style={{ fontSize: 11.5 }}>
+                  {isEs()
+                    ? <>Anillo = tú también la sigues · <Plus size={11} style={{ verticalAlign: "-1px" }} /> la añade a tu biblioteca · barra = su progreso.</>
+                    : <>Ring = you follow it too · <Plus size={11} style={{ verticalAlign: "-1px" }} /> adds to your library · bar = their progress.</>}
+                </span>
               </>
             )}
           </section>
@@ -447,10 +480,10 @@ export default function FriendPage() {
 
         {section === "activity" && (
           <section className="flex flex-col gap-1.5">
-            <div className="eyebrow flex items-center gap-1.5"><Activity size={13} />Recent activity</div>
+            <div className="eyebrow flex items-center gap-1.5"><Activity size={13} />{isEs() ? "Actividad reciente" : "Recent activity"}</div>
             {activity.length === 0 ? (
               <div className="card" style={{ padding: "24px" }}>
-                <p className="dim" style={{ margin: 0, fontSize: 14 }}>No activity yet.</p>
+                <p className="dim" style={{ margin: 0, fontSize: 14 }}>{isEs() ? "Aún sin actividad." : "No activity yet."}</p>
               </div>
             ) : (
               <div className="card" style={{ padding: 6 }}>
@@ -464,21 +497,21 @@ export default function FriendPage() {
                     <div className="min-w-0 flex-1" style={{ fontSize: 13.5 }}>
                       {a.kind === "watched" ? (
                         <>
-                          <span className="mute">Watched </span>
+                          <span className="mute">{isEs() ? "Vio " : "Watched "}</span>
                           {(a.count ?? 1) > 1
-                            ? <><b style={{ fontWeight: 700 }}>{a.count} episodes</b><span className="mute"> of </span></>
-                            : <><b style={{ fontWeight: 700 }}>S{a.season_number} · E{a.episode_number}</b><span className="mute"> of </span></>}
-                          <b style={{ fontWeight: 700 }}>{a.name}</b>
+                            ? <><b style={{ fontWeight: 700 }}>{a.count} {tr("episodes")}</b><span className="mute"> {isEs() ? "de" : "of"} </span></>
+                            : <><b style={{ fontWeight: 700 }}>S{a.season_number} · E{a.episode_number}</b><span className="mute"> {isEs() ? "de" : "of"} </span></>}
+                          <b style={{ fontWeight: 700 }}>{locName(esNames, a.tmdb_id, a.name)}</b>
                         </>
                       ) : (
                         <>
-                          <span className="mute">{a.kind === "rated" ? "Rated" : "Added"} </span>
-                          <b style={{ fontWeight: 700 }}>{a.name}</b>
+                          <span className="mute">{a.kind === "rated" ? (isEs() ? "Puntuó" : "Rated") : (isEs() ? "Añadió" : "Added")} </span>
+                          <b style={{ fontWeight: 700 }}>{locName(esNames, a.tmdb_id, a.name)}</b>
                           {a.kind === "rated" && a.score != null && <span className="mute"> · {a.score}/10</span>}
                         </>
                       )}
                     </div>
-                    <span className="mute" style={{ fontSize: 12, flex: "0 0 auto" }}>{relativeTime(a.at)}</span>
+                    <span className="mute" style={{ fontSize: 12, flex: "0 0 auto" }}>{relativeTime(a.at, new Date(), dateLocale())}</span>
                   </div>
                 ))}
               </div>
@@ -490,13 +523,13 @@ export default function FriendPage() {
           <>
             {derived && derived.topRated.length > 0 && (
               <section className="flex flex-col gap-2.5">
-                <div className="eyebrow">Their top ratings</div>
+                <div className="eyebrow">{isEs() ? "Sus mejores notas" : "Their top ratings"}</div>
                 <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
                   {derived.topRated.map((r) => (
                     <div key={r.tmdb_id} className="card mq-row" onClick={() => openTitle(r.tmdb_id)}>
-                      <MiniArt poster={r.poster_path} name={r.name} />
+                      <MiniArt poster={r.poster_path} name={locName(esNames, r.tmdb_id, r.name)} />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{r.name}</div>
+                        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{locName(esNames, r.tmdb_id, r.name)}</div>
                         <Stars score={r.score} size={12} />
                       </div>
                       <span className="badge badge-soft" style={{ fontWeight: 800 }}>{r.score}/10</span>
@@ -508,18 +541,18 @@ export default function FriendPage() {
 
             {derived && derived.coRated.length > 0 && (
               <div className="flex flex-col gap-2.5">
-                <div className="eyebrow">You both rated · {derived.coRated.length}</div>
+                <div className="eyebrow">{isEs() ? "Puntuadas por los dos" : "You both rated"} · {derived.coRated.length}</div>
                 <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
                   {derived.coRated.slice(0, 8).map((c) => (
                     <div key={c.tmdb_id} className="card mq-row" onClick={() => openTitle(c.tmdb_id)}>
-                      <MiniArt poster={c.poster_path} name={c.name} />
+                      <MiniArt poster={c.poster_path} name={locName(esNames, c.tmdb_id, c.name)} />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{c.name}</div>
+                        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{locName(esNames, c.tmdb_id, c.name)}</div>
                         <div className="dim" style={{ fontSize: 12.5 }}>{agreementLabel(c.score, c.mine)}</div>
                       </div>
                       <div className="flex items-center gap-1.5" style={{ flex: "0 0 auto" }}>
-                        <span className="badge badge-soft" title="Their score" style={{ fontWeight: 800 }}>Them {c.score}</span>
-                        <span className="badge badge-soft" title="Your score" style={{ fontWeight: 800 }}>You {c.mine}</span>
+                        <span className="badge badge-soft" title="Their score" style={{ fontWeight: 800 }}>{tr("Them")} {c.score}</span>
+                        <span className="badge badge-soft" title="Your score" style={{ fontWeight: 800 }}>{tr("You")} {c.mine}</span>
                       </div>
                     </div>
                   ))}
@@ -528,7 +561,7 @@ export default function FriendPage() {
             )}
             {derived && derived.topRated.length === 0 && derived.coRated.length === 0 && (
               <div className="card" style={{ padding: "24px" }}>
-                <p className="dim" style={{ margin: 0, fontSize: 14 }}>No ratings yet.</p>
+                <p className="dim" style={{ margin: 0, fontSize: 14 }}>{isEs() ? "Aún sin notas." : "No ratings yet."}</p>
               </div>
             )}
           </>
