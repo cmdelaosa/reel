@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Bell, Download, Mail, RotateCcw, Settings as SettingsIcon, Upload, X } from "lucide-react";
+// Sliders, not lucide's Settings gear: this has to match the shell button that
+// opens the sheet, or the icon changes under you on click.
+import { Bell, Download, Mail, RotateCcw, Sliders as SettingsIcon, Upload, X } from "lucide-react";
 import { useFocusTrap } from "@/ui/useFocusTrap";
 import {
   useSettings, setSetting, resetSettings,

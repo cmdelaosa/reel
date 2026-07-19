@@ -376,13 +376,19 @@
 }
 @media (prefers-reduced-motion: reduce) { .check.pop { animation: none; } }
 
-/* Profile header */
-.profile-cover {
-  height: 64px;
-  background: linear-gradient(105deg,
-    color-mix(in srgb, var(--accent) 80%, transparent),
-    color-mix(in srgb, var(--accent-2) 45%, transparent) 45%,
-    transparent 85%);
+/* Profile header — the same hue wash the friend header uses, over the whole
+   block rather than a 64px band. The band faded to transparent horizontally but
+   stopped dead vertically, and one dissolved edge against one cut edge reads as
+   a rendering fault rather than a design.
+   background-image only, so the card keeps its own surface colour underneath and
+   the wash can fade out into it. No backdrop-filter: this sits in the layout, so
+   there is nothing behind it to frost — the blur belongs to .fr-hero, which
+   floats. */
+.profile-head {
+  background-image: linear-gradient(105deg,
+    hsl(var(--fr-hue) 62% 40% / .55),
+    hsl(calc(var(--fr-hue) + 50) 65% 30% / .28) 42%,
+    transparent 78%);
 }
 .profile-avatar {
   width: 88px;
