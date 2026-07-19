@@ -36,10 +36,10 @@ jobs:
         run: |
           SR=$(supabase status -o env | grep '^SERVICE_ROLE_KEY=' | cut -d= -f2- | tr -d '"')
           API=http://127.0.0.1:54321
-          UID=$(curl -s -X POST $API/auth/v1/admin/users -H "apikey: $SR" -H "Authorization: Bearer $SR" -H "Content-Type: application/json" \
+          USER_ID=$(curl -s -X POST $API/auth/v1/admin/users -H "apikey: $SR" -H "Authorization: Bearer $SR" -H "Content-Type: application/json" \
             -d '{"email":"e2e@example.com","password":"password123","email_confirm":true,"user_metadata":{"name":"E2E Tester"}}' | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
           docker exec -i $(docker ps --format '{{.Names}}' | grep supabase_db) psql -U postgres -d postgres -c \
-            "insert into public.invites(code, used_by) values ('E2E-SEED', '$UID'); update public.profiles set handle='e2etester', display_name='E2E Tester' where id='$UID';"
+            "insert into public.invites(code, used_by) values ('E2E-SEED', '$USER_ID'); update public.profiles set handle='e2etester', display_name='E2E Tester' where id='$USER_ID';"
 
       - uses: actions/setup-node@v4
         with:
@@ -59,6 +59,10 @@ jobs:
         run: |
           export E2E_ANON_KEY=$(cd .. && supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '"')
           export E2E_SERVICE_ROLE_KEY=$(cd .. && supabase status -o env | grep '^SERVICE_ROLE_KEY=' | cut -d= -f2- | tr -d '"')
+          # Playwright's webServer boots `npm run dev`, and src/lib/supabase.ts
+          # throws at import without these. No .env.local exists on CI.
+          export VITE_SUPABASE_URL=http://127.0.0.1:54321
+          export VITE_SUPABASE_ANON_KEY=$E2E_ANON_KEY
           npm run test:e2e
 
       - uses: actions/upload-artifact@v4
