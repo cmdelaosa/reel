@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { User } from "lucide-react";
+import { User, X } from "lucide-react";
+import { useFocusTrap } from "@/ui/useFocusTrap";
 import { getPerson, tmdbImg } from "@/lib/tmdb";
 import { useLibrary } from "@/lib/library";
 import { useMyRatings } from "@/lib/ratings";
@@ -97,6 +98,9 @@ export default function PersonPage() {
 
   const person = data?.person;
   const photo = tmdbImg(person?.profile_path, "h632");
+  // The bio stays clamped in the card; the full text opens in a dialog instead of
+  // pushing the header taller — a long biography doubled the card's height and
+  // shoved the credits below the fold.
   const [bioOpen, setBioOpen] = useState(false);
   const [bioClamped, setBioClamped] = useState(false);
 
@@ -155,17 +159,17 @@ export default function PersonPage() {
                   <p
                     className="dim"
                     // The toggle only shows when the clamp actually cut something.
-                    ref={(el) => { if (el && !bioOpen) setBioClamped(el.scrollHeight > el.clientHeight + 1); }}
+                    ref={(el) => { if (el) setBioClamped(el.scrollHeight > el.clientHeight + 1); }}
                     style={{
                       fontSize: 13.5, lineHeight: 1.6, margin: 0, whiteSpace: "pre-line",
-                      ...(bioOpen ? {} : { display: "-webkit-box", WebkitLineClamp: 6, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
+                      display: "-webkit-box", WebkitLineClamp: 6, WebkitBoxOrient: "vertical" as const, overflow: "hidden",
                     }}
                   >
                     {bio}
                   </p>
-                  {(bioClamped || bioOpen) && (
-                    <button className="btn btn-ghost btn-sm" style={{ marginTop: 6, marginLeft: -10 }} onClick={() => setBioOpen((v) => !v)}>
-                      {bioOpen ? tr("Show less") : tr("Read more")}
+                  {bioClamped && (
+                    <button className="btn btn-ghost btn-sm" style={{ marginTop: 6, marginLeft: -10 }} onClick={() => setBioOpen(true)}>
+                      {tr("Read more")}
                     </button>
                   )}
                 </div>
@@ -185,8 +189,59 @@ export default function PersonPage() {
               ))}
             </div>
           </section>
+
+          {bioOpen && bio && (
+            <BioDialog name={person.name} bio={bio} onClose={() => setBioOpen(false)} />
+          )}
         </>
       )}
     </div>
+  );
+}
+
+/** Full biography in a dialog. Same idiom as the other modals in the app:
+ *  .backdrop + .sheet-center, focus trapped, Escape to close. */
+function BioDialog({ name, bio, onClose }: { name: string; bio: string; onClose: () => void }) {
+  const trapRef = useFocusTrap<HTMLDivElement>();
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  return (
+    <>
+      <div className="backdrop" onClick={onClose} />
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={name}
+        tabIndex={-1}
+        className="sheet-center fixed z-[70] card flex flex-col"
+        style={{
+          left: "50%", top: "50%", transform: "translate(-50%,-50%)",
+          width: "min(620px, 92vw)", maxHeight: "82vh", borderRadius: "var(--r-xl)",
+        }}
+      >
+        <div
+          className="flex items-center justify-between gap-3 px-5 py-4"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          <div className="truncate" style={{ fontWeight: 800, fontSize: 16 }}>{name}</div>
+          <button className="btn btn-ghost btn-icon" aria-label={tr("Close")} onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+        {/* The dialog scrolls, not the page behind it — a long bio would otherwise
+            grow the card past the viewport again, which is the thing being fixed. */}
+        <div className="px-5 py-4" style={{ overflowY: "auto" }}>
+          <p className="dim" style={{ fontSize: 14, lineHeight: 1.7, margin: 0, whiteSpace: "pre-line" }}>
+            {bio}
+          </p>
+        </div>
+      </div>
+    </>
   );
 }
