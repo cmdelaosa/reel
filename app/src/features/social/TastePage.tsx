@@ -5,7 +5,7 @@ import { useTaste, type TasteFriend, type TasteTitle } from "@/lib/taste";
 import { useOpenTitle } from "@/lib/useOpenTitle";
 import { isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { FriendAvatar, FriendStack } from "@/ui/FriendAvatar";
-import { usePager } from "@/ui/Pager";
+import { useShowMore } from "@/ui/ShowMore";
 import { posterBg } from "@/ui/posterBg";
 
 /* Taste match (route /friends/taste) — the aggregate rating comparison against
@@ -88,9 +88,9 @@ export default function TastePage() {
   const navigate = useNavigate();
   const open = useOpenTitle();
 
-  const ranked = usePager(taste.ranked, 12);
-  const clash = usePager(taste.clash, 12);
-  const agree = usePager(taste.agree, 12);
+  const ranked = useShowMore(taste.ranked, 12);
+  const clash = useShowMore(taste.clash, 12);
+  const agree = useShowMore(taste.agree, 12);
 
   return (
     <div className="screen mq-page">
@@ -109,10 +109,7 @@ export default function TastePage() {
       ) : (
         <>
           <section className="flex flex-col gap-2.5">
-            <div className="flex items-center">
-              <div className="eyebrow flex items-center gap-1.5"><Heart size={13} />{tr("Affinity ranking")}</div>
-              {ranked.pager}
-            </div>
+            <div className="eyebrow flex items-center gap-1.5"><Heart size={13} />{tr("Affinity ranking")}</div>
             {taste.ranked.length === 0 ? (
               <div className="card" style={{ padding: "24px" }}>
                 <p className="dim" style={{ margin: 0, fontSize: 14 }}>{tr("None of your friends rated a show you rated — yet. Nudge them to score something.")}</p>
@@ -120,10 +117,11 @@ export default function TastePage() {
             ) : (
               <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
                 {ranked.shown.map((f, i) => (
-                  <FriendRow key={f.id} rank={ranked.start + i + 1} f={f} onOpen={() => navigate(`/friend/${f.id}`)} />
+                  <FriendRow key={f.id} rank={i + 1} f={f} onOpen={() => navigate(`/friend/${f.id}`)} />
                 ))}
               </div>
             )}
+            {ranked.more}
             {taste.unranked.length > 0 && (
               <p className="mute" style={{ fontSize: 12.5, margin: 0 }}>
                 {isEs()
@@ -140,25 +138,21 @@ export default function TastePage() {
 
           {taste.clash.length > 0 && (
             <section className="flex flex-col gap-2.5">
-              <div className="flex items-center">
-                <div className="eyebrow flex items-center gap-1.5"><Flame size={13} />{tr("Where you clash")}</div>
-                {clash.pager}
-              </div>
+              <div className="eyebrow flex items-center gap-1.5"><Flame size={13} />{tr("Where you clash")}</div>
               <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
                 {clash.shown.map((t) => <TitleRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
               </div>
+              {clash.more}
             </section>
           )}
 
           {taste.agree.length > 0 && (
             <section className="flex flex-col gap-2.5">
-              <div className="flex items-center">
-                <div className="eyebrow flex items-center gap-1.5"><ThumbsUp size={13} />{tr("Where you agree")}</div>
-                {agree.pager}
-              </div>
+              <div className="eyebrow flex items-center gap-1.5"><ThumbsUp size={13} />{tr("Where you agree")}</div>
               <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
                 {agree.shown.map((t) => <TitleRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
               </div>
+              {agree.more}
             </section>
           )}
 

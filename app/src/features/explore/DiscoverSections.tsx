@@ -41,7 +41,7 @@ function TitlePoster({ t, rank, score, onOpen, onIgnore }: { t: TitleRow; rank?:
         <button
           className="btn btn-icon badge-glass absolute disc-hide"
           style={{ top: 8, right: 8, color: "#fff", zIndex: 3 }}
-          title="Not interested — hide from suggestions"
+          title={tr("Ignore — hide from suggestions")}
           aria-label={`Hide ${t.name} from suggestions`}
           onClick={(e) => { e.stopPropagation(); onIgnore(); }}
         >
@@ -162,7 +162,7 @@ function TitleListRow({ t, score, friends, friendCount, onOpen, onIgnore }: { t:
       </div>
       <button
         className="btn btn-icon"
-        title="Not interested — hide from suggestions"
+        title={tr("Ignore — hide from suggestions")}
         aria-label={`Hide ${t.name} from suggestions`}
         onClick={(e) => { e.stopPropagation(); onIgnore(); }}
       >
@@ -241,6 +241,48 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "rated", label: "Top rated" },
   { key: "friends", label: "Popular with friends" },
 ]; // labels run through tr() at render
+
+/* Phone shape of the pool tabs — CSS swaps this and the segmented row on the
+   .disc-panel breakpoint. A dropdown rather than a scrolling strip because the
+   strip put the third pool past the edge with nothing saying it existed.
+   Escape and outside-click close it, like the Filters popover next to it. */
+function TabMenu({ tab, onPick }: { tab: Tab; onPick: (t: Tab) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const current = TABS.find((t) => t.key === tab) ?? TABS[0];
+  return (
+    <div className="disc-tabmenu" ref={ref}>
+      <button className="chip" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu">
+        {tr(current.label)}
+        <ChevronDown size={14} />
+      </button>
+      {open && (
+        <div className="filter-menu" role="menu" aria-label={tr("Discover")}>
+          {TABS.map((tb) => (
+            <button
+              key={tb.key}
+              role="menuitemradio"
+              aria-checked={tab === tb.key}
+              className="filter-opt"
+              onClick={() => { onPick(tb.key); setOpen(false); }}
+            >
+              {tr(tb.label)}
+              {tab === tb.key && <Check size={14} className="filter-opt-check" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* Normalised discover card: a title plus the per-tab extras (TMDB score on the
    Top-rated tab, the friend stack on the With-friends tab). */
@@ -403,6 +445,7 @@ export function DiscoverSections() {
               </div>
             ))}
           </div>
+          <TabMenu tab={tab} onPick={goTab} />
           <div className="disc-tools">
             <div className="disc-filters" ref={filtersRef}>
               <button
@@ -488,7 +531,7 @@ export function DiscoverSections() {
         )}
 
         {shown < items.length && (
-          <div className="disc-more">
+          <div className="show-more">
             <button className="btn btn-outline" onClick={() => setShown((s) => s + PAGE_SIZE)}>
               {tr("Show more")}
             </button>
@@ -518,7 +561,7 @@ export function DiscoverSections() {
                       <button
                         className="btn btn-icon badge-glass absolute"
                         style={{ top: 8, right: 8, color: "#fff", zIndex: 3 }}
-                        title="Restore to suggestions"
+                        title={tr("Restore to suggestions")}
                         aria-label={`Restore ${t.name} to suggestions`}
                         onClick={(e) => { e.stopPropagation(); unignore.mutate(t.titleId); }}
                       >

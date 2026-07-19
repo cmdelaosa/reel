@@ -125,8 +125,11 @@ const DICT: Record<string, string> = {
   "Resume": "Reanudar",
   "Notify me": "Avisarme",
   "Tracking": "Siguiendo",
-  "Not interested": "No me interesa",
+  "Ignore": "Ignorar",
   "Un-ignore": "Restaurar",
+  "Ignore — hide from suggestions": "Ignorar — ocultar de las sugerencias",
+  "Un-ignore — show in suggestions again": "Restaurar — volver a sugerirla",
+  "Restore to suggestions": "Restaurar a las sugerencias",
   "Marking…": "Marcando…",
   "No episodes available yet.": "Aún no hay episodios disponibles.",
   "Mark earlier episodes as seen?": "¿Marcar los episodios anteriores como vistos?",
@@ -187,20 +190,13 @@ const DICT: Record<string, string> = {
   "What to watch next, score comparisons, shared stinkers": "Qué ver, comparativa de notas y los truños compartidos",
   "See how your ratings line up with your friends'": "Mira cómo encajan tus notas con las de tus amigos",
   "Closest match:": "Mayor afinidad:",
-  "Best rated by friends": "Lo mejor valorado por amigos",
-  "Their highest-scored shows": "Sus series con mejor nota",
   "Recommended by friends": "Recomendadas por amigos",
-  "Shows you haven't started, ranked by your friends' average score":
-    "Series que no has empezado, ordenadas por la nota media de tus amigos",
   "Nothing to recommend — you've seen everything your friends rated.":
     "Nada que recomendar — has visto todo lo que tus amigos han puntuado.",
   "Your scores vs theirs": "Tus notas contra las suyas",
-  "Every show you and at least one friend both rated": "Series que habéis puntuado tú y al menos un amigo",
   "No overlap yet — rate a few shows your friends also scored.":
     "Sin coincidencias aún — puntúa series que tus amigos también hayan puntuado.",
   "Worst watched together": "Lo peor visto en grupo",
-  "Lowest group averages among shows two or more of you scored":
-    "Las peores medias del grupo entre series puntuadas por dos o más",
   "No shared stinkers yet — lucky you.": "Aún no hay truños compartidos — suerte la tuya.",
   "The friend-group scoreboard — what to watch next, how your scores compare, and the shows everyone regrets.":
     "El marcador del grupo — qué ver, cómo comparan tus notas y las series de las que todos os arrepentís.",
@@ -217,6 +213,7 @@ const DICT: Record<string, string> = {
   "Search shows, genres, networks…": "Busca series, géneros, cadenas…",
   "Trending this week": "Tendencias de la semana",
   "What everyone's watching, via TMDB": "Lo que ve todo el mundo, vía TMDB",
+  "Discover": "Descubrir",
   "Popular now": "Popular ahora",
   "Popular with friends": "Popular entre amigos",
   "Most popular for the selected years": "Lo más popular de los años elegidos",

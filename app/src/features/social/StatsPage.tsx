@@ -9,7 +9,7 @@ import { useOpenTitle } from "@/lib/useOpenTitle";
 import { locName, t as tr, useEsNames } from "@/lib/i18n";
 import { tmdbImg } from "@/lib/tmdb";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
-import { usePager } from "@/ui/Pager";
+import { useShowMore } from "@/ui/ShowMore";
 import { posterBg } from "@/ui/posterBg";
 
 /* Group stats (route /friends/stats) — the friend-group scoreboard Krauser asked
@@ -127,19 +127,14 @@ function StatRow({ t, groupAvg, onOpen }: { t: StatTitle; groupAvg?: number; onO
   );
 }
 
-function Section({ icon: Icon, title, sub, pager, children }: {
-  icon: typeof Star; title: string; sub: string; pager?: React.ReactNode; children: React.ReactNode;
+function Section({ icon: Icon, title, more, children }: {
+  icon: typeof Star; title: string; more?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-2.5">
-      <div className="flex items-center gap-3">
-        <div className="min-w-0">
-          <div className="eyebrow flex items-center gap-1.5"><Icon size={13} />{title}</div>
-          <p className="mute" style={{ fontSize: 12.5, margin: "3px 0 0" }}>{sub}</p>
-        </div>
-        {pager}
-      </div>
+      <div className="eyebrow flex items-center gap-1.5"><Icon size={13} />{title}</div>
       {children}
+      {more}
     </section>
   );
 }
@@ -150,9 +145,9 @@ export default function StatsPage() {
   const stats = useStats();
   const open = useOpenTitle();
 
-  const recommended = usePager(stats.recommended, 12);
-  const compared = usePager(stats.compared, 12);
-  const worst = usePager(stats.worst, 12);
+  const recommended = useShowMore(stats.recommended, 12);
+  const compared = useShowMore(stats.compared, 12);
+  const worst = useShowMore(stats.worst, 12);
 
   return (
     <div className="screen mq-page">
@@ -166,7 +161,7 @@ export default function StatsPage() {
         </div>
       ) : (
         <>
-          <Section icon={TrendingUp} title={tr("Recommended by friends")} sub={tr("Shows you haven't started, ranked by your friends' average score")} pager={recommended.pager}>
+          <Section icon={TrendingUp} title={tr("Recommended by friends")} more={recommended.more}>
             {stats.recommended.length === 0 ? (
               <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("Nothing to recommend — you've seen everything your friends rated.")}</p>
             ) : (
@@ -176,7 +171,7 @@ export default function StatsPage() {
             )}
           </Section>
 
-          <Section icon={Award} title={tr("Your scores vs theirs")} sub={tr("Every show you and at least one friend both rated")} pager={compared.pager}>
+          <Section icon={Award} title={tr("Your scores vs theirs")} more={compared.more}>
             {stats.compared.length === 0 ? (
               <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No overlap yet — rate a few shows your friends also scored.")}</p>
             ) : (
@@ -186,7 +181,7 @@ export default function StatsPage() {
             )}
           </Section>
 
-          <Section icon={ThumbsDown} title={tr("Worst watched together")} sub={tr("Lowest group averages among shows two or more of you scored")} pager={worst.pager}>
+          <Section icon={ThumbsDown} title={tr("Worst watched together")} more={worst.more}>
             {stats.worst.length === 0 ? (
               <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No shared stinkers yet — lucky you.")}</p>
             ) : (

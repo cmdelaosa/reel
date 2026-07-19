@@ -19,6 +19,17 @@
 
 .hairline { border: 1px solid var(--border); }
 
+/* .btn, .chip and .seg all keep their label on one line (white-space: nowrap)
+   and none of them said what happens when the box ends up narrower than that
+   line — so with overflow: visible the label painted straight through the
+   border and "Not interested" sat on top of the next button.
+   min-content is the fix: the control sizes to its label, and a row that can't
+   hold them all wraps or scrolls. overflow is only the backstop for a parent
+   that overrides even that, and the two are not separable — a non-visible
+   overflow resolves a flex item's automatic minimum to 0, so on its own it
+   would squeeze every chip in a scroll row instead. */
+.btn, .chip, .seg { min-width: min-content; overflow: hidden; }
+
 /* Buttons */
 /* min-height, not vertical padding: the height then holds whatever the button
    contains, so a label-only button and one with a 16px icon are the same size.
@@ -161,8 +172,27 @@
 @keyframes disc-sheet-up { from { opacity: 0; transform: translateY(28px); } }
 @media (prefers-reduced-motion: reduce) { .disc-panel { animation: none; } }
 
-/* "Show more" + progress counter under the discover grid */
-.disc-more { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 2px; }
+/* Pool tabs, two shapes on the .disc-panel breakpoint. ≥768px the segmented
+   row. Below it a dropdown: the row scrolled, which left the third tab past
+   the edge with nothing on screen saying it was there, so people read the tab
+   list as two long. The trigger names the pool you are on. */
+.disc-tabmenu { position: relative; display: none; flex: 0 1 auto; min-width: 0; }
+.disc-tabmenu > .chip { max-width: 100%; }
+.disc-tabmenu > .chip svg { flex: 0 0 auto; }
+@media (max-width: 767px) {
+  /* .segmented.scroll sets its own display further down the file, so this needs
+     the extra class to outrank it — a media query buys no specificity. */
+  .disc-toolbar > .segmented.scroll { display: none; }
+  .disc-tabmenu { display: block; }
+}
+/* Single-choice sibling of the checkbox .filter-opt: a button, so it is one
+   tab stop and fires on Enter/Space like the menu it lives in. */
+button.filter-opt { width: 100%; border: 0; background: none; font: inherit; text-align: left; }
+.filter-opt-check { margin-left: auto; flex: 0 0 auto; color: var(--accent); }
+
+/* "Show more" under a grid — the one paging idiom, shared by Discover and the
+   friends/taste/stats sections (see useShowMore). */
+.show-more { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 2px; }
 
 /* Hide-from-suggestions: hover-reveal where hover exists; always on for touch */
 @media (hover: hover) and (pointer: fine) {
@@ -223,6 +253,11 @@
    (used for shows with many seasons). */
 .segmented.scroll { display: flex; max-width: 100%; overflow-x: auto; }
 .segmented.scroll .seg { flex: 0 0 auto; min-width: var(--ctl-h-sm); white-space: nowrap; }
+/* Wrapping variant, for option pickers in a form rather than tab strips: every
+   choice has to be on screen. Four theme names do not fit one phone-width row,
+   and scrolling hid "Light" behind a swipe nobody knew was there. */
+.segmented.wrap { display: flex; flex-wrap: wrap; }
+.segmented.wrap .seg { flex: 0 0 auto; white-space: nowrap; }
 .seg {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: var(--ctl-h-sm); padding: 0 14px;
@@ -311,8 +346,11 @@
 }
 
 /* Detail sheet — actions on one balanced line, ratings on their own line */
-.action-row { display: flex; gap: 10px; }
-.action-row .btn { flex: 1 1 0; min-width: 0; padding-left: 10px; padding-right: 10px; }
+/* Equal-width buttons while they fit — flex-basis 0 with equal grow, floored at
+   each button's own label by the shared .btn min-width. Wrap gives the row that
+   can no longer hold them all a second line instead of a squeezed one. */
+.action-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.action-row .btn { flex: 1 1 0; padding-left: 10px; padding-right: 10px; }
 .action-row .btn svg { flex: 0 0 auto; }
 @media (max-width: 640px) {
   .action-row { gap: 8px; }

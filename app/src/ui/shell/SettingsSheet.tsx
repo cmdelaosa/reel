@@ -31,7 +31,7 @@ function Seg<T extends string>({ value, options, onPick }: {
   onPick: (v: T) => void;
 }) {
   return (
-    <div className="segmented scroll no-scrollbar">
+    <div className="segmented wrap">
       {options.map((o) => (
         <div key={o.v} className={`seg ${value === o.v ? "seg-active" : ""}`} onClick={() => onPick(o.v)}>
           {o.label}

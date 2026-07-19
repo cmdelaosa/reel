@@ -4,7 +4,7 @@ import { relativeTime } from "@/domain/time";
 import { tmdbImg } from "@/lib/tmdb";
 import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
 import { FriendAvatar } from "@/ui/FriendAvatar";
-import { usePager } from "@/ui/Pager";
+import { useShowMore } from "@/ui/ShowMore";
 import { posterBg } from "@/ui/posterBg";
 
 /* Friend activity feed (P4-C4) — every episode watched, plus adds and ratings.
@@ -82,9 +82,9 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
   const navigate = useNavigate();
   const esNames = useEsNames();
 
-  // 10 events per page, arrow through up to 30.
+  // 10 events revealed at a time, up to 30.
   const rows = groupWatched(items).slice(0, 30);
-  const { shown, pager } = usePager(rows, 10);
+  const { shown, more } = useShowMore(rows, 10);
 
   if (!enabled || items.length === 0) return null;
 
@@ -102,7 +102,6 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
         <div>
           <h2 className="section-title">{isEs() ? "Actividad de amigos" : "Friend activity"}</h2>
         </div>
-        {pager}
       </div>
       <div className="card" style={{ padding: 6 }}>
         {shown.map((r) => {
@@ -115,7 +114,9 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
                 <FriendAvatar f={{ id: a.friend_id, name: a.friend_name, avatarUrl: a.friend_avatar }} size={38} />
               </span>
               <div className="flex-1 min-w-0">
-                <div style={{ fontSize: 13.5 }} className="truncate">
+                {/* Two lines, not one: the name and verb eat the whole line on a
+                    phone, and truncating left the show itself as "Ana Ruiz rated B…" */}
+                <div style={{ fontSize: 13.5 }} className="line-clamp-2">
                   <b style={{ fontWeight: 700 }}>{a.friend_name}</b> {phrase(r, titleName)}
                 </div>
                 <div className="mute" style={{ fontSize: 11.5 }}>
@@ -132,6 +133,7 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
           );
         })}
       </div>
+      {more}
     </section>
   );
 }

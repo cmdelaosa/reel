@@ -71,7 +71,7 @@ function CollectionPoster({ t, onOpen, onIgnore }: { t: TitleRow; onOpen: () => 
       <button
         className="btn btn-icon badge-glass absolute"
         style={{ top: 8, right: 8, color: "#fff" }}
-        title="Not interested — hide from suggestions"
+        title={tr("Ignore — hide from suggestions")}
         aria-label={`Hide ${name} from suggestions`}
         onClick={(e) => { e.stopPropagation(); onIgnore(); }}
       >
