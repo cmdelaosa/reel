@@ -56,7 +56,14 @@ function ShowRow({ s, status, myScore, onOpen }: {
             {STATUS_LABEL[status]?.[lang] ?? status}
           </span>
         ) : (
-          <span className="badge badge-soft mute">{tr("Not in your library")}</span>
+          /* "Not in your library" / "No está en tu biblioteca" was 175px of a
+             328px row, which left the show title 47px — every credit you don't
+             follow rendered as "Uncl…". Two words in the same family as the
+             status labels beside it ("Not started", "Not following") fit the
+             same column as those do, so the title gets the width back at every
+             size rather than only under a breakpoint, and nothing is lost: the
+             app already calls these "the shows you follow". */
+          <span className="badge badge-soft mute">{tr("Not following")}</span>
         )}
         {myScore != null && <span className="mq-score" style={{ fontSize: 15 }}>{myScore}<span>/10</span></span>}
       </div>

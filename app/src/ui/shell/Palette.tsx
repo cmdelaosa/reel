@@ -148,9 +148,9 @@ export function Palette({ onClose, onOpen }: {
           })}
         </div>
         <div className="mq-pal-foot">
-          <span><kbd className="mq-kbd">↑↓</kbd> navigate</span>
-          <span><kbd className="mq-kbd">↵</kbd> open</span>
-          <span className="mute">TMDB via Reel proxy</span>
+          <span><kbd className="mq-kbd">↑↓</kbd> {tr("navigate")}</span>
+          <span><kbd className="mq-kbd">↵</kbd> {tr("open")}</span>
+          <span className="mute">{tr("TMDB via Reel proxy")}</span>
         </div>
       </div>
     </>

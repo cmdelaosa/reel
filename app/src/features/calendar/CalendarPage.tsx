@@ -6,7 +6,7 @@ import { useCalendarFeed, type FeedRow } from "@/lib/calendar";
 import { useLibrary, useToggleNotify, type LibraryShow } from "@/lib/library";
 import { useUndoMarks } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
-import { NetworkLogo } from "@/ui";
+import { NetworkLogo, TabMenu } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useOpenTitle } from "@/lib/useOpenTitle";
 import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
@@ -20,20 +20,25 @@ import { CalEpGroup } from "@/features/calendar/CalEpGroup";
 
 export default function CalendarPage() {
   const [view, setView] = useState<"shows" | "returning" | "new">("shows");
-  const tabs: [typeof view, string][] = [
-    ["shows", tr("My shows")],
-    ["returning", isEs() ? "Series que regresan" : "Returning series"],
-    ["new", tr("New & announced")],
+  const tabs: { key: typeof view; label: string }[] = [
+    { key: "shows", label: tr("My shows") },
+    { key: "returning", label: isEs() ? "Series que regresan" : "Returning series" },
+    { key: "new", label: tr("New & announced") },
   ];
 
   return (
     <div className="screen mq-page cal-page">
       <div className="cal-tabsbar">
         <div className="segmented scroll no-scrollbar">
-          {tabs.map(([v, label]) => (
-            <div key={v} className={`seg ${view === v ? "seg-active" : ""}`} onClick={() => setView(v)}>{label}</div>
+          {tabs.map((t) => (
+            <div key={t.key} className={`seg ${view === t.key ? "seg-active" : ""}`} onClick={() => setView(t.key)}>{t.label}</div>
           ))}
         </div>
+        {/* Phone shape of the same strip: "Nuevas y anunciadas" ran off the edge
+            of a 360px viewport with 84 of its 162px on screen. `floating` makes
+            the trigger the blurred pill itself, since this bar has no layout of
+            its own to sit in — it hovers over the feed. */}
+        <TabMenu value={view} options={tabs} onPick={setView} menuLabel={tr("Calendar")} align="center" floating />
       </div>
 
       {view === "shows" ? <MyShowsFeed /> : <PremieresList kind={view} />}

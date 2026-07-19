@@ -100,6 +100,7 @@ const DICT: Record<string, string> = {
   "Finished": "Terminadas",
   "Stopped": "Abandonadas",
   "All": "Todas",
+  "Sort": "Ordenar", // aria-label on the phone dropdown that replaces the sort strip
   "Last watched": "Último visto",
   "Last released": "Último emitido",
   "A–Z": "A–Z",
@@ -268,10 +269,15 @@ const DICT: Record<string, string> = {
   "No results.": "Sin resultados.",
   "Searching…": "Buscando…",
   "Type to search TMDB.": "Escribe para buscar en TMDB.",
+  "navigate": "navegar",
+  "open": "abrir",
+  "TMDB via Reel proxy": "TMDB vía el proxy de Reel",
 
   // ---- Person page ----
   "Known for": "Conocido por",
-  "Not in your library": "No está en tu biblioteca",
+  // Deliberately short: it shares a column with the status labels and sits
+  // beside the show title in a 328px row — see PersonPage.
+  "Not following": "Sin seguir",
   "Your score": "Tu nota",
   "Read more": "Ver más",
   "Show less": "Ver menos",

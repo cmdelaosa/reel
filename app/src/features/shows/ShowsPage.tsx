@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router";
 import { useLibrary, toTitleCard, type LibraryShow } from "@/lib/library";
 import type { ShowStatus } from "@/domain/status";
 import { dateLocale, isEs, t as tr } from "@/lib/i18n";
-import { Poster } from "@/ui";
+import { Poster, TabMenu } from "@/ui";
 import { PosterGridSkeleton } from "@/ui/Skeleton";
 
 /* My Shows — the library grid with status buckets. Port of prototype
@@ -84,6 +84,15 @@ export default function ShowsPage() {
             </div>
           ))}
         </div>
+        {/* Phone shape of the same strip — "Mejor nota" showed 58 of its 95px at
+            360px, with nothing saying a fourth sort existed. */}
+        <TabMenu
+          value={sort}
+          options={SORTS.map((s) => ({ key: s.key, label: tr(s.label) }))}
+          onPick={setSort}
+          menuLabel={tr("Sort")}
+          align="end"
+        />
       </div>
 
       {f === "caughtup" && (

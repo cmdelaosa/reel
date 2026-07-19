@@ -8,7 +8,7 @@ import { useIgnore, useIgnored, useUnignore } from "@/lib/ignore";
 import type { TitleRow } from "@/lib/schemas";
 import { tmdbImg } from "@/lib/tmdb";
 import { isEs, locName, t as tr, tGenre, useEsNames } from "@/lib/i18n";
-import { Rail } from "@/ui";
+import { Rail, TabMenu } from "@/ui";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
@@ -242,48 +242,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "friends", label: "Popular with friends" },
 ]; // labels run through tr() at render
 
-/* Phone shape of the pool tabs — CSS swaps this and the segmented row on the
-   .disc-panel breakpoint. A dropdown rather than a scrolling strip because the
-   strip put the third pool past the edge with nothing saying it existed.
-   Escape and outside-click close it, like the Filters popover next to it. */
-function TabMenu({ tab, onPick }: { tab: Tab; onPick: (t: Tab) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", away);
-    document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
-  }, [open]);
-  const current = TABS.find((t) => t.key === tab) ?? TABS[0];
-  return (
-    <div className="disc-tabmenu" ref={ref}>
-      <button className="chip" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu">
-        {tr(current.label)}
-        <ChevronDown size={14} />
-      </button>
-      {open && (
-        <div className="filter-menu" role="menu" aria-label={tr("Discover")}>
-          {TABS.map((tb) => (
-            <button
-              key={tb.key}
-              role="menuitemradio"
-              aria-checked={tab === tb.key}
-              className="filter-opt"
-              onClick={() => { onPick(tb.key); setOpen(false); }}
-            >
-              {tr(tb.label)}
-              {tab === tb.key && <Check size={14} className="filter-opt-check" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* Normalised discover card: a title plus the per-tab extras (TMDB score on the
    Top-rated tab, the friend stack on the With-friends tab). */
 type DiscoverItem = { t: TitleRow; score: number | null; friends: FriendLike[] | null; friendCount: number };
@@ -445,7 +403,12 @@ export function DiscoverSections() {
               </div>
             ))}
           </div>
-          <TabMenu tab={tab} onPick={goTab} />
+          <TabMenu
+            value={tab}
+            options={TABS.map((t) => ({ key: t.key, label: tr(t.label) }))}
+            onPick={goTab}
+            menuLabel={tr("Discover")}
+          />
           <div className="disc-tools">
             <div className="disc-filters" ref={filtersRef}>
               <button
