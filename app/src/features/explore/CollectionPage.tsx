@@ -8,7 +8,7 @@ import { tmdbImg } from "@/lib/tmdb";
 import { Check, Plus } from "lucide-react";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
-import { isEs, locName, t as tr, tGenre, useEsNames } from "@/lib/i18n";
+import { isEs, locName, t as tr, tv, tGenre, useEsNames } from "@/lib/i18n";
 
 export default function CollectionPage() {
   const { slug } = useParams();
@@ -72,7 +72,7 @@ function CollectionPoster({ t, onOpen, onIgnore }: { t: TitleRow; onOpen: () => 
         className="btn btn-icon badge-glass absolute"
         style={{ top: 8, right: 8, color: "#fff" }}
         title={tr("Ignore — hide from suggestions")}
-        aria-label={`Hide ${name} from suggestions`}
+        aria-label={tv("Hide {name} from suggestions", { name })}
         onClick={(e) => { e.stopPropagation(); onIgnore(); }}
       >
         <EyeOff size={15} />

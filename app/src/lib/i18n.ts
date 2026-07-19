@@ -336,6 +336,11 @@ const DICT: Record<string, string> = {
   "with you.": "contigo.",
   "Upload your TV Time export and Reel rebuilds your library — shows, seen episodes and every rating. Years of watching, nothing lost.":
     "Sube tu exportación de TV Time y Reel reconstruye tu biblioteca: series, episodios vistos y todas tus notas. Años de historial, sin perder nada.",
+  // a11y / tooltip strings that name a show — see tv() for the {placeholder}.
+  "Watched — tap to clear": "Visto — toca para desmarcar",
+  "Mark all {count} watched": "Marcar los {count} como vistos",
+  "Hide {name} from suggestions": "Ocultar {name} de las sugerencias",
+  "Restore {name} to suggestions": "Devolver {name} a las sugerencias",
   "Your watchlist is": "Tu lista de pendientes te está",
   "waiting": "esperando",
   "Reel is in invite-only beta. Got a code from a friend? You're two minutes away from tonight's episode.":
@@ -345,6 +350,17 @@ const DICT: Record<string, string> = {
 /** Translate a UI string (identity in English / unknown strings). */
 export function t(s: string): string {
   return isEs() ? DICT[s] ?? s : s;
+}
+
+/** Translate a string carrying {placeholders}, then fill them.
+ *  The dictionary holds the whole sentence rather than fragments so a
+ *  translation can move the placeholder — concatenating around a variable locks
+ *  English word order into every language. Used for the labels that name a show:
+ *  the show's title can't be a dictionary key, but the sentence around it can. */
+export function tv(s: string, vars: Record<string, string | number>): string {
+  // split/join, not replaceAll: the app's tsc target predates ES2021, and this
+  // needs no regex escaping for a placeholder that is already brace-delimited.
+  return Object.entries(vars).reduce((out, [k, v]) => out.split(`{${k}}`).join(String(v)), t(s));
 }
 
 /* TMDB TV genres (stored in English in the metadata cache). */

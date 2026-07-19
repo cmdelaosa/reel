@@ -5,7 +5,7 @@ import type { FeedRow } from "@/lib/calendar";
 import { useMarkUpTo, useUnmarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { useOpenTitle } from "@/lib/useOpenTitle";
-import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
+import { dateLocale, isEs, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
@@ -83,7 +83,8 @@ export function CalEpGroup({
             <button
               className={`check ${allSeen ? "on" : someSeen ? "partial" : ""}`}
               onClick={bulk}
-              title={allSeen ? "Watched — tap to clear" : `Mark all ${count} watched`}
+              title={allSeen ? tr("Watched — tap to clear") : tv("Mark all {count} watched", { count })}
+              aria-label={allSeen ? tr("Watched — tap to clear") : tv("Mark all {count} watched", { count })}
             >
               <Check size={15} strokeWidth={3} />
             </button>

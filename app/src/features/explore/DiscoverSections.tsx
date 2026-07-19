@@ -7,7 +7,7 @@ import { useLibrary, useFollow, useUnfollow } from "@/lib/library";
 import { useIgnore, useIgnored, useUnignore } from "@/lib/ignore";
 import type { TitleRow } from "@/lib/schemas";
 import { tmdbImg } from "@/lib/tmdb";
-import { isEs, locName, t as tr, tGenre, useEsNames } from "@/lib/i18n";
+import { isEs, locName, t as tr, tv, tGenre, useEsNames } from "@/lib/i18n";
 import { Rail, TabMenu } from "@/ui";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
@@ -42,7 +42,7 @@ function TitlePoster({ t, rank, score, onOpen, onIgnore }: { t: TitleRow; rank?:
           className="btn btn-icon badge-glass absolute disc-hide"
           style={{ top: 8, right: 8, color: "#fff", zIndex: 3 }}
           title={tr("Ignore — hide from suggestions")}
-          aria-label={`Hide ${t.name} from suggestions`}
+          aria-label={tv("Hide {name} from suggestions", { name: t.name })}
           onClick={(e) => { e.stopPropagation(); onIgnore(); }}
         >
           <EyeOff size={15} />
@@ -163,7 +163,7 @@ function TitleListRow({ t, score, friends, friendCount, onOpen, onIgnore }: { t:
       <button
         className="btn btn-icon"
         title={tr("Ignore — hide from suggestions")}
-        aria-label={`Hide ${t.name} from suggestions`}
+        aria-label={tv("Hide {name} from suggestions", { name: t.name })}
         onClick={(e) => { e.stopPropagation(); onIgnore(); }}
       >
         <EyeOff size={15} />
@@ -525,7 +525,7 @@ export function DiscoverSections() {
                         className="btn btn-icon badge-glass absolute"
                         style={{ top: 8, right: 8, color: "#fff", zIndex: 3 }}
                         title={tr("Restore to suggestions")}
-                        aria-label={`Restore ${t.name} to suggestions`}
+                        aria-label={tv("Restore {name} to suggestions", { name: t.name })}
                         onClick={(e) => { e.stopPropagation(); unignore.mutate(t.titleId); }}
                       >
                         <Eye size={15} />
