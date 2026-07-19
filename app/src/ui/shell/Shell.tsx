@@ -68,6 +68,17 @@ export function Shell() {
     return () => clearTimeout(id);
   }, [pathname]);
 
+  /* The top bar carries no divider, so it needs the scroll position to know when
+     to separate itself from the content passing under it. Same idiom as the
+     landing nav. */
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   /* ⌘K / Ctrl-K opens the palette from anywhere */
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -85,7 +96,7 @@ export function Shell() {
   return (
     <div className="mq">
       {/* ---- Top bar ---- */}
-      <header className="mq-top">
+      <header className={`mq-top ${scrolled ? "scrolled" : ""}`}>
         <div className="mq-top-inner">
           <div className="mq-brand" onClick={() => navigate("/tonight")}>
             <span className="mq-brand-ico"><Play size={14} fill="currentColor" strokeWidth={0} /></span>
@@ -95,7 +106,7 @@ export function Shell() {
           <nav className="mq-tabs">
             {TABS.map((tab) => (
               <NavLink key={tab.path} to={tab.path} className={({ isActive }) => `mq-tab ${isActive ? "on" : ""}`}>
-                <tab.icon size={16} />
+                <tab.icon size={15} />
                 <span>{t(tab.label)}</span>
               </NavLink>
             ))}
