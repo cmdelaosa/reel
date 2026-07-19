@@ -34,15 +34,15 @@ export default function CollectionPage() {
         <ChevronLeft size={15} />{tr("Explore")}
       </Link>
       <header className="mq-header">
-        <h1 className="mq-h1">{data?.collection.name ?? (isEs() ? "Colección" : "Collection")}</h1>
+        <h1 className="mq-h1">{data?.collection.name ?? tr("Collection")}</h1>
       </header>
 
       {!isPending && data && titles.length === 0 && (
         <div className="card" style={{ padding: "28px 24px" }}>
           <p className="dim" style={{ margin: 0, fontSize: 14 }}>
             {data.titles.length > 0
-              ? (isEs() ? "Ya sigues (u ocultaste) todo lo de aquí." : "You already follow (or hid) everything here.")
-              : (isEs() ? "Aún no hay nada aquí." : "Nothing here yet.")}
+              ? tr("You already follow (or hid) everything here.")
+              : tr("Nothing here yet.")}
           </p>
         </div>
       )}

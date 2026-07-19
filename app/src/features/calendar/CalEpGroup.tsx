@@ -5,7 +5,7 @@ import type { FeedRow } from "@/lib/calendar";
 import { useMarkUpTo, useUnmarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { useOpenTitle } from "@/lib/useOpenTitle";
-import { dateLocale, isEs, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
+import { dateLocale, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
@@ -104,7 +104,7 @@ export function CalEpGroup({
       >
         <span>
           {count} {tr("episodes")}
-          {past && someSeen && !allSeen ? ` · ${seenCount} ${isEs() ? "vistos" : "watched"}` : ""}
+          {past && someSeen && !allSeen ? ` · ${seenCount} ${tr("watched")}` : ""}
         </span>
         <ChevronDown size={16} className={open ? "cal-chev-open" : ""} />
       </button>

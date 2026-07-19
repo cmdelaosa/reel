@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { WifiOff } from "lucide-react";
-import { isEs } from "@/lib/i18n";
+import { t as tr } from "@/lib/i18n";
 
 function subscribe(cb: () => void) {
   window.addEventListener("online", cb);
@@ -23,7 +23,7 @@ export function OfflineToast() {
     >
       <WifiOff size={16} style={{ color: "var(--accent)" }} />
       <span style={{ fontSize: 13.5, fontWeight: 650 }}>
-        {isEs() ? "Sin conexión — los cambios quedan en pausa" : "You're offline — changes are paused"}
+        {tr("You're offline — changes are paused")}
       </span>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { getSettings } from "@/lib/settings";
+import { getSettings, type LanguageName } from "@/lib/settings";
 import { useAuth } from "@/features/auth/AuthProvider";
 
 /* Lightweight es/en localization (settings.language).
@@ -16,12 +16,25 @@ import { useAuth } from "@/features/auth/AuthProvider";
      TitleRow use its name_es directly instead. */
 
 export const lang = () => getSettings().language;
+/** English is the source language: its strings are the keys, so it has no
+ *  dictionary. isEs stays for the few value-shaping spots (word order, es-only
+ *  data columns) that aren't a translatable UI string. */
 export const isEs = () => lang() === "es";
 
-/** Locale for toLocale*String calls — undefined keeps the browser default in English. */
-export const dateLocale = (): string | undefined => (isEs() ? "es-ES" : undefined);
+/** BCP-47 locale for toLocale*String / Intl. English keeps the browser default
+ *  (undefined); every other language maps here. Add a row per language. */
+export const dateLocale = (): string | undefined =>
+  ({ en: undefined, es: "es-ES" } as Record<LanguageName, string | undefined>)[lang()];
 
-const DICT: Record<string, string> = {
+/* One dictionary per non-English language, keyed by the English source string.
+   English is the key set, so it needs no dictionary. A missing language or a
+   missing key falls back to the English key — untranslated corners degrade to
+   English rather than break.
+
+   To add a language: add it to LanguageName (settings.ts), drop a `const FR = {…}`
+   below with the same keys, register it in DICTS, and add its GENRES map. Nothing
+   else in the app changes — every user-facing string already routes through t(). */
+const ES: Record<string, string> = {
   // ---- Shell / nav ----
   "Tonight": "Esta noche",
   "Explore": "Explorar",
@@ -54,6 +67,15 @@ const DICT: Record<string, string> = {
   "of": "de",
   "Prev": "Anterior",
   "Next": "Siguiente",
+  "now": "ahora",
+  // Counting fragment ("· 3 vistos" under a collapsed calendar batch), so plural
+  // — the singular "visto" sense stays inline in FriendPage's watching card.
+  "watched": "vistos",
+  "Find": "Buscar",
+  "Accept": "Aceptar",
+  "Decline": "Rechazar",
+  "Copied": "Copiado",
+  "Copy link": "Copiar enlace",
 
   // ---- Settings sheet ----
   "Theme": "Tema",
@@ -91,6 +113,7 @@ const DICT: Record<string, string> = {
   "No dated premieres yet.": "Aún no hay estrenos con fecha.",
   "% done": "% visto",
   "min": "min", // same abbreviation in es — routed through t() so the hero meta has no raw string
+  "Aired {days} days ago": "Emitido hace {days} días",
 
   // ---- Shows ----
   "Watching": "Viendo",
@@ -152,6 +175,10 @@ const DICT: Record<string, string> = {
   "Today": "Hoy",
   "Yesterday": "Ayer",
   "Tomorrow": "Mañana",
+  "Returning series": "Series que regresan",
+  "Loading earlier episodes…": "Cargando episodios anteriores…",
+  "Later": "Más adelante",
+  "Season": "Temporada",
 
   // ---- History ----
   "Everything you've watched, newest first.": "Todo lo que has visto, lo más reciente primero.",
@@ -182,6 +209,11 @@ const DICT: Record<string, string> = {
   "today": "hoy",
   "yesterday": "ayer",
   "days ago": "días",
+  // Whole sentence, not "days ago" + a number: es puts the count in the middle.
+  "{days} days ago": "hace {days} días",
+  "Invites": "Invitaciones",
+  "Create invite": "Crear invitación",
+  "No invites yet — create one to share.": "Aún no hay invitaciones — crea una para compartir.",
 
   // ---- Friends / social ----
   "Who you watch with — their activity, their favorites.": "Con quién ves series — su actividad y sus favoritas.",
@@ -207,6 +239,37 @@ const DICT: Record<string, string> = {
   "friends rated it": "amigos la puntuaron",
   "You": "Tú",
   "avg": "media",
+  "handle": "usuario",
+  "No one with that exact handle.": "Nadie con ese usuario exacto.",
+  "Already connected": "Ya conectados",
+  "Requests": "Solicitudes",
+  "wants to connect": "quiere conectar",
+  "In your library": "En tu biblioteca",
+  "Add to your library": "Añadir a tu biblioteca",
+  "Profile not available": "Perfil no disponible",
+  "This profile is private or not one of your friends.": "Este perfil es privado o no es de uno de tus amigos.",
+  "Newest first": "Las más recientes primero",
+  "Oldest first": "Las más antiguas primero",
+  "Highest first": "Las mejores primero",
+  "Lowest first": "Las peores primero",
+  "On": "Por",
+  "Watching now": "Viendo ahora",
+  "Shows": "Series",
+  "Episodes": "Episodios",
+  "Rated": "Puntuadas",
+  "Est. watch time": "Tiempo estimado",
+  // es needs a "de" the English doesn't, so the percentage travels in the key.
+  "{pct}% taste match": "{pct}% de afinidad",
+  "No taste match yet": "Aún sin afinidad",
+  "shows in common": "series en común",
+  "Rate shows you've both seen and the match score appears.":
+    "Puntuad series que hayáis visto los dos y aparecerá la afinidad.",
+  "Shared taste:": "Gustos compartidos:",
+  "Filter shows": "Filtrar series",
+  "Nothing here.": "Nada por aquí.",
+  "Recent activity": "Actividad reciente",
+  "No activity yet.": "Aún sin actividad.",
+  "You both rated": "Puntuadas por los dos",
 
   // ---- Explore ----
   "Find your next show — starting with what your friends love.":
@@ -242,6 +305,9 @@ const DICT: Record<string, string> = {
   "hidden show": "serie oculta",
   "hidden shows": "series ocultas",
   "Collections": "Colecciones",
+  "Collection": "Colección",
+  "You already follow (or hid) everything here.": "Ya sigues (u ocultaste) todo lo de aquí.",
+  "Nothing here yet.": "Aún no hay nada aquí.",
 
   // ---- Taste page ----
   "How your ratings line up with your friends' — who scores like you, and which shows split you.":
@@ -286,6 +352,7 @@ const DICT: Record<string, string> = {
   "Directing": "Dirección",
   "Writing": "Guion",
   "Production": "Producción",
+  "{age} years old": "{age} años",
 
   // ---- Poster lightbox ----
   "View poster": "Ver el póster",
@@ -345,11 +412,41 @@ const DICT: Record<string, string> = {
   "waiting": "esperando",
   "Reel is in invite-only beta. Got a code from a friend? You're two minutes away from tonight's episode.":
     "Reel está en beta solo con invitación. ¿Tienes un código de un amigo? Estás a dos minutos del episodio de esta noche.",
+
+  // ---- Notifications panel ----
+  "Mark all read": "Marcar todo leído",
+  "You're all caught up.": "Estás al día.",
+
+  // ---- Import ----
+  "Importing…": "Importando…",
+  "Drop your export zip here": "Suelta aquí tu zip",
+  "or click to choose · max 25MB": "o haz clic para elegirlo · máx. 25MB",
+  "Import complete": "Importación completada",
+  "Import failed": "La importación falló",
+  "Queued…": "En cola…",
+  "Shows matched": "Series encontradas",
+  "Episodes marked": "Episodios marcados",
+  "Couldn't match": "Sin coincidencia",
+
+  // ---- Export ----
+  "Shows you follow": "Series que sigues",
+  "Every episode you've marked watched": "Cada episodio que marcaste como visto",
+  "Your show ratings": "Tus notas de series",
+  "Preparing…": "Preparando…",
+  "Download my data": "Descargar mis datos",
+
+  // ---- Toasts ----
+  "Couldn't load — check your connection and retry": "No se pudo cargar — revisa tu conexión y reintenta",
+  "You're offline — changes are paused": "Sin conexión — los cambios quedan en pausa",
 };
 
-/** Translate a UI string (identity in English / unknown strings). */
+/** Every non-English dictionary, by language. English is absent — it is the keys. */
+const DICTS: Partial<Record<LanguageName, Record<string, string>>> = { es: ES };
+
+/** Translate a UI string. Falls back to the English key when the active language
+ *  has no dictionary or no entry, so unknown/untranslated strings stay readable. */
 export function t(s: string): string {
-  return isEs() ? DICT[s] ?? s : s;
+  return DICTS[lang()]?.[s] ?? s;
 }
 
 /** Translate a string carrying {placeholders}, then fill them.
@@ -363,7 +460,8 @@ export function tv(s: string, vars: Record<string, string | number>): string {
   return Object.entries(vars).reduce((out, [k, v]) => out.split(`{${k}}`).join(String(v)), t(s));
 }
 
-/* TMDB TV genres (stored in English in the metadata cache). */
+/* TMDB TV genres — stored in English in the metadata cache, translated per
+   language the same way the UI dictionary is. Add a language's map to GENRES. */
 const GENRES_ES: Record<string, string> = {
   "Action & Adventure": "Acción y aventura",
   "Animation": "Animación",
@@ -383,8 +481,10 @@ const GENRES_ES: Record<string, string> = {
   "Western": "Western",
 };
 
+const GENRES: Partial<Record<LanguageName, Record<string, string>>> = { es: GENRES_ES };
+
 export function tGenre(g: string): string {
-  return isEs() ? GENRES_ES[g] ?? g : g;
+  return GENRES[lang()]?.[g] ?? g;
 }
 
 /* ---- Localized show names ---------------------------------------------- */

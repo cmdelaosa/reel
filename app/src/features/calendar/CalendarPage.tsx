@@ -22,7 +22,7 @@ export default function CalendarPage() {
   const [view, setView] = useState<"shows" | "returning" | "new">("shows");
   const tabs: { key: typeof view; label: string }[] = [
     { key: "shows", label: tr("My shows") },
-    { key: "returning", label: isEs() ? "Series que regresan" : "Returning series" },
+    { key: "returning", label: tr("Returning series") },
     { key: "new", label: tr("New & announced") },
   ];
 
@@ -167,7 +167,7 @@ function MyShowsFeed() {
       <div className="cal-feed">
         <div ref={topRef} className="cal-sentinel">
           {weeksBack < 60
-            ? (isEs() ? "Cargando episodios anteriores…" : "Loading earlier episodes…")
+            ? tr("Loading earlier episodes…")
             : tr("That's the start of your history.")}
         </div>
 
@@ -180,7 +180,7 @@ function MyShowsFeed() {
 
         {later.length > 0 && (
           <div className="cal-day">
-            <div className="cal-daysep"><span>{isEs() ? "Más adelante" : "Later"}</span></div>
+            <div className="cal-daysep"><span>{tr("Later")}</span></div>
             {clusterFeed(later, now).map((c) => renderCluster(c, true))}
           </div>
         )}
@@ -314,7 +314,7 @@ function UpcomingRow({ s, at, announced }: { s: LibraryShow; at: number | null; 
         <div className="mq-row-title truncate" style={{ fontSize: 16 }}>{name}</div>
         {s.upcoming_season_number != null ? (
           <div className="truncate" style={{ fontSize: 13, fontWeight: 650 }}>
-            {isEs() ? "Temporada" : "Season"} {s.upcoming_season_number}
+            {tr("Season")} {s.upcoming_season_number}
           </div>
         ) : (
           <div className="dim truncate" style={{ fontSize: 13 }}>{s.genres.slice(0, 2).join(", ") || "—"}</div>

@@ -100,7 +100,7 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
     <section className="flex flex-col gap-4">
       <div className="mq-sechead">
         <div>
-          <h2 className="section-title">{isEs() ? "Actividad de amigos" : "Friend activity"}</h2>
+          <h2 className="section-title">{tr("Friend activity")}</h2>
         </div>
       </div>
       <div className="card" style={{ padding: 6 }}>

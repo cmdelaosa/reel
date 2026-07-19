@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Download, FileJson, Loader2, Table2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { isEs, t as tr } from "@/lib/i18n";
+import { t as tr } from "@/lib/i18n";
 
 /* Export my data — downloads a zip (profile.json, library.json,
    watch_events.csv, ratings.csv) from the export edge function. */
@@ -46,10 +46,10 @@ export default function ExportPage() {
       <div className="card" style={{ padding: 22, display: "flex", flexDirection: "column", gap: 16 }}>
         <div className="flex flex-col gap-2.5">
           {[
-            { icon: FileJson, name: "profile.json", desc: isEs() ? "Tu perfil" : "Your profile" },
-            { icon: FileJson, name: "library.json", desc: isEs() ? "Series que sigues" : "Shows you follow" },
-            { icon: Table2, name: "watch_events.csv", desc: isEs() ? "Cada episodio que marcaste como visto" : "Every episode you've marked watched" },
-            { icon: Table2, name: "ratings.csv", desc: isEs() ? "Tus notas de series" : "Your show ratings" },
+            { icon: FileJson, name: "profile.json", desc: tr("Your profile") },
+            { icon: FileJson, name: "library.json", desc: tr("Shows you follow") },
+            { icon: Table2, name: "watch_events.csv", desc: tr("Every episode you've marked watched") },
+            { icon: Table2, name: "ratings.csv", desc: tr("Your show ratings") },
           ].map((f) => (
             <div key={f.name} className="flex items-center gap-3">
               <f.icon size={18} className="mute" />
@@ -61,7 +61,7 @@ export default function ExportPage() {
           ))}
         </div>
         <button className="btn btn-accent" style={{ alignSelf: "flex-start" }} onClick={download} disabled={busy}>
-          {busy ? <><Loader2 size={16} className="spin" />{isEs() ? "Preparando…" : "Preparing…"}</> : <><Download size={16} />{isEs() ? "Descargar mis datos" : "Download my data"}</>}
+          {busy ? <><Loader2 size={16} className="spin" />{tr("Preparing…")}</> : <><Download size={16} />{tr("Download my data")}</>}
         </button>
         {error && <p role="alert" style={{ color: "#e5484d", fontSize: 13 }}>{error}</p>}
       </div>

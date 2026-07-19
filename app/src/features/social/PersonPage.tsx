@@ -6,7 +6,7 @@ import { useFocusTrap } from "@/ui/useFocusTrap";
 import { getPerson, tmdbImg } from "@/lib/tmdb";
 import { useLibrary } from "@/lib/library";
 import { useMyRatings } from "@/lib/ratings";
-import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
+import { dateLocale, isEs, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { useOpenTitle, useTitleIntent } from "@/lib/useOpenTitle";
 import { deriveStatus } from "@/domain/status";
 import type { PersonShow } from "@/lib/schemas";
@@ -157,7 +157,7 @@ export default function PersonPage() {
                       ? `${fmtLong(person.birthday)} – ${fmtLong(person.deathday)}`
                       : fmtLong(person.birthday)
                     : null,
-                  age != null && !person.deathday ? (isEs() ? `${age} años` : `${age} years old`) : null,
+                  age != null && !person.deathday ? tv("{age} years old", { age }) : null,
                   person.place_of_birth,
                 ].filter(Boolean).join(" · ")}
               </p>

@@ -6,7 +6,7 @@ import { useLibrary } from "@/lib/library";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
 import { useUserStats, timeSpentLabel } from "@/lib/stats";
 import { tmdbImg } from "@/lib/tmdb";
-import { dateLocale, isEs, locName, t as tr, tGenre, useEsNames } from "@/lib/i18n";
+import { dateLocale, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 import { Stars } from "@/ui";
 import { StatsSkeleton } from "@/ui/Skeleton";
 import { hueOf, posterBg } from "@/ui/posterBg";
@@ -20,9 +20,9 @@ type RateSort = "new" | "old" | "best" | "worst";
 
 function ratedAtLabel(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (days <= 0) return isEs() ? "hoy" : "today";
-  if (days === 1) return isEs() ? "ayer" : "yesterday";
-  if (days < 30) return isEs() ? `hace ${days} días` : `${days} days ago`;
+  if (days <= 0) return tr("today");
+  if (days === 1) return tr("yesterday");
+  if (days < 30) return tv("{days} days ago", { days });
   return new Date(iso).toLocaleDateString(dateLocale(), { month: "short", year: "numeric" });
 }
 
@@ -40,7 +40,7 @@ function RatingRow({ r, onOpen }: { r: RatedRow; onOpen: () => void }) {
       <div className="flex-1 min-w-0">
         <div className="mq-row-title truncate" style={{ marginTop: 0 }}>{name}</div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>
-          {[t.first_air_date?.slice(0, 4), tGenre(t.genres[0] ?? ""), `${isEs() ? "puntuada" : "rated"} ${ratedAtLabel(r.created_at)}`].filter(Boolean).join(" · ")}
+          {[t.first_air_date?.slice(0, 4), tGenre(t.genres[0] ?? ""), `${tr("rated")} ${ratedAtLabel(r.created_at)}`].filter(Boolean).join(" · ")}
         </div>
         <div style={{ marginTop: 4 }}><Stars score={r.score} size={13} /></div>
       </div>

@@ -79,8 +79,8 @@ export default function ImportPage() {
         }}
       >
         <Upload size={28} style={{ color: "var(--accent)" }} />
-        <div style={{ fontWeight: 700 }}>{busy ? (isEs() ? "Importando…" : "Importing…") : (isEs() ? "Suelta aquí tu zip" : "Drop your export zip here")}</div>
-        <div className="mute" style={{ fontSize: 13 }}>{isEs() ? "o haz clic para elegirlo · máx. 25MB" : "or click to choose · max 25MB"}</div>
+        <div style={{ fontWeight: 700 }}>{busy ? tr("Importing…") : tr("Drop your export zip here")}</div>
+        <div className="mute" style={{ fontSize: 13 }}>{tr("or click to choose · max 25MB")}</div>
         <input
           ref={fileRef}
           type="file"
@@ -101,9 +101,9 @@ export default function ImportPage() {
             {job.status === "error" && <XCircle size={20} style={{ color: "#e5484d" }} />}
             {(job.status === "pending" || job.status === "running") && <Loader2 size={20} className="spin" style={{ color: "var(--accent)" }} />}
             <div style={{ fontWeight: 750 }}>
-              {job.status === "done" && (isEs() ? "Importación completada" : "Import complete")}
-              {job.status === "error" && (isEs() ? "La importación falló" : "Import failed")}
-              {job.status === "pending" && (isEs() ? "En cola…" : "Queued…")}
+              {job.status === "done" && tr("Import complete")}
+              {job.status === "error" && tr("Import failed")}
+              {job.status === "pending" && tr("Queued…")}
               {job.status === "running" && (isEs()
                 ? `Importando… ${report.done ?? 0} / ${report.total ?? "?"} series`
                 : `Importing… ${report.done ?? 0} / ${report.total ?? "?"} shows`)}
@@ -117,9 +117,9 @@ export default function ImportPage() {
           {job.status === "done" && (
             <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))" }}>
               {[
-                { label: isEs() ? "Series encontradas" : "Shows matched", value: report.matched },
-                { label: isEs() ? "Episodios marcados" : "Episodes marked", value: report.watchEvents ?? report.watch_events },
-                { label: isEs() ? "Sin coincidencia" : "Couldn't match", value: unmatched.length },
+                { label: tr("Shows matched"), value: report.matched },
+                { label: tr("Episodes marked"), value: report.watchEvents ?? report.watch_events },
+                { label: tr("Couldn't match"), value: unmatched.length },
               ].map((s) => (
                 <div key={s.label} className="surface-2" style={{ borderRadius: "var(--r)", padding: 14 }}>
                   <div style={{ fontSize: 20, fontWeight: 800 }}>{String(s.value ?? 0)}</div>

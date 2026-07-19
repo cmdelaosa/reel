@@ -50,7 +50,7 @@ export function WatchHeatmap({ userId }: { userId?: string }) {
         }
         cells.push({
           key,
-          label: `${n} ${n === 1 ? (isEs() ? "episodio" : "episode") : isEs() ? "episodios" : "episodes"} · ${d.toLocaleDateString(dateLocale(), { day: "numeric", month: "short" })}`,
+          label: `${n} ${n === 1 ? tr("episode") : tr("episodes")} · ${d.toLocaleDateString(dateLocale(), { day: "numeric", month: "short" })}`,
           n,
           level: n === 0 ? 0 : Math.max(1, Math.ceil((n / max) * 4)),
           future,

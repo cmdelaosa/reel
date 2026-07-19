@@ -15,7 +15,7 @@ const ICONS: Record<string, typeof Bell> = {
 
 function relTime(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return isEs() ? "ahora" : "now";
+  if (s < 60) return tr("now");
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86400)}d`;
@@ -96,7 +96,7 @@ export function NotifPanel({ onClose }: { onClose: () => void }) {
           <div style={{ fontWeight: 750, fontSize: 15 }}>{tr("Notifications")}</div>
           {items.some((n) => !n.read_at) && (
             <button className="chip" onClick={() => markRead.mutate(undefined)}>
-              <Check size={13} />{isEs() ? "Marcar todo leído" : "Mark all read"}
+              <Check size={13} />{tr("Mark all read")}
             </button>
           )}
         </div>
@@ -104,7 +104,7 @@ export function NotifPanel({ onClose }: { onClose: () => void }) {
         <div className="flex flex-col" style={{ maxHeight: "min(60vh, 480px)", overflowY: "auto" }}>
           {items.length === 0 && (
             <div className="dim" style={{ padding: "28px 16px", textAlign: "center", fontSize: 13.5 }}>
-              {isEs() ? "Estás al día." : "You're all caught up."}
+              {tr("You're all caught up.")}
             </div>
           )}
           {items.map((n, i) => {

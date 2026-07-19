@@ -7,7 +7,7 @@ import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { useUpNext, type UpNextRow } from "@/lib/upnext";
 import { useMarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
-import { isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
+import { isEs, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { Poster, Rail } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
@@ -31,7 +31,7 @@ function airLabel(iso: string | null): string | null {
   if (days < 0) return null;
   if (days === 0) return tr("New today");
   if (days === 1) return tr("Aired yesterday");
-  if (days <= 7) return isEs() ? `Emitido hace ${days} días` : `Aired ${days} days ago`;
+  if (days <= 7) return tv("Aired {days} days ago", { days });
   return null;
 }
 
