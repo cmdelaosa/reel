@@ -500,6 +500,14 @@
 }
 
 .mq-top-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+/* Space the bar's actions by their ink, not their boxes. The icon buttons are
+   borderless, so an 18px glyph floats in a 40px target with 11px of nothing each
+   side. Against the search pill or the avatar — both of which have a visible edge
+   — only one of those dead margins is in play, so the eye reads 17px. Between two
+   borderless buttons they stack: 11 + 6 + 11 = 28px, and the bell looked adrift
+   from the settings. Closing the row gap between adjacent icon buttons spends
+   only invisible padding; both keep their full 40px hit target. */
+.mq-top-actions .btn-icon + .btn-icon { margin-left: -6px; }
 .mq-searchbtn {
   display: inline-flex; align-items: center; gap: 8px;
   height: var(--ctl-h); padding: 0 14px;
