@@ -35,7 +35,11 @@ export type HeatmapDay = z.infer<typeof heatmapSchema>[number];
  *  what comes back (a non-friend or private profile yields nothing). */
 export function useWatchHeatmap(days: number, userId?: string) {
   return useQuery({
-    queryKey: [...qk.watchHeatmap, userId ?? "me"],
+    // `days` belongs in the key: it decides how much history the RPC returns,
+    // so an entry cached under a narrower window would otherwise be served to a
+    // wider grid — the 26→53 week change left friend grids drawing a rolling
+    // year over half a year of data, blank until mid-January.
+    queryKey: [...qk.watchHeatmap, userId ?? "me", days],
     queryFn: async (): Promise<HeatmapDay[] | null> => {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
       // Only send p_user when targeting someone else, so the own-profile call
