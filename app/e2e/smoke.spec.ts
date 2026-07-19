@@ -40,7 +40,10 @@ test("core loop: search → add → mark watched → tonight → calendar → ra
 
   // ⌘K search
   await page.keyboard.press("Meta+k");
-  const search = page.getByPlaceholder(/Search shows/i);
+  // Target the palette by its aria-label, which is a plain literal. The
+  // placeholder goes through tr() and was reworded in 1e7f2f4 without the
+  // test noticing, since CI had never got this far.
+  const search = page.getByRole("dialog", { name: "Search shows" }).getByRole("textbox");
   await expect(search).toBeVisible();
   await search.fill("severance");
   const severanceRow = page.locator(".mq-pal-row", { hasText: "Severance" }).first();
