@@ -11,6 +11,7 @@ app/.env*.local
 app/*.log
 app/.vite/
 app/*.tsbuildinfo
+app/.wrangler/
 
 # Playwright
 app/test-results/
