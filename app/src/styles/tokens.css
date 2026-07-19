@@ -14,6 +14,24 @@
   --gap: 20px;
   --pad: 28px;
 
+  /* ---- Control rhythm ----
+     Two heights for the whole app: --ctl-h for anything you press with intent
+     (buttons, the bar's search / icon / avatar controls), --ctl-h-sm for the
+     pills you skim past (nav tabs, segments, chips, small buttons). Declared as
+     heights rather than left to padding + line-height, which is what let the
+     same .btn measure 36px or 38px depending on whether it happened to contain
+     an icon. */
+  --ctl-h: 40px;
+  --ctl-h-sm: 34px;
+
+  /* The top bar is exactly one control tall plus its own padding, so its height
+     is derived, never typed. Everything that pins itself underneath — the friend
+     hero, the calendar tab bar, the notification panel — reads --bar-h instead
+     of re-guessing; they were three separate magic numbers that had already
+     drifted apart from the bar and from each other. */
+  --bar-pad-y: 12px;
+  --bar-h: calc(var(--ctl-h) + 2 * var(--bar-pad-y));
+
   --font: "Inter Variable", Inter, system-ui, -apple-system, sans-serif;
 }
 

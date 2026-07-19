@@ -430,7 +430,7 @@ export function DiscoverSections() {
               )}
             </div>
             <button
-              className={`chip ${view === "list" ? "chip-active" : ""}`}
+              className={`chip chip-icon ${view === "list" ? "chip-active" : ""}`}
               onClick={() => switchView(view === "list" ? "mosaic" : "list")}
               title={tr("List view")}
               aria-label={tr("List view")}

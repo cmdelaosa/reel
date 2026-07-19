@@ -20,10 +20,14 @@
 .hairline { border: 1px solid var(--border); }
 
 /* Buttons */
+/* min-height, not vertical padding: the height then holds whatever the button
+   contains, so a label-only button and one with a 16px icon are the same size.
+   Padding is still free to push past it — .lp-btn-lg wants a taller hero CTA. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--ctl-h);
   font-weight: 600; font-size: 14px; line-height: 1;
-  padding: 10px 16px; border-radius: var(--r);
+  padding: 0 16px; border-radius: var(--r);
   border: 1px solid transparent; cursor: pointer;
   transition: transform .12s ease, background .18s ease, border-color .18s ease, opacity .18s ease;
   white-space: nowrap; user-select: none;
@@ -39,23 +43,32 @@
 .btn-outline:hover { background: var(--surface-2); }
 .btn-ghost { background: var(--surface-2); color: var(--text); }
 .btn-ghost:hover { background: var(--surface-3); }
-.btn-icon { padding: 10px; border-radius: var(--r); }
-.btn-sm { padding: 7px 12px; font-size: 13px; }
+/* Icon-only is a circle everywhere, not just in the top bar — that is what let
+   the bar drop its own radius/padding override. A square of the same footprint
+   reads heavier next to round avatars and pills. */
+.btn-icon { width: var(--ctl-h); height: var(--ctl-h); padding: 0; border-radius: 999px; }
+.btn-sm { min-height: var(--ctl-h-sm); padding: 0 14px; font-size: 13px; }
+.btn-sm.btn-icon { width: var(--ctl-h-sm); height: var(--ctl-h-sm); }
 
 /* Chips */
 .chip {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  height: var(--ctl-h-sm); padding: 0 13px;
+  border-radius: 999px; font-size: 13px; font-weight: 600;
   background: var(--surface-2); color: var(--text-dim);
   border: 1px solid var(--border); cursor: pointer;
   transition: all .16s ease; white-space: nowrap;
 }
 .chip:hover { color: var(--text); border-color: var(--border-strong); }
 .chip:disabled { opacity: .38; cursor: default; pointer-events: none; }
+/* Icon-only chip is a circle, mirroring .btn-icon — the text padding otherwise
+   leaves a squashed oval sitting in a row of proper pills. */
+.chip-icon { width: var(--ctl-h-sm); padding: 0; justify-content: center; }
 /* Year range dropdowns on the discover filter row — match the chips. */
 .year-select {
   appearance: none; -webkit-appearance: none;
-  padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  height: var(--ctl-h-sm); padding: 0 13px;
+  border-radius: 999px; font-size: 13px; font-weight: 600;
   background: var(--surface-2); color: var(--text);
   border: 1px solid var(--border); cursor: pointer; transition: border-color .16s ease;
 }
@@ -78,6 +91,10 @@
 }
 .filter-opt:hover { background: var(--surface-2); }
 .filter-opt input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex: 0 0 auto; }
+/* The one selected state that stays accent-tinted, and deliberately: a chip is a
+   filter or a toggle, so "on" is something you did and may want to undo. A
+   segment is a view switcher where one option is always on, and there accent
+   would just be the resting state — hence the neutral .seg-active. */
 .chip-active {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   color: var(--accent);
@@ -153,10 +170,12 @@
   .poster:hover .disc-hide, .poster .disc-hide:focus-visible { opacity: 1; }
 }
 
-/* Badges */
+/* Badges — read-only labels, so they sit below the control scale, but on a fixed
+   height of their own: a badge holding a 11px star icon used to be a pixel
+   taller than the one beside it holding only text. */
 .badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  height: 24px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
   letter-spacing: .02em; text-transform: uppercase;
 }
 .badge-accent { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
@@ -193,19 +212,39 @@
 .pbar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,0.18); z-index: 2; }
 .pbar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
 
-/* Segmented control */
-.segmented { display: inline-flex; padding: 4px; gap: 4px; background: var(--surface-2); border-radius: var(--r); border: 1px solid var(--border); }
+/* Segmented control — the nav's bare pills, reused verbatim.
+   The track and its border framed every in-page tab row the same way the top
+   bar used to frame the nav, and it was the same mistake at smaller scale: a
+   slab of chrome around four words. The filled pill alone marks the selection,
+   so .seg and .mq-tab are now literally the same shape and size.
+   The container comes back in exactly one place — see .cal-tabsbar. */
+.segmented { display: inline-flex; gap: 4px; padding: 0; background: none; border: none; }
 /* Scrollable variant: keeps every pill on one row, extras reachable by scroll
    (used for shows with many seasons). */
 .segmented.scroll { display: flex; max-width: 100%; overflow-x: auto; }
-.segmented.scroll .seg { flex: 0 0 auto; min-width: 30px; text-align: center; white-space: nowrap; }
-.seg { padding: 7px 14px; border-radius: calc(var(--r) - 4px); font-size: 13px; font-weight: 600; color: var(--text-dim); cursor: pointer; transition: all .15s ease; }
-.seg:hover { color: var(--text); }
-.seg-active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.segmented.scroll .seg { flex: 0 0 auto; min-width: var(--ctl-h-sm); white-space: nowrap; }
+.seg {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--ctl-h-sm); padding: 0 14px;
+  border-radius: 999px; border: none; background: transparent;
+  font-size: 13px; font-weight: 600; color: var(--text-dim);
+  cursor: pointer; transition: background .15s ease, color .15s ease;
+}
+.seg:hover { color: var(--text); background: color-mix(in srgb, var(--surface-3) 50%, transparent); }
+/* Neutral, not accent-tinted: one segment is always selected, so an accent here
+   would burn on permanently on nine screens. Accent is reserved for state you
+   chose to turn on (.chip-active) — see the note there. */
+.seg-active, .seg-active:hover { background: var(--surface-3); color: var(--text); }
 
 /* Section heads */
 .section-title { font-size: 19px; font-weight: 750; letter-spacing: -0.01em; }
-.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+/* Neutral, not accent. Every one of these is a section or field label — Seasons,
+   Cast, Your rating, Theme, Language — and there are four of them stacked in the
+   settings sheet alone, which made accent the panel's dominant colour rather
+   than a signal. The two eyebrows that genuinely are editorial and sit on
+   artwork keep their accent through their own classes (.mq-hero-eyebrow,
+   .lp-eyebrow), so nothing signed off is touched. */
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); }
 
 /* Rails */
 .rail { display: flex; gap: var(--gap); overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px; }
@@ -224,7 +263,7 @@
 .rail-nav { display: flex; align-items: center; gap: 8px; }
 .rail-arrow {
   display: grid; place-items: center;
-  width: 34px; height: 34px; border-radius: 999px;
+  width: var(--ctl-h-sm); height: var(--ctl-h-sm); border-radius: 999px;
   background: color-mix(in srgb, var(--bg) 76%, transparent);
   border: 1px solid var(--border-strong); color: var(--text);
   cursor: pointer;
@@ -308,8 +347,11 @@
 /* Episode row */
 .ep-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--r); transition: background .15s ease; cursor: pointer; }
 .ep-row:hover { background: var(--surface-2); }
+/* Below the control scale on purpose: it is the only control that lives inside a
+   dense list row, where a 34px pill would out-weigh the episode it marks. 26px
+   was under any usable tap target though, hence 30. */
 .check {
-  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 999px;
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 999px;
   border: 2px solid color-mix(in srgb, var(--accent) 30%, var(--border-strong));
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   display: grid; place-items: center;
@@ -399,14 +441,18 @@
 [data-theme="light"] .mq-top.scrolled {
   box-shadow: 0 14px 30px -22px rgba(31, 41, 68, 0.55);
 }
+/* The bar is one --ctl-h control plus --bar-pad-y top and bottom, and nothing
+   inside it may be taller — that identity is what --bar-h encodes for everything
+   pinned underneath. */
 .mq-top-inner {
   max-width: 1280px; margin: 0 auto;
   display: flex; align-items: center; gap: 14px;
-  padding: 12px clamp(16px, 3vw, 28px);
+  padding: var(--bar-pad-y) clamp(16px, 3vw, 28px);
 }
 .mq-brand { display: flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
 .mq-brand-ico {
-  display: grid; place-items: center; width: 30px; height: 30px;
+  display: grid; place-items: center;
+  width: var(--ctl-h-sm); height: var(--ctl-h-sm);
   border-radius: var(--r-sm);
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: var(--on-accent);
@@ -416,17 +462,29 @@
 
 /* Bare pills, no segmented-control container: the track plus its border made a
    heavy slab of what is only four words. The active pill is neutral rather than
-   accent-tinted — with nothing enclosing them, weight alone separates them. */
+   accent-tinted — with nothing enclosing them, weight alone separates them.
+   Left-aligned against the brand, matching .lp-app-tabs. No auto margin here:
+   with one on each side of the nav competing with .mq-top-actions' margin-left,
+   the browser split the free space three ways and the nav landed wherever the
+   actions group's width happened to put it — 170px off centre, and moving again
+   on every change to the controls. Now only the actions group floats. */
 .mq-tabs {
   display: none;
   align-items: center; gap: 4px;
-  margin: 0 auto;
+  /* 12px on top of the row's 14px. The reference mock gets away with the bare
+     gap at its smaller scale; here the active pill is a filled 34px shape, and
+     at 14px its fill crowds the wordmark badly enough that the pill reads as
+     part of the brand lockup. No hairline between the two — this direction is
+     the one that deleted the nav's container and the bar's bottom border, and
+     putting a divider back into the same bar would argue with both. */
+  margin-left: 12px;
 }
 .mq-tab {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 12px; border-radius: 999px; border: none;
+  display: inline-flex; align-items: center; gap: 7px;
+  height: var(--ctl-h-sm); padding: 0 13px;
+  border-radius: 999px; border: none;
   background: transparent; color: var(--text-dim);
-  font-size: 12.5px; font-weight: 600; cursor: pointer;
+  font-size: 13px; font-weight: 600; cursor: pointer;
   transition: background .18s ease, color .18s ease; white-space: nowrap;
 }
 .mq-tab:hover { color: var(--text); background: color-mix(in srgb, var(--surface-3) 50%, transparent); }
@@ -437,35 +495,33 @@
 
 .mq-top-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .mq-searchbtn {
-  display: inline-flex; align-items: center; gap: 7px;
-  height: 32px; padding: 0 12px;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: var(--ctl-h); padding: 0 14px;
   border-radius: 999px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--text-mute);
-  font-size: 12.5px; cursor: pointer; transition: color .16s ease, border-color .16s ease;
+  font-size: 13px; cursor: pointer; transition: color .16s ease, border-color .16s ease;
 }
 .mq-searchbtn:hover { color: var(--text); border-color: var(--border-strong); }
-/* Round and unfilled: three surface-filled squares next to bare pills put the
-   visual weight on the icons instead of the nav. */
-.mq-top-actions .btn-icon {
-  padding: 8px; border-radius: 999px;
-  background: transparent; color: var(--text-dim);
-}
+/* Unfilled: .btn-icon is already a circle, but three surface-filled ones next to
+   bare nav pills put the visual weight on the icons instead of the nav. */
+.mq-top-actions .btn-icon { background: transparent; color: var(--text-dim); }
 .mq-top-actions .btn-icon:hover { background: var(--surface-2); color: var(--text); }
 .mq-kbd {
-  font-family: var(--font); font-size: 10px; font-weight: 700;
-  padding: 2px 5px; border-radius: 5px;
+  font-family: var(--font); font-size: 10.5px; font-weight: 700;
+  padding: 2px 6px; border-radius: 6px;
   background: var(--surface-3); color: var(--text-dim);
   border: 1px solid var(--border);
 }
 /* Ring matches the canvas, not a surface — the bell button is unfilled now. */
 .mq-belldot {
-  position: absolute; top: 6px; right: 7px; width: 8px; height: 8px;
+  position: absolute; top: 7px; right: 8px; width: 8px; height: 8px;
   border-radius: 999px; background: var(--accent); border: 2px solid var(--app-bg);
 }
 .mq-avatar {
-  width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--border);
+  width: var(--ctl-h); height: var(--ctl-h);
+  border-radius: 999px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--accent);
-  font-weight: 800; font-size: 13.5px; cursor: pointer;
+  font-weight: 800; font-size: 15px; cursor: pointer;
 }
 
 /* ---- Layout ---- */
@@ -564,11 +620,6 @@
 
 /* ---- Toolbar / misc ---- */
 .mq-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.mq-searchrow {
-  display: flex; align-items: center; gap: 12px;
-  height: 52px; padding: 0 16px; max-width: 560px; width: 100%;
-  cursor: pointer; text-align: left; font-size: 15px;
-}
 /* Circular rank badge on the trending posters */
 .mq-rank {
   position: absolute; top: 8px; left: 8px; z-index: 3;
@@ -680,7 +731,7 @@
    top bar while scrolling. The hue gradient fades out to the right for a
    softer, more modern wash than the old solid banner. */
 .fr-hero {
-  position: sticky; top: 60px; z-index: 30;
+  position: sticky; top: var(--bar-h); z-index: 30;
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 10px 14px;
   border-radius: var(--r-lg);
@@ -697,7 +748,7 @@
 .fr-hero-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .fr-hero-tabs { margin-left: auto; }
 @media (max-width: 700px) {
-  /* No top override: the bar is 60px at every width now that the tab track is gone. */
+  /* No top override: --bar-h holds at every width now that the tab track is gone. */
   .fr-hero { padding: 8px 10px; }
   .fr-hero-tabs { margin-left: 0; width: 100%; }
 }
@@ -707,23 +758,30 @@
 @media (max-width: 560px) { .fr-stats { grid-template-columns: repeat(2, 1fr); } }
 
 .cal-tabsbar {
-  position: sticky; top: 60px; z-index: 30;
+  position: sticky; top: var(--bar-h); z-index: 30;
   display: flex; justify-content: center;
   margin-top: calc(-1 * clamp(20px, 3.5vw, 36px));
   padding: 12px 0;
   /* No full-width bar — a transparent wrapper so only the rounded pill shows
-     over the ambient glow. Clicks/scroll pass through the empty sides. */
+     over the canvas. Clicks/scroll pass through the empty sides. */
   background: transparent;
   pointer-events: none;
 }
-/* The frosting lives on the pill itself now, so just the segmented control
-   floats over the feed instead of a full-width box. */
+/* The only segmented control that keeps a container. It is the one that floats
+   over live content rather than sitting in the layout, and bare pills over a
+   scrolling feed put episode art straight through the labels. So it takes the
+   shape of the other thing that floats over content — the mobile dock — instead
+   of the track the rest of them just lost. */
 .cal-tabsbar .segmented {
   width: auto;
   pointer-events: auto;
-  background: color-mix(in srgb, var(--bg) 84%, transparent);
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-  box-shadow: var(--shadow);
+  padding: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-bg) 84%, transparent);
+  border: 1px solid var(--border-strong);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: var(--shadow-lg);
+  max-width: calc(100vw - 24px);
 }
 
 /* ---- Calendar · TV-Time-style episode feed ---- */
@@ -732,7 +790,9 @@
    correction and throws the viewport weeks forward. */
 .cal-feed { display: flex; flex-direction: column; overflow-anchor: none; }
 .cal-sentinel { text-align: center; font-size: 12px; color: var(--text-mute); padding: 10px 0; }
-.cal-day { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 140px; }
+/* Clear the bar plus the floating tab pill above it, both of which cover the top
+   of whatever we scroll a day into view. */
+.cal-day { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: calc(var(--bar-h) + 76px); }
 .cal-daysep { display: flex; justify-content: center; margin: 16px 0 6px; }
 .cal-daysep span {
   font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
@@ -834,6 +894,25 @@
 .mq-docklabel { display: none; }
 .mq-dockbtn.on .mq-docklabel { display: inline; }
 
+/* ---- Notification panel ---- */
+/* Hangs off the bell with nothing but the page behind it — unlike the sheets and
+   the palette, it gets no scrim to darken what it covers. As a plain .card that
+   meant var(--surface), which is translucent under the glass look: opened over
+   the Tonight hero the panel washed out to near-white and took its own text with
+   it. Opaque glass mix instead, the same fix .filter-menu and .friends-pop
+   already carry for the same reason. Top follows the bar, never a literal. */
+.mq-notif {
+  position: fixed; z-index: 56;
+  top: calc(var(--bar-h) + 4px); right: 16px;
+  width: min(380px, 92vw);
+  border-radius: var(--r-lg); overflow: hidden;
+  background: color-mix(in srgb, var(--app-bg) 94%, #ffffff 6%);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg);
+}
+[data-theme="light"] .mq-notif { background: rgba(255, 255, 255, 0.94); }
+
 /* ---- Command palette ---- */
 .mq-pal {
   position: fixed; z-index: 80; left: 50%; top: 12vh;
@@ -859,8 +938,11 @@
   display: flex; align-items: center; gap: 12px;
   padding: 9px 10px; border-radius: var(--r-sm); cursor: pointer;
 }
-.mq-pal-row.on { background: color-mix(in srgb, var(--accent) 13%, var(--surface-2)); }
-.mq-pal-art { width: 34px; height: 50px; border-radius: 6px; flex: 0 0 auto; border: 1px solid var(--border); }
+/* Same neutral raised surface as an active nav pill or segment — selection reads
+   one way everywhere, and the palette cursor moves on every keystroke, which is
+   the last place that wants an accent flashing. */
+.mq-pal-row.on { background: var(--surface-3); }
+.mq-pal-art { width: 34px; height: 50px; border-radius: var(--r-sm); flex: 0 0 auto; border: 1px solid var(--border); }
 .mq-pal-title { font-weight: 700; font-size: 14px; }
 .mq-pal-sub { color: var(--text-mute); font-size: 12px; margin-top: 1px; }
 .mq-pal-empty { padding: 26px 16px; text-align: center; color: var(--text-mute); font-size: 13.5px; }
@@ -982,9 +1064,9 @@
 }
 @media (max-width: 560px) {
   .mq-searchbtn-label, .mq-searchbtn .mq-kbd { display: none; }
-  /* Square it off once only the icon is left — the desktop padding leaves a
-     squashed oval sitting between round icon buttons. */
-  .mq-searchbtn { width: 32px; padding: 0; justify-content: center; }
+  /* Round it off once only the icon is left — the desktop padding leaves a
+     squashed oval sitting between circular icon buttons. */
+  .mq-searchbtn { width: var(--ctl-h); padding: 0; justify-content: center; }
   /* 21/9 collapses to a letterbox strip on a phone, so min-height takes over and
      the frame goes near-square — the overlaid copy needs that height anyway. */
   .mq-hero { min-height: 262px; }

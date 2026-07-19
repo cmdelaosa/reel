@@ -42,10 +42,9 @@
 [data-look="glass"][data-theme="light"] .card {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), var(--shadow);
 }
-[data-look="glass"] .segmented {
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-}
+/* No .segmented rule any more: the control has no background to frost. The one
+   instance that still floats over content carries its own blur — see
+   .cal-tabsbar .segmented. */
 
 /* Modals float on a deeply blurred scene */
 [data-look="glass"] .backdrop {

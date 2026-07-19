@@ -106,7 +106,7 @@ export function Shell() {
           <nav className="mq-tabs">
             {TABS.map((tab) => (
               <NavLink key={tab.path} to={tab.path} className={({ isActive }) => `mq-tab ${isActive ? "on" : ""}`}>
-                <tab.icon size={15} />
+                <tab.icon size={16} />
                 <span>{t(tab.label)}</span>
               </NavLink>
             ))}
