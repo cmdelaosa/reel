@@ -390,7 +390,7 @@ export function DiscoverSections() {
 
       <section className="flex flex-col gap-4">
         <div className="disc-toolbar">
-          <div className="segmented scroll no-scrollbar" role="tablist" aria-label="Discover">
+          <div className="segmented scroll no-scrollbar" role="tablist" aria-label={tr("Discover")}>
             {TABS.map((tb) => (
               <div
                 key={tb.key}

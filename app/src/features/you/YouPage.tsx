@@ -123,7 +123,7 @@ export default function YouPage() {
                 <div className="dim" style={{ fontSize: 13.5 }}>@{profile?.handle}</div>
               </div>
             </div>
-            <button className="btn btn-outline" title="Sharing lands with friends (Phase 4)">
+            <button className="btn btn-outline" title={tr("Sharing lands with friends (Phase 4)")}>
               <Share2 size={16} />{tr("Share profile")}
             </button>
           </div>

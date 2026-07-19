@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useWatchHeatmap } from "@/lib/stats";
-import { dateLocale, isEs, t as tr } from "@/lib/i18n";
+import { dateLocale, t as tr, tv } from "@/lib/i18n";
 
 /* GitHub-style contribution grid of the days you watched episodes — weeks as
    columns, Monday-first rows. Hidden entirely while loading or if the RPC is
@@ -50,7 +50,10 @@ export function WatchHeatmap({ userId }: { userId?: string }) {
         }
         cells.push({
           key,
-          label: `${n} ${n === 1 ? tr("episode") : tr("episodes")} · ${d.toLocaleDateString(dateLocale(), { day: "numeric", month: "short" })}`,
+          label: tv(n === 1 ? "{count} episode · {date}" : "{count} episodes · {date}", {
+            count: n,
+            date: d.toLocaleDateString(dateLocale(), { day: "numeric", month: "short" }),
+          }),
           n,
           level: n === 0 ? 0 : Math.max(1, Math.ceil((n / max) * 4)),
           future,
@@ -69,7 +72,14 @@ export function WatchHeatmap({ userId }: { userId?: string }) {
 
   if (isPending || isError || !grid) return null;
 
-  const weekdays = isEs() ? ["L", "", "X", "", "V", "", ""] : ["M", "", "W", "", "F", "", ""];
+  // Narrow weekday initials from the active locale (en M/W/F, es L/X/V) rather
+  // than a per-language array: rows are Monday-first, and only every other one
+  // is labelled — seven initials don't fit the column width.
+  const weekdays = [0, 1, 2, 3, 4, 5, 6].map((i) =>
+    i % 2 === 0 && i < 5
+      ? new Date(2024, 0, 1 + i).toLocaleDateString(dateLocale(), { weekday: "narrow" }) // 1 Jan 2024 was a Monday
+      : "",
+  );
   // Third person on a friend's profile, where every other heading reads that
   // way ("Their top ratings") and a bare "Watch activity" would be ambiguous.
   const heading = userId ? tr("Their watch activity") : tr("Watch activity");

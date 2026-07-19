@@ -90,7 +90,7 @@ export function Palette({ onClose, onOpen }: {
   return (
     <>
       <div className="backdrop" onClick={onClose} />
-      <div className="mq-pal sheet" onKeyDown={onKey} role="dialog" aria-modal="true" aria-label="Search shows">
+      <div className="mq-pal sheet" onKeyDown={onKey} role="dialog" aria-modal="true" aria-label={tr("Search shows")}>
         <div className="mq-pal-head">
           <Search size={17} className="mute" />
           <input

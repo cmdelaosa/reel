@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { t as tr } from "@/lib/i18n";
 
 /* Horizontal carousel with a header row: title/subtitle on the left and the two
    scroll arrows grouped at the top-right (opposite the title). Each arrow is
@@ -132,10 +133,10 @@ export function Rail({
           </div>
           <div className="rail-nav">
             {action}
-            <button className="rail-arrow" onClick={() => nudge(-1)} disabled={!canL} aria-label="Scroll left">
+            <button className="rail-arrow" onClick={() => nudge(-1)} disabled={!canL} aria-label={tr("Scroll left")}>
               <ChevronLeft size={18} />
             </button>
-            <button className="rail-arrow" onClick={() => nudge(1)} disabled={!canR} aria-label="Scroll right">
+            <button className="rail-arrow" onClick={() => nudge(1)} disabled={!canR} aria-label={tr("Scroll right")}>
               <ChevronRight size={18} />
             </button>
           </div>

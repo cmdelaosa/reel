@@ -7,7 +7,7 @@ import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { useUpNext, type UpNextRow } from "@/lib/upnext";
 import { useMarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
-import { isEs, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
+import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { Poster, Rail } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
@@ -113,9 +113,9 @@ export default function TonightPage() {
       {!isPending && !hero && (
         <div className="card" style={{ padding: "28px 24px" }}>
           <p className="dim" style={{ margin: 0, fontSize: 14 }}>
-            {isEs()
-              ? <>Nada en marcha — añade una serie con <kbd className="mq-kbd">⌘K</kbd> y marca por dónde vas.</>
-              : <>Nothing in progress — add a show with <kbd className="mq-kbd">⌘K</kbd> and mark where you are.</>}
+            {tr("Nothing in progress — add a show with {key} and mark where you are.")
+              .split("{key}")
+              .flatMap((part, i) => (i === 0 ? [part] : [<kbd key={i} className="mq-kbd">⌘K</kbd>, part]))}
           </p>
         </div>
       )}
@@ -229,7 +229,7 @@ function ContinueCard({ r, onOpen, onMarked }: { r: UpNextRow; onOpen: () => voi
             {showName} · {seLabel(r)}
           </div>
         </div>
-        <MarkCheck episodeId={r.episode_id} mark={mark} label={`Mark ${showName} ${seLabel(r)} watched`} onMarked={onMarked} />
+        <MarkCheck episodeId={r.episode_id} mark={mark} label={tv("Mark {name} {se} watched", { name: showName, se: seLabel(r) })} onMarked={onMarked} />
       </div>
     </div>
   );

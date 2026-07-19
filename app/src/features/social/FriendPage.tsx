@@ -22,7 +22,7 @@ import { useMyRatings } from "@/lib/ratings";
 import { tasteAffinity } from "@/lib/taste";
 import { timeSpentLabel } from "@/lib/stats";
 import { WatchHeatmap } from "@/features/you/WatchHeatmap";
-import { dateLocale, isEs, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
+import { dateLocale, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 import type { TitleRow } from "@/lib/schemas";
 
 /* Friend profile page (route /friend/:id). rpc_friend_snapshot supplies the
@@ -97,16 +97,10 @@ function toTitleRow(f: FriendFollow): TitleRow {
 
 function agreementLabel(theirs: number, mine: number): string {
   const d = Math.abs(theirs - mine);
-  if (isEs()) {
-    if (d === 0) return "Misma nota";
-    if (d <= 1) return "Básicamente coincidís";
-    if (d >= 4) return "Discrepáis totalmente";
-    return "Opiniones algo distintas";
-  }
-  if (d === 0) return "Same score";
-  if (d <= 1) return "You basically agree";
-  if (d >= 4) return "You strongly disagree";
-  return "Slightly different takes";
+  if (d === 0) return tr("Same score");
+  if (d <= 1) return tr("You basically agree");
+  if (d >= 4) return tr("You strongly disagree");
+  return tr("Slightly different takes");
 }
 
 /** TV-Time-style progress: thin bar + "watched / aired" underneath a poster. */
@@ -140,7 +134,7 @@ function FollowTile({ f, name, theirScore, progress, added, onOpen, onAdd }: {
           className="btn btn-icon badge-glass absolute"
           style={{ top: 6, right: 6, zIndex: 2, color: "#fff", width: 26, height: 26 }}
           title={added ? tr("In your library") : tr("Add to your library")}
-          aria-label={added ? `${name} is in your library` : `Add ${name} to your library`}
+          aria-label={tv(added ? "{name} is in your library" : "Add {name} to your library", { name })}
           onClick={(e) => { e.stopPropagation(); if (!added) onAdd(); }}
         >
           {added ? <Check size={14} /> : <Plus size={14} />}
@@ -305,43 +299,24 @@ export default function FriendPage() {
   // The last tab holds nothing but the head-to-head, so it is named and drawn
   // for that: a balance, not the star it shared with every other rating in the
   // app. "Notas" said whose notes it was showing, and the answer was "both".
-  const sections: { v: SectionKey; label: string; icon: typeof User }[] = isEs()
-    ? [
-        { v: "overview", label: "Resumen", icon: User },
-        { v: "shows", label: "Series", icon: LayoutGrid },
-        { v: "activity", label: "Actividad", icon: Activity },
-        { v: "compare", label: "Comparar", icon: Scale },
-      ]
-    : [
-        { v: "overview", label: "Overview", icon: User },
-        { v: "shows", label: "Shows", icon: LayoutGrid },
-        { v: "activity", label: "Activity", icon: Activity },
-        { v: "compare", label: "Compare", icon: Scale },
-      ];
+  const sections: { v: SectionKey; label: string; icon: typeof User }[] = [
+    { v: "overview", label: tr("Overview"), icon: User },
+    { v: "shows", label: tr("Shows"), icon: LayoutGrid },
+    { v: "activity", label: tr("Activity"), icon: Activity },
+    { v: "compare", label: tr("Compare"), icon: Scale },
+  ];
 
-  const filters: { v: ShowFilter; label: string }[] = isEs()
-    ? [
-        { v: "all", label: "Todas" },
-        { v: "both", label: "Seguís los dos" },
-        { v: "not", label: "No la sigues" },
-      ]
-    : [
-        { v: "all", label: "All" },
-        { v: "both", label: "You both follow" },
-        { v: "not", label: "You don't follow" },
-      ];
+  const filters: { v: ShowFilter; label: string }[] = [
+    { v: "all", label: tr("All") },
+    { v: "both", label: tr("You both follow") },
+    { v: "not", label: tr("You don't follow") },
+  ];
 
-  const sorts: { v: ShowSort; label: string }[] = isEs()
-    ? [
-        { v: "their", label: "Su nota" },
-        { v: "critic", label: "Nota de la crítica" },
-        { v: "air", label: "Fecha de emisión" },
-      ]
-    : [
-        { v: "their", label: "Their rating" },
-        { v: "critic", label: "Critic rating" },
-        { v: "air", label: "Air date" },
-      ];
+  const sorts: { v: ShowSort; label: string }[] = [
+    { v: "their", label: tr("Their rating") },
+    { v: "critic", label: tr("Critic rating") },
+    { v: "air", label: tr("Air date") },
+  ];
   // What the arrow means depends on the field it points at — "lowest first" on
   // an air date is nonsense, and the toggle is the only thing naming the order.
   const dirLabel = showSort === "air"
@@ -560,9 +535,11 @@ export default function FriendPage() {
                   ))}
                 </div>
                 <span className="mute" style={{ fontSize: 11.5 }}>
-                  {isEs()
-                    ? <>Anillo = tú también la sigues · <Plus size={11} style={{ verticalAlign: "-1px" }} /> la añade a tu biblioteca · barra = su progreso.</>
-                    : <>Ring = you follow it too · <Plus size={11} style={{ verticalAlign: "-1px" }} /> adds to your library · bar = their progress.</>}
+                  {/* One key for the whole legend: the + icon is slotted back
+                      where the translation puts {plus}, not where English did. */}
+                  {tr("Ring = you follow it too · {plus} adds to your library · bar = their progress.")
+                    .split("{plus}")
+                    .flatMap((part, i) => (i === 0 ? [part] : [<Plus key={i} size={11} style={{ verticalAlign: "-1px" }} />, part]))}
                 </span>
               </>
             )}
@@ -632,8 +609,8 @@ export default function FriendPage() {
                         <div className="dim" style={{ fontSize: 12.5 }}>{agreementLabel(c.score, c.mine)}</div>
                       </div>
                       <div className="flex items-center gap-1.5" style={{ flex: "0 0 auto" }}>
-                        <span className="badge badge-soft" title="Their score" style={{ fontWeight: 800 }}>{tr("Them")} {c.score}</span>
-                        <span className="badge badge-soft" title="Your score" style={{ fontWeight: 800 }}>{tr("You")} {c.mine}</span>
+                        <span className="badge badge-soft" title={tr("Their score")} style={{ fontWeight: 800 }}>{tr("Them")} {c.score}</span>
+                        <span className="badge badge-soft" title={tr("Your score")} style={{ fontWeight: 800 }}>{tr("You")} {c.mine}</span>
                       </div>
                     </div>
                   ))}
@@ -644,9 +621,7 @@ export default function FriendPage() {
             {derived && derived.coRated.length === 0 && (
               <div className="card" style={{ padding: "24px" }}>
                 <p className="dim" style={{ margin: 0, fontSize: 14 }}>
-                  {isEs()
-                    ? "Aún no habéis puntuado ninguna serie los dos. Puntuad alguna en común y aparecerá aquí."
-                    : "You haven't both rated the same show yet. Rate one you've both seen and it shows up here."}
+                  {tr("You haven't both rated the same show yet. Rate one you've both seen and it shows up here.")}
                 </p>
               </div>
             )}

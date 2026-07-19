@@ -5,7 +5,7 @@ import {
   useAcceptRequest, useFindProfile, useFriendships, useRemoveFriend, useSendRequest,
   type Friendship, type FoundProfile,
 } from "@/lib/friends";
-import { isEs, t as tr } from "@/lib/i18n";
+import { t as tr, tv } from "@/lib/i18n";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 
 /* You → Friends: add by handle, incoming requests atop, then the friends list. */
@@ -107,9 +107,7 @@ export function FriendsSection() {
       {friends.length === 0 && incoming.length === 0 ? (
         <div className="card" style={{ padding: "24px" }}>
           <p className="dim" style={{ margin: 0, fontSize: 14 }}>
-            {isEs()
-              ? "Aún no tienes amigos — añade a alguien por su @usuario o comparte una invitación."
-              : "No friends yet — add someone by their @handle, or share an invite."}
+            {tr("No friends yet — add someone by their @handle, or share an invite.")}
           </p>
         </div>
       ) : (
@@ -122,9 +120,7 @@ export function FriendsSection() {
 
       {outgoing.length > 0 && (
         <p className="mute" style={{ fontSize: 12.5 }}>
-          {isEs()
-            ? `${outgoing.length} ${outgoing.length === 1 ? "solicitud enviada pendiente" : "solicitudes enviadas pendientes"}.`
-            : `${outgoing.length} pending sent ${outgoing.length === 1 ? "request" : "requests"}.`}
+          {tv(outgoing.length === 1 ? "{count} pending sent request." : "{count} pending sent requests.", { count: outgoing.length })}
         </p>
       )}
     </section>

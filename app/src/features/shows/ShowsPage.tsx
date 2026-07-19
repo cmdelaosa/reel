@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { useLibrary, toTitleCard, type LibraryShow } from "@/lib/library";
 import type { ShowStatus } from "@/domain/status";
-import { dateLocale, isEs, t as tr } from "@/lib/i18n";
+import { dateLocale, t as tr, tv } from "@/lib/i18n";
 import { Poster, TabMenu } from "@/ui";
 import { PosterGridSkeleton } from "@/ui/Skeleton";
 
@@ -115,13 +115,13 @@ export default function ShowsPage() {
       {!isPending && items.length === 0 && (
         <div className="card" style={{ padding: "28px 24px" }}>
           <p className="dim" style={{ margin: 0, fontSize: 14 }}>
+            {/* One key for the sentence; the ⌘K chip is slotted back wherever
+                the translation puts {key}, so it isn't pinned to English order. */}
             {f === "all"
-              ? isEs()
-                ? <>Aún no hay nada — pulsa <kbd className="mq-kbd">⌘K</kbd> y añade una serie.</>
-                : <>Nothing here yet — hit <kbd className="mq-kbd">⌘K</kbd> and add a show.</>
-              : isEs()
-                ? `Nada en ${tr(FILTERS.find((x) => x.key === f)?.label ?? "")} ahora mismo.`
-                : `Nothing in ${FILTERS.find((x) => x.key === f)?.label} right now.`}
+              ? tr("Nothing here yet — hit {key} and add a show.")
+                  .split("{key}")
+                  .flatMap((part, i) => (i === 0 ? [part] : [<kbd key={i} className="mq-kbd">⌘K</kbd>, part]))
+              : tv("Nothing in {filter} right now.", { filter: tr(FILTERS.find((x) => x.key === f)?.label ?? "") })}
           </p>
         </div>
       )}

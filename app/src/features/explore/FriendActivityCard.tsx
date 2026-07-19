@@ -1,8 +1,9 @@
+import { Fragment } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useFriendActivity, type ActivityItem } from "@/lib/explore";
 import { relativeTime } from "@/domain/time";
 import { tmdbImg } from "@/lib/tmdb";
-import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
+import { dateLocale, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { useShowMore } from "@/ui/ShowMore";
 import { posterBg } from "@/ui/posterBg";
@@ -48,6 +49,17 @@ function epRange({ from, to }: FeedRow): string {
   return `S${from.season_number} · E${from.episode_number} – S${to.season_number} · E${to.episode_number}`;
 }
 
+/* Slot React nodes into a translated sentence's {placeholders}. The whole
+   sentence is one dictionary key, so a language can put the show name and the
+   episode range where its grammar wants them ("vio S1 · E3 de Severance") —
+   a chain of translated fragments would freeze English order. */
+function fill(s: string, nodes: Record<string, React.ReactNode>): React.ReactNode {
+  return s.split(/(\{[a-z]+\})/).map((part, i) => {
+    const slot = /^\{[a-z]+\}$/.test(part) ? nodes[part.slice(1, -1)] : undefined;
+    return <Fragment key={i}>{slot ?? part}</Fragment>;
+  });
+}
+
 function phrase(r: FeedRow, titleName: string): React.ReactNode {
   const a = r.a;
   const name = <b style={{ fontWeight: 700 }}>{titleName}</b>;
@@ -56,21 +68,14 @@ function phrase(r: FeedRow, titleName: string): React.ReactNode {
       {r.count > 1 ? epRange(r) : <>S{a.season_number} · E{a.episode_number}</>}
     </b>
   );
-  if (isEs()) {
-    switch (a.verb) {
-      case "rated": return <>puntuó {name}</>;
-      case "added": return <>añadió {name} a su lista</>;
-      case "watched": return <>vio {eps} de {name}</>;
-      case "started": return <>empezó a ver {name}</>;
-      case "finished_season": return <>terminó la temporada {a.season_number} de {name}</>;
-    }
-  }
   switch (a.verb) {
-    case "rated": return <>rated {name}</>;
-    case "added": return <>added {name} to their watchlist</>;
-    case "watched": return <>watched {eps} of {name}</>;
-    case "started": return <>started watching {name}</>;
-    case "finished_season": return <>finished season {a.season_number} of {name}</>;
+    case "rated": return fill(tr("rated {name}"), { name });
+    case "added": return fill(tr("added {name} to their watchlist"), { name });
+    case "watched": return fill(tr("watched {eps} of {name}"), { eps, name });
+    case "started": return fill(tr("started watching {name}"), { name });
+    case "finished_season":
+      // {season} is a plain number — filled first, so only {name} stays a node.
+      return fill(tv("finished season {season} of {name}", { season: a.season_number ?? "" }), { name });
   }
 }
 

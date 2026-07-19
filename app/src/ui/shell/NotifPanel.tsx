@@ -1,7 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router";
 import { Bell, CalendarClock, Check, Download, Tv, Users } from "lucide-react";
 import { useNotifications, useMarkNotificationsRead, type Notification } from "@/lib/notifications";
-import { isEs, t as tr } from "@/lib/i18n";
+import { t as tr, tv } from "@/lib/i18n";
 
 /* Bell popover — the in-app inbox. Styling ported from prototype overlays.tsx
    NotifPanel; rows are live (Realtime) and route by type. */
@@ -22,45 +22,33 @@ function relTime(iso: string): string {
 }
 
 function title(n: Notification): string {
-  if (isEs()) {
-    switch (n.type) {
-      case "new_episode": return "Nuevo episodio";
-      case "premiere": return "Estreno con fecha";
-      case "friend_request": return "Solicitud de amistad";
-      case "import_done": return "Importación terminada";
-      default: return n.type;
-    }
-  }
   switch (n.type) {
-    case "new_episode": return "New episode";
-    case "premiere": return "Premiere dated";
-    case "friend_request": return "Friend request";
-    case "import_done": return "Import finished";
+    case "new_episode": return tr("New episode");
+    case "premiere": return tr("Premiere dated");
+    case "friend_request": return tr("Friend request");
+    case "import_done": return tr("Import finished");
+    // The type itself, for a row this build doesn't know how to name yet.
     default: return n.type;
   }
 }
 
 function body(n: Notification): string {
   const p = n.payload as Record<string, unknown>;
-  if (isEs()) {
-    switch (n.type) {
-      case "new_episode":
-        return `${p.show_name ?? "Una serie"} S${p.season_number} · E${p.episode_number}${p.episode_name ? ` "${p.episode_name}"` : ""} acaba de emitirse`;
-      case "premiere":
-        return `${p.show_name ?? "Una serie"} ya tiene fecha de estreno`;
-      case "import_done":
-        return `${p.matched ?? 0} series importadas de TV Time`;
-      default:
-        return typeof p.message === "string" ? p.message : "";
-    }
-  }
+  const show = (p.show_name as string | undefined) ?? tr("A show");
   switch (n.type) {
     case "new_episode":
-      return `${p.show_name ?? "A show"} S${p.season_number} · E${p.episode_number}${p.episode_name ? ` "${p.episode_name}"` : ""} just aired`;
+      // The episode title travels as a placeholder (quoted, or empty) rather
+      // than being appended, so a language can put it anywhere in the sentence.
+      return tv("{show} S{season} · E{episode}{name} just aired", {
+        show,
+        season: String(p.season_number),
+        episode: String(p.episode_number),
+        name: p.episode_name ? ` "${p.episode_name}"` : "",
+      });
     case "premiere":
-      return `${p.show_name ?? "A show"} has a premiere date`;
+      return tv("{show} has a premiere date", { show });
     case "import_done":
-      return `${p.matched ?? 0} shows imported from TV Time`;
+      return tv("{count} shows imported from TV Time", { count: String(p.matched ?? 0) });
     default:
       return typeof p.message === "string" ? p.message : "";
   }

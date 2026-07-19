@@ -3,7 +3,7 @@ import type { TitleCard } from "@/domain/types";
 import { posterBg } from "@/ui/posterBg";
 import { NetworkLogo } from "@/ui/NetworkLogo";
 import { useTitleIntent } from "@/lib/useOpenTitle";
-import { locName, tGenre, useEsNames } from "@/lib/i18n";
+import { locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 
 /* ---- Poster tile (overlaid title, TV-Time-like) ---- */
 export function Poster({ t, subtitle, showNetwork = true, onClick, prefetchTmdbId }: {
@@ -31,7 +31,7 @@ export function Poster({ t, subtitle, showNetwork = true, onClick, prefetchTmdbI
         ? {
             role: "button",
             tabIndex: 0,
-            "aria-label": `${name} — open details`,
+            "aria-label": tv("{name} — open details", { name }),
             onKeyDown: (e: React.KeyboardEvent) => {
               if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); }
             },
@@ -44,7 +44,7 @@ export function Poster({ t, subtitle, showNetwork = true, onClick, prefetchTmdbI
         {showNetwork ? <NetworkLogo network={t.network} /> : <span />}
         <span className="flex items-center gap-1">
           {t.stopped && (
-            <span className="badge badge-glass" title="Stopped watching">
+            <span className="badge badge-glass" title={tr("Stopped watching")}>
               <Pause size={11} fill="currentColor" strokeWidth={0} />
             </span>
           )}

@@ -116,9 +116,9 @@ function StatRow({ t, groupAvg, onOpen }: { t: StatTitle; groupAvg?: number; onO
       </div>
       <div className="flex items-center gap-1.5" style={{ flex: "0 0 auto" }}>
         {t.mine != null && (
-          <span className="badge badge-soft" title="Your score" style={{ fontWeight: 800 }}>{tr("You")} {t.mine}</span>
+          <span className="badge badge-soft" title={tr("Your score")} style={{ fontWeight: 800 }}>{tr("You")} {t.mine}</span>
         )}
-        <span className="badge badge-soft" title={groupAvg != null ? "Group average (yours included)" : "Friends' average"} style={{ fontWeight: 800 }}>
+        <span className="badge badge-soft" title={tr(groupAvg != null ? "Group average (yours included)" : "Friends' average")} style={{ fontWeight: 800 }}>
           <Star size={11} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
           {fmt(groupAvg ?? t.friendAvg)}
         </span>

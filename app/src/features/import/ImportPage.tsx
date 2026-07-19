@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Loader2, Upload, XCircle } from "lucide-react";
 import { useContinueImport, useLatestImportJob, useStartImport } from "@/lib/import";
-import { isEs, t as tr } from "@/lib/i18n";
+import { t as tr, tv } from "@/lib/i18n";
 import { qk } from "@/lib/queryKeys";
 
 /* Import from TV Time — drop zone → job status (polled) → report. */
@@ -104,9 +104,8 @@ export default function ImportPage() {
               {job.status === "done" && tr("Import complete")}
               {job.status === "error" && tr("Import failed")}
               {job.status === "pending" && tr("Queued…")}
-              {job.status === "running" && (isEs()
-                ? `Importando… ${report.done ?? 0} / ${report.total ?? "?"} series`
-                : `Importing… ${report.done ?? 0} / ${report.total ?? "?"} shows`)}
+              {job.status === "running" &&
+                tv("Importing… {done} / {total} shows", { done: report.done ?? 0, total: report.total ?? "?" })}
             </div>
           </div>
 
@@ -131,9 +130,7 @@ export default function ImportPage() {
 
           {job.status === "done" && unmatched.length > 0 && (
             <p className="mute" style={{ fontSize: 12.5, margin: 0 }}>
-              {isEs()
-                ? <>Sin coincidencia: {unmatched.join(", ")} — añádelas a mano con ⌘K.</>
-                : <>Couldn't match: {unmatched.join(", ")} — add them by hand with ⌘K.</>}
+              {tv("Couldn't match: {shows} — add them by hand with ⌘K.", { shows: unmatched.join(", ") })}
             </p>
           )}
         </div>

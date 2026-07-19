@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { Bell, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, User, X } from "lucide-react";
 import { getCredits, tmdbImg } from "@/lib/tmdb";
-import { dateLocale, isEs, t as tr, tGenre } from "@/lib/i18n";
+import { dateLocale, isEs, t as tr, tGenre, tv } from "@/lib/i18n";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
 import { useIgnored, useIgnore, useUnignore } from "@/lib/ignore";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
@@ -42,7 +42,7 @@ function Skeleton() {
 
 function EpisodeSkeleton() {
   return (
-    <div className="flex flex-col gap-2" aria-label="Loading episodes">
+    <div className="flex flex-col gap-2" aria-label={tr("Loading episodes")}>
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="skeleton" style={{ height: 50 }} />
       ))}
@@ -100,10 +100,10 @@ function SeasonTabs({ seasons, active, onPick }: { seasons: SeasonRow[]; active:
       <div className="rail-head" style={{ marginBottom: 10 }}>
         <div className="eyebrow">{tr("Seasons")}</div>
         <div className="rail-nav">
-          <button className="rail-arrow" onClick={() => nudge(-1)} disabled={!canL} aria-label="Earlier seasons">
+          <button className="rail-arrow" onClick={() => nudge(-1)} disabled={!canL} aria-label={tr("Earlier seasons")}>
             <ChevronLeft size={18} />
           </button>
-          <button className="rail-arrow" onClick={() => nudge(1)} disabled={!canR} aria-label="Later seasons">
+          <button className="rail-arrow" onClick={() => nudge(1)} disabled={!canR} aria-label={tr("Later seasons")}>
             <ChevronRight size={18} />
           </button>
         </div>
@@ -175,12 +175,12 @@ function CastRail({ cast, onPick }: { cast: CastMember[]; onPick: (id: number) =
         ))}
       </div>
       {canL && (
-        <button className="rail-arrow cast-edge left" onClick={() => nudge(-1)} aria-label="Earlier cast">
+        <button className="rail-arrow cast-edge left" onClick={() => nudge(-1)} aria-label={tr("Earlier cast")}>
           <ChevronLeft size={18} />
         </button>
       )}
       {canR && (
-        <button className="rail-arrow cast-edge right" onClick={() => nudge(1)} aria-label="More cast">
+        <button className="rail-arrow cast-edge right" onClick={() => nudge(1)} aria-label={tr("More cast")}>
           <ChevronRight size={18} />
         </button>
       )}
@@ -404,7 +404,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
         ref={trapRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title ? `${displayName} details` : "Show details"}
+        aria-label={title ? tv("{name} details", { name: displayName }) : tr("Show details")}
         tabIndex={-1}
         className="detail-sheet sheet-center fixed z-[70] card overflow-hidden flex flex-col"
         style={{
@@ -513,7 +513,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                   <button
                     className="btn btn-outline"
                     onClick={() => setStopped.mutate({ titleId: entry.title_id, stopped: !entry.stopped })}
-                    title={entry.stopped ? "Resume — back in Tonight & calendar" : "Stop watching — keeps history, hides from Tonight"}
+                    title={tr(entry.stopped ? "Resume — back in Tonight & calendar" : "Stop watching — keeps history, hides from Tonight")}
                   >
                     {entry.stopped ? <><Play size={16} />{tr("Resume")}</> : <><Pause size={16} />{tr("Stop")}</>}
                   </button>
@@ -523,7 +523,9 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                     className="btn btn-outline"
                     disabled={markSeries.isPending}
                     onClick={markWholeSeries}
-                    title={`Mark all ${unwatchedAired} aired episodes as seen — for shows you've already watched`}
+                    title={unwatchedAired === 1
+                      ? tr("Mark the last aired episode as seen — for shows you've already watched")
+                      : tv("Mark all {count} aired episodes as seen — for shows you've already watched", { count: unwatchedAired })}
                   >
                     <CheckCheck size={16} />{markSeries.isPending ? tr("Marking…") : tr("All watched")}
                   </button>
@@ -572,7 +574,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                               className="friends-pop-row"
                               role="button"
                               tabIndex={0}
-                              title={`Open ${r.name}'s profile`}
+                              title={tv("Open {name}'s profile", { name: r.name })}
                               onClick={() => { setFriendsOpen(false); onClose(); navigate(`/friend/${r.id}`); }}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFriendsOpen(false); onClose(); navigate(`/friend/${r.id}`); }
@@ -656,11 +658,12 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
           >
             <div style={{ fontWeight: 800, fontSize: 16 }}>{tr("Mark earlier episodes as seen?")}</div>
             <p className="dim" style={{ fontSize: 14, lineHeight: 1.55, margin: "2px 0 14px" }}>
-              {isEs()
-                ? <>Aún tienes {unseenPriors(pending)} {unseenPriors(pending) === 1 ? "episodio sin ver" : "episodios sin ver"} hasta
-                  {" "}S{pending.season_number} · E{pending.episode_number}. ¿Marcarlos todos como vistos?</>
-                : <>You still have {unseenPriors(pending)} unwatched {unseenPriors(pending) === 1 ? "episode" : "episodes"} up to
-                  {" "}S{pending.season_number} · E{pending.episode_number}. Mark them all as seen?</>}
+              {tv(
+                unseenPriors(pending) === 1
+                  ? "You still have {count} unwatched episode up to S{season} · E{episode}. Mark them all as seen?"
+                  : "You still have {count} unwatched episodes up to S{season} · E{episode}. Mark them all as seen?",
+                { count: unseenPriors(pending), season: pending.season_number, episode: pending.episode_number },
+              )}
             </p>
             <div className="flex items-center gap-2.5">
               <button className="btn btn-accent flex-1" onClick={() => confirmMarkUpTo(pending)}>
@@ -716,9 +719,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
           style={{ zIndex: 85, left: "50%", bottom: 26, transform: "translateX(-50%)", padding: "12px 16px", borderRadius: 999 }}
         >
           <span style={{ fontSize: 13.5, fontWeight: 650 }}>
-            {isEs()
-              ? `${toast.count} ${toast.count === 1 ? "episodio marcado" : "episodios marcados"} como vistos`
-              : `Marked ${toast.count} ${toast.count === 1 ? "episode" : "episodes"} as seen`}
+            {tv(toast.count === 1 ? "Marked {count} episode as seen" : "Marked {count} episodes as seen", { count: toast.count })}
           </span>
           <button
             className="btn btn-ghost btn-sm"

@@ -3,7 +3,7 @@ import { ChevronRight, Flame, Heart, ThumbsUp } from "lucide-react";
 import { tmdbImg } from "@/lib/tmdb";
 import { useTaste, type TasteFriend, type TasteTitle } from "@/lib/taste";
 import { useOpenTitle } from "@/lib/useOpenTitle";
-import { isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
+import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { FriendAvatar, FriendStack } from "@/ui/FriendAvatar";
 import { useShowMore } from "@/ui/ShowMore";
 import { posterBg } from "@/ui/posterBg";
@@ -20,7 +20,7 @@ function AffinityRing({ pct, size = 50 }: { pct: number; size?: number }) {
     <span
       style={{ position: "relative", width: size, height: size, flex: "0 0 auto", display: "grid", placeItems: "center" }}
       role="img"
-      aria-label={`${pct}% taste match`}
+      aria-label={tv("{pct}% taste match", { pct })}
     >
       <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: ring, WebkitMask: mask, mask }} />
       <span style={{ fontSize: 13, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{pct}%</span>
@@ -74,8 +74,8 @@ function TitleRow({ t, onOpen }: { t: TasteTitle; onOpen: () => void }) {
         </div>
       </div>
       <div className="flex items-center gap-1.5" style={{ flex: "0 0 auto" }}>
-        <span className="badge badge-soft" title="Your score" style={{ fontWeight: 800 }}>{tr("You")} {t.mine}</span>
-        <span className="badge badge-soft" title="Friends' average" style={{ fontWeight: 800 }}>
+        <span className="badge badge-soft" title={tr("Your score")} style={{ fontWeight: 800 }}>{tr("You")} {t.mine}</span>
+        <span className="badge badge-soft" title={tr("Friends' average")} style={{ fontWeight: 800 }}>
           {tr("Them")} {Number.isInteger(t.friendAvg) ? t.friendAvg : t.friendAvg.toFixed(1)}
         </span>
       </div>
@@ -124,9 +124,7 @@ export default function TastePage() {
             {ranked.more}
             {taste.unranked.length > 0 && (
               <p className="mute" style={{ fontSize: 12.5, margin: 0 }}>
-                {isEs()
-                  ? `Aún no hay notas compartidas con ${taste.unranked.map((f) => f.name).join(", ")}.`
-                  : `No shared ratings yet with ${taste.unranked.map((f) => f.name).join(", ")}.`}
+                {tv("No shared ratings yet with {friends}.", { friends: taste.unranked.map((f) => f.name).join(", ") })}
               </p>
             )}
             {taste.ranked.length > 0 && (

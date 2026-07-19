@@ -9,7 +9,7 @@ import { tmdbImg } from "@/lib/tmdb";
 import { NetworkLogo, TabMenu } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useOpenTitle } from "@/lib/useOpenTitle";
-import { dateLocale, isEs, locName, t as tr, useEsNames } from "@/lib/i18n";
+import { dateLocale, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { CalEpGroup } from "@/features/calendar/CalEpGroup";
 
@@ -147,9 +147,7 @@ function MyShowsFeed() {
   if (!isPending && rows.length === 0) {
     return (
       <p className="dim">
-        {isEs()
-          ? "No hay episodios con fecha de las series que sigues en esta ventana."
-          : "No dated episodes from the shows you follow in this window."}
+        {tr("No dated episodes from the shows you follow in this window.")}
       </p>
     );
   }
@@ -192,9 +190,7 @@ function MyShowsFeed() {
           style={{ zIndex: 85, left: "50%", bottom: 26, transform: "translateX(-50%)", padding: "12px 16px", borderRadius: 999 }}
         >
           <span style={{ fontSize: 13.5, fontWeight: 650 }}>
-            {isEs()
-              ? `${toast.count} ${toast.count === 1 ? "episodio marcado" : "episodios marcados"} como vistos`
-              : `Marked ${toast.count} ${toast.count === 1 ? "episode" : "episodes"} as seen`}
+            {tv(toast.count === 1 ? "Marked {count} episode as seen" : "Marked {count} episodes as seen", { count: toast.count })}
           </span>
           <button className="btn btn-ghost btn-sm" onClick={() => { undoMarks.mutate(toast.ids); setToast(null); }}>
             {tr("Undo")}
@@ -246,24 +242,18 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() ? "month" : "later";
   };
 
-  const groups: { key: "month" | "later" | "tba"; title: string }[] = isEs()
-    ? [
-        { key: "month", title: "Este mes" },
-        { key: "later", title: "Más adelante" },
-        { key: "tba", title: "Anunciadas · sin fecha" },
-      ]
-    : [
-        { key: "month", title: "This month" },
-        { key: "later", title: `Later` },
-        { key: "tba", title: "Announced · no date yet" },
-      ];
+  const groups: { key: "month" | "later" | "tba"; title: string }[] = [
+    { key: "month", title: tr("This month") },
+    { key: "later", title: tr("Later") },
+    { key: "tba", title: tr("Announced · no date yet") },
+  ];
 
   if (items.length === 0) {
     return (
       <p className="dim" style={{ fontSize: 14 }}>
-        {isEs()
-          ? `Nada ${kind === "returning" ? "que regrese" : "nuevo"} de las series que sigues ahora mismo.`
-          : `Nothing ${kind === "returning" ? "returning" : "new"} from the shows you follow right now.`}
+        {tr(kind === "returning"
+          ? "Nothing returning from the shows you follow right now."
+          : "Nothing new from the shows you follow right now.")}
       </p>
     );
   }
@@ -317,7 +307,7 @@ function UpcomingRow({ s, at, announced }: { s: LibraryShow; at: number | null; 
             {tr("Season")} {s.upcoming_season_number}
           </div>
         ) : (
-          <div className="dim truncate" style={{ fontSize: 13 }}>{s.genres.slice(0, 2).join(", ") || "—"}</div>
+          <div className="dim truncate" style={{ fontSize: 13 }}>{s.genres.slice(0, 2).map(tGenre).join(", ") || "—"}</div>
         )}
       </div>
       <button

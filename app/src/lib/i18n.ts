@@ -76,6 +76,11 @@ const ES: Record<string, string> = {
   "Decline": "Rechazar",
   "Copied": "Copiado",
   "Copy link": "Copiar enlace",
+  // Rail arrows and the search dialog: invisible unless you're on a screen
+  // reader, which is exactly why they were the last English left.
+  "Scroll left": "Desplazar a la izquierda",
+  "Scroll right": "Desplazar a la derecha",
+  "Search shows": "Buscar series",
 
   // ---- Settings sheet ----
   "Theme": "Tema",
@@ -114,6 +119,8 @@ const ES: Record<string, string> = {
   "% done": "% visto",
   "min": "min", // same abbreviation in es — routed through t() so the hero meta has no raw string
   "Aired {days} days ago": "Emitido hace {days} días",
+  "Nothing in progress — add a show with {key} and mark where you are.":
+    "Nada en marcha — añade una serie con {key} y marca por dónde vas.",
 
   // ---- Shows ----
   "Watching": "Viendo",
@@ -134,6 +141,10 @@ const ES: Record<string, string> = {
     "Has visto todo lo emitido — solo queda esperar la próxima temporada.",
   "Next episode": "Próximo episodio",
   "Stopped watching": "Abandonada",
+  // {key} is the ⌘K chip: it stays a <kbd>, so the sentence travels whole and
+  // the component splits on the placeholder to slot the element back in.
+  "Nothing here yet — hit {key} and add a show.": "Aún no hay nada — pulsa {key} y añade una serie.",
+  "Nothing in {filter} right now.": "Nada en {filter} ahora mismo.",
 
   // ---- Detail sheet ----
   "Seasons": "Temporadas",
@@ -160,6 +171,29 @@ const ES: Record<string, string> = {
   "Only this one": "Solo este",
   "Mark all": "Marcar los",
   "TBA": "Por anunciar",
+  "Loading episodes": "Cargando episodios",
+  "Earlier seasons": "Temporadas anteriores",
+  "Later seasons": "Temporadas siguientes",
+  "Earlier cast": "Reparto anterior",
+  "More cast": "Más reparto",
+  "Show details": "Detalles de la serie",
+  "{name} details": "Detalles de {name}",
+  "Resume — back in Tonight & calendar": "Reanudar — vuelve a Esta noche y al calendario",
+  "Stop watching — keeps history, hides from Tonight":
+    "Dejar de ver — conserva el historial y la oculta de Esta noche",
+  // Singular gets its own sentence: "los 1 episodios" is broken Spanish, and
+  // the English it mirrored ("all 1 aired episodes") was never right either.
+  "Mark the last aired episode as seen — for shows you've already watched":
+    "Marcar el último episodio emitido como visto — para series que ya has visto",
+  "Mark all {count} aired episodes as seen — for shows you've already watched":
+    "Marcar los {count} episodios emitidos como vistos — para series que ya has visto",
+  "Open {name}'s profile": "Abrir el perfil de {name}",
+  // Two whole sentences rather than a shared stem plus "episode"/"episodes":
+  // a language whose plural reshapes the clause can't be served by a swapped noun.
+  "You still have {count} unwatched episode up to S{season} · E{episode}. Mark them all as seen?":
+    "Aún tienes {count} episodio sin ver hasta S{season} · E{episode}. ¿Marcarlos todos como vistos?",
+  "You still have {count} unwatched episodes up to S{season} · E{episode}. Mark them all as seen?":
+    "Aún tienes {count} episodios sin ver hasta S{season} · E{episode}. ¿Marcarlos todos como vistos?",
 
   // ---- Calendar ----
   "Series premiere": "Estreno de la serie",
@@ -179,10 +213,24 @@ const ES: Record<string, string> = {
   "Loading earlier episodes…": "Cargando episodios anteriores…",
   "Later": "Más adelante",
   "Season": "Temporada",
+  "No dated episodes from the shows you follow in this window.":
+    "No hay episodios con fecha de las series que sigues en esta ventana.",
+  "Marked {count} episode as seen": "{count} episodio marcado como visto",
+  "Marked {count} episodes as seen": "{count} episodios marcados como vistos",
+  "This month": "Este mes",
+  "Announced · no date yet": "Anunciadas · sin fecha",
+  // Whole sentences, not "Nothing " + a verb: es puts the adjective after the
+  // noun it qualifies, so the two halves can't be assembled in English order.
+  "Nothing returning from the shows you follow right now.":
+    "Nada que regrese de las series que sigues ahora mismo.",
+  "Nothing new from the shows you follow right now.":
+    "Nada nuevo de las series que sigues ahora mismo.",
 
   // ---- History ----
   "Everything you've watched, newest first.": "Todo lo que has visto, lo más reciente primero.",
   "Nothing watched yet.": "Aún no has visto nada.",
+  "Nothing watched yet. Episodes you mark as watched show up here.":
+    "Aún no has visto nada. Los episodios que marques como vistos aparecen aquí.",
 
   // ---- You ----
   "in your library": "en tu biblioteca",
@@ -195,6 +243,9 @@ const ES: Record<string, string> = {
   "Taste profile": "Perfil de gustos",
   "Watch activity": "Actividad de visionado",
   "Their watch activity": "Su actividad de visionado",
+  // Heatmap cell tooltip — the whole line, so the count and the date can swap.
+  "{count} episode · {date}": "{count} episodio · {date}",
+  "{count} episodes · {date}": "{count} episodios · {date}",
   "Less": "Menos",
   "More": "Más",
   "Your ratings": "Tus notas",
@@ -211,9 +262,16 @@ const ES: Record<string, string> = {
   "days ago": "días",
   // Whole sentence, not "days ago" + a number: es puts the count in the middle.
   "{days} days ago": "hace {days} días",
+  "Sharing lands with friends (Phase 4)": "Compartir llega con los amigos (fase 4)",
   "Invites": "Invitaciones",
   "Create invite": "Crear invitación",
   "No invites yet — create one to share.": "Aún no hay invitaciones — crea una para compartir.",
+  // Invite states. The badge shows the bare word; the row below names the
+  // redeemer when there is one, so both come from the same three keys.
+  "Used": "Usada",
+  "Used by @{handle}": "Usada por @{handle}",
+  "Expired": "Caducada",
+  "Unused": "Sin usar",
 
   // ---- Friends / social ----
   "Who you watch with — their activity, their favorites.": "Con quién ves series — su actividad y sus favoritas.",
@@ -226,6 +284,14 @@ const ES: Record<string, string> = {
   "activity: Watched": "Vio",
   "activity: Rated": "Puntuó",
   "activity: Added": "Añadió",
+  /* Explore's activity feed writes whole sentences instead of a verb + a noun,
+     because {name} and {eps} are bold <b> nodes the component slots back in
+     after translating — that way es can move them ("vio {eps} de {name}"). */
+  "rated {name}": "puntuó {name}",
+  "added {name} to their watchlist": "añadió {name} a su lista",
+  "watched {eps} of {name}": "vio {eps} de {name}",
+  "started watching {name}": "empezó a ver {name}",
+  "finished season {season} of {name}": "terminó la temporada {season} de {name}",
   "Taste match": "Afinidad de gustos",
   "Friends stats": "Estadísticas de amigos",
   "What to watch next, score comparisons, shared stinkers": "Qué ver, comparativa de notas y los truños compartidos",
@@ -254,6 +320,13 @@ const ES: Record<string, string> = {
   "wants to connect": "quiere conectar",
   "In your library": "En tu biblioteca",
   "Add to your library": "Añadir a tu biblioteca",
+  // Same two states as above, but as the a11y label that names the show.
+  "{name} is in your library": "{name} está en tu biblioteca",
+  "Add {name} to your library": "Añadir {name} a tu biblioteca",
+  "No friends yet — add someone by their @handle, or share an invite.":
+    "Aún no tienes amigos — añade a alguien por su @usuario o comparte una invitación.",
+  "{count} pending sent request.": "{count} solicitud enviada pendiente.",
+  "{count} pending sent requests.": "{count} solicitudes enviadas pendientes.",
   "Profile not available": "Perfil no disponible",
   "This profile is private or not one of your friends.": "Este perfil es privado o no es de uno de tus amigos.",
   "Newest first": "Las más recientes primero",
@@ -278,6 +351,29 @@ const ES: Record<string, string> = {
   "Recent activity": "Actividad reciente",
   "No activity yet.": "Aún sin actividad.",
   "You both rated": "Puntuadas por los dos",
+  // Friend profile: section tabs, the shows filter/sort strips, score badges.
+  "Overview": "Resumen",
+  "Activity": "Actividad",
+  "Compare": "Comparar",
+  "You both follow": "Seguís los dos",
+  "You don't follow": "No la sigues",
+  "Their rating": "Su nota",
+  "Critic rating": "Nota de la crítica",
+  "Air date": "Fecha de emisión",
+  "Their score": "Su nota",
+  "Friends' average": "Media de amigos",
+  "Group average (yours included)": "Media del grupo (tú incluido)",
+  // Head-to-head verdicts. Sentence-cased and standalone here; the lowercase
+  // "you basically agree" above is a fragment inside a Taste-page count.
+  "Same score": "Misma nota",
+  "You basically agree": "Básicamente coincidís",
+  "You strongly disagree": "Discrepáis totalmente",
+  "Slightly different takes": "Opiniones algo distintas",
+  "You haven't both rated the same show yet. Rate one you've both seen and it shows up here.":
+    "Aún no habéis puntuado ninguna serie los dos. Puntuad alguna en común y aparecerá aquí.",
+  // {plus} is the inline + icon, slotted back after translation.
+  "Ring = you follow it too · {plus} adds to your library · bar = their progress.":
+    "Anillo = tú también la sigues · {plus} la añade a tu biblioteca · barra = su progreso.",
 
   // ---- Explore ----
   "Find your next show — starting with what your friends love.":
@@ -337,6 +433,7 @@ const ES: Record<string, string> = {
   "rated it": "la puntuó",
   "Tap a friend for the full 1-on-1 comparison": "Toca un amigo para la comparativa completa 1 a 1",
   "Them": "Ellos",
+  "No shared ratings yet with {friends}.": "Aún no hay notas compartidas con {friends}.",
 
   // ---- Search palette ----
   "Search TV shows…": "Busca series…",
@@ -365,6 +462,10 @@ const ES: Record<string, string> = {
   // ---- Poster lightbox ----
   "View poster": "Ver el póster",
   "Close": "Cerrar",
+  // a11y labels that name a show — the only text a screen reader gets off a
+  // poster tile or a mark-watched check, so they carry the whole sentence.
+  "{name} — open details": "{name} — abrir detalles",
+  "Mark {name} {se} watched": "Marcar {name} {se} como visto",
 
   // ---- Landing (public marketing page) ----
   "Features": "Funciones",
@@ -424,6 +525,17 @@ const ES: Record<string, string> = {
   // ---- Notifications panel ----
   "Mark all read": "Marcar todo leído",
   "You're all caught up.": "Estás al día.",
+  // Row titles (singular — the settings toggles above use the plural forms).
+  "New episode": "Nuevo episodio",
+  "Premiere dated": "Estreno con fecha",
+  "Friend request": "Solicitud de amistad",
+  "Import finished": "Importación terminada",
+  // Row bodies. {name} carries the already-quoted episode title or "" — the
+  // whole clause is one key so a language can move it off the end.
+  "A show": "Una serie",
+  "{show} S{season} · E{episode}{name} just aired": "{show} S{season} · E{episode}{name} acaba de emitirse",
+  "{show} has a premiere date": "{show} ya tiene fecha de estreno",
+  "{count} shows imported from TV Time": "{count} series importadas de TV Time",
 
   // ---- Import ----
   "Importing…": "Importando…",
@@ -435,6 +547,9 @@ const ES: Record<string, string> = {
   "Shows matched": "Series encontradas",
   "Episodes marked": "Episodios marcados",
   "Couldn't match": "Sin coincidencia",
+  "Importing… {done} / {total} shows": "Importando… {done} / {total} series",
+  "Couldn't match: {shows} — add them by hand with ⌘K.":
+    "Sin coincidencia: {shows} — añádelas a mano con ⌘K.",
 
   // ---- Export ----
   "Shows you follow": "Series que sigues",

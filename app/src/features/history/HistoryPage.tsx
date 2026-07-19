@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { groupHistory, historyDayLabel } from "@/domain/history";
 import { useWatchHistory } from "@/lib/history";
-import { dateLocale, isEs, t as tr } from "@/lib/i18n";
+import { dateLocale, t as tr } from "@/lib/i18n";
 import { HistoryEpRow } from "@/features/history/HistoryEpRow";
 
 /* History — every watched episode, newest first, grouped by the local day it
@@ -37,9 +37,7 @@ export default function HistoryPage() {
         <p className="dim">{tr("Loading…")}</p>
       ) : rows.length === 0 ? (
         <p className="dim">
-          {isEs()
-            ? "Aún no has visto nada. Los episodios que marques como vistos aparecen aquí."
-            : "Nothing watched yet. Episodes you mark as watched show up here."}
+          {tr("Nothing watched yet. Episodes you mark as watched show up here.")}
         </p>
       ) : (
         <div className="cal-feed">

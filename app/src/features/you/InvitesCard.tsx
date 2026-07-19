@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { Check, Copy, Link2, Plus, Ticket } from "lucide-react";
 import { useCreateInvite, useMyInvites, inviteLink, type MyInvite } from "@/lib/invites";
-import { isEs, t as tr } from "@/lib/i18n";
+import { t as tr, tv } from "@/lib/i18n";
 
 /* You → Invites: create + share codes, see who redeemed them. */
 
+/** The bare state, for the badge. */
+function statusWord(status: MyInvite["status"]): string {
+  if (status === "used") return tr("Used");
+  if (status === "expired") return tr("Expired");
+  return tr("Unused");
+}
+
+/** The row's subtitle: the same state, naming the redeemer when there is one. */
 function statusLabel(inv: MyInvite): string {
-  if (isEs()) {
-    if (inv.status === "used") return inv.used_by_handle ? `Usada por @${inv.used_by_handle}` : "Usada";
-    if (inv.status === "expired") return "Caducada";
-    return "Sin usar";
-  }
-  if (inv.status === "used") return inv.used_by_handle ? `Used by @${inv.used_by_handle}` : "Used";
-  if (inv.status === "expired") return "Expired";
-  return "Unused";
+  if (inv.status === "used" && inv.used_by_handle) return tv("Used by @{handle}", { handle: inv.used_by_handle });
+  return statusWord(inv.status);
 }
 
 export function InvitesCard() {
@@ -78,7 +80,7 @@ export function InvitesCard() {
                 </button>
               )}
               {inv.status !== "unused" && (
-                <span className="badge badge-soft"><Link2 size={12} />{inv.status}</span>
+                <span className="badge badge-soft"><Link2 size={12} />{statusWord(inv.status)}</span>
               )}
             </div>
           ))}
