@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router";
-import { Activity, Check, Clock, Eye, Heart, LayoutGrid, Play, Plus, Star, Tv, User } from "lucide-react";
+import {
+  Activity, ArrowDownWideNarrow, ArrowUpNarrowWide, Check, Clock, Eye, Heart,
+  LayoutGrid, Play, Plus, Scale, Star, Tv, User,
+} from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { hueOf, posterBg } from "@/ui/posterBg";
 import { tmdbImg } from "@/lib/tmdb";
-import { NetworkLogo, Stars } from "@/ui";
+import { NetworkLogo, TabMenu } from "@/ui";
+import { useShowMore } from "@/ui/ShowMore";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { relativeTime } from "@/domain/time";
 import {
@@ -26,7 +30,7 @@ import type { TitleRow } from "@/lib/schemas";
    their last watch); useFriendProfile adds their full follow list + ratings,
    useFriendProgress their per-show watched/aired counts and
    useFriendWatchHistory their latest episode watches. A slim sticky header
-   fuses identity + section tabs (Overview / Shows / Activity / Ratings) and
+   fuses identity + section tabs (Overview / Shows / Activity / Compare) and
    stays pinned under the top bar. Opening a show stacks the detail sheet on
    top via the shell's global ?title= param. */
 
@@ -55,9 +59,10 @@ const snapshotSchema = z.object({
 });
 type Snapshot = z.infer<typeof snapshotSchema>;
 
-type SectionKey = "overview" | "shows" | "activity" | "ratings";
+type SectionKey = "overview" | "shows" | "activity" | "compare";
 type ShowFilter = "all" | "both" | "not";
 type ShowSort = "their" | "critic" | "air";
+type SortDir = "desc" | "asc";
 
 type Act = {
   kind: "rated" | "added" | "watched";
@@ -173,6 +178,7 @@ export default function FriendPage() {
   const esNames = useEsNames();
   const [showFilter, setShowFilter] = useState<ShowFilter>("all");
   const [showSort, setShowSort] = useState<ShowSort>("their");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const openTitle = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -214,9 +220,7 @@ export default function FriendPage() {
     const avgRuntime = runtimes.length ? runtimes.reduce((a, b) => a + b, 0) / runtimes.length : 42;
     const avgRating = ratings.length ? ratings.reduce((a, b) => a + b.score, 0) / ratings.length : null;
 
-    const topRated = [...ratings].sort((a, b) => b.score - a.score || b.created_at.localeCompare(a.created_at)).slice(0, 8);
-
-    return { sharedFollows, affinity, coRated, topGenres, sharedGenres, topNetworks, avgRuntime, avgRating, topRated };
+    return { sharedFollows, affinity, coRated, topGenres, sharedGenres, topNetworks, avgRuntime, avgRating };
   }, [fp, myFollowIds, myGenres, myScoreByTmdb, theirScoreByTmdb]);
 
   // Activity feed: episode watches (consecutive same-show-same-day runs are
@@ -243,18 +247,41 @@ export default function FriendPage() {
     return [...watched, ...rest].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 24);
   }, [fp, watchHistory]);
 
-  // Browsable follows: follow-overlap filter + sort.
+  // Browsable follows: follow-overlap filter + sort, either way up.
   const browseFollows = useMemo(() => {
     let list = fp?.follows ?? [];
     if (showFilter === "both") list = list.filter((f) => myFollowIds.has(f.tmdb_id));
     if (showFilter === "not") list = list.filter((f) => !myFollowIds.has(f.tmdb_id));
-    const by: Record<ShowSort, (a: FriendFollow, b: FriendFollow) => number> = {
-      their: (a, b) => (theirScoreByTmdb.get(b.tmdb_id) ?? -1) - (theirScoreByTmdb.get(a.tmdb_id) ?? -1) || a.name.localeCompare(b.name),
-      critic: (a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0) || a.name.localeCompare(b.name),
-      air: (a, b) => (b.first_air_date ?? "").localeCompare(a.first_air_date ?? "") || a.name.localeCompare(b.name),
+    // One numeric key per field so the direction is a single sign flip; dates
+    // become timestamps rather than a second, string-shaped comparison.
+    const rank: Record<ShowSort, (f: FriendFollow) => number | null> = {
+      their: (f) => theirScoreByTmdb.get(f.tmdb_id) ?? null,
+      critic: (f) => f.vote_average ?? null,
+      air: (f) => {
+        const t = f.first_air_date ? Date.parse(f.first_air_date) : NaN;
+        return Number.isNaN(t) ? null : t;
+      },
     };
-    return [...list].sort(by[showSort]);
-  }, [fp, showFilter, showSort, myFollowIds, theirScoreByTmdb]);
+    const key = rank[showSort];
+    const dir = sortDir === "asc" ? -1 : 1;
+    return [...list].sort((a, b) => {
+      const ka = key(a), kb = key(b);
+      // Shows with no value sink whichever way the sort runs. Flipping to
+      // "lowest first" is a request for their worst scores, not for the pile
+      // they never scored at all — those would otherwise take the whole screen.
+      if (ka == null || kb == null) {
+        if (ka != null) return -1;
+        if (kb != null) return 1;
+      } else if (ka !== kb) {
+        return dir * (kb - ka);
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [fp, showFilter, showSort, sortDir, myFollowIds, theirScoreByTmdb]);
+
+  // 9 at a time, so the comparison grid reveals whole rows at its widest (three
+  // 320px columns). Must sit above the early returns — it is a hook.
+  const { shown: coRatedShown, more: coRatedMore } = useShowMore(derived?.coRated ?? [], 9);
 
   const hue = hueOf(friendId);
   const estMinutes = snap && derived ? Math.round(snap.stats.episodes * derived.avgRuntime) : 0;
@@ -275,18 +302,21 @@ export default function FriendPage() {
     );
   }
 
+  // The last tab holds nothing but the head-to-head, so it is named and drawn
+  // for that: a balance, not the star it shared with every other rating in the
+  // app. "Notas" said whose notes it was showing, and the answer was "both".
   const sections: { v: SectionKey; label: string; icon: typeof User }[] = isEs()
     ? [
         { v: "overview", label: "Resumen", icon: User },
         { v: "shows", label: "Series", icon: LayoutGrid },
         { v: "activity", label: "Actividad", icon: Activity },
-        { v: "ratings", label: "Notas", icon: Star },
+        { v: "compare", label: "Comparar", icon: Scale },
       ]
     : [
         { v: "overview", label: "Overview", icon: User },
         { v: "shows", label: "Shows", icon: LayoutGrid },
         { v: "activity", label: "Activity", icon: Activity },
-        { v: "ratings", label: "Ratings", icon: Star },
+        { v: "compare", label: "Compare", icon: Scale },
       ];
 
   const filters: { v: ShowFilter; label: string }[] = isEs()
@@ -300,6 +330,27 @@ export default function FriendPage() {
         { v: "both", label: "You both follow" },
         { v: "not", label: "You don't follow" },
       ];
+
+  const sorts: { v: ShowSort; label: string }[] = isEs()
+    ? [
+        { v: "their", label: "Su nota" },
+        { v: "critic", label: "Nota de la crítica" },
+        { v: "air", label: "Fecha de emisión" },
+      ]
+    : [
+        { v: "their", label: "Their rating" },
+        { v: "critic", label: "Critic rating" },
+        { v: "air", label: "Air date" },
+      ];
+  // What the arrow means depends on the field it points at — "lowest first" on
+  // an air date is nonsense, and the toggle is the only thing naming the order.
+  const dirLabel = showSort === "air"
+    ? sortDir === "desc"
+      ? (isEs() ? "Las más recientes primero" : "Newest first")
+      : (isEs() ? "Las más antiguas primero" : "Oldest first")
+    : sortDir === "desc"
+      ? (isEs() ? "Las mejores primero" : "Highest first")
+      : (isEs() ? "Las peores primero" : "Lowest first");
 
   const watchingCards = snap.watching.map((w) => {
     const wName = locName(esNames, w.tmdb_id, w.name);
@@ -339,11 +390,21 @@ export default function FriendPage() {
             <div className="dim truncate" style={{ fontSize: 12 }}>@{snap.profile.handle}{snap.profile.country ? ` · ${snap.profile.country}` : ""}</div>
           </div>
         </div>
-        <div className="segmented scroll fr-hero-tabs">
+        {/* Buttons, not divs: on a phone CSS drops the label of every tab but
+            the active one to keep all four on one line, and only an aria-label
+            on a focusable control survives that. */}
+        <div className="segmented scroll no-scrollbar fr-hero-tabs">
           {sections.map((s) => (
-            <div key={s.v} className={`seg ${section === s.v ? "seg-active" : ""}`} onClick={() => setSection(s.v)}>
-              <s.icon size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} />{s.label}
-            </div>
+            <button
+              key={s.v}
+              type="button"
+              className={`seg ${section === s.v ? "seg-active" : ""}`}
+              onClick={() => setSection(s.v)}
+              aria-label={s.label}
+              title={s.label}
+            >
+              <s.icon size={14} /><span className="seg-label">{s.label}</span>
+            </button>
           ))}
         </div>
       </div>
@@ -438,19 +499,46 @@ export default function FriendPage() {
 
         {section === "shows" && (
           <section className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="segmented scroll">
+            <div className="fr-toolbar">
+              <div className="segmented scroll no-scrollbar">
                 {filters.map((f) => (
-                  <div key={f.v} className={`seg ${showFilter === f.v ? "seg-active" : ""}`} onClick={() => setShowFilter(f.v)}>
+                  <button
+                    key={f.v}
+                    type="button"
+                    className={`seg ${showFilter === f.v ? "seg-active" : ""}`}
+                    onClick={() => setShowFilter(f.v)}
+                  >
                     {f.label}
-                  </div>
+                  </button>
                 ))}
               </div>
-              <select className="year-select" value={showSort} onChange={(e) => setShowSort(e.target.value as ShowSort)} aria-label="Sort">
-                <option value="their">{isEs() ? "Su nota" : "Their rating"}</option>
-                <option value="critic">{isEs() ? "Nota TMDB" : "Critic rating"}</option>
-                <option value="air">{isEs() ? "Fecha de emisión" : "Air date"}</option>
-              </select>
+              {/* Phone shape of the same three — "You don't follow" alone is
+                  half a 375px row, so the strip wrapped onto a second line. */}
+              <TabMenu
+                value={showFilter}
+                options={filters.map((f) => ({ key: f.v, label: f.label }))}
+                onPick={setShowFilter}
+                menuLabel={isEs() ? "Filtrar series" : "Filter shows"}
+              />
+              <div className="fr-sort">
+                <TabMenu
+                  value={showSort}
+                  options={sorts.map((s) => ({ key: s.v, label: s.label }))}
+                  onPick={setShowSort}
+                  menuLabel={tr("Sort")}
+                  align="end"
+                  always
+                />
+                <button
+                  type="button"
+                  className="chip chip-icon"
+                  onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+                  aria-label={dirLabel}
+                  title={dirLabel}
+                >
+                  {sortDir === "desc" ? <ArrowDownWideNarrow size={15} /> : <ArrowUpNarrowWide size={15} />}
+                </button>
+              </div>
             </div>
             {browseFollows.length === 0 ? (
               <p className="dim" style={{ fontSize: 13, margin: 0 }}>{isEs() ? "Nada por aquí." : "Nothing here."}</p>
@@ -522,31 +610,21 @@ export default function FriendPage() {
           </section>
         )}
 
-        {section === "ratings" && (
+        {/* Head-to-head only. "Their top ratings" sat above it saying nothing
+            about the two of you, and it was already the first thing the Activity
+            feed and the Overview's average covered. Everything you have both
+            rated is reachable now, 9 at a press: the list runs widest
+            disagreement first, so the old hard cap of 8 always cut from the
+            agreeing end — the half of the picture that says you two match. */}
+        {section === "compare" && (
           <>
-            {derived && derived.topRated.length > 0 && (
-              <section className="flex flex-col gap-2.5">
-                <div className="eyebrow">{isEs() ? "Sus mejores notas" : "Their top ratings"}</div>
-                <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
-                  {derived.topRated.map((r) => (
-                    <div key={r.tmdb_id} className="card mq-row" onClick={() => openTitle(r.tmdb_id)}>
-                      <MiniArt poster={r.poster_path} name={locName(esNames, r.tmdb_id, r.name)} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{locName(esNames, r.tmdb_id, r.name)}</div>
-                        <Stars score={r.score} size={12} />
-                      </div>
-                      <span className="badge badge-soft" style={{ fontWeight: 800 }}>{r.score}/10</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
             {derived && derived.coRated.length > 0 && (
               <div className="flex flex-col gap-2.5">
-                <div className="eyebrow">{isEs() ? "Puntuadas por los dos" : "You both rated"} · {derived.coRated.length}</div>
+                <div className="eyebrow flex items-center gap-1.5">
+                  <Scale size={13} />{isEs() ? "Puntuadas por los dos" : "You both rated"} · {derived.coRated.length}
+                </div>
                 <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
-                  {derived.coRated.slice(0, 8).map((c) => (
+                  {coRatedShown.map((c) => (
                     <div key={c.tmdb_id} className="card mq-row" onClick={() => openTitle(c.tmdb_id)}>
                       <MiniArt poster={c.poster_path} name={locName(esNames, c.tmdb_id, c.name)} />
                       <div className="min-w-0 flex-1">
@@ -560,11 +638,16 @@ export default function FriendPage() {
                     </div>
                   ))}
                 </div>
+                {coRatedMore}
               </div>
             )}
-            {derived && derived.topRated.length === 0 && derived.coRated.length === 0 && (
+            {derived && derived.coRated.length === 0 && (
               <div className="card" style={{ padding: "24px" }}>
-                <p className="dim" style={{ margin: 0, fontSize: 14 }}>{isEs() ? "Aún sin notas." : "No ratings yet."}</p>
+                <p className="dim" style={{ margin: 0, fontSize: 14 }}>
+                  {isEs()
+                    ? "Aún no habéis puntuado ninguna serie los dos. Puntuad alguna en común y aparecerá aquí."
+                    : "You haven't both rated the same show yet. Rate one you've both seen and it shows up here."}
+                </p>
               </div>
             )}
           </>

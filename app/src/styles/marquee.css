@@ -189,12 +189,16 @@
      the extra class to outrank it — a media query buys no specificity. */
   .disc-toolbar > .segmented.scroll,
   .mq-toolbar > .segmented.scroll,
+  .fr-toolbar > .segmented.scroll,
   .cal-tabsbar > .segmented.scroll { display: none; }
   /* My Shows' status buckets are chips, but they behave as a strip: exactly one
      is active. Seven of them scrolled, so only two were ever on screen. */
   .mq-toolbar > .shows-buckets { display: none; }
   .tabmenu { display: block; }
 }
+/* The always-on variant is not a phone shape, so it sits outside the query —
+   later in the file than `.tabmenu { display: none }` at equal specificity. */
+.tabmenu-always { display: block; }
 /* The menu is wider than its trigger, so it hangs off whichever trigger edge
    keeps it on screen — .filter-menu's own left: 0 covers the "start" case. */
 .tabmenu-end > .filter-menu { left: auto; right: 0; }
@@ -803,6 +807,24 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   display: grid; gap: 12px 10px;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
+/* Their-shows toolbar, built like .disc-toolbar: one row always. It used to
+   wrap, which on a phone stacked the three follow filters over the sort and
+   pushed the grid a control-height down the screen. */
+.fr-toolbar { display: flex; align-items: center; gap: 10px; }
+.fr-toolbar > .segmented { flex: 0 1 auto; min-width: 0; }
+/* Sort field + its direction toggle travel together, parked at the right. */
+.fr-sort { display: flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; }
+/* Both of this row's triggers carry a label, and in Spanish they are long:
+   "Fecha de emisión" beside "Seguís los dos" overran a 320px row and printed
+   one chip through the other. Neither is allowed to hold the row open —
+   .fr-sort shrinks (unlike .disc-tools, whose contents are glyphs), and the
+   chips give up the min-width: min-content floor that .btn/.chip set to stop a
+   squeezed label painting over its own border. That floor is right for a row
+   that wraps or scrolls; this one does neither, so the labels ellipsis instead
+   (.tabmenu already zeroes the min-width of the span inside them). The toggle
+   keeps its fixed circle, so the width always comes off words, never a glyph. */
+.fr-toolbar .tabmenu > .chip { min-width: 0; }
+.fr-sort > .chip-icon { flex: 0 0 auto; }
 /* Tile + progress strip below it (TV-Time style) */
 .fr-show { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .fr-progress { display: flex; align-items: center; gap: 7px; padding: 0 2px; }
@@ -831,16 +853,15 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    outranks them and would stretch a visually-hidden heading to 780px wide. */
 .cal-page > *:not(.sr-only) { width: 100%; max-width: 780px; margin-inline: auto; }
 
-/* View switcher pinned under the top bar — always reachable while scrolling */
-/* Friend header — identity + section tabs in one slim bar, pinned under the
-   top bar while scrolling. The hue gradient fades out to the right for a
-   softer, more modern wash than the old solid banner. */
+/* Friend header — identity + section tabs in one slim bar. It scrolls away
+   with the page rather than pinning under the top bar: a banner that flew over
+   the cards on every scroll read as clutter, so it now stays where it sits and
+   you scroll back up to reach the tabs. The hue gradient fades out to the right
+   for a softer, more modern wash than the old solid banner. */
 .fr-hero {
-  position: sticky; top: var(--bar-h); z-index: 30;
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 10px 14px;
   border-radius: var(--r-lg);
-  border: 1px solid var(--border);
   background:
     linear-gradient(105deg,
       hsl(var(--fr-hue) 62% 40% / .55),
@@ -848,14 +869,30 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
       transparent 78%),
     color-mix(in srgb, var(--bg) 82%, transparent);
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-  box-shadow: var(--shadow);
+  /* The frame is a shadow ring, not a border. A border paints over the fill,
+     and this fill is bright hue on the left, dark on the right — so a light
+     (dark-theme) border faded into the wash on the left but stood out as a lone
+     bright line down the dark right edge. The ring sits just outside the box on
+     the uniform page instead, so it reads as an even 1px frame on all four
+     sides in every theme. */
+  box-shadow: 0 0 0 1px var(--border), var(--shadow);
 }
 .fr-hero-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .fr-hero-tabs { margin-left: auto; }
 @media (max-width: 700px) {
-  /* No top override: --bar-h holds at every width now that the tab track is gone. */
   .fr-hero { padding: 8px 10px; }
   .fr-hero-tabs { margin-left: 0; width: 100%; }
+  /* Four labelled tabs ran ~400px at a 375px viewport, so the last one sat past
+     the edge behind a scroll with nothing on screen saying it was there — the
+     same way the strips that became TabMenus did. These stay a strip: a profile
+     has four sections and they are the page's spine, so hiding three of them
+     behind a trigger costs more than it saves. Only the tab you are on spells
+     its name; the rest keep their glyph, which fits all four on one line down
+     to 320px. Each carries an aria-label, so the name survives the hidden span. */
+  .fr-hero-tabs .seg-label { display: none; }
+  .fr-hero-tabs .seg-active .seg-label { display: inline; }
+  .fr-hero-tabs .seg { width: var(--ctl-h-sm); padding: 0; }
+  .fr-hero-tabs .seg-active { width: auto; padding: 0 13px; }
 }
 
 /* Friend stats — 2 columns on phones instead of a ragged auto-fit */

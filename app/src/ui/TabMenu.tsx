@@ -10,7 +10,7 @@ import { Check, ChevronDown } from "lucide-react";
    it, the idiom the Filters popover already uses.
 
    Labels arrive already localized — this is pure UI and never calls t(). */
-export function TabMenu<T extends string>({ value, options, onPick, menuLabel, align = "start", floating = false }: {
+export function TabMenu<T extends string>({ value, options, onPick, menuLabel, align = "start", floating = false, always = false }: {
   value: T;
   /** `hint` rides along beside the label — My Shows' buckets carry a count, and
    *  losing it in the phone shape would make the menu say less than the row. */
@@ -26,6 +26,11 @@ export function TabMenu<T extends string>({ value, options, onPick, menuLabel, a
   /** The calendar's strip floats over the scrolling feed inside a blurred pill;
    *  its trigger has to be that pill rather than a flat chip dropped into it. */
   floating?: boolean;
+  /** Keep the menu shape at every width, with no segmented row behind it. For
+   *  controls that were never a strip: the friend page's sort was a bare
+   *  <select> whose custom skin stripped the arrow, so on a desktop it read as
+   *  a dead pill. The chip's chevron is the affordance the select lost. */
+  always?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -40,7 +45,7 @@ export function TabMenu<T extends string>({ value, options, onPick, menuLabel, a
 
   const current = options.find((o) => o.key === value) ?? options[0];
   return (
-    <div className={`tabmenu tabmenu-${align}${floating ? " tabmenu-float" : ""}`} ref={ref}>
+    <div className={`tabmenu tabmenu-${align}${floating ? " tabmenu-float" : ""}${always ? " tabmenu-always" : ""}`} ref={ref}>
       <button className="chip" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu">
         <span className="truncate">{current.label}</span>
         {current.hint && <span className="mute" style={{ fontWeight: 700 }}>{current.hint}</span>}
