@@ -836,11 +836,29 @@
 }
 .friends-pop-row:hover, .friends-pop-row:focus-visible { background: var(--surface-2); }
 
-/* ---- You page: taste profile + watch heatmap side by side on web ---- */
-/* Taste profile and watch activity each take the full width and stack. They used
-   to sit side by side (height-matched via subgrid), but a rolling year is 53
-   columns: in half a row that's ~7px cells at 1440px and ~4px at 900px, plus a
-   mostly empty panel next to the taller taste card. Full width buys ~20px cells. */
+/* ---- Taste profile + watch heatmap side by side (your profile and a friend's) ---- */
+/* The split is deliberately uneven. The taste card is eight fixed bars in a box
+   that stops growing; the heatmap is 53 columns and spends every pixel it gets.
+   An even 1fr 1fr gives ~7px cells at 1440px next to a half-empty taste panel,
+   so the heatmap takes two thirds instead — ~12px cells at the same width.
+   Below 1200px they stack and the heatmap gets the whole row (~19px cells).
+   That breakpoint is where two thirds of the row still fits 53 columns at the
+   9px floor: at 1100px the board came up 10px short and started scrolling. */
+.taste-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+.taste-grid:empty { display: none; } /* both halves absent → no stray gap */
+.taste-col { display: grid; gap: 12px; grid-template-rows: auto 1fr auto; align-content: start; min-width: 0; }
+/* Both columns are subgrids of one eyebrow / panel / extras track, so the two
+   .card boxes share the same 1fr row and come out identical in height whatever
+   their content. Plain columns can't guarantee that — the taste side carries a
+   badge row under its card that the heatmap side doesn't. */
+@media (min-width: 1200px) {
+  .taste-grid { grid-template-columns: 1fr 2fr; gap: 12px 20px; grid-template-rows: auto 1fr auto; }
+  .taste-col { grid-row: span 3; grid-template-rows: subgrid; align-content: stretch; }
+  .taste-grid .card { justify-content: center; }
+  /* Only one half present (the friend follows nothing, or the heatmap is
+     hidden): span the row instead of sitting in a third of it. */
+  .taste-col:only-child { grid-column: 1 / -1; }
+}
 
 /* GitHub-style contribution grid: weeks as columns, Monday-first rows.
    A rolling year is 53 columns, so cells get a floor (--heat-min) and the whole

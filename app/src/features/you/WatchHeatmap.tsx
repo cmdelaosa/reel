@@ -79,7 +79,7 @@ export function WatchHeatmap({ userId }: { userId?: string }) {
   const weekColumns = `repeat(${WEEKS}, minmax(var(--heat-min), 1fr))`;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="taste-col">
       <div className="eyebrow">{heading}</div>
       <div className="card p-4 flex flex-col gap-2">
         {/* One scroll container around months + gutter + cells, so they can
