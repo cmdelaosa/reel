@@ -386,8 +386,8 @@
    floats. */
 .profile-head {
   background-image: linear-gradient(105deg,
-    hsl(var(--fr-hue) 62% 40% / .55),
-    hsl(calc(var(--fr-hue) + 50) 65% 30% / .28) 42%,
+    hsl(var(--fr-hue) 48% 46% / .26),
+    hsl(calc(var(--fr-hue) + 50) 50% 36% / .13) 42%,
     transparent 78%);
 }
 .profile-avatar {
