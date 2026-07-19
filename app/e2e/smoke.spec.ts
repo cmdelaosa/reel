@@ -96,7 +96,10 @@ test("core loop: search → add → mark watched → tonight → calendar → ra
   await expect(page).toHaveURL(/\/calendar/);
 
   // You shows the rating we just made
-  await page.getByRole("link", { name: "You" }).first().click();
+  // The profile is not a nav link but an avatar button, and its accessible
+  // name is the user's initial (the text content wins over the title
+  // attribute), so it depends on the seeded user. Bind to the class.
+  await page.locator(".mq-avatar").click();
   await expect(page.getByRole("heading", { name: "Your ratings" })).toBeVisible();
   await expect(page.locator(".mq-row", { hasText: "Severance" }).first()).toBeVisible();
 });
