@@ -12,7 +12,9 @@ import { Check, ChevronDown } from "lucide-react";
    Labels arrive already localized — this is pure UI and never calls t(). */
 export function TabMenu<T extends string>({ value, options, onPick, menuLabel, align = "start", floating = false }: {
   value: T;
-  options: readonly { key: T; label: string }[];
+  /** `hint` rides along beside the label — My Shows' buckets carry a count, and
+   *  losing it in the phone shape would make the menu say less than the row. */
+  options: readonly { key: T; label: string; hint?: string }[];
   onPick: (key: T) => void;
   /** aria-label for the menu, already localized. */
   menuLabel: string;
@@ -41,6 +43,7 @@ export function TabMenu<T extends string>({ value, options, onPick, menuLabel, a
     <div className={`tabmenu tabmenu-${align}${floating ? " tabmenu-float" : ""}`} ref={ref}>
       <button className="chip" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu">
         <span className="truncate">{current.label}</span>
+        {current.hint && <span className="mute" style={{ fontWeight: 700 }}>{current.hint}</span>}
         <ChevronDown size={14} />
       </button>
       {open && (
@@ -54,6 +57,7 @@ export function TabMenu<T extends string>({ value, options, onPick, menuLabel, a
               onClick={() => { onPick(o.key); setOpen(false); }}
             >
               {o.label}
+              {o.hint && <span className="mute" style={{ fontWeight: 700 }}>{o.hint}</span>}
               {value === o.key && <Check size={14} className="filter-opt-check" />}
             </button>
           ))}

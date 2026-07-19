@@ -190,6 +190,9 @@
   .disc-toolbar > .segmented.scroll,
   .mq-toolbar > .segmented.scroll,
   .cal-tabsbar > .segmented.scroll { display: none; }
+  /* My Shows' status buckets are chips, but they behave as a strip: exactly one
+     is active. Seven of them scrolled, so only two were ever on screen. */
+  .mq-toolbar > .shows-buckets { display: none; }
   .tabmenu { display: block; }
 }
 /* The menu is wider than its trigger, so it hangs off whichever trigger edge

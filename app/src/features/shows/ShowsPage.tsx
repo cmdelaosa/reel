@@ -69,7 +69,7 @@ export default function ShowsPage() {
       <h1 className="sr-only">{tr("My Shows")}</h1>
 
       <div className="mq-toolbar">
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ flex: 1 }}>
+        <div className="shows-buckets flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ flex: 1 }}>
           {FILTERS.map((x) => (
             <button key={x.key} className={`chip ${f === x.key ? "chip-active" : ""}`} onClick={() => setF(x.key)}>
               {tr(x.label)}
@@ -77,6 +77,15 @@ export default function ShowsPage() {
             </button>
           ))}
         </div>
+        {/* Same options on a phone, as a menu — the chip row scrolled seven wide
+            and showed two. Counts ride along as hints so the menu says as much
+            as the row does. */}
+        <TabMenu
+          value={f}
+          options={FILTERS.map((x) => ({ key: x.key, label: tr(x.label), hint: String(count(x.key)) }))}
+          onPick={setF}
+          menuLabel={tr("My Shows")}
+        />
         <div className="segmented scroll no-scrollbar">
           {SORTS.map((s) => (
             <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => setSort(s.key)}>
