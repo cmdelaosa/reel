@@ -218,6 +218,14 @@ const ES: Record<string, string> = {
   // ---- Friends / social ----
   "Who you watch with — their activity, their favorites.": "Con quién ves series — su actividad y sus favoritas.",
   "Friend activity": "Actividad de amigos",
+  /* Activity-feed verbs. Prefixed because English reuses these words in other
+     senses that need different Spanish: the "Watched" label is "Visto", the
+     "Rated" stat is "Puntuadas", the "Added" badge is "Añadida". A key names a
+     meaning, not a word — an unprefixed "Watched" cannot be both. */
+  "activity: watched": "visto",
+  "activity: Watched": "Vio",
+  "activity: Rated": "Puntuó",
+  "activity: Added": "Añadió",
   "Taste match": "Afinidad de gustos",
   "Friends stats": "Estadísticas de amigos",
   "What to watch next, score comparisons, shared stinkers": "Qué ver, comparativa de notas y los truños compartidos",
@@ -440,8 +448,19 @@ const ES: Record<string, string> = {
   "You're offline — changes are paused": "Sin conexión — los cambios quedan en pausa",
 };
 
-/** Every non-English dictionary, by language. English is absent — it is the keys. */
-const DICTS: Partial<Record<LanguageName, Record<string, string>>> = { es: ES };
+/* English normally needs no dictionary — the keys ARE the English. The
+   exception is a context-prefixed key like "activity: Watched", whose prefix
+   disambiguates a meaning and must never reach the screen. Those get an English
+   entry too, so the fallback prints the word rather than the key. */
+const EN: Record<string, string> = {
+  "activity: watched": "watched",
+  "activity: Watched": "Watched",
+  "activity: Rated": "Rated",
+  "activity: Added": "Added",
+};
+
+/** Dictionaries by language. */
+const DICTS: Partial<Record<LanguageName, Record<string, string>>> = { en: EN, es: ES };
 
 /** Translate a UI string. Falls back to the English key when the active language
  *  has no dictionary or no entry, so unknown/untranslated strings stay readable. */

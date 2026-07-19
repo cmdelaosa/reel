@@ -365,7 +365,7 @@ export default function FriendPage() {
           <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{wName}</div>
           <div className="dim" style={{ fontSize: 12.5 }}>
             {tr("On")} S{w.season_number} · E{w.episode_number}
-            {w.last_watched_at ? <span className="mute"> · {isEs() ? "visto" : "watched"} {relativeTime(w.last_watched_at, new Date(), dateLocale())}</span> : null}
+            {w.last_watched_at ? <span className="mute"> · {tr("activity: watched")} {relativeTime(w.last_watched_at, new Date(), dateLocale())}</span> : null}
           </div>
           {pct != null && (
             <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
@@ -588,7 +588,7 @@ export default function FriendPage() {
                     <div className="min-w-0 flex-1" style={{ fontSize: 13.5 }}>
                       {a.kind === "watched" ? (
                         <>
-                          <span className="mute">{isEs() ? "Vio " : "Watched "}</span>
+                          <span className="mute">{tr("activity: Watched")}{" "}</span>
                           {(a.count ?? 1) > 1
                             ? <><b style={{ fontWeight: 700 }}>{a.count} {tr("episodes")}</b><span className="mute"> {tr("of")} </span></>
                             : <><b style={{ fontWeight: 700 }}>S{a.season_number} · E{a.episode_number}</b><span className="mute"> {tr("of")} </span></>}
@@ -596,7 +596,7 @@ export default function FriendPage() {
                         </>
                       ) : (
                         <>
-                          <span className="mute">{a.kind === "rated" ? (isEs() ? "Puntuó" : "Rated") : (isEs() ? "Añadió" : "Added")} </span>
+                          <span className="mute">{a.kind === "rated" ? tr("activity: Rated") : tr("activity: Added")}{" "}</span>
                           <b style={{ fontWeight: 700 }}>{locName(esNames, a.tmdb_id, a.name)}</b>
                           {a.kind === "rated" && a.score != null && <span className="mute"> · {a.score}/10</span>}
                         </>
