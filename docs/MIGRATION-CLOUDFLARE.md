@@ -30,12 +30,27 @@ Phases 1–3 touch **nothing in production**. The only shared-infra change befor
 the cutover is *adding* one entry to Supabase Redirect URLs (additive,
 harmless). All risk is concentrated in phase 4, which has its own checklist.
 
-## Phase 1 — repo (done)
+## Phase 1 — repo (done, 362ca59)
 
 - [x] `app/wrangler.jsonc` — static-assets-only Worker (no `main`), name `reel`,
       `not_found_handling: "single-page-application"`.
-- [x] `wrangler` as devDependency.
-- [ ] Commit + push (safe: Vercel ignores `wrangler.jsonc`; `vercel.json` untouched).
+- [x] `wrangler` as devDependency; `app/.wrangler/` gitignored.
+- [x] Committed and pushed. CI green; production re-verified after the push
+      (200, `index-18rdc5gt.js` = 842 KB — the real bundle, unchanged).
+
+**Validated locally with `wrangler dev` against a real build**, so the config is
+known-good before Cloudflare ever runs it:
+
+| Check | Result |
+| --- | --- |
+| `/` | 200, `text/html` |
+| `/friends/stats`, `/calendar`, `/login`, `/show/1399`, `?tab=compare`, unknown paths | 200 + index.html on all — SPA fallback works |
+| `/assets/index-*.js` | 200, 841 KB, `text/javascript` |
+| `/favicon.svg`, `/logos/*.svg` | 200, `image/svg+xml` |
+| `supabase.co` inlined in bundle | Yes — confirms the build-var mechanism |
+
+If a Cloudflare build ever misbehaves, the wrangler config is not the suspect —
+look at Build Variables first.
 
 ## Phase 2 — Cloudflare project (human, dashboard)
 
