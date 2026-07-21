@@ -18,7 +18,8 @@ Supabase auth config changes only once.
 | --- | --- |
 | Vercel serverless functions / `api/` | None — backend is 100% Supabase |
 | `vercel.json` contents | SPA rewrite only; replaced by `assets.not_found_handling` |
-| Build-time env vars | Only `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (plus `VITE_GOOGLE_AUTH` if ever enabled) |
+| Build-time env vars | Three: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_GOOGLE_AUTH=true` (see phase 2 step 1) |
+| Secrets leaking into the client bundle | None — audited the deployed JS for `sb_secret_`, `service_role`, JWT secret and Postgres URLs |
 | Edge-function CORS | `Access-Control-Allow-Origin: *` everywhere — any origin works |
 | Auth redirects (`emailRedirectTo`, invite links) | Built from `window.location.origin` — domain-agnostic |
 | Hardcoded URLs in `index.html` / `public/` | None |
@@ -54,10 +55,30 @@ look at Build Variables first.
 
 ## Phase 2 — Cloudflare project (human, dashboard)
 
-1. Before anything: check the **Vercel dashboard → project reel → Settings →
-   Environment Variables** and note *exactly* what is set there (the repo can't
-   see it). Expected: the two `VITE_SUPABASE_*` vars; if `VITE_GOOGLE_AUTH=true`
-   is there too, replicate it and see the Google OAuth note in phase 4.
+1. Env vars — **resolved 2026-07-20, no dashboard archaeology needed**. The
+   Vercel project carries ~17 vars, but only three are `VITE_`-prefixed and
+   therefore only three reach a Vite build. Verified against the deployed
+   bundle: its baked Supabase URL and anon key are byte-identical to
+   `app/.env.local`, and the Google button renders live on `/login`, which
+   proves `VITE_GOOGLE_AUTH=true`. **Copy these three from `app/.env.local`**
+   (`VITE_GOOGLE_AUTH` is marked Sensitive in Vercel and can't be read back
+   there anyway):
+
+   | Build Variable | Source |
+   | --- | --- |
+   | `VITE_SUPABASE_URL` | `app/.env.local` — matches prod |
+   | `VITE_SUPABASE_ANON_KEY` | `app/.env.local` — matches prod |
+   | `VITE_GOOGLE_AUTH` | `true` |
+
+   **Do NOT carry over the rest.** The `NEXT_PUBLIC_*`, `POSTGRES_*` and
+   `SUPABASE_*` vars come from Vercel's Supabase integration (Next.js-shaped;
+   this is a Vite app) and are dead weight in a static build. Several are
+   crown jewels — `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS entirely, plus
+   `POSTGRES_PASSWORD` and `SUPABASE_JWT_SECRET`. They were **not** leaking
+   into the client (audited: the only `POSTGRES` hits in the bundle are
+   supabase-js's `POSTGRES_CHANGES` enum), but a static-asset build has no use
+   for them and shouldn't hold them. Leaving them behind is a net security win;
+   consider deleting them from Vercel once phase 5 lands.
 2. Cloudflare dashboard → **Workers & Pages → Create → Connect a repository**.
    Install the Cloudflare GitHub App on the repo when prompted.
 3. Project settings:
@@ -67,9 +88,10 @@ look at Build Variables first.
      (eslint + vitest gate the deploy — stricter than Vercel, which only ran tsc).
    - **Deploy command**: `npx wrangler deploy` (default).
 4. **Settings → Build → Build Variables and Secrets** (⚠️ NOT "Variables &
-   Secrets" — that's runtime; Vite inlines at build time):
-   - `VITE_SUPABASE_URL` = `https://<ref>.supabase.co`
-   - `VITE_SUPABASE_ANON_KEY` = anon key
+   Secrets" — that's runtime; Vite inlines at build time). All three from
+   step 1: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_GOOGLE_AUTH`.
+   Omitting the last one doesn't fail the build — it silently drops the Google
+   button and locks out everyone who signed up that way.
 5. Optional: build watch paths → `app/**` so docs-only pushes don't trigger builds.
 6. Push (or retry build) → note the `https://reel.<account>.workers.dev` URL.
 
@@ -86,6 +108,8 @@ bundle size (~800+ KB), never by the green check.
    - [ ] Deep link with hard reload (e.g. `/friends/stats`) returns the app,
          not 404 — proves the SPA fallback.
    - [ ] Magic-link login round-trips back to workers.dev.
+   - [ ] **Google button is present** on `/login` (proves `VITE_GOOGLE_AUTH`
+         made it into the build) and completes a sign-in.
    - [ ] TMDB posters load; no console/network errors.
    - [ ] A push to main auto-deploys; a branch push produces a preview URL.
 
@@ -131,14 +155,18 @@ Order matters; each step is verifiable before the next.
    - [ ] `https://reel-track.vercel.app/login?invite=TEST` → 308 →
          `https://reelapp.xyz/login?invite=TEST`.
    - [ ] Magic-link login **to a non-team address** (proves custom SMTP).
+   - [ ] **Google sign-in works from the new domain.**
    - [ ] Manual `alerts` invoke sends a real email from `alerts@mail.reelapp.xyz`.
 10. **Docs sweep** (Claude): update Vercel/URL references in `ARCHITECTURE.md`
     (hosting row), `DEPLOY.md` (section 6 + SMTP notes), `DETAIL-PERFORMANCE.md`
     (deploy command + alias), `DESIGN.md:101`, `PLAN.md:101`; remove
     `VERCEL_OIDC_TOKEN` from `.env.local` files and delete `.vercel/`.
 
-If Google OAuth was enabled (`VITE_GOOGLE_AUTH=true`): also add
-`https://reelapp.xyz` to the Google Cloud Console authorized origins.
+**Google OAuth needs no Google Cloud Console change.** Supabase owns the OAuth
+redirect URI (`https://<ref>.supabase.co/auth/v1/callback`), which the domain
+move doesn't touch; the app URL is governed by Supabase's Redirect URLs
+allowlist, already covered in step 6. Verify with a real Google sign-in anyway
+(step 9) rather than trusting the reasoning.
 
 ## Phase 5 — decommission (weeks later, no hurry)
 
