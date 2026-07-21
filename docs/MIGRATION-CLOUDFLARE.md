@@ -53,6 +53,29 @@ known-good before Cloudflare ever runs it:
 If a Cloudflare build ever misbehaves, the wrangler config is not the suspect —
 look at Build Variables first.
 
+### Response headers: neutral migration, plus one improvement
+
+Compared Vercel's live headers against the Worker's. Both default to
+`Cache-Control: public, max-age=0, must-revalidate` on every file, so the move
+is header-neutral — nothing to regress.
+
+Both also leave the same thing on the table: Vite content-hashes everything
+under `/assets/` (17 files — js, css, woff2), so the filename is already the
+cache key and revalidating it on every visit is wasted. `app/public/_headers`
+now caches that prefix `immutable` for a year. Verified locally:
+
+| Path | Cache-Control |
+| --- | --- |
+| `/assets/index-*.js` | `public, max-age=31536000, immutable` |
+| `/` (index.html) | `public, max-age=0, must-revalidate` — deploys land at once |
+| `/favicon.svg`, `/logos/*` | `public, max-age=0, must-revalidate` — stable names |
+
+Scoped deliberately to `/assets/`: those are the only fingerprinted files, so
+nothing with a stable name can get pinned in a browser cache for a year. The
+`_headers` file is not served (requests for it hit the SPA fallback and get
+index.html). This is inert on Vercel — it ignores the file — so it changes
+nothing until the cutover.
+
 ## Phase 2 — Cloudflare project (human, dashboard)
 
 1. Env vars — **resolved 2026-07-20, no dashboard archaeology needed**. The

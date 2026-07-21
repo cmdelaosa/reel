@@ -1,0 +1,11 @@
+# Cloudflare Workers static-assets header rules. Not served as an asset itself.
+#
+# Everything Vite emits under /assets/ is content-hashed (js, css, woff2), so
+# the filename *is* the cache key — a rebuild always produces a new URL. Caching
+# it forever saves repeat visitors a revalidation round-trip on ~900 kB.
+#
+# Deliberately scoped to /assets/: index.html and the files copied from public/
+# (favicon.svg, logos/*) have stable names, so they keep Cloudflare's default
+# `max-age=0, must-revalidate` and a deploy is visible immediately.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
