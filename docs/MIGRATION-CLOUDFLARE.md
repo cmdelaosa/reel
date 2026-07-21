@@ -1,7 +1,7 @@
-# Migration runbook — Vercel → Cloudflare Workers + reelapp.xyz
+# Migration runbook — Vercel → Cloudflare Workers + reel-app.com
 
 Decided 2026-07-20. Reel moves entirely to Cloudflare: hosting on **Workers +
-static assets**, domain **`reelapp.xyz`** on Cloudflare Registrar. Vercel gave
+static assets**, domain **`reel-app.com`** on Cloudflare Registrar. Vercel gave
 us nothing the app uses — no serverless functions, no image optimization, no
 analytics; its only artifact was the SPA rewrite in `app/vercel.json`, which is
 one line of `wrangler.jsonc`. The domain also unblocks login SMTP (Supabase's
@@ -160,32 +160,45 @@ workers.dev URL, which needs its Redirect URL added in Supabase.
 
 Order matters; each step is verifiable before the next.
 
-1. **Buy** `reelapp.xyz` — Cloudflare → Domain Registration (~$11/yr at cost,
-   no first-year promo). Zone is created automatically.
+1. **Buy** `reel-app.com` — Cloudflare → Domain Registration ($10.46/yr at cost,
+   registration and renewal alike). Zone is created automatically. Click the
+   ICANN verification email or the domain is suspended after ~15 days.
+
+   *Name decided 2026-07-21 after surveying the alternatives.* `reelapp.com`
+   (no hyphen) is registered by someone else and currently serves nothing —
+   worth knowing, since anyone typing the name without the hyphen lands there,
+   and its owner can point it anywhere later. That risk is identical for any
+   `reelapp.*` we could have bought, so it did not decide anything. `.com` won
+   over `.xyz` on email reputation, which matters because this domain exists to
+   send magic links; the hyphen costs nothing technically
+   (`noreply@mail.reel-app.com` is unaffected) and only shows up when saying
+   the name aloud. Rejected: `.win` (cheap but abuse-adjacent TLD, and email
+   deliverability is the one thing that cannot fail here) and `.uk` (Nominet
+   requires a UK address for service from non-UK registrants).
 2. **Attach domain to the Worker**: Worker → Settings → Domains & Routes →
-   Custom Domain → `reelapp.xyz`. DNS + cert are automatic (this is the payoff
+   Custom Domain → `reel-app.com`. DNS + cert are automatic (this is the payoff
    of registrar + host in one place: no A/CNAME plumbing, no gray-cloud rules).
-3. **www**: add a Cloudflare Redirect Rule `www.reelapp.xyz/*` →
-   `https://reelapp.xyz/$1` (301). Keeps a single canonical origin.
-4. **Resend**: Domains → Add → `mail.reelapp.xyz` (subdomain keeps root email
+3. **www**: add a Cloudflare Redirect Rule `www.reel-app.com/*` →
+   `https://reel-app.com/$1` (301). Keeps a single canonical origin.
+4. **Resend**: Domains → Add → `mail.reel-app.com` (subdomain keeps root email
    untouched) → add the MX/SPF/DKIM records it lists into the same Cloudflare
    zone (DMARC optional but nice) → Verify green. Then API Keys → create
    `re_...` (shown once).
 5. **Supabase SMTP**: Auth → Emails/SMTP → host `smtp.resend.com`, port `465`,
-   user `resend`, password = API key, sender `noreply@mail.reelapp.xyz`.
+   user `resend`, password = API key, sender `noreply@mail.reel-app.com`.
    Then Auth → Rate Limits → emails/hour to 100+.
-6. **Supabase URLs**: Site URL → `https://reelapp.xyz`. Redirect URLs: add
-   `https://reelapp.xyz/**`; KEEP the vercel.app and workers.dev entries for
+6. **Supabase URLs**: Site URL → `https://reel-app.com`. Redirect URLs: add
+   `https://reel-app.com/**`; KEEP the vercel.app and workers.dev entries for
    now (magic links already sent must stay valid).
 7. **Edge-function secrets** (alerts digest skips email silently without them):
    ```bash
-   supabase secrets set RESEND_API_KEY=re_... RESEND_FROM="Reel <alerts@mail.reelapp.xyz>"
+   supabase secrets set RESEND_API_KEY=re_... RESEND_FROM="Reel <alerts@mail.reel-app.com>"
    ```
 8. **Vercel becomes a redirect**: replace `app/vercel.json` contents with
    ```json
    {
      "redirects": [
-       { "source": "/(.*)", "destination": "https://reelapp.xyz/$1", "permanent": true }
+       { "source": "/(.*)", "destination": "https://reel-app.com/$1", "permanent": true }
      ]
    }
    ```
@@ -193,13 +206,13 @@ Order matters; each step is verifiable before the next.
    preserved automatically — old bookmarks and circulating invite links land on
    the new domain. Vercel keeps auto-building on push; harmless.
 9. **Verify the cutover**:
-   - [ ] `https://reelapp.xyz` serves the app, cert valid.
-   - [ ] `https://www.reelapp.xyz/x?y=1` → 301 → apex, query intact.
+   - [ ] `https://reel-app.com` serves the app, cert valid.
+   - [ ] `https://www.reel-app.com/x?y=1` → 301 → apex, query intact.
    - [ ] `https://reel-track.vercel.app/login?invite=TEST` → 308 →
-         `https://reelapp.xyz/login?invite=TEST`.
+         `https://reel-app.com/login?invite=TEST`.
    - [ ] Magic-link login **to a non-team address** (proves custom SMTP).
    - [ ] **Google sign-in works from the new domain.**
-   - [ ] Manual `alerts` invoke sends a real email from `alerts@mail.reelapp.xyz`.
+   - [ ] Manual `alerts` invoke sends a real email from `alerts@mail.reel-app.com`.
 10. **Docs sweep** (Claude): update Vercel/URL references in `ARCHITECTURE.md`
     (hosting row), `DEPLOY.md` (section 6 + SMTP notes), `DETAIL-PERFORMANCE.md`
     (deploy command + alias), `DESIGN.md:101`, `PLAN.md:101`; remove
