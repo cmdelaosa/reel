@@ -122,7 +122,27 @@ nothing until the cutover.
 goes green and serves a blank app (vendor-only bundle, ~30 KB JS). Verify by
 bundle size (~800+ KB), never by the green check.
 
-## Phase 3 — verify on workers.dev (no production impact)
+## Phase 3 — verify on workers.dev (DONE, 2026-07-21)
+
+Live at `https://reel.cmdelaosa.workers.dev`. The first build shipped a
+vendor-only bundle (336 KB, blank page) because the build variables hadn't been
+added yet — the predicted failure, and it went green. After adding the three
+vars and re-running the build:
+
+| Check | Result |
+| --- | --- |
+| Bundle | 842,677 B — matches production's 842,674 B |
+| `supabase.co` baked in / `Missing Supabase config` | 4 hits / 0 hits |
+| Google button | renders on `/login` (`VITE_GOOGLE_AUTH` arrived) |
+| Deep links `/friends/stats` `/calendar` `/login` `/show/1399` | 200 on hard reload |
+| `/assets/*` | `max-age=31536000, immutable` |
+| `/` | `max-age=0, must-revalidate` |
+| Console errors | none |
+
+Remaining before cutover: sign in end-to-end (magic link + Google) from the
+workers.dev URL, which needs its Redirect URL added in Supabase.
+
+### Original checklist
 
 1. Supabase dashboard → Authentication → **URL Configuration → Redirect URLs**:
    add `https://reel.<account>.workers.dev/**`. Do NOT touch Site URL.
