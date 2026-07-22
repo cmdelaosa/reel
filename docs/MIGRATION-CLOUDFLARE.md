@@ -178,8 +178,22 @@ Order matters; each step is verifiable before the next.
 2. **Attach domain to the Worker**: Worker → Settings → Domains & Routes →
    Custom Domain → `reel-app.com`. DNS + cert are automatic (this is the payoff
    of registrar + host in one place: no A/CNAME plumbing, no gray-cloud rules).
-3. **www**: add a Cloudflare Redirect Rule `www.reel-app.com/*` →
-   `https://reel-app.com/$1` (301). Keeps a single canonical origin.
+3. **www** — two steps, and the first is easy to miss:
+
+   a. **DNS → Records → Add record**: type `AAAA`, name `www`, address `100::`
+      (Cloudflare's documented placeholder for redirect-only hostnames),
+      **Proxied (orange cloud)**. Without a proxied record `www` doesn't
+      resolve at all and the redirect rule never fires — redirect rules only
+      run on hostnames Cloudflare proxies. Orange cloud is correct here
+      because the origin *is* Cloudflare (the Worker); the gray-cloud advice
+      only applied to the abandoned Vercel-origin plan.
+
+   b. **Rules → Overview → Create rule → Redirect Rule**: match with a
+      wildcard pattern `https://www.reel-app.com/*`, target
+      `https://reel-app.com/${1}` (dynamic — note `${1}`, not `$1`), status
+      301, and enable **Preserve query string** so `?invite=CODE` survives.
+
+   Keeps a single canonical origin.
 4. **Resend**: Domains → Add → `mail.reel-app.com` (subdomain keeps root email
    untouched) → add the MX/SPF/DKIM records it lists into the same Cloudflare
    zone (DMARC optional but nice) → Verify green. Then API Keys → create
