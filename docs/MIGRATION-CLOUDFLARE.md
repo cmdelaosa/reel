@@ -160,6 +160,26 @@ workers.dev URL, which needs its Redirect URL added in Supabase.
 
 Order matters; each step is verifiable before the next.
 
+**Steps 1–3 are DONE and verified (2026-07-22).** The domain is registered on
+Cloudflare nameservers, attached to the Worker, and `https://reel-app.com`
+serves the real app (842,677 B bundle — byte-identical to workers.dev — with
+Supabase config baked in and deep links answering 200). The `www` redirect is
+live and correct on every shape that matters:
+
+| Request | Result |
+| --- | --- |
+| `https://www.reel-app.com` | 301 → `https://reel-app.com/` |
+| `https://www.reel-app.com/x` | 301 → `https://reel-app.com/x` |
+| `https://www.reel-app.com/login?invite=TEST123` | 301 → same path **and query** |
+
+A bare `/` briefly returned 522 right after deploying the rule — that is the
+rule still propagating across the edge, not a misconfiguration (522 = Cloudflare
+reached the `100::` placeholder because no rule intercepted yet). It cleared on
+its own within a minute.
+
+**Nothing so far touches friends** — they are still on
+`reel-track.vercel.app`. The remaining steps (4 onward) are the ones that do.
+
 1. **Buy** `reel-app.com` — Cloudflare → Domain Registration ($10.46/yr at cost,
    registration and renewal alike). Zone is created automatically. Click the
    ICANN verification email or the domain is suspended after ~15 days.
