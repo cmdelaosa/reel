@@ -214,6 +214,21 @@ its own within a minute.
       301, and enable **Preserve query string** so `?invite=CODE` survives.
 
    Keeps a single canonical origin.
+**Steps 4–5 DONE and verified (2026-07-22).** Resend domain `mail.reel-app.com`
+verified (DKIM + SPF green, confirmed via `dig`); records were pushed by
+Resend's "Auto configure" Cloudflare integration, not added by hand. DMARC left
+unset (optional, `p=none` only, no monitoring planned). Supabase custom SMTP
+enabled and **proven live**: a magic link requested through the app arrived in
+the inbox (not spam) from `Reel <noreply@mail.reel-app.com>`. The 2/hour
+built-in cap — the original reason for this whole migration — is gone.
+
+Diagnostic from that test email: its `redirect_to` was
+`https://reel-yixo.vercel.app/`, i.e. the current Supabase **Site URL** is still
+a Vercel URL (expected — step 6 not done yet). Consequence to remember: until
+step 6, a sign-in initiated from `reel-app.com` bounces back to the old Vercel
+app, because `reel-app.com` isn't in the redirect allow-list yet. That is the
+intermediate state, not a bug.
+
 4. **Resend**: Domains → Add → `mail.reel-app.com` (subdomain keeps root email
    untouched) → add the MX/SPF/DKIM records it lists into the same Cloudflare
    zone (DMARC optional but nice) → Verify green. Then API Keys → create
