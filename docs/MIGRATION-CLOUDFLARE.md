@@ -243,17 +243,29 @@ intermediate state, not a bug.
    ```bash
    supabase secrets set RESEND_API_KEY=re_... RESEND_FROM="Reel <alerts@mail.reel-app.com>"
    ```
-8. **Vercel becomes a redirect**: replace `app/vercel.json` contents with
+8. **Vercel becomes a redirect** (DONE 2026-07-22): `app/vercel.json` now holds
    ```json
    {
      "redirects": [
-       { "source": "/(.*)", "destination": "https://reel-app.com/$1", "permanent": true }
+       { "source": "/:path*", "destination": "https://reel-app.com/:path*", "permanent": false }
      ]
    }
    ```
-   Redirects run before the filesystem, and query strings (`?invite=CODE`) are
-   preserved automatically — old bookmarks and circulating invite links land on
-   the new domain. Vercel keeps auto-building on push; harmless.
+   Two deliberate choices, both learned the hard way from the docs:
+   - **`:path*`, not `/(.*)` + `$1`.** Vercel's own `/(.*)`→external example
+     *drops* the path (sends everything to one page). The named wildcard
+     `:path*` is the documented way to preserve the path; query strings
+     (`?invite=CODE`) are preserved automatically.
+   - **`permanent: false` (307), not 308.** A 308 is cached hard by browsers,
+     so if a rollback were ever needed, friends' browsers would keep
+     redirecting to reel-app.com even after a `git revert` — unfixable
+     remotely. A 307 behaves identically for users but doesn't cache, keeping
+     rollback clean. For an invite-only app the permanent-redirect SEO signal
+     is worthless, so 307 is pure upside. Promote to `true` once it's been
+     stable under real traffic for a while.
+
+   Vercel keeps auto-building on push; the redirect replaces the SPA rewrite
+   atomically on deploy, so there's no serving gap.
 9. **Verify the cutover**:
    - [ ] `https://reel-app.com` serves the app, cert valid.
    - [ ] `https://www.reel-app.com/x?y=1` → 301 → apex, query intact.
