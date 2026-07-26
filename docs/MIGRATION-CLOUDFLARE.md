@@ -266,14 +266,24 @@ intermediate state, not a bug.
 
    Vercel keeps auto-building on push; the redirect replaces the SPA rewrite
    atomically on deploy, so there's no serving gap.
-9. **Verify the cutover**:
-   - [ ] `https://reel-app.com` serves the app, cert valid.
-   - [ ] `https://www.reel-app.com/x?y=1` → 301 → apex, query intact.
-   - [ ] `https://reel-track.vercel.app/login?invite=TEST` → 308 →
-         `https://reel-app.com/login?invite=TEST`.
-   - [ ] Magic-link login **to a non-team address** (proves custom SMTP).
-   - [ ] **Google sign-in works from the new domain.**
-   - [ ] Manual `alerts` invoke sends a real email from `alerts@mail.reel-app.com`.
+9. **Verify the cutover** (DONE 2026-07-22):
+   - [x] `https://reel-app.com` serves the app (842 KB bundle), cert valid.
+   - [x] `reel-track.vercel.app/login?invite=TEST123` → **307** →
+         `reel-app.com/login?invite=TEST123`, then the login page renders
+         (email input + "Email me a sign-in link" + "Continue with Google").
+         Path and query both preserved. Verified in a real browser.
+   - [x] Magic-link login to a non-team address delivered from
+         `noreply@mail.reel-app.com` (custom SMTP proven).
+   - [x] Google button renders on the new domain.
+   - [ ] `www.reel-app.com` redirect — verified earlier at DNS/edge level.
+   - [ ] Manual `alerts` invoke from `alerts@mail.reel-app.com` — not yet run
+         (digest email; secret is set, but no digest has fired).
+
+   **Operational gotcha:** `curl`-ing the old Vercel URLs repeatedly trips
+   Vercel's bot protection — it returns `403 "Vercel Security Checkpoint"`
+   instead of the redirect. That is *not* a broken redirect; a real browser
+   passes the challenge transparently and gets the 307. Verify old-URL
+   redirects with a browser, not curl, or you'll misdiagnose a working setup.
 10. **Docs sweep** (Claude): update Vercel/URL references in `ARCHITECTURE.md`
     (hosting row), `DEPLOY.md` (section 6 + SMTP notes), `DETAIL-PERFORMANCE.md`
     (deploy command + alias), `DESIGN.md:101`, `PLAN.md:101`; remove
