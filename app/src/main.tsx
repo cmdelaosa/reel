@@ -11,6 +11,8 @@ import { RequireInvited } from "@/features/auth/RequireInvited";
 import { RequireOnboarded } from "@/features/auth/RequireOnboarded";
 import WelcomePage from "@/features/auth/WelcomePage";
 import { LandingGate } from "@/features/landing/LandingGate";
+import PrivacyPage from "@/features/legal/PrivacyPage";
+import TermsPage from "@/features/legal/TermsPage";
 import CalendarPage from "@/features/calendar/CalendarPage";
 import ExplorePage from "@/features/explore/ExplorePage";
 import CollectionPage from "@/features/explore/CollectionPage";
@@ -55,6 +57,10 @@ const queryClient = new QueryClient({
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/kit", element: <KitPage /> }, // living style guide — public, static
+  // Public legal pages — must stay outside the auth gate so signed-out visitors
+  // (and Google's OAuth brand-verification reviewer) can reach them.
+  { path: "/privacy", element: <PrivacyPage /> },
+  { path: "/terms", element: <TermsPage /> },
   {
     path: "/invite",
     element: (

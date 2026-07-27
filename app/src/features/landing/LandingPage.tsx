@@ -404,6 +404,10 @@ export default function LandingPage() {
       <footer className="lp-foot">
         <div className="lp-wrap lp-foot-inner">
           <Logo tagline={false} />
+          <nav className="lp-foot-links">
+            <Link to="/privacy">{t("Privacy")}</Link>
+            <Link to="/terms">{t("Terms")}</Link>
+          </nav>
         </div>
       </footer>
     </div>
