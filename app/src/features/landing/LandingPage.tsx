@@ -4,7 +4,7 @@ import {
   CalendarClock, Check, Clapperboard, Compass, FileArchive, Info,
   Play, Search, Star, StarHalf, TrendingUp, Users,
 } from "lucide-react";
-import { Logo } from "@/ui";
+import { Logo, LangToggle } from "@/ui";
 import { t } from "@/lib/i18n";
 
 /* Public marketing page at "/" for signed-out visitors (see LandingGate).
@@ -101,6 +101,7 @@ function Nav() {
           <a className="lp-nav-link" href="#import">{t("Import")}</a>
         </nav>
         <div className="lp-nav-cta">
+          <LangToggle />
           <Link className="btn btn-ghost btn-sm" to="/login">{t("Log in")}</Link>
           <Link className="btn btn-accent btn-sm" to="/login?mode=signup">{t("Sign up")}</Link>
         </div>

@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { Logo } from "@/ui";
+import { Logo, LangToggle } from "@/ui";
+import { t } from "@/lib/i18n";
 
 /**
  * Shared shell for the public /privacy and /terms pages. These render outside
  * the auth gate (see main.tsx) so signed-out visitors — and Google's OAuth
- * brand-verification reviewer — can reach them without logging in.
+ * brand-verification reviewer — can reach them without logging in. A language
+ * switch sits in the header since there's no in-app Settings here.
  */
 export function LegalLayout({
   title,
@@ -19,13 +21,16 @@ export function LegalLayout({
   return (
     <main style={{ minHeight: "100dvh", padding: "28px 20px 80px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 30 }}>
           <Link to="/" aria-label="Reel home">
             <Logo tagline={false} />
           </Link>
-          <Link to="/" className="btn btn-ghost btn-sm">
-            Back to Reel
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <LangToggle />
+            <Link to="/" className="btn btn-ghost btn-sm">
+              {t("Back to Reel")}
+            </Link>
+          </div>
         </div>
 
         <article className="card sheet legal" style={{ padding: "34px 32px" }}>
@@ -33,15 +38,15 @@ export function LegalLayout({
             {title}
           </h1>
           <p className="mute" style={{ fontSize: 13, margin: "8px 0 26px" }}>
-            Last updated {updated}
+            {t("Last updated")} {updated}
           </p>
           {children}
         </article>
 
         <p className="mute" style={{ fontSize: 12.5, textAlign: "center", marginTop: 26 }}>
-          <Link to="/privacy" style={{ color: "var(--accent)" }}>Privacy Policy</Link>
+          <Link to="/privacy" style={{ color: "var(--accent)" }}>{t("Privacy Policy")}</Link>
           {" · "}
-          <Link to="/terms" style={{ color: "var(--accent)" }}>Terms of Service</Link>
+          <Link to="/terms" style={{ color: "var(--accent)" }}>{t("Terms of Service")}</Link>
         </p>
       </div>
     </main>

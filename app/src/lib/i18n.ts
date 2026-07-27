@@ -472,6 +472,13 @@ const ES: Record<string, string> = {
   "Import": "Importar",
   "Log in": "Inicia sesión",
   "Sign up": "Regístrate",
+  // ---- Public legal pages ----
+  "Back to Reel": "Volver a Reel",
+  "Last updated": "Última actualización",
+  "Privacy Policy": "Política de Privacidad",
+  "Terms of Service": "Términos del Servicio",
+  "Privacy": "Privacidad",
+  "Terms": "Términos",
   "Always know what to watch": "Siempre sabrás qué ver",
   "tonight": "esta noche",
   "Reel keeps every show you follow in one place — what's next, when it returns, and what your friends thought of it. Fast, beautiful, and yours.":
