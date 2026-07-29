@@ -7,7 +7,7 @@ import { tmdbImg } from "@/lib/tmdb";
 import { useOpenTitle } from "@/lib/useOpenTitle";
 import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { airTimeZone, fmtAirDate, fmtAirTime, hasRealAirTime } from "@/lib/region";
-import { NetworkLogo } from "@/ui";
+import { WatchOn } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
 
@@ -93,7 +93,7 @@ export function CalEpGroup({
           ) : (
             <>
               {timed && <div className="cal-time">{fmtAirTime(lead.air_datetime)}</div>}
-              {lead.network && <NetworkLogo network={lead.network} />}
+              <WatchOn tmdbId={lead.tmdb_id} />
             </>
           )}
         </div>

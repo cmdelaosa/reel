@@ -1,15 +1,16 @@
 import { Pause, Star } from "lucide-react";
 import type { TitleCard } from "@/domain/types";
 import { posterBg } from "@/ui/posterBg";
-import { NetworkLogo } from "@/ui/NetworkLogo";
+import { WatchOn } from "@/ui/WatchOn";
 import { useTitleIntent } from "@/lib/useOpenTitle";
 import { locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 
 /* ---- Poster tile (overlaid title, TV-Time-like) ---- */
-export function Poster({ t, subtitle, showNetwork = true, onClick, prefetchTmdbId }: {
+export function Poster({ t, subtitle, showProviders = true, onClick, prefetchTmdbId }: {
   t: TitleCard;
   subtitle?: string;
-  showNetwork?: boolean;
+  /** Where-to-watch logos in the top-left slot. */
+  showProviders?: boolean;
   onClick?: () => void;
   prefetchTmdbId?: number;
 }) {
@@ -41,7 +42,10 @@ export function Poster({ t, subtitle, showNetwork = true, onClick, prefetchTmdbI
       {t.posterPath && <img className="poster-img" src={t.posterPath} alt="" loading="lazy" />}
       <div className="poster-sheen" />
       <div className="poster-top">
-        {showNetwork ? <NetworkLogo network={t.network} /> : <span />}
+        {/* TitleCard.id is the tmdb id as a string — the key providers are
+            cached by. The wrapper always renders so the badges stay pinned
+            right whether or not this title is available in your country. */}
+        <span>{showProviders && <WatchOn tmdbId={Number(t.id) || null} />}</span>
         <span className="flex items-center gap-1">
           {t.stopped && (
             <span className="badge badge-glass" title={tr("Stopped watching")}>

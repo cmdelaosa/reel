@@ -15,14 +15,14 @@ const DEMO_ART =
   );
 
 const FIXTURES: TitleCard[] = [
-  { id: "severance", name: "Severance", year: "2022", genres: ["Sci-Fi", "Thriller"], network: "Apple TV+", voteAverage: 8.4, progress: 68, posterPath: DEMO_ART },
-  { id: "the-bear", name: "The Bear", year: "2022", genres: ["Comedy", "Drama"], network: "FX", voteAverage: 8.6, progress: 35 },
-  { id: "andor", name: "Andor", year: "2022", genres: ["Sci-Fi", "Drama"], network: "Disney+", voteAverage: 8.3 },
-  { id: "the-diplomat", name: "The Diplomat", year: "2023", genres: ["Drama", "Thriller"], network: "Netflix", voteAverage: 7.6 },
-  { id: "hacks", name: "Hacks", year: "2021", genres: ["Comedy"], network: "HBO", voteAverage: 8.0, progress: 92 },
-  { id: "fallout", name: "Fallout", year: "2024", genres: ["Sci-Fi", "Drama"], network: "Prime Video", voteAverage: 8.2 },
-  { id: "dark-winds", name: "Dark Winds", year: "2022", genres: ["Crime", "Drama"], network: "AMC", voteAverage: 7.7 },
-  { id: "unknown-net", name: "Local Heroes", year: "2025", genres: ["Documentary"], network: "Canal 9", voteAverage: 0 },
+  { id: "severance", name: "Severance", year: "2022", genres: ["Sci-Fi", "Thriller"], voteAverage: 8.4, progress: 68, posterPath: DEMO_ART },
+  { id: "the-bear", name: "The Bear", year: "2022", genres: ["Comedy", "Drama"], voteAverage: 8.6, progress: 35 },
+  { id: "andor", name: "Andor", year: "2022", genres: ["Sci-Fi", "Drama"], voteAverage: 8.3 },
+  { id: "the-diplomat", name: "The Diplomat", year: "2023", genres: ["Drama", "Thriller"], voteAverage: 7.6 },
+  { id: "hacks", name: "Hacks", year: "2021", genres: ["Comedy"], voteAverage: 8.0, progress: 92 },
+  { id: "fallout", name: "Fallout", year: "2024", genres: ["Sci-Fi", "Drama"], voteAverage: 8.2 },
+  { id: "dark-winds", name: "Dark Winds", year: "2022", genres: ["Crime", "Drama"], voteAverage: 7.7 },
+  { id: "unknown-net", name: "Local Heroes", year: "2025", genres: ["Documentary"], voteAverage: 0 },
 ];
 
 const THEMES: ThemeName[] = ["system", "dark", "oled", "light"];

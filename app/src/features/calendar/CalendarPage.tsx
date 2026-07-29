@@ -6,7 +6,7 @@ import { useCalendarFeed, type FeedRow } from "@/lib/calendar";
 import { useLibrary, useToggleNotify, type LibraryShow } from "@/lib/library";
 import { useUndoMarks } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
-import { NetworkLogo, TabMenu } from "@/ui";
+import { TabMenu, WatchOn } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useOpenTitle } from "@/lib/useOpenTitle";
 import { airTimeZone, fmtAirDate } from "@/lib/region";
@@ -321,7 +321,7 @@ function UpcomingRow({ s, at, announced }: { s: LibraryShow; at: number | null; 
           <span className={`badge ${announced ? "badge-soft" : "badge-accent"}`}>
             {announced ? tr("Announced") : at ? fmtAirDate(new Date(at).toISOString()) : tr("TBA")}
           </span>
-          {s.network && <NetworkLogo network={s.network} />}
+          <WatchOn tmdbId={s.tmdb_id} />
         </div>
         <div className="mq-row-title truncate" style={{ fontSize: 16 }}>{name}</div>
         {s.upcoming_season_number != null ? (

@@ -8,7 +8,7 @@ import { useUpNext, type UpNextRow } from "@/lib/upnext";
 import { useMarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
-import { Poster, Rail } from "@/ui";
+import { Poster, Rail, WatchOn } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
 
@@ -17,12 +17,14 @@ import { useTitleIntent } from "@/lib/useOpenTitle";
 
 const seLabel = (r: UpNextRow) => `S${r.season_number} · E${r.episode_number}`;
 
-/** One line in the shape `S2 · E1 — “Future Days” · HBO · 54 min`, minus
- *  whatever the row is missing — episode name, network and runtime are each
- *  nullable, so drop empty pieces rather than leaving a dangling separator. */
+/** One line in the shape `S2 · E1 — “Future Days” · 54 min`, minus whatever the
+ *  row is missing — episode name and runtime are both nullable, so drop empty
+ *  pieces rather than leaving a dangling separator. Where to watch it used to
+ *  be a third segment here; it's now the provider logos beside this line, which
+ *  say it in the viewer's country instead of the show's. */
 function metaLine(r: UpNextRow): string {
   const ep = r.episode_name ? `${seLabel(r)} — “${r.episode_name}”` : seLabel(r);
-  return [ep, r.network, r.runtime ? `${r.runtime} ${tr("min")}` : null].filter(Boolean).join(" · ");
+  return [ep, r.runtime ? `${r.runtime} ${tr("min")}` : null].filter(Boolean).join(" · ");
 }
 
 function airLabel(iso: string | null): string | null {
@@ -92,7 +94,10 @@ export default function TonightPage() {
             <div className="mq-hero-body">
               <div className="mq-hero-eyebrow">{tr("Up next for you")}</div>
               <h2 className="mq-hero-title">{locName(heroEsNames, hero.tmdb_id, hero.name)}</h2>
-              <div className="mq-hero-meta">{metaLine(hero)}</div>
+              <div className="mq-hero-meta flex items-center gap-2 flex-wrap">
+                <span>{metaLine(hero)}</span>
+                <WatchOn tmdbId={hero.tmdb_id} />
+              </div>
               <div className="mq-hero-progress">
                 <span className="mq-hero-track"><i style={{ width: `${heroProgress}%` }} /></span>
                 <span className="mq-hero-count">
@@ -211,7 +216,6 @@ function ContinueCard({ r, onOpen, onMarked }: { r: UpNextRow; onOpen: () => voi
           name: r.name,
           year: "",
           genres: [seLabel(r)],
-          network: r.network ?? "",
           posterPath: tmdbImg(r.poster_path),
           voteAverage: r.vote_average ?? 0,
           progress: r.aired_count > 0 ? Math.round((r.watched_count / r.aired_count) * 100) : undefined,

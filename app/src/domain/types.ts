@@ -5,7 +5,6 @@ export interface TitleCard {
   name: string;
   year: string;
   genres: string[];
-  network: string;
   /** Full image URL when TMDB art exists; the gradient fallback renders otherwise. */
   posterPath?: string;
   /** TMDB community score, 0–10. Hidden when 0. */

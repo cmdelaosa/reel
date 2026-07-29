@@ -5,6 +5,8 @@ import { Camera, Check, X } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { isPlaceholderHandle } from "@/lib/schemas";
+import { getSettings, setSetting } from "@/lib/settings";
+import { COUNTRIES, countryName } from "@/lib/region";
 import { Logo } from "@/ui";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { cropAvatar } from "@/features/auth/avatar";
@@ -41,6 +43,10 @@ export default function WelcomePage() {
     profile && profile.display_name !== "New user" ? profile.display_name : "",
   );
   const [handle, setHandle] = useState("");
+  // Seeded from the device's timezone, then owned by the viewer — it decides
+  // which country's streaming providers Reel shows and what clock airing times
+  // are in, so it is asked once here rather than guessed forever.
+  const [country, setCountry] = useState(getSettings().country);
   const [handleState, setHandleState] = useState<HandleState>({ kind: "idle" });
   const [avatarBlob, setAvatarBlob] = useState<Blob | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -117,6 +123,10 @@ export default function WelcomePage() {
         }
         throw new Error(updErr.message);
       }
+
+      // Local, like the rest of the appearance settings — it describes this
+      // device's viewer, not the profile friends see.
+      setSetting("country", country);
 
       await queryClient.invalidateQueries({ queryKey: ["profile", session.user.id] });
       navigate("/tonight", { replace: true });
@@ -215,6 +225,22 @@ export default function WelcomePage() {
                 handleHint
               )}
             </div>
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span className="eyebrow">Where you watch</span>
+            <select
+              style={{ ...field, appearance: "auto" }}
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+            >
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>{countryName(c)}</option>
+              ))}
+            </select>
+            <span className="mute" style={{ fontSize: 12.5 }}>
+              Sets which streaming services we show for each series, and the timezone airing times use.
+            </span>
           </label>
 
           <button

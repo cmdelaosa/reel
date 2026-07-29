@@ -20,4 +20,5 @@ export const qk = {
   notifications: ["notifications"] as const,
   ignored: ["ignored"] as const,
   networkLogos: ["networkLogos"] as const,
+  providers: (region: string, tmdbId: number) => ["providers", region, tmdbId] as const,
 };

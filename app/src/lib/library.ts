@@ -59,7 +59,6 @@ export function toTitleCard(s: LibraryShow): TitleCard {
     name: s.name,
     year: s.first_air_date?.slice(0, 4) ?? "TBA",
     genres: s.genres.length ? s.genres : ["—"],
-    network: s.network ?? "",
     posterPath: tmdbImg(s.poster_path),
     voteAverage: s.vote_average ?? 0,
     progress: s.status === "watching" ? s.progress : undefined,

@@ -196,6 +196,84 @@ function esTranslation(d: Any): { name: string | null; overview: string | null }
   return { name: t?.data?.name || null, overview: t?.data?.overview || null };
 }
 
+/* Hand-mirrors app/src/domain/watchProviders.ts — the canonical spec, with the
+   unit tests. Keep the two in step.
+
+   TMDB names the same brand differently as a provider than as a network
+   ("Disney Plus" vs "Disney+"), and splits the ad-supported tiers out as their
+   own entries. Both matter downstream: the client renders providers through
+   the very same NetworkLogo that switches on these exact strings, and the
+   logo cache is keyed by name. Canonicalising here keeps one spelling per
+   brand in the column, the cache and the UI. */
+const PROVIDER_ALIASES: Record<string, string> = {
+  "Amazon Prime Video": "Prime Video",
+  "Disney Plus": "Disney+",
+  "Apple TV Plus": "Apple TV+",
+  // TMDB renamed the subscription service to plain "Apple TV" (the rent/buy
+  // storefront is "Apple TV Store"), and we only read subscription buckets.
+  "Apple TV": "Apple TV+",
+};
+
+// A service resold through another storefront ("HBO Max Amazon Channel") is the
+// same service, and TMDB ships some names with a trailing space.
+const RESELLER = /\s+(amazon|apple tv|roku)\s+channel$/i;
+// The tier word is optional: TMDB ships a bare "Amazon Prime Video with Ads".
+const AD_TIER = /\s+(basic\s+|standard\s+)?with\s+ads$/i;
+
+function canonicalProvider(name: string): string {
+  const base = name.replace(RESELLER, "").replace(AD_TIER, "").trim();
+  return PROVIDER_ALIASES[base] ?? base;
+}
+
+/** TMDB watch/providers → {ES: [{name, logo_path}], …}, ready for the column.
+ *
+ *  Subscription-shaped access only: `flatrate` (included with a sub), `free`
+ *  and `ads`. `rent`/`buy` are dropped — nearly every catalogue title is
+ *  rentable on Apple TV and Google Play, so keeping them would stamp the same
+ *  two logos on half the library. Within a country TMDB already orders by
+ *  display_priority, and a provider appearing in two buckets is kept once, at
+ *  its best position.
+ *
+ *  Returns undefined when the payload carried no providers at all, so the
+ *  column is left untouched rather than wiped — same rule the translations
+ *  above follow. */
+function providerMap(d: Any): Record<string, { name: string; logo_path: string | null }[]> | undefined {
+  const results = d?.["watch/providers"]?.results;
+  if (!results || typeof results !== "object") return undefined;
+
+  const out: Record<string, { name: string; logo_path: string | null }[]> = {};
+  for (const [country, buckets] of Object.entries(results as Record<string, Any>)) {
+    const seen = new Set<string>();
+    // Also dedup on artwork: a sub-package ("Movistar Plus+ Ficción Total")
+    // shares its parent's icon, so a show on both drew the same tile twice.
+    const seenArt = new Set<string>();
+    const list: { name: string; logo_path: string | null }[] = [];
+    for (const bucket of ["flatrate", "free", "ads"] as const) {
+      for (const p of (buckets?.[bucket] ?? []) as Any[]) {
+        if (!p?.provider_name) continue;
+        // Dedup on the canonical name, not provider_id: the ad-supported tier
+        // is a separate id, and un-deduped it would put two Netflix logos on
+        // the same poster.
+        const name = canonicalProvider(p.provider_name as string);
+        const art = (p.logo_path ?? null) as string | null;
+        if (seen.has(name) || (art && seenArt.has(art))) continue;
+        seen.add(name);
+        if (art) seenArt.add(art);
+        list.push({ name, logo_path: art });
+      }
+    }
+    // A country whose only access is rent/buy stores nothing, which the client
+    // reads the same as "not available here" — which is what it means to us.
+    // Drop an entry that merely extends another in the same country: Spain
+    // returns "Movistar Plus+" and "Movistar Plus+ Ficción Total" for one show,
+    // near-identical icons under different file names. Parent wins whatever
+    // the order; an add-on listed alone keeps its own name.
+    const merged = list.filter((a) => !list.some((b) => b !== a && a.name.startsWith(`${b.name} `)));
+    if (merged.length) out[country] = merged;
+  }
+  return out;
+}
+
 function titleRow(d: Any) {
   const up = upcomingSeason(d.seasons, d.last_episode_to_air, d.next_episode_to_air);
   // Localized columns ride along only when the payload actually carried
@@ -217,6 +295,12 @@ function titleRow(d: Any) {
     ...(d.external_ids ? { imdb_id: d.external_ids.imdb_id || null } : {}),
     genres: (d.genres ?? []).map((g: Any) => g.name),
     network: d.networks?.[0]?.name ?? null,
+    // Like the translations above: present only when the payload carried it,
+    // so a partial refresh can't wipe a full one.
+    ...((): Record<string, unknown> => {
+      const p = providerMap(d);
+      return p ? { providers: p } : {};
+    })(),
     episode_run_time: d.episode_run_time?.[0] ?? null,
     vote_average: d.vote_average ?? null,
     popularity: d.popularity ?? null,
@@ -402,7 +486,9 @@ function inBackground(work: Promise<unknown>) {
 /** TMDB → cache refresh of a title and its season list; returns the
  *  GET /title/:id response shape. Network logos are cached off the hot path. */
 async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: number) {
-  const d = await fetchTmdb(apiKey, `/tv/${tmdbId}?append_to_response=translations,external_ids`);
+  // watch/providers rides the append: no extra request, and TMDB hands back
+  // every country at once, so switching country never refetches anything.
+  const d = await fetchTmdb(apiKey, `/tv/${tmdbId}?append_to_response=translations,external_ids,watch/providers`);
   const [title] = await upsertReturning(admin, "titles", titleRow(d), "tmdb_id");
   inBackground(cacheNetworkLogos(admin, d.networks));
   const seasons = (d.seasons ?? []).length
@@ -621,7 +707,10 @@ Deno.serve(async (req) => {
         const CHUNK = 20;
         for (let i = 0; i < pool.length; i += CHUNK) {
           const details = await Promise.all(
-            pool.slice(i, i + CHUNK).map((c) => fetchTmdb(apiKey, `/tv/${c.id}`).catch(() => null)),
+            // Same request count with the append, and it means a trending row
+            // already carries its providers the first time it's rendered.
+            pool.slice(i, i + CHUNK).map((c) =>
+              fetchTmdb(apiKey, `/tv/${c.id}?append_to_response=watch/providers`).catch(() => null)),
           );
           for (const d of details) {
             if (!d) continue;

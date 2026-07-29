@@ -62,6 +62,16 @@ const EN: Content = {
       ),
     },
     {
+      heading: "Where the show data comes from",
+      body: (
+        <>
+          Show and episode information, artwork and streaming availability come from <strong>TMDB</strong>. This
+          product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data is
+          provided by <strong>JustWatch</strong>. None of your personal data is sent to either of them.
+        </>
+      ),
+    },
+    {
       heading: "Friends and visibility",
       body: <>Reel is social by design: activity such as the shows you watch and your ratings can be visible to friends you connect with inside the app. Only add people you&rsquo;re comfortable sharing that with.</>,
     },
@@ -133,6 +143,17 @@ const ES: Content = {
             <li style={{ marginBottom: 4 }}><strong>Google</strong> — solo si eliges &ldquo;Continuar con Google&rdquo; para entrar.</li>
           </ul>
           También podemos revelar datos si la ley lo exige.
+        </>
+      ),
+    },
+    {
+      heading: "De dónde salen los datos de las series",
+      body: (
+        <>
+          La información de series y episodios, las imágenes y la disponibilidad en plataformas provienen
+          de <strong>TMDB</strong>. Este producto usa la API de TMDB, pero no está avalado ni certificado por
+          TMDB. Los datos de disponibilidad en plataformas los proporciona <strong>JustWatch</strong>. No se
+          envía ningún dato personal tuyo a ninguno de los dos.
         </>
       ),
     },
