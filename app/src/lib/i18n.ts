@@ -91,6 +91,11 @@ const ES: Record<string, string> = {
   "Language": "Idioma",
   "English": "English",
   "Español": "Español",
+  "Country": "País",
+  "Use my device": "Usar mi dispositivo",
+  "Airing times follow your device": "Las horas de emisión siguen a tu dispositivo",
+  "Airing times are shown in this country's timezone.":
+    "Las horas de emisión se muestran en la zona horaria de este país.",
   "New episodes": "Nuevos episodios",
   "When a show you follow airs": "Cuando emite una serie que sigues",
   "Premieres": "Estrenos",

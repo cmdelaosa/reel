@@ -9,6 +9,7 @@ import { tmdbImg } from "@/lib/tmdb";
 import { NetworkLogo, TabMenu } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useOpenTitle } from "@/lib/useOpenTitle";
+import { airTimeZone } from "@/lib/region";
 import { dateLocale, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { CalEpGroup } from "@/features/calendar/CalEpGroup";
@@ -65,7 +66,10 @@ function MyShowsFeed() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const { days, later } = useMemo(() => groupFeed(rows, now), [rows, now]);
+  // Bucket in the same zone the rows are formatted in, or an episode files
+  // under "Today" while its own row prints tomorrow's date.
+  const tz = airTimeZone();
+  const { days, later } = useMemo(() => groupFeed(rows, now, tz), [rows, now, tz]);
 
   const renderCluster = (c: FeedCluster<FeedRow>, isLater: boolean) =>
     c.count === 1 ? (
@@ -171,15 +175,15 @@ function MyShowsFeed() {
 
         {days.map(([off, list]) => (
           <div key={off} ref={off === todayOffset ? todayRef : undefined} className="cal-day">
-            <div className="cal-daysep"><span>{dayLabel(off, list[0].air_datetime, dateLocale())}</span></div>
-            {clusterFeed(list, now).map((c) => renderCluster(c, false))}
+            <div className="cal-daysep"><span>{dayLabel(off, list[0].air_datetime, dateLocale(), tz)}</span></div>
+            {clusterFeed(list, now, tz).map((c) => renderCluster(c, false))}
           </div>
         ))}
 
         {later.length > 0 && (
           <div className="cal-day">
             <div className="cal-daysep"><span>{tr("Later")}</span></div>
-            {clusterFeed(later, now).map((c) => renderCluster(c, true))}
+            {clusterFeed(later, now, tz).map((c) => renderCluster(c, true))}
           </div>
         )}
       </div>
@@ -203,6 +207,7 @@ function MyShowsFeed() {
 
 function PremieresList({ kind }: { kind: "returning" | "new" }) {
   const { data: library = [] } = useLibrary();
+  const esNames = useEsNames();
   const now = new Date();
 
   // Land at the top whenever this view opens. The feed we came from leaves the
@@ -235,6 +240,18 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
     return null;
   };
 
+  // Soonest first inside every bucket. rpc_library_rollup has no ORDER BY, so
+  // without this the rows arrive in whatever order Postgres emits them and the
+  // lists look shuffled. Undated shows sink to the bottom, alphabetically.
+  const byPremiere = (a: LibraryShow, b: LibraryShow) => {
+    const at = premiereAt(a);
+    const bt = premiereAt(b);
+    if (at != null && bt != null) return at - bt;
+    if (at != null) return -1;
+    if (bt != null) return 1;
+    return locName(esNames, a.tmdb_id, a.name).localeCompare(locName(esNames, b.tmdb_id, b.name), dateLocale());
+  };
+
   const bucketOf = (s: LibraryShow): "month" | "later" | "tba" => {
     const at = premiereAt(s);
     if (at == null || at <= now.getTime()) return "tba";
@@ -261,7 +278,7 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
   return (
     <div className="flex flex-col gap-6">
       {groups.map((g) => {
-        const rows = items.filter((s) => bucketOf(s) === g.key);
+        const rows = items.filter((s) => bucketOf(s) === g.key).sort(byPremiere);
         if (!rows.length) return null;
         return (
           <div key={g.key} className="flex flex-col gap-3">

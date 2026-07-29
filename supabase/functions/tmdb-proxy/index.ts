@@ -18,12 +18,16 @@
 // *user* JWT is required (the anon key alone is rejected). The response shape is
 // mirrored (minimally, no cross-runtime import) by app/src/lib/schemas.ts.
 //
-// air_datetime placeholder: TMDB gives an air_date (day) but no time, so we
-// stamp 21:00 UTC. Refined later if we add a real time source.
+// air_datetime: TMDB gives an air_date (day) but no time, so the upsert stamps
+// 21:00 UTC as a placeholder and a background pass overwrites it with TVmaze's
+// real airstamp where TVmaze carries the show (see enrichAirTimes). Rows keep
+// air_time_source = 'estimated' until that lands, and the client shows a bare
+// date rather than a made-up clock for them.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const TMDB = "https://api.themoviedb.org/3";
+const TVMAZE = "https://api.tvmaze.com";
 const AIR_TIME = "T21:00:00Z"; // UTC placeholder appended to TMDB air_date
 
 // TMDB TV genre ids → names. Search results carry only ids; details carry names.
@@ -209,6 +213,8 @@ function titleRow(d: Any) {
     backdrop_path: d.backdrop_path ?? null,
     first_air_date: d.first_air_date || null,
     status: d.status ?? null,
+    // Bridge to TVmaze, which indexes IMDb/TVDB ids and knows nothing of TMDB's.
+    ...(d.external_ids ? { imdb_id: d.external_ids.imdb_id || null } : {}),
     genres: (d.genres ?? []).map((g: Any) => g.name),
     network: d.networks?.[0]?.name ?? null,
     episode_run_time: d.episode_run_time?.[0] ?? null,
@@ -261,6 +267,9 @@ const episodeRow = (titleId: string, seasonId: string, e: Any) => ({
   overview: e.overview ?? null,
   runtime: e.runtime ?? null,
   air_datetime: airDatetime(e.air_date),
+  // Written alongside the placeholder so value and provenance can never drift
+  // apart: enrichAirTimes upgrades both together, or neither.
+  air_time_source: "estimated",
 });
 
 async function upsertReturning(admin: SupabaseClient, table: string, rows: Any, onConflict: string) {
@@ -279,6 +288,73 @@ async function cacheNetworkLogos(admin: SupabaseClient, networks: Any) {
   if (!rows.length) return;
   const { error } = await admin.from("network_logos").upsert(rows, { onConflict: "name" });
   if (error) console.error(`network_logos upsert: ${error.message}`);
+}
+
+/** TVmaze's show id for one of our titles, resolved through the IMDb id TMDB
+ *  hands us (TVmaze indexes IMDb/TVDB, never TMDB) and cached on the row so the
+ *  lookup costs one request per show, ever. /lookup answers 301 → 200; 404 just
+ *  means TVmaze doesn't carry it. */
+async function tvmazeShowId(admin: SupabaseClient, title: Any): Promise<number | null> {
+  if (title.tvmaze_id) return title.tvmaze_id;
+  if (!title.imdb_id) return null;
+  const res = await fetch(`${TVMAZE}/lookup/shows?imdb=${encodeURIComponent(title.imdb_id)}`);
+  if (!res.ok) return null;
+  const id = (await res.json())?.id ?? null;
+  if (id) await admin.from("titles").update({ tvmaze_id: id }).eq("id", title.id);
+  return id;
+}
+
+/** Replace a title's 21:00 UTC placeholders with TVmaze's real airstamps —
+ *  absolute instants with the broadcaster's DST already resolved, so no
+ *  timezone arithmetic on our side. Best-effort: TVmaze being down, or simply
+ *  not carrying the show, leaves the estimates (and their 'estimated' marker)
+ *  exactly as they were. Specials are skipped — TVmaze numbers them on its own
+ *  scheme and every gate in the app filters season_number > 0 anyway. */
+async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
+  const { data: title } = await admin
+    .from("titles").select("id, imdb_id, tvmaze_id").eq("id", titleId).maybeSingle();
+  if (!title) return;
+
+  const showId = await tvmazeShowId(admin, title);
+  if (!showId) return;
+
+  const res = await fetch(`${TVMAZE}/shows/${showId}/episodes`);
+  if (!res.ok) return;
+  const stamps = new Map<string, string>();
+  for (const e of (await res.json()) as Any[]) {
+    if (e?.airstamp && e.season != null && e.number != null) {
+      stamps.set(`${e.season}x${e.number}`, new Date(e.airstamp).toISOString());
+    }
+  }
+  if (!stamps.size) return;
+
+  const { data: ours } = await admin
+    .from("episodes")
+    .select("title_id, season_number, episode_number, air_datetime, air_time_source")
+    .eq("title_id", titleId)
+    .gt("season_number", 0);
+
+  const rows = (ours ?? [])
+    .map((e: Any) => ({ e, at: stamps.get(`${e.season_number}x${e.episode_number}`) }))
+    // Compare as instants, not strings: Postgres renders timestamptz with a
+    // +00:00 offset where toISOString() writes a Z, so a textual diff would
+    // rewrite every episode on every pass.
+    .filter((x) =>
+      x.at &&
+      (x.e.air_time_source !== "tvmaze" ||
+        new Date(x.e.air_datetime ?? 0).getTime() !== new Date(x.at).getTime()))
+    .map((x) => ({
+      title_id: x.e.title_id,
+      season_number: x.e.season_number,
+      episode_number: x.e.episode_number,
+      air_datetime: x.at,
+      air_time_source: "tvmaze",
+    }));
+  if (!rows.length) return;
+
+  const { error } = await admin
+    .from("episodes").upsert(rows, { onConflict: "title_id,season_number,episode_number" });
+  if (error) console.error(`tvmaze air times: ${error.message}`);
 }
 
 // How long a cached title (and its seasons/episodes) is served without any
@@ -301,7 +377,7 @@ function inBackground(work: Promise<unknown>) {
 /** TMDB → cache refresh of a title and its season list; returns the
  *  GET /title/:id response shape. Network logos are cached off the hot path. */
 async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: number) {
-  const d = await fetchTmdb(apiKey, `/tv/${tmdbId}?append_to_response=translations`);
+  const d = await fetchTmdb(apiKey, `/tv/${tmdbId}?append_to_response=translations,external_ids`);
   const [title] = await upsertReturning(admin, "titles", titleRow(d), "tmdb_id");
   inBackground(cacheNetworkLogos(admin, d.networks));
   const seasons = (d.seasons ?? []).length
@@ -323,6 +399,10 @@ async function refreshSeason(admin: SupabaseClient, apiKey: string, tmdbId: numb
         "title_id,season_number,episode_number",
       )
     : [];
+  // Off the hot path, like the network logos above: the caller gets the TMDB
+  // placeholders now and the real airstamps land before the next read. The
+  // response we just built is the only one that can still carry an estimate.
+  if (episodes.length) inBackground(enrichAirTimes(admin, titleId));
   return { season, episodes };
 }
 

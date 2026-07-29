@@ -15,6 +15,10 @@ export interface Settings {
   accent: AccentName;
   density: DensityName;
   language: LanguageName;
+  /** ISO 3166-1 alpha-2, or "auto" to follow the device. Drives the timezone
+   *  air times render in (see lib/region.ts). "auto" is the default because
+   *  the device knows the exact zone and a country only implies one. */
+  country: string;
 }
 
 const DEFAULTS: Settings = {
@@ -22,12 +26,15 @@ const DEFAULTS: Settings = {
   accent: "coral",
   density: "comfortable",
   language: "en",
+  country: "auto",
 };
 
 const KEY = "reel.settings";
 
+// typeof, not `in`: jsdom declares matchMedia without implementing it, so the
+// key-presence check passed and the call threw on import.
 const lightQuery: MediaQueryList | null =
-  typeof window !== "undefined" && "matchMedia" in window
+  typeof window !== "undefined" && typeof window.matchMedia === "function"
     ? window.matchMedia("(prefers-color-scheme: light)")
     : null;
 
