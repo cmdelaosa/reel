@@ -33,6 +33,12 @@
   --bar-h: calc(var(--ctl-h) + 2 * var(--bar-pad-y));
 
   --font: "Inter Variable", Inter, system-ui, -apple-system, sans-serif;
+
+  /* IMDb's brand gold — its own identity, held constant across themes and the
+     four accents so an IMDb score never reads as TMDB's (--accent) or a friend's.
+     Used on the star glyph and the episode-graph line; numbers stay in --text so
+     they keep contrast on the light theme. */
+  --imdb: #f5c518;
 }
 
 /* ---- Corner radius presets ---- */

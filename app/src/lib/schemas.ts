@@ -24,6 +24,11 @@ export const titleRowSchema = z.object({
   episode_run_time: z.number().int().nullable(),
   vote_average: z.number().nullable(),
   popularity: z.number().nullable(),
+  // IMDb score (0057), written by the Edge Functions via OMDb. Optional so rows
+  // from a DB that predates the column — or older persisted cache — still parse,
+  // and null while a title hasn't been enriched (no imdb_id, or an OMDb miss).
+  imdb_rating: z.number().nullable().optional(),
+  imdb_votes: z.number().int().nullable().optional(),
   // Present on full DB/proxy rows. Search fixtures and older persisted cache
   // entries may omit it, so keep it optional for backwards compatibility.
   last_refreshed_at: z.string().nullable().optional(),
@@ -52,6 +57,15 @@ export const episodeRowSchema = z.object({
   overview: z.string().nullable(),
   runtime: z.number().int().nullable(),
   air_datetime: z.string().nullable(), // ISO 8601 UTC
+  // Per-episode scores (0057). TMDB's ride along in every season payload; IMDb's
+  // arrive via OMDb. imdb_id is the episode's own tconst. All optional (older
+  // DB/persisted cache) and nullable (not yet resolved) — the UI hides absent
+  // scores rather than showing a zero.
+  tmdb_vote_average: z.number().nullable().optional(),
+  tmdb_vote_count: z.number().int().nullable().optional(),
+  imdb_rating: z.number().nullable().optional(),
+  imdb_votes: z.number().int().nullable().optional(),
+  imdb_id: z.string().nullable().optional(),
 });
 export type EpisodeRow = z.infer<typeof episodeRowSchema>;
 

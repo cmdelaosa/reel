@@ -404,6 +404,9 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 .ratings-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; text-align: center; }
 .ratings-divider { width: 1px; background: var(--border); flex: 0 0 auto; }
 .rating-num { font-weight: 800; font-size: 15px; min-width: 42px; }
+/* The static score cells (TMDB, IMDb) share the shape of the interactive one. */
+.ratings-value { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 850; font-size: 17px; }
+.ratings-value svg { flex: 0 0 auto; }
 /* Narrow phones: smaller stars so yours | TMDB | friends still share one line */
 @media (max-width: 480px) {
   .ratings-row { justify-content: space-between; gap: 6px; }
@@ -412,6 +415,14 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
   .ratings-row .rating-star svg { width: 19px; height: 19px; }
   .ratings-row .rating-num { font-size: 13.5px; min-width: 34px; }
   .ratings-row .eyebrow { font-size: 10.5px; }
+  .ratings-value { font-size: 15px; }
+}
+/* Four cells (Yours · TMDB · IMDb · Friends) can't share one line on a phone, so
+   that case alone reflows to a balanced 2×2 grid, dividers dropped. Three or
+   fewer keep the single row above. */
+@media (max-width: 520px) {
+  .ratings-row-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 10px; }
+  .ratings-row-grid .ratings-divider { display: none; }
 }
 
 /* Cast rail — arrows floating over the row's edges; swipe instead on touch */
@@ -425,7 +436,7 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 @media (hover: none) { .cast-edge { display: none; } }
 
 /* Episode row */
-.ep-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--r); transition: background .15s ease; cursor: pointer; }
+.ep-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--r); transition: background .15s ease; }
 .ep-row:hover { background: var(--surface-2); }
 /* The disc: 32px, deliberately below the control scale, because this is the only
    control that lives inside a dense list row and a 34px pill would out-weigh the
@@ -480,6 +491,46 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   100% { transform: scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .check.pop { animation: none; } }
+
+/* The rest of the episode row is one wide button that opens the episode sheet —
+   the check to its left is the only thing that marks watched now. Transparent so
+   the row's own hover carries the affordance. */
+.ep-main {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  color: inherit; font: inherit; text-align: left;
+}
+.ep-num { flex: 0 0 auto; width: 42px; font-size: 13px; color: var(--text-dim); }
+.ep-title { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; }
+.ep-date { flex: 0 0 auto; font-size: 12px; color: var(--text-dim); }
+.ep-unaired .ep-title, .ep-unaired .ep-num { opacity: .6; }
+/* Compact IMDb score on the row — the gold star is its identity; the number
+   stays in --text for contrast. TMDB's per-episode score lives on the sheet. */
+.ep-imdb { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 750; }
+.ep-imdb svg { color: var(--imdb); }
+
+/* Season episode-rating graph (IMDb). Hand-rolled SVG — no chart dependency,
+   theme-aware through the tokens. */
+.season-chart { display: flex; flex-direction: column; gap: 8px; }
+.season-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.season-chart-agg { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; font-size: 14px; }
+.season-chart-agg svg { color: var(--imdb); }
+.season-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.season-chart .grid-line { stroke: var(--border); stroke-width: 1; }
+.season-chart .grid-label { fill: var(--text-mute); font-size: 10px; }
+.season-chart .rating-line { fill: none; stroke: var(--imdb); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.season-chart .rating-dot { fill: var(--surface); stroke: var(--imdb); stroke-width: 2; cursor: pointer; transition: r .12s ease; }
+.season-chart .rating-dot:hover { r: 5.5; fill: var(--imdb); }
+.season-chart .rating-hit { fill: transparent; cursor: pointer; }
+.season-chart .x-label { fill: var(--text-mute); font-size: 10px; text-anchor: middle; }
+
+/* Episode sub-sheet — a small card over the detail sheet: synopsis + per-episode
+   scores from both sources, and mark-watched. Reuses the sheet/backdrop system. */
+.ep-sheet { width: min(460px, 92vw); max-height: 86vh; border-radius: var(--r-lg); display: flex; flex-direction: column; }
+.ep-sheet-body { overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+.ep-sheet-scores { display: flex; align-items: stretch; gap: 8px; }
+.ep-sheet-overview { font-size: 14px; line-height: 1.6; color: var(--text-dim); margin: 0; }
 
 /* Profile header — the same hue wash the friend header uses, over the whole
    block rather than a 64px band. The band faded to transparent horizontally but

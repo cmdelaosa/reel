@@ -172,6 +172,17 @@ const ES: Record<string, string> = {
   "Mark all": "Marcar los",
   "TBA": "Por anunciar",
   "Loading episodes": "Cargando episodios",
+  // Episode sub-sheet + season rating graph (IMDb).
+  "Episode ratings": "Notas por episodio",
+  "Season average (IMDb)": "Media de la temporada (IMDb)",
+  "IMDb episode ratings for this season": "Notas de IMDb de los episodios de esta temporada",
+  "IMDb episode ratings for this season, averaging {avg}":
+    "Notas de IMDb de los episodios de esta temporada, con media {avg}",
+  "E{ep} · {rating}": "E{ep} · {rating}",
+  "No synopsis yet.": "Aún no hay sinopsis.",
+  "Episode {n}": "Episodio {n}",
+  "Episode S{season} · E{episode}": "Episodio T{season} · E{episode}",
+  "{votes} votes on IMDb": "{votes} votos en IMDb",
   "Earlier seasons": "Temporadas anteriores",
   "Later seasons": "Temporadas siguientes",
   "Earlier cast": "Reparto anterior",
