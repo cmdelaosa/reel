@@ -108,6 +108,34 @@ const tvmaze = async (path: string): Promise<Response> => {
   return fetch(`${TVMAZE}${path}`);
 };
 
+/** Air times already resolved from TVmaze, keyed `season x episode`.
+ *
+ *  The TMDB upsert writes every column in its payload, so without this it would
+ *  stamp the 21:00 UTC placeholder over rows we had already dated properly —
+ *  and the enrichment pass that follows is allowed to fail silently (TVmaze
+ *  outage, rate limit, show dropped from their catalogue). That combination
+ *  turns a momentary blip into real air times lost until the next successful
+ *  run. Carrying the known values through the upsert keeps the placeholder for
+ *  genuinely new episodes only.
+ *
+ *  Trade-off: if TMDB reschedules an episode while TVmaze is unreachable, we
+ *  hold the older TVmaze instant rather than adopting a fresh placeholder. That
+ *  is the better failure — the enrichment pass right below reconciles it as
+ *  soon as TVmaze answers, and `air_time_source` stays an honest claim about
+ *  where the value came from. */
+async function keepTvmazeTimes(admin: SupabaseClient, titleId: string): Promise<Map<string, string>> {
+  const { data } = await admin
+    .from("episodes")
+    .select("season_number, episode_number, air_datetime")
+    .eq("title_id", titleId)
+    .eq("air_time_source", "tvmaze");
+  const keep = new Map<string, string>();
+  for (const e of (data ?? []) as Any[]) {
+    if (e.air_datetime) keep.set(`${e.season_number}x${e.episode_number}`, e.air_datetime);
+  }
+  return keep;
+}
+
 /** TVmaze's show id, resolved via the IMDb id TMDB gives us (TVmaze indexes
  *  IMDb/TVDB, never TMDB) and cached on the row so it costs one request ever. */
 async function tvmazeShowId(admin: SupabaseClient, title: Any): Promise<number | null> {
@@ -214,6 +242,9 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
     .sort((a: Any, b: Any) => b.season_number - a.season_number)
     .slice(0, 2);
 
+  // Read once for the whole title, before any episode write touches it.
+  const keep = await keepTvmazeTimes(admin, row.id);
+
   for (const s of latest) {
     const { data: season, error: se } = await admin
       .from("seasons")
@@ -233,20 +264,23 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
     if (se || !season) throw new Error(`season upsert: ${se?.message}`);
 
     const sd = await tmdb(key, `/tv/${row.tmdb_id}/season/${s.season_number}`);
-    const eps = (sd.episodes ?? []).map((e: Any) => ({
-      title_id: row.id,
-      season_id: season.id,
-      tmdb_id: e.id ?? null,
-      season_number: e.season_number,
-      episode_number: e.episode_number,
-      name: e.name ?? null,
-      overview: e.overview ?? null,
-      runtime: e.runtime ?? null,
-      air_datetime: airDatetime(e.air_date),
-      // Paired with the value so provenance can never drift from the timestamp:
-      // enrichAirTimes below upgrades both together, or neither.
-      air_time_source: "estimated",
-    }));
+    const eps = (sd.episodes ?? []).map((e: Any) => {
+      // Never downgrade an air time we already know; only new episodes get the
+      // placeholder. Value and provenance move together, always.
+      const known = keep.get(`${e.season_number}x${e.episode_number}`);
+      return {
+        title_id: row.id,
+        season_id: season.id,
+        tmdb_id: e.id ?? null,
+        season_number: e.season_number,
+        episode_number: e.episode_number,
+        name: e.name ?? null,
+        overview: e.overview ?? null,
+        runtime: e.runtime ?? null,
+        air_datetime: known ?? airDatetime(e.air_date),
+        air_time_source: known ? "tvmaze" : "estimated",
+      };
+    });
     if (eps.length) {
       const { error: ee } = await admin
         .from("episodes")

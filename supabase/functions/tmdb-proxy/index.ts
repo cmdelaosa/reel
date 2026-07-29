@@ -257,20 +257,27 @@ const seasonRow = (titleId: string, s: Any) => ({
   air_date: s.air_date || null,
 });
 
-const episodeRow = (titleId: string, seasonId: string, e: Any) => ({
-  title_id: titleId,
-  season_id: seasonId,
-  tmdb_id: e.id ?? null,
-  season_number: e.season_number,
-  episode_number: e.episode_number,
-  name: e.name ?? null,
-  overview: e.overview ?? null,
-  runtime: e.runtime ?? null,
-  air_datetime: airDatetime(e.air_date),
-  // Written alongside the placeholder so value and provenance can never drift
-  // apart: enrichAirTimes upgrades both together, or neither.
-  air_time_source: "estimated",
-});
+/** `keep` carries the air times TVmaze already resolved for this title (see
+ *  keepTvmazeTimes). An upsert writes every column in its payload, so without it
+ *  a refresh would stamp the placeholder over good data and rely on the
+ *  enrichment pass — which is allowed to fail silently — to put it back. */
+const episodeRow = (titleId: string, seasonId: string, e: Any, keep: Map<string, string>) => {
+  const known = keep.get(`${e.season_number}x${e.episode_number}`);
+  return {
+    title_id: titleId,
+    season_id: seasonId,
+    tmdb_id: e.id ?? null,
+    season_number: e.season_number,
+    episode_number: e.episode_number,
+    name: e.name ?? null,
+    overview: e.overview ?? null,
+    runtime: e.runtime ?? null,
+    // Placeholder for genuinely new episodes only; value and provenance always
+    // move together, so the pair can never disagree.
+    air_datetime: known ?? airDatetime(e.air_date),
+    air_time_source: known ? "tvmaze" : "estimated",
+  };
+};
 
 async function upsertReturning(admin: SupabaseClient, table: string, rows: Any, onConflict: string) {
   const { data, error } = await admin.from(table).upsert(rows, { onConflict }).select();
@@ -288,6 +295,24 @@ async function cacheNetworkLogos(admin: SupabaseClient, networks: Any) {
   if (!rows.length) return;
   const { error } = await admin.from("network_logos").upsert(rows, { onConflict: "name" });
   if (error) console.error(`network_logos upsert: ${error.message}`);
+}
+
+/** Air times already resolved from TVmaze for this title, keyed
+ *  `season x episode`, so a TMDB refresh can carry them through its upsert
+ *  instead of overwriting them with the 21:00 UTC placeholder. Without this a
+ *  single failed enrichment (TVmaze outage, rate limit, show missing from their
+ *  catalogue) would leave real air times lost until the next successful run. */
+async function keepTvmazeTimes(admin: SupabaseClient, titleId: string): Promise<Map<string, string>> {
+  const { data } = await admin
+    .from("episodes")
+    .select("season_number, episode_number, air_datetime")
+    .eq("title_id", titleId)
+    .eq("air_time_source", "tvmaze");
+  const keep = new Map<string, string>();
+  for (const e of (data ?? []) as Any[]) {
+    if (e.air_datetime) keep.set(`${e.season_number}x${e.episode_number}`, e.air_datetime);
+  }
+  return keep;
 }
 
 /** TVmaze's show id for one of our titles, resolved through the IMDb id TMDB
@@ -391,17 +416,20 @@ async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: numbe
 async function refreshSeason(admin: SupabaseClient, apiKey: string, tmdbId: number, titleId: string, n: number) {
   const s = await fetchTmdb(apiKey, `/tv/${tmdbId}/season/${n}`);
   const [season] = await upsertReturning(admin, "seasons", seasonRow(titleId, s), "title_id,number");
+  // Read before the first episode write, so the upsert can carry known air
+  // times through instead of clobbering them.
+  const keep = await keepTvmazeTimes(admin, titleId);
   const episodes = (s.episodes ?? []).length
     ? await upsertReturning(
         admin,
         "episodes",
-        s.episodes.map((e: Any) => episodeRow(titleId, season.id, e)),
+        s.episodes.map((e: Any) => episodeRow(titleId, season.id, e, keep)),
         "title_id,season_number,episode_number",
       )
     : [];
-  // Off the hot path, like the network logos above: the caller gets the TMDB
-  // placeholders now and the real airstamps land before the next read. The
-  // response we just built is the only one that can still carry an estimate.
+  // Off the hot path, like the network logos above. Episodes we had already
+  // dated keep their real time in the response; only genuinely new ones can
+  // still read as an estimate until the background pass lands.
   if (episodes.length) inBackground(enrichAirTimes(admin, titleId));
   return { season, episodes };
 }

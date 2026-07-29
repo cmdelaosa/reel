@@ -9,7 +9,7 @@ import { tmdbImg } from "@/lib/tmdb";
 import { NetworkLogo, TabMenu } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useOpenTitle } from "@/lib/useOpenTitle";
-import { airTimeZone } from "@/lib/region";
+import { airTimeZone, fmtAirDate } from "@/lib/region";
 import { dateLocale, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { CalEpGroup } from "@/features/calendar/CalEpGroup";
@@ -252,11 +252,16 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
     return locName(esNames, a.tmdb_id, a.name).localeCompare(locName(esNames, b.tmdb_id, b.name), dateLocale());
   };
 
+  // "This month" in the viewer's chosen zone, like every other date on this
+  // page — a premiere at 02:00Z on the 1st belongs to the previous month for
+  // anyone west of UTC, and to this one for Madrid.
+  const monthKey = (d: Date) =>
+    d.toLocaleDateString("en-CA", { timeZone: airTimeZone(), year: "numeric", month: "2-digit" });
+
   const bucketOf = (s: LibraryShow): "month" | "later" | "tba" => {
     const at = premiereAt(s);
     if (at == null || at <= now.getTime()) return "tba";
-    const d = new Date(at);
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() ? "month" : "later";
+    return monthKey(new Date(at)) === monthKey(now) ? "month" : "later";
   };
 
   const groups: { key: "month" | "later" | "tba"; title: string }[] = [
@@ -314,7 +319,7 @@ function UpcomingRow({ s, at, announced }: { s: LibraryShow; at: number | null; 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`badge ${announced ? "badge-soft" : "badge-accent"}`}>
-            {announced ? tr("Announced") : at ? new Date(at).toLocaleDateString(dateLocale(), { month: "short", day: "numeric" }) : tr("TBA")}
+            {announced ? tr("Announced") : at ? fmtAirDate(new Date(at).toISOString()) : tr("TBA")}
           </span>
           {s.network && <NetworkLogo network={s.network} />}
         </div>

@@ -36,11 +36,6 @@ exception
 end
 $$;
 
--- The enrichment pass looks up "titles that still need a TVmaze id".
-create index if not exists titles_tvmaze_pending_idx
-  on public.titles (id)
-  where tvmaze_id is null;
-
 -- ── rpc_calendar_feed — carry air_time_source to the client ─────────────────
 -- Same body as 0022; the new column rides along so CalEpRow/CalEpGroup can
 -- decide between "21:00" and a bare date. Dropped first, not "or replace":
