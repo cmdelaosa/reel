@@ -14,8 +14,10 @@ describe("airTimeZone", () => {
   it("an explicit country overrides the device", () => {
     setSetting("country", "ES");
     expect(airTimeZone()).toBe("Europe/Madrid");
-    setSetting("country", "JP");
-    expect(airTimeZone()).toBe("Asia/Tokyo");
+    setSetting("country", "DE");
+    expect(airTimeZone()).toBe("Europe/Berlin");
+    setSetting("country", "CH");
+    expect(airTimeZone()).toBe("Europe/Zurich");
     resetSettings();
   });
 
@@ -42,19 +44,21 @@ describe("COUNTRIES", () => {
 });
 
 describe("fmtPlainDate", () => {
-  it("keeps a bare TMDB date on its own day in a negative-offset zone", () => {
-    // Date parses 'YYYY-MM-DD' as UTC midnight, so formatting it in New York
-    // would otherwise render the 17th as the 16th.
-    setSetting("country", "US");
+  // Date parses 'YYYY-MM-DD' as UTC midnight, so the formatter pins UTC too —
+  // run it through a negative-offset zone and a premiere dated the 17th renders
+  // as the 16th. No country in the picker is west of UTC today, but the device
+  // zone can be anything, so the guarantee has to hold independently of both.
+  it("keeps a bare TMDB date on its own day", () => {
     expect(fmtPlainDate("2011-04-17")).toMatch(/17/);
-    resetSettings();
   });
 
   it("is unaffected by the chosen country", () => {
-    setSetting("country", "JP");
-    const jp = fmtPlainDate("2011-04-17");
-    setSetting("country", "US");
-    expect(fmtPlainDate("2011-04-17")).toBe(jp);
+    resetSettings();
+    const auto = fmtPlainDate("2011-04-17");
+    for (const c of COUNTRIES) {
+      setSetting("country", c.code);
+      expect(fmtPlainDate("2011-04-17"), `country ${c.code}`).toBe(auto);
+    }
     resetSettings();
   });
 });

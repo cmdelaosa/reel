@@ -125,10 +125,10 @@ function calls `is_current_user_invited()`:
 ```bash
 supabase db push --linked
 supabase functions deploy tmdb-proxy
-vercel deploy --prod
 ```
 
-The production alias is `https://reel-track.vercel.app`.
+The frontend deploys itself on push to `main`. Production is
+`https://reel-app.com`.
 
 ## Verification
 

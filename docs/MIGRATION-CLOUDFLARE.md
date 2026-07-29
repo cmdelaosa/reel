@@ -9,7 +9,7 @@ built-in email is capped at 2/hour; raising it requires Resend, which requires
 a verified domain).
 
 **Sequencing decision:** migrate onto `*.workers.dev` first, buy the domain
-after. Friends keep using `reel-track.vercel.app` untouched until the cutover;
+after. Friends keep using the old Vercel origin untouched until the cutover;
 Supabase auth config changes only once.
 
 ## Pre-flight audit (done 2026-07-20 — why this is safe)
@@ -178,7 +178,7 @@ reached the `100::` placeholder because no rule intercepted yet). It cleared on
 its own within a minute.
 
 **Nothing so far touches friends** — they are still on
-`reel-track.vercel.app`. The remaining steps (4 onward) are the ones that do.
+the old Vercel origin. The remaining steps (4 onward) are the ones that do.
 
 1. **Buy** `reel-app.com` — Cloudflare → Domain Registration ($10.46/yr at cost,
    registration and renewal alike). Zone is created automatically. Click the
@@ -268,7 +268,7 @@ intermediate state, not a bug.
    atomically on deploy, so there's no serving gap.
 9. **Verify the cutover** (DONE 2026-07-22):
    - [x] `https://reel-app.com` serves the app (842 KB bundle), cert valid.
-   - [x] `reel-track.vercel.app/login?invite=TEST123` → **307** →
+   - [x] the old origin's `/login?invite=TEST123` → **307** →
          `reel-app.com/login?invite=TEST123`, then the login page renders
          (email input + "Email me a sign-in link" + "Continue with Google").
          Path and query both preserved. Verified in a real browser.
@@ -295,16 +295,30 @@ move doesn't touch; the app URL is governed by Supabase's Redirect URLs
 allowlist, already covered in step 6. Verify with a real Google sign-in anyway
 (step 9) rather than trusting the reasoning.
 
-## Phase 5 — decommission (weeks later, no hurry)
+## Phase 5 — decommission
 
-When redirect traffic on reel-track.vercel.app is ~zero: delete the Vercel
-project, drop `app/vercel.json`, remove the old entries from Supabase Redirect
-URLs.
+**Started 2026-07-29.** The old Vercel origin is no longer a destination: every
+path on it, root included, now forwards to `reel-app.com`, and nothing in the
+codebase or docs points at it any more.
+
+Before the root redirect was added it served its own stale `index.html`, whose
+hashed asset URLs forwarded to `reel-app.com` where those hashes no longer
+exist — the SPA fallback answered with `text/html`, the module script refused to
+execute, and anyone still on the old address got a blank page. Any deploy that
+changed the bundle hash would have done it; forwarding the root removes the
+failure mode entirely.
+
+Remaining, in the Vercel and Supabase dashboards (nothing left in this repo):
+
+- Delete the Vercel project. **Drop `app/vercel.json` only after that** — remove
+  it while the project still builds and the old origin starts serving a second,
+  independent copy of the app instead of forwarding to the real one.
+- Remove the old origin from Supabase → Authentication → Redirect URLs.
 
 ## Rollback
 
 - Phases 1–3: nothing to roll back — production never changed.
-- Phase 4: revert Site URL to `https://reel-track.vercel.app`, `git revert` the
+- Phase 4: revert Site URL to the old Vercel origin, `git revert` the
   vercel.json redirect commit (Vercel redeploys the app automatically), and the
   old origin is fully restored. The Worker and domain can stay up harmlessly
   while retrying.
