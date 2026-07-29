@@ -52,12 +52,9 @@ const ALIASES: Record<string, string> = {
    returns both "HBO Max" and "HBO Max Amazon Channel" for the same show, and
    Germany adds "Wow Fiction Amazon Channel" next to "WOW". They are one
    service billed two ways, and left alone they would burn the poster's second
-   and third logo slots on a repeat of the first.
-
-   Sub-packages ("Movistar Plus+ Ficción Total") are deliberately NOT folded
-   into their parent: that one is a real add-on you might not have, and
-   claiming plain Movistar Plus+ would be telling you a show is available on a
-   subscription you're paying for when it isn't. */
+   and third logo slots on a repeat of the first. That folding happens here, by
+   name; the separate question of sub-packages is settled at the end of
+   providerMap, and the trade-off is recorded there. */
 const RESELLER = /\s+(amazon|apple tv|roku)\s+channel$/i;
 /* The tier word is optional: TMDB ships "Netflix Standard with Ads" but also a
    bare "Amazon Prime Video with Ads", which is why Spain returns Prime Video
@@ -109,13 +106,20 @@ export function providerMap(
         list.push({ name, logo_path: art });
       }
     }
-    /* Finally, drop any entry that merely extends another one present in the
-       same country. Spain returns "Movistar Plus+" and "Movistar Plus+
-       Ficción Total" for the same show, with near-identical icons under
-       different file names — two of the poster's three badge slots spent
-       saying one thing. The parent survives whichever order TMDB listed them
-       in, and a show carried *only* by the add-on has nothing to fold into and
-       keeps its own name, so nothing is claimed that isn't true. */
+    /* Finally, sub-packages: drop any entry that merely extends another one
+       present in the same country. Spain returns "Movistar Plus+" and
+       "Movistar Plus+ Ficción Total" for the same show, with near-identical
+       icons under different file names — two of the poster's three badge slots
+       spent saying one thing. The parent survives whichever order TMDB listed
+       them in.
+
+       The trade-off, deliberately taken: "Ficción Total" is a real add-on you
+       might not have, so when a show is on both we now show the icon of the
+       package you're likelier to hold rather than naming the add-on. Nothing
+       is over-claimed — a show carried *only* by the add-on has nothing to
+       fold into and keeps its own name — but a viewer with base Movistar and a
+       show on both packages reads one Movistar tile either way, because TMDB
+       draws them with the same mark. Showing it twice communicated nothing. */
     const merged = list.filter(
       (a) => !list.some((b) => b !== a && a.name.startsWith(`${b.name} `)),
     );

@@ -234,9 +234,12 @@ function canonicalProvider(name: string): string {
  *  display_priority, and a provider appearing in two buckets is kept once, at
  *  its best position.
  *
- *  Returns undefined when the payload carried no providers at all, so the
- *  column is left untouched rather than wiped — same rule the translations
- *  above follow. */
+ *  Returns undefined only when the payload carried no `watch/providers` block
+ *  at all — a fetch made without the append — so those callers leave the column
+ *  untouched rather than wiping it, the same rule the translations above
+ *  follow. A payload that *did* carry the block but lists nothing we keep
+ *  returns {} and does overwrite: availability really has gone to zero, and
+ *  saying so is the point. */
 function providerMap(d: Any): Record<string, { name: string; logo_path: string | null }[]> | undefined {
   const results = d?.["watch/providers"]?.results;
   if (!results || typeof results !== "object") return undefined;
@@ -262,13 +265,13 @@ function providerMap(d: Any): Record<string, { name: string; logo_path: string |
         list.push({ name, logo_path: art });
       }
     }
-    // A country whose only access is rent/buy stores nothing, which the client
-    // reads the same as "not available here" — which is what it means to us.
-    // Drop an entry that merely extends another in the same country: Spain
-    // returns "Movistar Plus+" and "Movistar Plus+ Ficción Total" for one show,
-    // near-identical icons under different file names. Parent wins whatever
-    // the order; an add-on listed alone keeps its own name.
+    // Sub-packages: drop an entry that merely extends another in the same
+    // country. Spain returns "Movistar Plus+" and "Movistar Plus+ Ficción
+    // Total" for one show, near-identical icons under different file names.
+    // Parent wins whatever the order; an add-on listed alone keeps its name.
     const merged = list.filter((a) => !list.some((b) => b !== a && a.name.startsWith(`${b.name} `)));
+    // A country left with nothing — only rent/buy, say — stores nothing, which
+    // the client reads as "not available here", because that is what it means.
     if (merged.length) out[country] = merged;
   }
   return out;
@@ -276,6 +279,7 @@ function providerMap(d: Any): Record<string, { name: string; logo_path: string |
 
 function titleRow(d: Any) {
   const up = upcomingSeason(d.seasons, d.last_episode_to_air, d.next_episode_to_air);
+  const providers = providerMap(d);
   // Localized columns ride along only when the payload actually carried
   // translations — other callers (popular-now detail checks) must not null
   // out values a full refresh already wrote.
@@ -296,11 +300,8 @@ function titleRow(d: Any) {
     genres: (d.genres ?? []).map((g: Any) => g.name),
     network: d.networks?.[0]?.name ?? null,
     // Like the translations above: present only when the payload carried it,
-    // so a partial refresh can't wipe a full one.
-    ...((): Record<string, unknown> => {
-      const p = providerMap(d);
-      return p ? { providers: p } : {};
-    })(),
+    // so a fetch made without the append can't wipe a full one.
+    ...(providers ? { providers } : {}),
     episode_run_time: d.episode_run_time?.[0] ?? null,
     vote_average: d.vote_average ?? null,
     popularity: d.popularity ?? null,

@@ -30,7 +30,12 @@ export function WatchOn({ tmdbId, size = 11, max = 3 }: {
 
   const shown = data.slice(0, max);
   return (
+    // role="img": aria-label is ignored on a bare span (role generic is
+    // skipped by the accessible-name computation), and the role also makes the
+    // subtree presentational, so the stack is announced once as a group
+    // instead of once per logo's alt text.
     <span
+      role="img"
       style={{ display: "inline-flex", alignItems: "center", gap: 3, flex: "0 0 auto", minWidth: 0 }}
       aria-label={tv("Available on {providers}", { providers: shown.map((p) => p.name).join(", ") })}
     >

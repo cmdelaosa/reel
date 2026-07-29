@@ -137,14 +137,20 @@ export function Palette({ onClose, onOpen }: {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="mq-pal-title">{display}</div>
+                  {/* The one place the original network keeps its text. Search
+                      hits are upserted as partial rows (searchRow omits the
+                      rich columns), so a show nobody has opened and nobody
+                      follows carries no providers at all — dropping the network
+                      here would leave the row saying strictly less than it did
+                      before, at the moment you're deciding whether to add it.
+                      Providers still render beside it when we happen to hold
+                      them. */}
                   <div className="mq-pal-sub">
-                    {[r.first_air_date?.slice(0, 4), r.genres.slice(0, 2).map(tGenre).join(" · ")]
+                    {[r.first_air_date?.slice(0, 4), r.genres.slice(0, 2).map(tGenre).join(" · "), r.network]
                       .filter(Boolean)
                       .join(" · ")}
                   </div>
                 </div>
-                {/* Search hits are upserted as partial rows, so a show nobody
-                    has opened yet carries no providers and shows none here. */}
                 <WatchOn tmdbId={r.tmdb_id} />
                 <ArrowRight size={14} className="mute" />
               </div>

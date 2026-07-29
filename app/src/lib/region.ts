@@ -17,7 +17,6 @@ import { getSettings } from "@/lib/settings";
    also means air times stay on your home clock while travelling. */
 
 export { COUNTRIES, type Country } from "@/lib/countries";
-export { deviceTimeZone } from "@/lib/countries";
 
 export const countryName = (c: Country): string => (isEs() ? c.es : c.en);
 
