@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { createBatcher } from "@/lib/providers";
+import { createBatcher } from "@/lib/batch";
 
-/* The batching loader's contract. Everything here drives createBatcher with a
-   fake fetchMany, which is why that parameter exists — nothing in this repo
-   mocks the Supabase client, and the mechanics worth testing (a queue and a
-   flush that both reset before the fetch resolves) are independent of it. */
+/* The batching loader's contract, driven with a fake fetchMany — which is why
+   that parameter exists. lib/providers can't host this: it imports the
+   Supabase client, which throws at import time without credentials, so a test
+   reaching through it dies in CI (as this one did). */
 
 const mapOf = (entries: Record<number, string[]>) =>
   new Map(Object.entries(entries).map(([k, v]) => [Number(k), v]));

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { createBatcher } from "@/lib/batch";
 import { qk } from "@/lib/queryKeys";
 import { regionCode } from "@/lib/region";
 
@@ -90,39 +91,8 @@ async function fetchProviders(ids: number[]): Promise<Map<number, Provider[]>> {
   return out;
 }
 
-/** Collapse the id lookups made in one tick into a single `fetchMany` call.
- *
- *  `fetchMany` is a parameter rather than a direct import so the mechanics
- *  below — which are the fiddly part: a queue and a flush that both reset
- *  before the fetch resolves — are testable without mocking the Supabase
- *  client, which nothing else in this codebase does. */
-export function createBatcher<T>(
-  fetchMany: (ids: number[]) => Promise<Map<number, T[]>>,
-): (id: number) => Promise<T[]> {
-  let queued: number[] = [];
-  let batch: Promise<Map<number, T[]>> | null = null;
-
-  return (id: number): Promise<T[]> => {
-    queued.push(id);
-    // setTimeout, not queueMicrotask: the ids arrive as React commits a
-    // screen's worth of components, which spans more than one microtask
-    // checkpoint. Nothing may await between the push above and the assignment
-    // below, or an id could land in a queue whose promise the caller doesn't
-    // hold.
-    batch ??= new Promise<Map<number, T[]>>((resolve, reject) => {
-      setTimeout(() => {
-        const ids = [...new Set(queued)];
-        queued = [];
-        batch = null;
-        fetchMany(ids).then(resolve, reject);
-      }, 0);
-    });
-    // A title we hold no row for reads as "nothing here", same as one with no
-    // subscription provider in this country. Both mean: show no logo.
-    return batch.then((m) => m.get(id) ?? []);
-  };
-}
-
+/* A title we hold no row for resolves to [] — the same answer as one with no
+   subscription provider in this country. Both mean: draw no logo. */
 const loadBatched = createBatcher(fetchProviders);
 
 /** Subscription providers for one title in the viewer's country, best first.
