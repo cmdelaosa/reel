@@ -1,4 +1,7 @@
-import { dateLocale, isEs } from "@/lib/i18n";
+// lib/locale, not lib/i18n: the latter also owns useEsNames and so imports the
+// Supabase client, which would make this module (and its tests) unloadable
+// without credentials in the environment.
+import { dateLocale, isEs } from "@/lib/locale";
 import { getSettings } from "@/lib/settings";
 
 /* Region — the country the viewer watches from, and everything that hangs off
