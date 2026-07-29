@@ -13,7 +13,7 @@ import { useFriendsRatings } from "@/lib/taste";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useMarkSeries, useUndoMarks } from "@/lib/watch";
 import type { SeasonRow, EpisodeRow, CastMember } from "@/lib/schemas";
-import { NetworkLogo } from "@/ui";
+import { WatchOn } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useFocusTrap } from "@/ui/useFocusTrap";
 import {
@@ -445,7 +445,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 </div>
                 <div className="pb-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
-                    {title.network && <NetworkLogo network={title.network} size={12} />}
+                    <WatchOn tmdbId={title.tmdb_id} size={12} />
                     {isUpcoming && (
                       <span className="badge badge-accent">
                         {title.first_air_date ? `${tr("Premieres ")}${fmtPlainDate(title.first_air_date)}` : tr("Announced")}

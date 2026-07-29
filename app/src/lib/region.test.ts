@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { COUNTRIES, airTimeZone, fmtPlainDate, hasRealAirTime } from "@/lib/region";
-import { resetSettings, setSetting } from "@/lib/settings";
+import { COUNTRIES, airTimeZone, fmtPlainDate, hasRealAirTime, regionCode } from "@/lib/region";
+import { countryFromTimeZone, isCountryCode } from "@/lib/countries";
+import { getSettings, resetSettings, setSetting } from "@/lib/settings";
 
-/* The country picker's contract: it decides which zone air times land in, and
-   bare TMDB dates must stay put regardless of it. */
+/* The country setting's contract: one explicit country decides both the zone
+   air times land in and the region providers are looked up for, and bare TMDB
+   dates must stay put regardless of it. */
 
 describe("airTimeZone", () => {
-  it("defers to the device on 'auto' (undefined = the runtime's own zone)", () => {
+  it("is always a real zone — there is no 'follow my device' any more", () => {
     resetSettings();
-    expect(airTimeZone()).toBeUndefined();
+    expect(airTimeZone()).toBeTypeOf("string");
+    expect(COUNTRIES.map((c) => c.tz)).toContain(airTimeZone());
   });
 
-  it("an explicit country overrides the device", () => {
+  it("tracks the chosen country", () => {
     setSetting("country", "ES");
     expect(airTimeZone()).toBe("Europe/Madrid");
     setSetting("country", "DE");
@@ -21,10 +24,51 @@ describe("airTimeZone", () => {
     resetSettings();
   });
 
-  it("falls back to the device for a code we don't carry", () => {
+  it("survives a code we don't carry rather than rendering in no zone", () => {
     setSetting("country", "ZZ");
-    expect(airTimeZone()).toBeUndefined();
+    expect(COUNTRIES.map((c) => c.tz)).toContain(airTimeZone());
     resetSettings();
+  });
+});
+
+describe("regionCode", () => {
+  it("is the provider lookup key, and follows the same setting", () => {
+    setSetting("country", "DE");
+    expect(regionCode()).toBe("DE");
+    resetSettings();
+    // Whatever the device resolved to, it must be a country we actually offer
+    // — a bogus code would silently return no providers for every title.
+    expect(isCountryCode(regionCode())).toBe(true);
+  });
+});
+
+describe("the retired 'auto' value", () => {
+  // Migrating it is lib/settings' job on load (settings.test.ts). This is the
+  // backstop: even handed "auto" directly, region resolves a real country
+  // rather than passing it to TMDB or formatting dates in no zone at all.
+  it("never reaches TMDB or the date formatters", () => {
+    setSetting("country", "auto");
+    expect(regionCode()).not.toBe("auto");
+    expect(isCountryCode(regionCode())).toBe(true);
+    expect(COUNTRIES.map((c) => c.tz)).toContain(airTimeZone());
+    resetSettings();
+    expect(getSettings().country).not.toBe("auto");
+  });
+});
+
+describe("countryFromTimeZone", () => {
+  it("maps the picker's own zones back to their codes", () => {
+    for (const c of COUNTRIES) expect(countryFromTimeZone(c.tz)).toBe(c.code);
+  });
+
+  it("knows the zones that are the same country by another name", () => {
+    expect(countryFromTimeZone("Atlantic/Canary")).toBe("ES");
+    expect(countryFromTimeZone("Europe/Busingen")).toBe("DE");
+  });
+
+  it("gives up rather than guessing for anywhere else", () => {
+    expect(countryFromTimeZone("America/New_York")).toBeNull();
+    expect(countryFromTimeZone(null)).toBeNull();
   });
 });
 
@@ -39,7 +83,6 @@ describe("COUNTRIES", () => {
     const codes = COUNTRIES.map((c) => c.code);
     expect(new Set(codes).size).toBe(codes.length);
     expect(codes.every((c) => /^[A-Z]{2}$/.test(c))).toBe(true);
-    expect(codes).not.toContain("auto"); // reserved for the device option
   });
 });
 

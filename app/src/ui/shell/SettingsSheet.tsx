@@ -11,7 +11,7 @@ import {
 import {
   NOTIFICATION_TYPES, prefFor, useNotificationPrefs, useSetPref,
 } from "@/lib/notificationPrefs";
-import { COUNTRIES, countryName, deviceTimeZone } from "@/lib/region";
+import { COUNTRIES, countryName } from "@/lib/region";
 import { t } from "@/lib/i18n";
 
 /* Settings sheet — the prototype's DesignLab stripped to production scope:
@@ -151,21 +151,19 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
               value={settings.country}
               onChange={(e) => {
                 setSetting("country", e.target.value);
-                // Air times are formatted through lib/region.ts on render with
-                // no subscription plumbing, same as the language above — a
-                // reload is what makes the new zone show up everywhere.
+                // Air times are formatted through lib/region.ts on render and
+                // providers are keyed by country in the query cache, neither
+                // with subscription plumbing — a reload is what makes the new
+                // country show up everywhere.
                 window.location.reload();
               }}
             >
-              <option value="auto">{t("Use my device")}</option>
               {COUNTRIES.map((c) => (
                 <option key={c.code} value={c.code}>{countryName(c)}</option>
               ))}
             </select>
             <div className="mute" style={{ fontSize: 12 }}>
-              {settings.country === "auto"
-                ? `${t("Airing times follow your device")}${deviceTimeZone() ? ` · ${deviceTimeZone()}` : ""}`
-                : t("Airing times are shown in this country's timezone.")}
+              {t("Sets where you can stream each show, and the timezone airing times are shown in.")}
             </div>
           </Row>
 

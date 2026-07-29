@@ -6,6 +6,7 @@ import { usePrefetchTitle } from "@/lib/useOpenTitle";
 import { searchShows, tmdbImg } from "@/lib/tmdb";
 import { isEs, t as tr, tGenre } from "@/lib/i18n";
 import { posterBg } from "@/ui/posterBg";
+import { WatchOn } from "@/ui/WatchOn";
 
 /* ⌘K command palette — TMDB search via the edge proxy. Markup/classes ported
    from prototype/src/marquee.tsx Palette; data is live (debounced 300ms,
@@ -136,12 +137,21 @@ export function Palette({ onClose, onOpen }: {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="mq-pal-title">{display}</div>
+                  {/* The one place the original network keeps its text. Search
+                      hits are upserted as partial rows (searchRow omits the
+                      rich columns), so a show nobody has opened and nobody
+                      follows carries no providers at all — dropping the network
+                      here would leave the row saying strictly less than it did
+                      before, at the moment you're deciding whether to add it.
+                      Providers still render beside it when we happen to hold
+                      them. */}
                   <div className="mq-pal-sub">
                     {[r.first_air_date?.slice(0, 4), r.genres.slice(0, 2).map(tGenre).join(" · "), r.network]
                       .filter(Boolean)
                       .join(" · ")}
                   </div>
                 </div>
+                <WatchOn tmdbId={r.tmdb_id} />
                 <ArrowRight size={14} className="mute" />
               </div>
             );

@@ -206,9 +206,66 @@ function esTranslation(d: Any): { name: string | null; overview: string | null }
   return { name: t?.data?.name || null, overview: t?.data?.overview || null };
 }
 
+// One spelling per brand across the column, the logo cache and the UI, and the
+// ad-supported tiers folded into their parent. Hand-mirrors
+// app/src/domain/watchProviders.ts (the spec + tests), same as tmdb-proxy.
+const PROVIDER_ALIASES: Record<string, string> = {
+  "Amazon Prime Video": "Prime Video",
+  "Disney Plus": "Disney+",
+  "Apple TV Plus": "Apple TV+",
+  // TMDB renamed the subscription service to plain "Apple TV" (the rent/buy
+  // storefront is "Apple TV Store"), and we only read subscription buckets.
+  "Apple TV": "Apple TV+",
+};
+
+const RESELLER = /\s+(amazon|apple tv|roku)\s+channel$/i;
+// The tier word is optional: TMDB ships a bare "Amazon Prime Video with Ads".
+const AD_TIER = /\s+(basic\s+|standard\s+)?with\s+ads$/i;
+
+function canonicalProvider(name: string): string {
+  const base = name.replace(RESELLER, "").replace(AD_TIER, "").trim();
+  return PROVIDER_ALIASES[base] ?? base;
+}
+
+/** TMDB watch/providers → {ES: [{name, logo_path}], …}. Mirrors tmdb-proxy:
+ *  subscription-shaped buckets only (rent/buy would put Apple TV and Google
+ *  Play on half the library), every country in one column, TMDB's own order. */
+function providerMap(d: Any): Record<string, { name: string; logo_path: string | null }[]> | undefined {
+  const results = d?.["watch/providers"]?.results;
+  if (!results || typeof results !== "object") return undefined;
+
+  const out: Record<string, { name: string; logo_path: string | null }[]> = {};
+  for (const [country, buckets] of Object.entries(results as Record<string, Any>)) {
+    const seen = new Set<string>();
+    // Also dedup on artwork: a sub-package ("Movistar Plus+ Ficción Total")
+    // shares its parent's icon, so a show on both drew the same tile twice.
+    const seenArt = new Set<string>();
+    const list: { name: string; logo_path: string | null }[] = [];
+    for (const bucket of ["flatrate", "free", "ads"] as const) {
+      for (const p of (buckets?.[bucket] ?? []) as Any[]) {
+        if (!p?.provider_name) continue;
+        const name = canonicalProvider(p.provider_name as string);
+        const art = (p.logo_path ?? null) as string | null;
+        if (seen.has(name) || (art && seenArt.has(art))) continue;
+        seen.add(name);
+        if (art) seenArt.add(art);
+        list.push({ name, logo_path: art });
+      }
+    }
+    // Drop an entry that merely extends another in the same country: Spain
+    // returns "Movistar Plus+" and "Movistar Plus+ Ficción Total" for one show,
+    // near-identical icons under different file names. Parent wins whatever
+    // the order; an add-on listed alone keeps its own name.
+    const merged = list.filter((a) => !list.some((b) => b !== a && a.name.startsWith(`${b.name} `)));
+    if (merged.length) out[country] = merged;
+  }
+  return out;
+}
+
 async function refreshTitle(admin: SupabaseClient, key: string, row: { id: string; tmdb_id: number }) {
-  const d = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations,external_ids`);
+  const d = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations,external_ids,watch/providers`);
   const es = esTranslation(d);
+  const providers = providerMap(d);
   const { error: te } = await admin
     .from("titles")
     .update({
@@ -224,6 +281,9 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
       imdb_id: d.external_ids?.imdb_id || null, // bridge to TVmaze
       genres: (d.genres ?? []).map((g: Any) => g.name),
       network: d.networks?.[0]?.name ?? null,
+      // Omitted, not nulled, when TMDB returned none — a title we hold
+      // providers for shouldn't lose them to a payload that skipped the append.
+      ...(providers ? { providers } : {}),
       episode_run_time: d.episode_run_time?.[0] ?? null,
       vote_average: d.vote_average ?? null,
       popularity: d.popularity ?? null,

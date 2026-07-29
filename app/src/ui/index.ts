@@ -6,4 +6,5 @@ export { useShowMore } from "@/ui/ShowMore";
 export { Rail } from "@/ui/Rail";
 export { Stars } from "@/ui/Stars";
 export { TabMenu } from "@/ui/TabMenu";
+export { WatchOn } from "@/ui/WatchOn";
 export { hueOf, posterBg } from "@/ui/posterBg";

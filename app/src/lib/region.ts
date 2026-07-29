@@ -2,59 +2,36 @@
 // Supabase client, which would make this module (and its tests) unloadable
 // without credentials in the environment.
 import { dateLocale, isEs } from "@/lib/locale";
+import { COUNTRIES, type Country, FALLBACK_COUNTRY } from "@/lib/countries";
 import { getSettings } from "@/lib/settings";
 
-/* Region — the country the viewer watches from, and everything that hangs off
-   it. Today that is the timezone air times are rendered in; the same ISO
-   3166-1 alpha-2 code is what TMDB's watch/providers wants, so the "where can
-   I watch this here" work can reuse it untouched.
+/* Region — the country the viewer watches from, and the two things that hang
+   off it: the timezone air times render in, and the country Reel asks TMDB for
+   streaming providers (lib/providers.ts). One setting drives both, so the list
+   of countries can only hold single-timezone ones — see lib/countries.
 
-   Timezones are the main population centre of each country, which is all a
-   country-level picker can honestly promise: pick Spain from the Canaries and
-   you get peninsular time. That is why "auto" is the default and wins by
-   default — the device already knows the exact zone, including while
-   travelling. The picker is an override for people who want their shows on
-   their home country's clock regardless of where they are. */
+   There is no "follow my device" any more. A zone is not a country, and
+   providers need a country: Europe/Madrid could be Spain, but Europe/Zurich is
+   as much Liechtenstein as Switzerland and America/New_York is four countries.
+   The device seeds the first guess and the viewer owns it from there, which
+   also means air times stay on your home clock while travelling. */
 
-export interface Country {
-  /** ISO 3166-1 alpha-2 — also the key TMDB's watch/providers is keyed by. */
-  code: string;
-  /** IANA zone of the country's main population centre. */
-  tz: string;
-  en: string;
-  es: string;
-}
-
-/* Deliberately short: the countries the people using Reel actually watch from.
-   Add a row when someone needs one — every entry is a promise that its single
-   timezone is right for the whole country, so a long speculative list is worse
-   than a short accurate one. Spain, Germany and Switzerland all sit on
-   CET/CEST and shift together, so today the picker only matters for someone
-   travelling outside that band. */
-export const COUNTRIES: Country[] = [
-  { code: "ES", tz: "Europe/Madrid", en: "Spain", es: "España" },
-  { code: "DE", tz: "Europe/Berlin", en: "Germany", es: "Alemania" },
-  { code: "CH", tz: "Europe/Zurich", en: "Switzerland", es: "Suiza" },
-];
+export { COUNTRIES, type Country } from "@/lib/countries";
 
 export const countryName = (c: Country): string => (isEs() ? c.es : c.en);
 
-/** IANA zone air times render in: the device's own (undefined → the runtime
- *  default) unless a country was picked explicitly, which overrides it. */
-export function airTimeZone(): string | undefined {
-  const { country } = getSettings();
-  if (country === "auto") return undefined;
-  return COUNTRIES.find((c) => c.code === country)?.tz;
-}
+const activeCountry = (): Country =>
+  COUNTRIES.find((c) => c.code === getSettings().country) ??
+  // Unreachable in practice: lib/settings validates the stored code on load.
+  (COUNTRIES.find((c) => c.code === FALLBACK_COUNTRY) as Country);
 
-/** The device's own IANA zone, for labelling the "auto" choice. */
-export function deviceTimeZone(): string | null {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
-  } catch {
-    return null;
-  }
-}
+/** ISO 3166-1 alpha-2 of the country the viewer watches from — the key into
+ *  TMDB's watch/providers. */
+export const regionCode = (): string => activeCountry().code;
+
+/** IANA zone air times render in: always the chosen country's, never the
+ *  device's. Travelling moves the clock on your wrist, not the schedule. */
+export const airTimeZone = (): string => activeCountry().tz;
 
 /* ── Air-time formatting ────────────────────────────────────────────────────
    Every air date/time in the UI goes through these, so the active zone is

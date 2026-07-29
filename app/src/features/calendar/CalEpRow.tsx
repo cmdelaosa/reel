@@ -6,7 +6,7 @@ import { tmdbImg } from "@/lib/tmdb";
 import { useOpenTitle } from "@/lib/useOpenTitle";
 import { locName, t as tr, useEsNames } from "@/lib/i18n";
 import { airTimeZone, fmtAirDate, fmtAirTime, hasRealAirTime } from "@/lib/region";
-import { NetworkLogo } from "@/ui";
+import { WatchOn } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 
 /* One episode row in the calendar feed. Shared so Tonight's "Premieres soon"
@@ -68,7 +68,7 @@ export function CalEpRow({ ep, now, later = false, sub = false }: { ep: FeedRow;
         ) : (
           <>
             {timed && <div className="cal-time">{fmtAirTime(ep.air_datetime)}</div>}
-            {ep.network && <NetworkLogo network={ep.network} />}
+            <WatchOn tmdbId={ep.tmdb_id} />
           </>
         )}
       </div>

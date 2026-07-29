@@ -131,3 +131,42 @@ export function NetworkLogo({ network, size = 11 }: { network: string; size?: nu
 
   return <StandIn network={network} size={size} />;
 }
+
+/* Streaming providers are a different kind of art from networks. TMDB ships
+   them as square app icons with their own baked-in background, where a network
+   logo is a transparent wordmark. Run an app icon through the wordmark tile
+   above — padded, height-constrained to `size + 2` — and Movistar Plus+ or
+   SkyShowtime come out as unreadable grey squares at poster size. So they
+   render as what they are: the icon filling a rounded square the same height
+   as the wordmark tiles, edge to edge.
+
+   The bundled vectors still win where we have them, because ours are better
+   than TMDB's. The logo path comes straight off titles.providers, so unlike
+   NetworkLogo this needs no cache lookup at all. */
+export function ProviderLogo({ name, logoPath, size = 11 }: {
+  name: string;
+  logoPath: string | null;
+  size?: number;
+}) {
+  const shipped = ShippedMark({ network: name, size });
+  if (shipped) return shipped;
+
+  if (logoPath) {
+    const box = size + 10;
+    return (
+      <img
+        src={tmdbImg(logoPath, "w92")}
+        alt={name}
+        title={name}
+        style={{
+          height: box, width: box, flex: "0 0 auto", display: "block",
+          borderRadius: 6, objectFit: "cover",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+          border: "1px solid rgba(255,255,255,0.09)",
+        }}
+      />
+    );
+  }
+
+  return <StandIn network={name} size={size} />;
+}

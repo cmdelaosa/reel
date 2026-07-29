@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { deviceCountry, isCountryCode } from "@/lib/countries";
 
 /* User-facing appearance settings, persisted to localStorage and applied to
    the <html> dataset. Ported from prototype/src/theme.tsx minus concept/look:
@@ -15,19 +16,22 @@ export interface Settings {
   accent: AccentName;
   density: DensityName;
   language: LanguageName;
-  /** ISO 3166-1 alpha-2, or "auto" to follow the device. Drives the timezone
-   *  air times render in (see lib/region.ts). "auto" is the default because
-   *  the device knows the exact zone and a country only implies one. */
+  /** ISO 3166-1 alpha-2 — always one of lib/countries' COUNTRIES, never
+   *  absent. It decides both the timezone air times render in and the country
+   *  Reel asks TMDB for streaming providers (see lib/region.ts). There is no
+   *  "follow my device" value: a zone doesn't name a country, and providers
+   *  need a country. The device only seeds the initial guess. */
   country: string;
 }
 
-const DEFAULTS: Settings = {
+const BASE: Omit<Settings, "country"> = {
   theme: "dark",
   accent: "coral",
   density: "comfortable",
   language: "en",
-  country: "auto",
 };
+
+const defaults = (): Settings => ({ ...BASE, country: deviceCountry() });
 
 const KEY = "reel.settings";
 
@@ -38,14 +42,27 @@ const lightQuery: MediaQueryList | null =
     ? window.matchMedia("(prefers-color-scheme: light)")
     : null;
 
+/** The country exactly as storage held it, so init can tell a migration from a
+ *  no-op and only write when something actually changed. */
+let rawStoredCountry: unknown;
+
 function load(): Settings {
+  const base = defaults();
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+    if (raw) {
+      const stored = { ...base, ...JSON.parse(raw) } as Settings;
+      rawStoredCountry = stored.country;
+      // Everyone stored before this shipped carries country:"auto", which no
+      // longer means anything — resolve it once from the device and keep it.
+      // Same path catches a hand-edited or retired code.
+      if (!isCountryCode(stored.country)) stored.country = base.country;
+      return stored;
+    }
   } catch {
     /* corrupt storage → defaults */
   }
-  return DEFAULTS;
+  return base;
 }
 
 function apply(s: Settings) {
@@ -77,6 +94,14 @@ function persist() {
   listeners.forEach((fn) => fn());
 }
 
+// Pin the resolved country on the way in. Without this the guess would be
+// re-made every launch, which is the "follow my device" behaviour this setting
+// deliberately dropped — and would move a traveller's providers mid-trip.
+// Runs down here, not beside load(): persist() closes over `listeners`, and
+// calling it any earlier is a temporal-dead-zone crash at boot for exactly the
+// viewers who need the migration.
+if (settings.country !== rawStoredCountry) persist();
+
 export function getSettings(): Settings {
   return settings;
 }
@@ -87,7 +112,7 @@ export function setSetting<K extends keyof Settings>(k: K, v: Settings[K]) {
 }
 
 export function resetSettings() {
-  settings = DEFAULTS;
+  settings = defaults();
   persist();
 }
 

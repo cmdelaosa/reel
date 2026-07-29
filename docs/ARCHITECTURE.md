@@ -85,7 +85,17 @@ titles (
   poster_path text, backdrop_path text,
   first_air_date date, status text,        -- TMDB: Returning Series | Ended | Canceled | …
   genres text[] not null default '{}',
-  network text,                            -- primary network display name
+  network text,                            -- ORIGINAL broadcast network (US for most shows).
+                                           -- Provenance only: drives the profile's top-networks
+                                           -- stat, never "where do I watch this" — see providers.
+  providers jsonb,                         -- TMDB watch/providers by ISO 3166-1 alpha-2 (0055):
+                                           -- {"ES":[{"name","logo_path"}]}. Subscription-shaped
+                                           -- only (flatrate/free/ads; rent/buy dropped at write
+                                           -- time). Every country in one column — the API returns
+                                           -- them all in one call, so changing the country setting
+                                           -- needs no refetch. Absent country = not available
+                                           -- there, and the UI shows no logo. Canonical extraction
+                                           -- spec + tests: app/src/domain/watchProviders.ts.
   episode_run_time int, vote_average numeric, popularity numeric,
   aired_count int,                         -- authoritative aired regular-season episodes (0028)
   last_refreshed_at timestamptz
