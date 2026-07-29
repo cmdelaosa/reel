@@ -14,6 +14,12 @@ export const feedRowSchema = z.object({
   episode_number: z.number().int(),
   episode_name: z.string().nullable(),
   air_datetime: z.string(),
+  /** 'tvmaze' = a real broadcast instant; 'estimated' = the 21:00 UTC
+   *  placeholder, correct to the day but with no meaningful clock.
+   *  Defaulted rather than required so a frontend that ships ahead of migration
+   *  0051 degrades to "no real times known" instead of failing to parse the
+   *  whole feed. */
+  air_time_source: z.string().default("estimated"),
   is_premiere: z.boolean(),
   is_finale: z.boolean(),
   watch_event_id: z.string().uuid().nullable(),

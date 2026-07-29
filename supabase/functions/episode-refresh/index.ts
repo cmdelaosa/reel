@@ -21,7 +21,8 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const TMDB = "https://api.themoviedb.org/3";
-const AIR_TIME = "T21:00:00Z";
+const TVMAZE = "https://api.tvmaze.com";
+const AIR_TIME = "T21:00:00Z"; // placeholder; enrichAirTimes replaces it below
 const STALE_MS = 20 * 60 * 60 * 1000; // 20h
 const LIMIT = 40;
 const WINDOW_MS = 10_000;
@@ -96,6 +97,105 @@ async function cacheNetworkLogos(admin: SupabaseClient, networks: Any) {
   if (error) console.error(`network_logos upsert: ${error.message}`);
 }
 
+// -- TVmaze air times (hand-mirror of tmdb-proxy's pair — keep in sync) -------
+// TVmaze publishes ~20 requests per 10s and asks callers to stay under it. We
+// spend at most two per title (a one-off id lookup, then the episode list), so
+// a flat 250ms spacing keeps this job well inside the budget without needing
+// the fixed-window planner TMDB gets.
+const TVMAZE_GAP_MS = 250;
+const tvmaze = async (path: string): Promise<Response> => {
+  await new Promise((r) => setTimeout(r, TVMAZE_GAP_MS));
+  return fetch(`${TVMAZE}${path}`);
+};
+
+/** Air times already resolved from TVmaze, keyed `season x episode`.
+ *
+ *  The TMDB upsert writes every column in its payload, so without this it would
+ *  stamp the 21:00 UTC placeholder over rows we had already dated properly —
+ *  and the enrichment pass that follows is allowed to fail silently (TVmaze
+ *  outage, rate limit, show dropped from their catalogue). That combination
+ *  turns a momentary blip into real air times lost until the next successful
+ *  run. Carrying the known values through the upsert keeps the placeholder for
+ *  genuinely new episodes only.
+ *
+ *  Trade-off: if TMDB reschedules an episode while TVmaze is unreachable, we
+ *  hold the older TVmaze instant rather than adopting a fresh placeholder. That
+ *  is the better failure — the enrichment pass right below reconciles it as
+ *  soon as TVmaze answers, and `air_time_source` stays an honest claim about
+ *  where the value came from. */
+async function keepTvmazeTimes(admin: SupabaseClient, titleId: string): Promise<Map<string, string>> {
+  const { data } = await admin
+    .from("episodes")
+    .select("season_number, episode_number, air_datetime")
+    .eq("title_id", titleId)
+    .eq("air_time_source", "tvmaze");
+  const keep = new Map<string, string>();
+  for (const e of (data ?? []) as Any[]) {
+    if (e.air_datetime) keep.set(`${e.season_number}x${e.episode_number}`, e.air_datetime);
+  }
+  return keep;
+}
+
+/** TVmaze's show id, resolved via the IMDb id TMDB gives us (TVmaze indexes
+ *  IMDb/TVDB, never TMDB) and cached on the row so it costs one request ever. */
+async function tvmazeShowId(admin: SupabaseClient, title: Any): Promise<number | null> {
+  if (title.tvmaze_id) return title.tvmaze_id;
+  if (!title.imdb_id) return null;
+  const res = await tvmaze(`/lookup/shows?imdb=${encodeURIComponent(title.imdb_id)}`);
+  if (!res.ok) return null; // 404 → not in TVmaze's catalogue
+  const id = (await res.json())?.id ?? null;
+  if (id) await admin.from("titles").update({ tvmaze_id: id }).eq("id", title.id);
+  return id;
+}
+
+/** Replace this title's 21:00 UTC placeholders with TVmaze's real airstamps.
+ *  Best-effort: a miss leaves the estimates and their marker untouched. */
+async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
+  const { data: title } = await admin
+    .from("titles").select("id, imdb_id, tvmaze_id").eq("id", titleId).maybeSingle();
+  if (!title) return;
+
+  const showId = await tvmazeShowId(admin, title);
+  if (!showId) return;
+
+  const res = await tvmaze(`/shows/${showId}/episodes`);
+  if (!res.ok) return;
+  const stamps = new Map<string, string>();
+  for (const e of (await res.json()) as Any[]) {
+    if (e?.airstamp && e.season != null && e.number != null) {
+      stamps.set(`${e.season}x${e.number}`, new Date(e.airstamp).toISOString());
+    }
+  }
+  if (!stamps.size) return;
+
+  const { data: ours } = await admin
+    .from("episodes")
+    .select("title_id, season_number, episode_number, air_datetime, air_time_source")
+    .eq("title_id", titleId)
+    .gt("season_number", 0);
+
+  const rows = (ours ?? [])
+    .map((e: Any) => ({ e, at: stamps.get(`${e.season_number}x${e.episode_number}`) }))
+    // Instants, not strings: Postgres renders timestamptz with +00:00 where
+    // toISOString() writes Z, so a textual diff would rewrite everything daily.
+    .filter((x) =>
+      x.at &&
+      (x.e.air_time_source !== "tvmaze" ||
+        new Date(x.e.air_datetime ?? 0).getTime() !== new Date(x.at).getTime()))
+    .map((x) => ({
+      title_id: x.e.title_id,
+      season_number: x.e.season_number,
+      episode_number: x.e.episode_number,
+      air_datetime: x.at,
+      air_time_source: "tvmaze",
+    }));
+  if (!rows.length) return;
+
+  const { error } = await admin
+    .from("episodes").upsert(rows, { onConflict: "title_id,season_number,episode_number" });
+  if (error) console.error(`tvmaze air times: ${error.message}`);
+}
+
 // es-ES translation (plain es fallback) from a payload fetched with
 // append_to_response=translations. Mirrors tmdb-proxy.
 function esTranslation(d: Any): { name: string | null; overview: string | null } {
@@ -107,7 +207,7 @@ function esTranslation(d: Any): { name: string | null; overview: string | null }
 }
 
 async function refreshTitle(admin: SupabaseClient, key: string, row: { id: string; tmdb_id: number }) {
-  const d = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations`);
+  const d = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations,external_ids`);
   const es = esTranslation(d);
   const { error: te } = await admin
     .from("titles")
@@ -121,6 +221,7 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
       backdrop_path: d.backdrop_path ?? null,
       first_air_date: d.first_air_date || null,
       status: d.status ?? null,
+      imdb_id: d.external_ids?.imdb_id || null, // bridge to TVmaze
       genres: (d.genres ?? []).map((g: Any) => g.name),
       network: d.networks?.[0]?.name ?? null,
       episode_run_time: d.episode_run_time?.[0] ?? null,
@@ -141,6 +242,9 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
     .sort((a: Any, b: Any) => b.season_number - a.season_number)
     .slice(0, 2);
 
+  // Read once for the whole title, before any episode write touches it.
+  const keep = await keepTvmazeTimes(admin, row.id);
+
   for (const s of latest) {
     const { data: season, error: se } = await admin
       .from("seasons")
@@ -160,23 +264,39 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
     if (se || !season) throw new Error(`season upsert: ${se?.message}`);
 
     const sd = await tmdb(key, `/tv/${row.tmdb_id}/season/${s.season_number}`);
-    const eps = (sd.episodes ?? []).map((e: Any) => ({
-      title_id: row.id,
-      season_id: season.id,
-      tmdb_id: e.id ?? null,
-      season_number: e.season_number,
-      episode_number: e.episode_number,
-      name: e.name ?? null,
-      overview: e.overview ?? null,
-      runtime: e.runtime ?? null,
-      air_datetime: airDatetime(e.air_date),
-    }));
+    const eps = (sd.episodes ?? []).map((e: Any) => {
+      // Never downgrade an air time we already know; only new episodes get the
+      // placeholder. Value and provenance move together, always.
+      const known = keep.get(`${e.season_number}x${e.episode_number}`);
+      return {
+        title_id: row.id,
+        season_id: season.id,
+        tmdb_id: e.id ?? null,
+        season_number: e.season_number,
+        episode_number: e.episode_number,
+        name: e.name ?? null,
+        overview: e.overview ?? null,
+        runtime: e.runtime ?? null,
+        air_datetime: known ?? airDatetime(e.air_date),
+        air_time_source: known ? "tvmaze" : "estimated",
+      };
+    });
     if (eps.length) {
       const { error: ee } = await admin
         .from("episodes")
         .upsert(eps, { onConflict: "title_id,season_number,episode_number" });
       if (ee) throw new Error(`episodes upsert: ${ee.message}`);
     }
+  }
+
+  // After the TMDB placeholders are in, overwrite the ones TVmaze can date
+  // properly. Inline (not detached) so the run's rate limiting still applies
+  // and a slow TVmaze can't outlive the invocation. Never fatal: a failure
+  // here must not cost us the TMDB refresh we just did.
+  try {
+    await enrichAirTimes(admin, row.id);
+  } catch (err) {
+    console.error(`tvmaze enrich ${row.tmdb_id}: ${String(err)}`);
   }
 }
 

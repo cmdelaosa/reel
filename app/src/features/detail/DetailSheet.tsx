@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { Bell, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, User, X } from "lucide-react";
 import { getCredits, tmdbImg } from "@/lib/tmdb";
-import { dateLocale, isEs, t as tr, tGenre, tv } from "@/lib/i18n";
+import { fmtAirDateLong, fmtPlainDate } from "@/lib/region";
+import { isEs, t as tr, tGenre, tv } from "@/lib/i18n";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
 import { useIgnored, useIgnore, useUnignore } from "@/lib/ignore";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
@@ -27,8 +28,8 @@ import {
    Opened globally via ?title=<tmdbId>; episode marking is wired in P2-C4 and
    rating persistence in P2-C5. */
 
-const fmtDate = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" }) : tr("TBA");
+/** Episode air_datetime — an instant, rendered in the viewer's air-time zone. */
+const fmtDate = (iso: string | null) => (iso ? fmtAirDateLong(iso) : tr("TBA"));
 
 function Skeleton() {
   return (
@@ -447,7 +448,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                     {title.network && <NetworkLogo network={title.network} size={12} />}
                     {isUpcoming && (
                       <span className="badge badge-accent">
-                        {title.first_air_date ? `${tr("Premieres ")}${fmtDate(title.first_air_date)}` : tr("Announced")}
+                        {title.first_air_date ? `${tr("Premieres ")}${fmtPlainDate(title.first_air_date)}` : tr("Announced")}
                       </span>
                     )}
                   </div>

@@ -19,6 +19,24 @@ describe("dayOffset", () => {
     const dstNow = new Date(2026, 9, 24, 12, 0); // Oct 24 noon
     expect(dayOffset(at(2026, 9, 25, 12), dstNow)).toBe(1); // 25h wall day → still 1
   });
+
+  // An explicit zone is what the country picker in settings feeds through: the
+  // same instant has to bucket by ITS calendar day, not the machine's.
+  it("buckets by the given zone, not the runtime's", () => {
+    // 2026-07-08T01:00Z — still Jul 7 in New York, already Jul 8 in Madrid.
+    const iso = "2026-07-08T01:00:00Z";
+    const anchor = new Date("2026-07-07T12:00:00Z");
+    expect(dayOffset(iso, anchor, "America/New_York")).toBe(0);
+    expect(dayOffset(iso, anchor, "Europe/Madrid")).toBe(1);
+    expect(dayOffset(iso, anchor, "Asia/Tokyo")).toBe(1);
+  });
+
+  it("crosses a DST boundary in an explicit zone without drifting", () => {
+    // Madrid falls back at 03:00 on 2026-10-25; the day either side is still 1.
+    const anchor = new Date("2026-10-24T12:00:00Z");
+    expect(dayOffset("2026-10-25T12:00:00Z", anchor, "Europe/Madrid")).toBe(1);
+    expect(dayOffset("2026-10-26T12:00:00Z", anchor, "Europe/Madrid")).toBe(2);
+  });
 });
 
 describe("groupFeed", () => {
@@ -73,6 +91,18 @@ describe("clusterFeed", () => {
     const out = clusterFeed(rows, now);
     expect(out).toHaveLength(2);
     expect(out.every((c) => c.count === 1)).toBe(true);
+  });
+
+  it("splits a drop that straddles midnight in the viewer's zone", () => {
+    // Both land Jul 7 in New York, but Jul 7 and Jul 8 in Madrid — so Madrid
+    // must see two clusters where New York sees one.
+    const rows = [
+      { title_id: "s", season_number: 1, episode_number: 1, air_datetime: "2026-07-07T20:00:00Z" },
+      { title_id: "s", season_number: 1, episode_number: 2, air_datetime: "2026-07-07T23:00:00Z" },
+    ];
+    const anchor = new Date("2026-07-07T12:00:00Z");
+    expect(clusterFeed(rows, anchor, "America/New_York")).toHaveLength(1);
+    expect(clusterFeed(rows, anchor, "Europe/Madrid")).toHaveLength(2);
   });
 
   it("does not merge two shows that drop on the same day", () => {

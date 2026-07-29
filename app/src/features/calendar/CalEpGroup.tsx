@@ -5,7 +5,8 @@ import type { FeedRow } from "@/lib/calendar";
 import { useMarkUpTo, useUnmarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { useOpenTitle } from "@/lib/useOpenTitle";
-import { dateLocale, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
+import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
+import { airTimeZone, fmtAirDate, fmtAirTime, hasRealAirTime } from "@/lib/region";
 import { NetworkLogo } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { CalEpRow } from "@/features/calendar/CalEpRow";
@@ -16,8 +17,6 @@ import { CalEpRow } from "@/features/calendar/CalEpRow";
    drop (reusing rpc_mark_up_to) — one tap to clear a binged season. */
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
-const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
-const fmtShort = (iso: string) => new Date(iso).toLocaleDateString(dateLocale(), { month: "short", day: "numeric" });
 
 export function CalEpGroup({
   cluster,
@@ -37,7 +36,8 @@ export function CalEpGroup({
   const unmark = useUnmarkWatched(lead.title_id);
 
   const past = new Date(lead.air_datetime).getTime() < now.getTime();
-  const days = dayOffset(lead.air_datetime, now);
+  const days = dayOffset(lead.air_datetime, now, airTimeZone());
+  const timed = hasRealAirTime(lead.air_time_source); // else: date only, no invented clock
   const tag = episodeBadge(lead);
   const art = tmdbImg(lead.poster_path, "w92");
   const esNames = useEsNames();
@@ -77,7 +77,9 @@ export function CalEpGroup({
           {later ? (
             <>
               <div className="cal-days">{days}<span>{tr("days")}</span></div>
-              <div className="cal-when mute">{fmtShort(lead.air_datetime)} · {fmtTime(lead.air_datetime)}</div>
+              <div className="cal-when mute">
+                {fmtAirDate(lead.air_datetime)}{timed && ` · ${fmtAirTime(lead.air_datetime)}`}
+              </div>
             </>
           ) : past ? (
             <button
@@ -90,7 +92,7 @@ export function CalEpGroup({
             </button>
           ) : (
             <>
-              <div className="cal-time">{fmtTime(lead.air_datetime)}</div>
+              {timed && <div className="cal-time">{fmtAirTime(lead.air_datetime)}</div>}
               {lead.network && <NetworkLogo network={lead.network} />}
             </>
           )}

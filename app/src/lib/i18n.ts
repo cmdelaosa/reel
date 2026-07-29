@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { getSettings, type LanguageName } from "@/lib/settings";
+import { type LanguageName } from "@/lib/settings";
+import { dateLocale, isEs, lang } from "@/lib/locale";
 import { useAuth } from "@/features/auth/AuthProvider";
 
 /* Lightweight es/en localization (settings.language).
@@ -15,16 +16,11 @@ import { useAuth } from "@/features/auth/AuthProvider";
      and locName() resolves a display name; components that hold a full
      TitleRow use its name_es directly instead. */
 
-export const lang = () => getSettings().language;
-/** English is the source language: its strings are the keys, so it has no
- *  dictionary. isEs stays for the few value-shaping spots (word order, es-only
- *  data columns) that aren't a translatable UI string. */
-export const isEs = () => lang() === "es";
-
-/** BCP-47 locale for toLocale*String / Intl. English keeps the browser default
- *  (undefined); every other language maps here. Add a row per language. */
-export const dateLocale = (): string | undefined =>
-  ({ en: undefined, es: "es-ES" } as Record<LanguageName, string | undefined>)[lang()];
+/* The locale primitives live in lib/locale.ts — this module pulls in the
+   Supabase client for useEsNames, and formatting a date shouldn't drag that in.
+   Re-exported here so the many existing `from "@/lib/i18n"` imports still find
+   them, and imported because the dictionary lookups below use them too. */
+export { dateLocale, isEs, lang };
 
 /* One dictionary per non-English language, keyed by the English source string.
    English is the key set, so it needs no dictionary. A missing language or a
@@ -91,6 +87,11 @@ const ES: Record<string, string> = {
   "Language": "Idioma",
   "English": "English",
   "Español": "Español",
+  "Country": "País",
+  "Use my device": "Usar mi dispositivo",
+  "Airing times follow your device": "Las horas de emisión siguen a tu dispositivo",
+  "Airing times are shown in this country's timezone.":
+    "Las horas de emisión se muestran en la zona horaria de este país.",
   "New episodes": "Nuevos episodios",
   "When a show you follow airs": "Cuando emite una serie que sigues",
   "Premieres": "Estrenos",
