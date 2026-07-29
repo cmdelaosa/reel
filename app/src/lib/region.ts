@@ -25,25 +25,16 @@ export interface Country {
   es: string;
 }
 
+/* Deliberately short: the countries the people using Reel actually watch from.
+   Add a row when someone needs one — every entry is a promise that its single
+   timezone is right for the whole country, so a long speculative list is worse
+   than a short accurate one. Spain, Germany and Switzerland all sit on
+   CET/CEST and shift together, so today the picker only matters for someone
+   travelling outside that band. */
 export const COUNTRIES: Country[] = [
   { code: "ES", tz: "Europe/Madrid", en: "Spain", es: "España" },
-  { code: "US", tz: "America/New_York", en: "United States", es: "Estados Unidos" },
-  { code: "MX", tz: "America/Mexico_City", en: "Mexico", es: "México" },
-  { code: "AR", tz: "America/Argentina/Buenos_Aires", en: "Argentina", es: "Argentina" },
-  { code: "CL", tz: "America/Santiago", en: "Chile", es: "Chile" },
-  { code: "CO", tz: "America/Bogota", en: "Colombia", es: "Colombia" },
-  { code: "PE", tz: "America/Lima", en: "Peru", es: "Perú" },
-  { code: "BR", tz: "America/Sao_Paulo", en: "Brazil", es: "Brasil" },
-  { code: "CA", tz: "America/Toronto", en: "Canada", es: "Canadá" },
-  { code: "GB", tz: "Europe/London", en: "United Kingdom", es: "Reino Unido" },
-  { code: "IE", tz: "Europe/Dublin", en: "Ireland", es: "Irlanda" },
-  { code: "PT", tz: "Europe/Lisbon", en: "Portugal", es: "Portugal" },
-  { code: "FR", tz: "Europe/Paris", en: "France", es: "Francia" },
   { code: "DE", tz: "Europe/Berlin", en: "Germany", es: "Alemania" },
-  { code: "IT", tz: "Europe/Rome", en: "Italy", es: "Italia" },
-  { code: "NL", tz: "Europe/Amsterdam", en: "Netherlands", es: "Países Bajos" },
-  { code: "AU", tz: "Australia/Sydney", en: "Australia", es: "Australia" },
-  { code: "JP", tz: "Asia/Tokyo", en: "Japan", es: "Japón" },
+  { code: "CH", tz: "Europe/Zurich", en: "Switzerland", es: "Suiza" },
 ];
 
 export const countryName = (c: Country): string => (isEs() ? c.es : c.en);
