@@ -31,6 +31,14 @@ const TVMAZE = "https://api.tvmaze.com";
 const OMDB = "https://www.omdbapi.com"; // IMDb ratings, bridged via imdb_id
 const AIR_TIME = "T21:00:00Z"; // UTC placeholder appended to TMDB air_date
 
+/* Every upstream call is capped: a third party that accepts the connection but
+   never answers would otherwise hang `await fetch` forever, holding the request
+   (a MISS blocks on TMDB) or a background task open until the platform kills the
+   invocation. Rejections are already handled — fetchTmdb throws into the route's
+   try/catch (502), the TVmaze/OMDb passes degrade to a silent no-op. Mirrors
+   episode-refresh's UPSTREAM_TIMEOUT_MS; keep the two in step. */
+const UPSTREAM_TIMEOUT_MS = 10_000;
+
 // TMDB TV genre ids → names. Search results carry only ids; details carry names.
 const TV_GENRES: Record<number, string> = {
   10759: "Action & Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
@@ -412,7 +420,9 @@ async function keepTvmazeTimes(admin: SupabaseClient, titleId: string): Promise<
 async function tvmazeShowId(admin: SupabaseClient, title: Any): Promise<number | null> {
   if (title.tvmaze_id) return title.tvmaze_id;
   if (!title.imdb_id) return null;
-  const res = await fetch(`${TVMAZE}/lookup/shows?imdb=${encodeURIComponent(title.imdb_id)}`);
+  const res = await fetch(`${TVMAZE}/lookup/shows?imdb=${encodeURIComponent(title.imdb_id)}`, {
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  });
   if (!res.ok) return null;
   const id = (await res.json())?.id ?? null;
   if (id) await admin.from("titles").update({ tvmaze_id: id }).eq("id", title.id);
@@ -433,7 +443,9 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
   const showId = await tvmazeShowId(admin, title);
   if (!showId) return;
 
-  const res = await fetch(`${TVMAZE}/shows/${showId}/episodes`);
+  const res = await fetch(`${TVMAZE}/shows/${showId}/episodes`, {
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  });
   if (!res.ok) return;
   const stamps = new Map<string, string>();
   for (const e of (await res.json()) as Any[]) {
@@ -492,14 +504,11 @@ const parseImdbVotes = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-// A hung OMDb connection must not stall the request (or, on the cron mirror, the
-// whole run): cap every call. AbortSignal.timeout rejects, which the catch maps
-// to null — the same silent no-op as any other OMDb miss.
-const OMDB_TIMEOUT_MS = 8000;
-
 async function omdb(apiKey: string, params: string): Promise<Any | null> {
+  // Capped like every upstream call (see UPSTREAM_TIMEOUT_MS). The timeout
+  // rejects, which the catch maps to null — the same no-op as an OMDb miss.
   const res = await fetch(`${OMDB}/?apikey=${apiKey}&${params}`, {
-    signal: AbortSignal.timeout(OMDB_TIMEOUT_MS),
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   }).catch(() => null);
   if (!res || !res.ok) return null;
   const d = await res.json().catch(() => null);
@@ -626,7 +635,9 @@ async function refreshSeason(admin: SupabaseClient, apiKey: string, tmdbId: numb
 }
 
 const fetchTmdb = async (apiKey: string, p: string) => {
-  const res = await fetch(`${TMDB}${p}${p.includes("?") ? "&" : "?"}api_key=${apiKey}`);
+  const res = await fetch(`${TMDB}${p}${p.includes("?") ? "&" : "?"}api_key=${apiKey}`, {
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`TMDB ${p}: ${res.status}`); // don't treat an error body as data
   return res.json();
 };
