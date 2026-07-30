@@ -28,14 +28,13 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 
 const TMDB = "https://api.themoviedb.org/3";
 const TVMAZE = "https://api.tvmaze.com";
-const OMDB = "https://www.omdbapi.com"; // IMDb ratings, bridged via imdb_id
 const AIR_TIME = "T21:00:00Z"; // UTC placeholder appended to TMDB air_date
 
 /* Every upstream call is capped: a third party that accepts the connection but
    never answers would otherwise hang `await fetch` forever, holding the request
    (a MISS blocks on TMDB) or a background task open until the platform kills the
    invocation. Rejections are already handled — fetchTmdb throws into the route's
-   try/catch (502), the TVmaze/OMDb passes degrade to a silent no-op. Mirrors
+   try/catch (502), the TVmaze pass degrades to a silent no-op. Mirrors
    episode-refresh's UPSTREAM_TIMEOUT_MS; keep the two in step. */
 const UPSTREAM_TIMEOUT_MS = 10_000;
 
@@ -367,7 +366,8 @@ const episodeRow = (titleId: string, seasonId: string, e: Any, keep: Map<string,
     overview: e.overview ?? null,
     runtime: e.runtime ?? null,
     // Per-episode TMDB score — free (already in this payload) and the second
-    // source behind the episode graph. IMDb ratings arrive separately, via OMDb.
+    // source behind the episode graph. IMDb ratings come from the weekly
+    // dataset import (scripts/imdb-ratings), which owns those columns.
     tmdb_vote_average: e.vote_average ?? null,
     tmdb_vote_count: e.vote_count ?? null,
     // Placeholder for genuinely new episodes only; value and provenance always
@@ -484,98 +484,6 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
   if (error) console.error(`tvmaze air times: ${error.message}`);
 }
 
-/* ── IMDb ratings via OMDb ───────────────────────────────────────────────────
-   TMDB carries no IMDb rating, so we bridge through the imdb_id it hands us
-   (0051) to OMDb (omdbapi.com), which mirrors IMDb's score. Best-effort and
-   idempotent, exactly like the TVmaze air-time pass: no OMDB_API_KEY, no
-   imdb_id, or an OMDb miss simply leaves the columns as they were. OMDb's
-   season listing gives every episode's rating in one request; a bare `i=`
-   fetch gives the show's. Hand-mirrored (minimally) by episode-refresh — keep
-   the two in sync. */
-
-// OMDb ships numbers as strings ("9.2", "1,234,567") or the sentinel "N/A".
-const parseImdbRating = (v: unknown): number | null => {
-  const n = typeof v === "string" ? Number.parseFloat(v) : NaN;
-  return Number.isFinite(n) ? n : null;
-};
-const parseImdbVotes = (v: unknown): number | null => {
-  if (typeof v !== "string") return null;
-  const n = Number.parseInt(v.replace(/,/g, ""), 10);
-  return Number.isFinite(n) ? n : null;
-};
-
-async function omdb(apiKey: string, params: string): Promise<Any | null> {
-  // Capped like every upstream call (see UPSTREAM_TIMEOUT_MS). The timeout
-  // rejects, which the catch maps to null — the same no-op as an OMDb miss.
-  const res = await fetch(`${OMDB}/?apikey=${apiKey}&${params}`, {
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-  }).catch(() => null);
-  if (!res || !res.ok) return null;
-  const d = await res.json().catch(() => null);
-  // OMDb answers 200 with { Response: "False", Error } for misses and quota hits.
-  return d && d.Response !== "False" ? d : null;
-}
-
-/** Show-level IMDb rating → titles.imdb_rating/imdb_votes. `imdbId` is passed in
- *  (callers already hold the title row), so this makes no DB read of its own.
- *  Only overwrites when OMDb returns a real score, so a transient "N/A" never
- *  wipes a good value. */
-async function enrichImdbShowRating(admin: SupabaseClient, titleId: string, imdbId: string | null) {
-  const apiKey = Deno.env.get("OMDB_API_KEY");
-  if (!apiKey || !imdbId) return;
-  const d = await omdb(apiKey, `i=${encodeURIComponent(imdbId)}`);
-  const rating = parseImdbRating(d?.imdbRating);
-  if (rating == null) return;
-  await admin
-    .from("titles")
-    .update({ imdb_rating: rating, imdb_votes: parseImdbVotes(d?.imdbVotes) })
-    .eq("id", titleId);
-}
-
-/** One season's per-episode IMDb ratings → episodes.imdb_rating/imdb_id, matched
- *  to our rows by episode number (IMDb and TMDB agree on it save for rare
- *  ordering quirks). One OMDb request covers the whole season. Only rated
- *  episodes are written: an episode OMDb reports as "N/A" is left untouched, so a
- *  transient/lagging listing can never null out a rating (and imdb_id, needed
- *  only for a future per-episode fetch, rides along with the rating it belongs
- *  to). */
-async function enrichImdbSeasonRatings(admin: SupabaseClient, titleId: string, seasonNumber: number) {
-  const apiKey = Deno.env.get("OMDB_API_KEY");
-  if (!apiKey) return;
-  const { data: title } = await admin
-    .from("titles").select("imdb_id").eq("id", titleId).maybeSingle();
-  if (!title?.imdb_id) return;
-
-  const d = await omdb(apiKey, `i=${encodeURIComponent(title.imdb_id)}&Season=${seasonNumber}`);
-  const eps = (d?.Episodes ?? []) as Any[];
-  if (!eps.length) return;
-  const byNum = new Map<number, { rating: number | null; imdbId: string | null }>();
-  for (const e of eps) {
-    const num = Number.parseInt(e?.Episode, 10);
-    if (Number.isFinite(num)) byNum.set(num, { rating: parseImdbRating(e?.imdbRating), imdbId: e?.imdbID ?? null });
-  }
-
-  const { data: ours } = await admin
-    .from("episodes")
-    .select("title_id, season_number, episode_number")
-    .eq("title_id", titleId)
-    .eq("season_number", seasonNumber);
-  const rows = (ours ?? [])
-    .map((e: Any) => ({ e, m: byNum.get(e.episode_number) }))
-    .filter((x) => x.m && x.m.rating != null)
-    .map((x) => ({
-      title_id: x.e.title_id,
-      season_number: x.e.season_number,
-      episode_number: x.e.episode_number,
-      imdb_rating: x.m!.rating,
-      imdb_id: x.m!.imdbId,
-    }));
-  if (!rows.length) return;
-  const { error } = await admin
-    .from("episodes").upsert(rows, { onConflict: "title_id,season_number,episode_number" });
-  if (error) console.error(`imdb season ratings: ${error.message}`);
-}
-
 // How long a cached title (and its seasons/episodes) is served without any
 // TMDB round trip. Matches the daily episode-refresh cron cadence, so followed
 // shows are effectively always a cache hit.
@@ -601,7 +509,6 @@ async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: numbe
   const d = await fetchTmdb(apiKey, `/tv/${tmdbId}?append_to_response=translations,external_ids,watch/providers`);
   const [title] = await upsertReturning(admin, "titles", titleRow(d), "tmdb_id");
   inBackground(cacheNetworkLogos(admin, d.networks));
-  inBackground(enrichImdbShowRating(admin, title.id, title.imdb_id));
   const seasons = (d.seasons ?? []).length
     ? await upsertReturning(admin, "seasons", d.seasons.map((s: Any) => seasonRow(title.id, s)), "title_id,number")
     : [];
@@ -627,10 +534,7 @@ async function refreshSeason(admin: SupabaseClient, apiKey: string, tmdbId: numb
   // Off the hot path, like the network logos above. Episodes we had already
   // dated keep their real time in the response; only genuinely new ones can
   // still read as an estimate until the background pass lands.
-  if (episodes.length) {
-    inBackground(enrichAirTimes(admin, titleId));
-    inBackground(enrichImdbSeasonRatings(admin, titleId, n));
-  }
+  if (episodes.length) inBackground(enrichAirTimes(admin, titleId));
   return { season, episodes };
 }
 
@@ -1060,10 +964,6 @@ Deno.serve(async (req) => {
         const seasons = [...nestedSeasons].sort((a: Any, b: Any) => a.number - b.number);
         const stale = !isFresh(title);
         if (stale) inBackground(refreshTitle(admin, apiKey, tmdbId));
-        // Fresh row that predates OMDb enrichment (or a first-ever view): fill
-        // the IMDb score lazily. A stale row is skipped — its refresh above does
-        // the same enrichment, and firing both would burn an OMDb request.
-        else if (title.imdb_rating == null && title.imdb_id) inBackground(enrichImdbShowRating(admin, title.id, title.imdb_id));
         return json({ title, seasons }, 200, detailHeaders(stale ? "STALE" : "HIT", dbMs));
       }
       const fillStarted = performance.now();
@@ -1094,16 +994,6 @@ Deno.serve(async (req) => {
           const complete = seasonRow.episode_count == null || episodes.length >= seasonRow.episode_count;
           const stale = !isFresh(title) || !complete;
           if (stale) inBackground(refreshSeason(admin, apiKey, tmdbId, title.id, n));
-          // Lazy IMDb fill for a season we've never rated (older seasons stay a
-          // cache hit forever, so their refresh never runs to trigger it). Gated
-          // on the title carrying an imdb_id — without one OMDb can never answer,
-          // and firing on every open of an uncovered show's season would be a DB
-          // read that can never populate anything. Also gated on "no episode
-          // rated yet" (not "any missing"), so a currently-airing season whose
-          // latest episode has no IMDb score yet isn't re-fetched on every open.
-          else if (title.imdb_id && !episodes.some((e: Any) => e.imdb_rating != null)) {
-            inBackground(enrichImdbSeasonRatings(admin, title.id, n));
-          }
           return json({ season: seasonRow, episodes }, 200, detailHeaders(stale ? "STALE" : "HIT", dbMs));
         }
       }
