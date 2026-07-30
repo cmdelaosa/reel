@@ -1,6 +1,11 @@
 /**
  * IMDb ratings importer — official datasets, no scraping.
  *
+ * The ONLY writer of imdb_rating / imdb_votes. OMDb used to fill them nightly and
+ * was removed: besides the gaps below it is years out of date (it still serves
+ * "Ozymandias" as 10.0 from 251,146 votes where IMDb publishes 9.5 from 504,738),
+ * so the nightly stale source kept overwriting this fresher one.
+ *
  * WHY THIS EXISTS
  * OMDb (our live IMDb bridge) is missing the rating field for a large minority
  * of episodes: 6957 of them sat inside otherwise-rated seasons, and asking OMDb
@@ -104,8 +109,8 @@ async function main() {
   // ---- 2. our episodes: the only rows we may touch, plus their air dates ---
   const episodes = await all<{
     id: string; title_id: string; season_number: number; episode_number: number;
-    air_datetime: string | null; imdb_rating: number | null;
-  }>(admin, "episodes", "id, title_id, season_number, episode_number, air_datetime, imdb_rating");
+    air_datetime: string | null; imdb_rating: number | null; imdb_votes: number | null;
+  }>(admin, "episodes", "id, title_id, season_number, episode_number, air_datetime, imdb_rating, imdb_votes");
   const ourEpisodes = new Map<string, (typeof episodes)[number]>();
   for (const e of episodes) ourEpisodes.set(`${e.title_id}|${e.season_number}|${e.episode_number}`, e);
   console.log(`episodes in our cache: ${ourEpisodes.size}`);
@@ -148,7 +153,14 @@ async function main() {
     if (!Number.isFinite(n) || n < MIN_VOTES) { tooFew++; continue; }
     // A rating a few days old still swings; let it settle before storing it.
     if (ours.air_datetime && ours.air_datetime > cutoff) { tooYoung++; continue; }
-    if (ours.imdb_rating != null && Math.abs(ours.imdb_rating - score) < 0.05) { unchanged++; continue; }
+    // Skip only rows that are ALREADY complete. Matching on the rating alone
+    // stranded 11258 episodes that OMDb had filled without a vote count — their
+    // score matched, so the row was never touched again and its votes stayed
+    // null forever.
+    if (ours.imdb_rating != null && ours.imdb_votes != null && Math.abs(ours.imdb_rating - score) < 0.05) {
+      unchanged++;
+      continue;
+    }
     epRows.push({
       title_id: ours.title_id,
       season_number: ours.season_number,

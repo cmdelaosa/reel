@@ -43,7 +43,7 @@ reel/
 ## Environment & secrets
 
 - `app/.env.local` (gitignored): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
-- Edge function secrets (`supabase secrets set`): `TMDB_API_KEY`, `RESEND_API_KEY`, `OMDB_API_KEY` (optional — IMDb ratings; unset just leaves the IMDb columns null).
+- Edge function secrets (`supabase secrets set`): `TMDB_API_KEY`, `RESEND_API_KEY`.
 - The author's TV Time zip lives **outside the repo** (`~/tvtime-export/`); scripts take a path arg.
 - CI (GitHub Actions): `npm run check` = `tsc --noEmit && eslint . && vitest run` in `app/`.
 
@@ -97,7 +97,7 @@ titles (
                                            -- there, and the UI shows no logo. Canonical extraction
                                            -- spec + tests: app/src/domain/watchProviders.ts.
   episode_run_time int, vote_average numeric, popularity numeric,
-  imdb_rating numeric, imdb_votes int,     -- IMDb score via OMDb, bridged by imdb_id (0057)
+  imdb_rating numeric, imdb_votes int,     -- IMDb score, from IMDb's datasets (0057)
   aired_count int,                         -- authoritative aired regular-season episodes (0028)
   last_refreshed_at timestamptz
 )
@@ -112,27 +112,26 @@ episodes (
   name text, overview text, runtime int,
   air_datetime timestamptz,                -- UTC; client renders local
   tmdb_vote_average numeric, tmdb_vote_count int,  -- per-episode TMDB score (0057)
-  imdb_rating numeric, imdb_votes int, imdb_id text, -- per-episode IMDb score via OMDb (0057)
+  imdb_rating numeric, imdb_votes int, imdb_id text, -- per-episode IMDb score (0057)
   unique (title_id, season_number, episode_number)
 )
 ```
 
 - RLS: `select` for authenticated; writes only via Edge Functions (service role).
 - Season 0 (specials) is stored but **excluded from all derivations**.
-- **IMDb ratings** (show + per-episode) come from OMDb, not TMDB, bridged through
-  the `imdb_id` TMDB gives us — the same bridge TVmaze air times use. The Edge
-  Functions fill them best-effort and idempotently (`enrichImdb*`), mirroring the
-  air-time pass: no `OMDB_API_KEY` / no `imdb_id` / an OMDb miss just leaves the
-  columns null, which the UI reads as "hide". Season aggregates (the season
-  rating) are derived client-side from the episode rows (`app/src/domain/episodeRatings.ts`).
-- OMDb's copy of IMDb is **incomplete**: it returns `"N/A"` for a large minority
-  of episodes even when asked for them directly, while still reporting their vote
-  count (Breaking Bad's "Crawl Space": 54,650 votes, no rating — the real score is
-  9.7). So a weekly GitHub Action (`scripts/imdb-ratings`, workflow
-  `imdb-ratings.yml`) takes the ratings from **IMDb's own published datasets**
-  instead, which do carry them. It only ever updates episode rows we already
-  hold, and drops ratings that are too thinly voted or too freshly aired to have
-  settled. The datasets are licensed for personal, non-commercial use.
+- **IMDb ratings** (`imdb_rating` / `imdb_votes`, on both titles and episodes) are
+  owned by ONE writer: the weekly GitHub Action `scripts/imdb-ratings`, which
+  reads IMDb's own published datasets. Nothing else writes those columns.
+  OMDb used to fill them nightly and was removed: it is both incomplete (it
+  returns `"N/A"` for a large minority of episodes even asked directly, while
+  reporting their vote count) and **stale** — it still serves Breaking Bad's
+  "Ozymandias" as 10.0 from 251,146 votes where IMDb publishes 9.5 from 504,738,
+  a snapshot from when that was true. Two writers on one column meant the nightly
+  stale one kept overwriting the weekly fresh one.
+  The importer only ever updates episode rows we already hold, and drops ratings
+  too thinly voted (`MIN_VOTES`) or too freshly aired (`MIN_AGE_DAYS`) to have
+  settled. Season aggregates are derived client-side (`app/src/domain/episodeRatings.ts`).
+  The datasets are licensed for personal, non-commercial use.
 
 ### User data
 

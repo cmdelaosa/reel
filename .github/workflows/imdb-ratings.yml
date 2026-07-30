@@ -6,8 +6,13 @@ name: imdb-ratings
 # gzipped TSV with ~8.5M rows: the script streams it, but a runner has the time
 # and memory headroom to do that comfortably and an edge invocation does not.
 #
-# Mondays 04:00 UTC — before the 05:00 episode-refresh cron, so a fresh week's
-# ratings are in place when the rest of the pipeline runs.
+# Daily at 04:00 UTC, before the 05:00 episode-refresh cron.
+#
+# Daily rather than weekly because it is the ONLY writer of imdb_rating /
+# imdb_votes now (OMDb was removed for being stale), so its cadence decides how
+# long a newly-followed show waits for a rating. A whole run takes ~25s and IMDb
+# regenerates the files daily, so weekly bought nothing. What keeps a just-aired
+# episode's volatile score out is MIN_AGE_DAYS, not the schedule.
 #
 # SECRETS (repo → Settings → Secrets and variables → Actions):
 #   SUPABASE_URL                — https://<ref>.supabase.co
@@ -17,7 +22,7 @@ name: imdb-ratings
 
 on:
   schedule:
-    - cron: "0 4 * * 1"
+    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       dry_run:

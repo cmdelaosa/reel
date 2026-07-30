@@ -7,6 +7,13 @@
 // to ≤ 40 TMDB requests per 10s (fixed window — mirrors the unit-tested
 // planner in app/src/domain/rateLimit.ts).
 //
+// IMDb ratings are NOT written here — scripts/imdb-ratings owns imdb_rating /
+// imdb_votes, from IMDb's own published datasets. OMDb, which used to fill them
+// nightly, turned out to be both incomplete and years out of date (it still
+// serves Breaking Bad's "Ozymandias" as 10.0 from 251,146 votes; IMDb publishes
+// 9.5 from 504,738), so it was removed rather than left to overwrite fresher
+// numbers.
+//
 // AUTH: headless job — requires the service-role key as the bearer token.
 //
 // SCHEDULING (documented choice: pg_cron on hosted):
@@ -22,7 +29,6 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 
 const TMDB = "https://api.themoviedb.org/3";
 const TVMAZE = "https://api.tvmaze.com";
-const OMDB = "https://www.omdbapi.com"; // IMDb ratings, bridged via imdb_id
 const AIR_TIME = "T21:00:00Z"; // placeholder; enrichAirTimes replaces it below
 const STALE_MS = 20 * 60 * 60 * 1000; // 20h
 const LIMIT = 40;
@@ -35,7 +41,7 @@ const WINDOW_MS = 10_000;
    job_runs bookkeeping written after the loop (observed 2026-07-30: a forced
    backfill run stopped ~2.5 min in having refreshed 90 titles and never logged).
    A rejected fetch, by contrast, is already handled everywhere: TMDB throws and
-   the per-title try/catch records it, TVmaze/OMDb degrade to a silent no-op.
+   the per-title try/catch records it, the TVmaze pass degrades to a no-op.
    10s is generous for all three (p99 well under 1s) while keeping the worst-case
    per-title cost bounded — a handful of fetches, so tens of seconds, comfortably
    inside the margin the guard leaves. */
@@ -212,84 +218,6 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
   if (error) console.error(`tvmaze air times: ${error.message}`);
 }
 
-// -- IMDb ratings via OMDb (hand-mirror of tmdb-proxy's pair — keep in sync) --
-// TMDB carries no IMDb rating; we bridge through the imdb_id it gives us (0051)
-// to OMDb, which mirrors IMDb's score. OMDb has no documented burst limit beyond
-// its daily quota, but we pace it with a flat gap like TVmaze above. Best-effort
-// and idempotent: no key, no imdb_id, or an OMDb miss is a silent no-op.
-const OMDB_GAP_MS = 120;
-const omdbFetch = async (apiKey: string, params: string): Promise<Any | null> => {
-  await new Promise((r) => setTimeout(r, OMDB_GAP_MS));
-  // Capped like every upstream call (see UPSTREAM_TIMEOUT_MS). The timeout
-  // rejects, which the catch turns into null — the same no-op as an OMDb miss.
-  const res = await fetch(`${OMDB}/?apikey=${apiKey}&${params}`, {
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-  }).catch(() => null);
-  if (!res || !res.ok) return null;
-  const d = await res.json().catch(() => null);
-  // OMDb answers 200 with { Response: "False" } for misses and quota hits.
-  return d && d.Response !== "False" ? d : null;
-};
-
-// OMDb ships numbers as strings ("9.2", "1,234,567") or the sentinel "N/A".
-const parseImdbRating = (v: unknown): number | null => {
-  const n = typeof v === "string" ? Number.parseFloat(v) : NaN;
-  return Number.isFinite(n) ? n : null;
-};
-const parseImdbVotes = (v: unknown): number | null => {
-  if (typeof v !== "string") return null;
-  const n = Number.parseInt(v.replace(/,/g, ""), 10);
-  return Number.isFinite(n) ? n : null;
-};
-
-/** Refresh the show's IMDb rating and the given seasons' per-episode ratings
- *  from OMDb. `seasons` are the numbers we just pulled from TMDB (the latest
- *  two), so the graph's newest data stays current without re-fetching a show's
- *  whole back catalogue every night. Only writes real scores — both the show
- *  and each episode — so a transient/lagging "N/A" never wipes a good value. */
-async function enrichImdb(admin: SupabaseClient, titleId: string, imdbId: string | null, seasons: number[]) {
-  const apiKey = Deno.env.get("OMDB_API_KEY");
-  if (!apiKey || !imdbId) return;
-
-  const show = await omdbFetch(apiKey, `i=${encodeURIComponent(imdbId)}`);
-  const rating = parseImdbRating(show?.imdbRating);
-  if (rating != null) {
-    await admin.from("titles")
-      .update({ imdb_rating: rating, imdb_votes: parseImdbVotes(show?.imdbVotes) })
-      .eq("id", titleId);
-  }
-
-  for (const n of seasons) {
-    const d = await omdbFetch(apiKey, `i=${encodeURIComponent(imdbId)}&Season=${n}`);
-    const eps = (d?.Episodes ?? []) as Any[];
-    if (!eps.length) continue;
-    const byNum = new Map<number, { rating: number | null; imdbId: string | null }>();
-    for (const e of eps) {
-      const num = Number.parseInt(e?.Episode, 10);
-      if (Number.isFinite(num)) byNum.set(num, { rating: parseImdbRating(e?.imdbRating), imdbId: e?.imdbID ?? null });
-    }
-    const { data: ours } = await admin
-      .from("episodes").select("title_id, season_number, episode_number")
-      .eq("title_id", titleId).eq("season_number", n);
-    const rows = (ours ?? [])
-      .map((e: Any) => ({ e, m: byNum.get(e.episode_number) }))
-      // Only rated episodes: an "N/A" listing must not null out a stored rating.
-      .filter((x) => x.m && x.m.rating != null)
-      .map((x) => ({
-        title_id: x.e.title_id,
-        season_number: x.e.season_number,
-        episode_number: x.e.episode_number,
-        imdb_rating: x.m!.rating,
-        imdb_id: x.m!.imdbId,
-      }));
-    if (rows.length) {
-      const { error } = await admin.from("episodes")
-        .upsert(rows, { onConflict: "title_id,season_number,episode_number" });
-      if (error) console.error(`imdb season ratings: ${error.message}`);
-    }
-  }
-}
-
 // es-ES translation (plain es fallback) from a payload fetched with
 // append_to_response=translations. Mirrors tmdb-proxy.
 function esTranslation(d: Any): { name: string | null; overview: string | null } {
@@ -356,19 +284,7 @@ function providerMap(d: Any): Record<string, { name: string; logo_path: string |
   return out;
 }
 
-/** `allImdbSeasons` widens the IMDb pass from the latest two seasons to every
- *  regular season. Off by default — the daily cron only needs the seasons that
- *  can still change. On for the one-off backfill: a show's OLDER seasons are the
- *  finished ones, where the episode graph is most worth having, and they were
- *  otherwise left to fill in only when someone happened to open them (measured
- *  on 2026-07-30: 1048 of 1851 seasons had no IMDb rating at all). Costs one OMDb
- *  request per extra season — nothing against the paid tier's 100k/day. */
-async function refreshTitle(
-  admin: SupabaseClient,
-  key: string,
-  row: { id: string; tmdb_id: number },
-  allImdbSeasons = false,
-) {
+async function refreshTitle(admin: SupabaseClient, key: string, row: { id: string; tmdb_id: number }) {
   const d = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations,external_ids,watch/providers`);
   const es = esTranslation(d);
   const providers = providerMap(d);
@@ -448,7 +364,8 @@ async function refreshTitle(
         overview: e.overview ?? null,
         runtime: e.runtime ?? null,
         // Per-episode TMDB score — free, already in this payload; the second
-        // source behind the episode graph. IMDb ratings come via OMDb below.
+        // source behind the episode graph. IMDb ratings come from the weekly
+        // dataset import (scripts/imdb-ratings), which owns those columns.
         tmdb_vote_average: e.vote_average ?? null,
         tmdb_vote_count: e.vote_count ?? null,
         air_datetime: known ?? airDatetime(e.air_date),
@@ -473,19 +390,8 @@ async function refreshTitle(
     console.error(`tvmaze enrich ${row.tmdb_id}: ${String(err)}`);
   }
 
-  // IMDb ratings (show + the seasons we just refreshed). Same contract as the
-  // TVmaze pass: inline so the run's pacing applies, never fatal to the TMDB
-  // refresh we just did. `latest` is the newest ≤2 regular seasons.
-  try {
-    await enrichImdb(
-      admin,
-      row.id,
-      d.external_ids?.imdb_id || null,
-      (allImdbSeasons ? regular : latest).map((s: Any) => s.season_number),
-    );
-  } catch (err) {
-    console.error(`imdb enrich ${row.tmdb_id}: ${String(err)}`);
-  }
+  // No IMDb pass here any more: scripts/imdb-ratings owns those columns, from
+  // IMDb's own published datasets. See the header note.
 }
 
 Deno.serve(async (req) => {
@@ -507,11 +413,6 @@ Deno.serve(async (req) => {
   // respecting staleness to stay within the TMDB budget.
   const params = new URL(req.url).searchParams;
   const force = params.get("force") === "1";
-  // Opt-in (manual runs only): enrich EVERY season's IMDb ratings, not just the
-  // latest two. See refreshTitle's allImdbSeasons — this is the flag the one-off
-  // IMDb backfill uses so finished seasons get their episode graph without
-  // waiting for someone to open them.
-  const allImdbSeasons = params.get("imdbSeasons") === "all";
 
   // One queryable row per run/exit (job_runs, migration 0029) so a silently-
   // failing daily job is visible (edge logs are console-only + ~1 day on free
@@ -585,7 +486,7 @@ Deno.serve(async (req) => {
     for (const t of stale) {
       if (Date.now() - started > MAX_MS) { hitGuard = true; break; }
       try {
-        await refreshTitle(admin, tmdbKey, t, allImdbSeasons);
+        await refreshTitle(admin, tmdbKey, t);
         refreshed++;
       } catch (err) {
         errors.push(`${t.tmdb_id}: ${String(err)}`);
@@ -607,9 +508,6 @@ Deno.serve(async (req) => {
       errors: errors.length,
       hitGuard,
       remaining: hitGuard ? stale.length - refreshed - errors.length : 0,
-      // Which mode produced these numbers: an all-seasons IMDb run covers far
-      // fewer titles per invocation, so without this the counts look alarming.
-      allImdbSeasons,
       sample: errors.slice(0, 5),
     });
   })();
