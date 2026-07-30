@@ -190,10 +190,16 @@ async function main() {
       .upsert(epRows.slice(i, i + CHUNK), { onConflict: "title_id,season_number,episode_number" });
     if (error) throw new Error(`episodes upsert: ${error.message}`);
   }
-  // Shows are updated by primary key, one statement per chunk via upsert.
-  for (let i = 0; i < showRows.length; i += CHUNK) {
-    const { error } = await admin.from("titles").upsert(showRows.slice(i, i + CHUNK), { onConflict: "id" });
-    if (error) throw new Error(`titles upsert: ${error.message}`);
+  // Shows go one UPDATE at a time, NOT an upsert. An upsert sends an INSERT …
+  // ON CONFLICT, and Postgres checks the proposed row's NOT NULL constraints
+  // before it ever gets to the conflict clause — so a partial row of
+  // {id, imdb_rating, imdb_votes} fails on titles.tmdb_id/name every time.
+  // (Episodes above are safe because their payload carries the whole natural
+  // key, which is all the NOT NULLs that table has.)
+  for (const row of showRows) {
+    const { id, ...patch } = row as { id: string; [k: string]: unknown };
+    const { error } = await admin.from("titles").update(patch).eq("id", id);
+    if (error) throw new Error(`titles update: ${error.message}`);
   }
 
   // Same bookkeeping the edge crons write, so this job is visible in one place.
