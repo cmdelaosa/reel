@@ -125,6 +125,14 @@ episodes (
   air-time pass: no `OMDB_API_KEY` / no `imdb_id` / an OMDb miss just leaves the
   columns null, which the UI reads as "hide". Season aggregates (the season
   rating) are derived client-side from the episode rows (`app/src/domain/episodeRatings.ts`).
+- OMDb's copy of IMDb is **incomplete**: it returns `"N/A"` for a large minority
+  of episodes even when asked for them directly, while still reporting their vote
+  count (Breaking Bad's "Crawl Space": 54,650 votes, no rating — the real score is
+  9.7). So a weekly GitHub Action (`scripts/imdb-ratings`, workflow
+  `imdb-ratings.yml`) takes the ratings from **IMDb's own published datasets**
+  instead, which do carry them. It only ever updates episode rows we already
+  hold, and drops ratings that are too thinly voted or too freshly aired to have
+  settled. The datasets are licensed for personal, non-commercial use.
 
 ### User data
 

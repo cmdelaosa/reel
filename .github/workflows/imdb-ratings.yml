@@ -1,0 +1,54 @@
+name: imdb-ratings
+
+# Weekly IMDb rating import from the official datasets (scripts/imdb-ratings).
+#
+# It runs here rather than as an edge function because the input is a ~52 MB
+# gzipped TSV with ~8.5M rows: the script streams it, but a runner has the time
+# and memory headroom to do that comfortably and an edge invocation does not.
+#
+# Mondays 04:00 UTC — before the 05:00 episode-refresh cron, so a fresh week's
+# ratings are in place when the rest of the pipeline runs.
+#
+# SECRETS (repo → Settings → Secrets and variables → Actions):
+#   SUPABASE_URL                — https://<ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY   — Dashboard → Project Settings → API
+# Without them the job fails loudly on the first run rather than writing nothing
+# silently.
+
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report what would change, write nothing"
+        type: boolean
+        default: false
+      min_votes:
+        description: "Ignore ratings under this many votes"
+        default: "20"
+      min_age_days:
+        description: "Skip episodes that aired more recently than this"
+        default: "7"
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/imdb-ratings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - name: Import IMDb ratings
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MIN_VOTES: ${{ inputs.min_votes || '20' }}
+          MIN_AGE_DAYS: ${{ inputs.min_age_days || '7' }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: npm start
