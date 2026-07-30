@@ -1,0 +1,19 @@
+{
+  "name": "imdb-ratings",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Weekly importer: IMDb official datasets → episode/show ratings (fills OMDb's gaps).",
+  "scripts": {
+    "start": "tsx index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^6.0.3"
+  }
+}
