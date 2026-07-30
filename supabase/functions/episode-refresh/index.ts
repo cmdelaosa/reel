@@ -356,7 +356,19 @@ function providerMap(d: Any): Record<string, { name: string; logo_path: string |
   return out;
 }
 
-async function refreshTitle(admin: SupabaseClient, key: string, row: { id: string; tmdb_id: number }) {
+/** `allImdbSeasons` widens the IMDb pass from the latest two seasons to every
+ *  regular season. Off by default — the daily cron only needs the seasons that
+ *  can still change. On for the one-off backfill: a show's OLDER seasons are the
+ *  finished ones, where the episode graph is most worth having, and they were
+ *  otherwise left to fill in only when someone happened to open them (measured
+ *  on 2026-07-30: 1048 of 1851 seasons had no IMDb rating at all). Costs one OMDb
+ *  request per extra season — nothing against the paid tier's 100k/day. */
+async function refreshTitle(
+  admin: SupabaseClient,
+  key: string,
+  row: { id: string; tmdb_id: number },
+  allImdbSeasons = false,
+) {
   const d = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations,external_ids,watch/providers`);
   const es = esTranslation(d);
   const providers = providerMap(d);
@@ -391,10 +403,14 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
 
   await cacheNetworkLogos(admin, d.networks);
 
-  const latest = (d.seasons ?? [])
+  const regular = (d.seasons ?? [])
     .filter((s: Any) => (s.season_number as number) > 0)
-    .sort((a: Any, b: Any) => b.season_number - a.season_number)
-    .slice(0, 2);
+    .sort((a: Any, b: Any) => b.season_number - a.season_number);
+  // TMDB episode refresh stays on the latest two seasons — that's where episodes
+  // and air times still move, and it's the expensive half (a request per season
+  // plus the upserts). The IMDb pass can be widened independently: it's one
+  // request per season and older seasons are exactly the settled ones.
+  const latest = regular.slice(0, 2);
 
   // Read once for the whole title, before any episode write touches it.
   const keep = await keepTvmazeTimes(admin, row.id);
@@ -461,7 +477,12 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
   // TVmaze pass: inline so the run's pacing applies, never fatal to the TMDB
   // refresh we just did. `latest` is the newest ≤2 regular seasons.
   try {
-    await enrichImdb(admin, row.id, d.external_ids?.imdb_id || null, latest.map((s: Any) => s.season_number));
+    await enrichImdb(
+      admin,
+      row.id,
+      d.external_ids?.imdb_id || null,
+      (allImdbSeasons ? regular : latest).map((s: Any) => s.season_number),
+    );
   } catch (err) {
     console.error(`imdb enrich ${row.tmdb_id}: ${String(err)}`);
   }
@@ -484,7 +505,13 @@ Deno.serve(async (req) => {
   // followed title is recomputed now — used to backfill after a derivation
   // change (e.g. upcoming_season_number). The daily cron omits it and keeps
   // respecting staleness to stay within the TMDB budget.
-  const force = new URL(req.url).searchParams.get("force") === "1";
+  const params = new URL(req.url).searchParams;
+  const force = params.get("force") === "1";
+  // Opt-in (manual runs only): enrich EVERY season's IMDb ratings, not just the
+  // latest two. See refreshTitle's allImdbSeasons — this is the flag the one-off
+  // IMDb backfill uses so finished seasons get their episode graph without
+  // waiting for someone to open them.
+  const allImdbSeasons = params.get("imdbSeasons") === "all";
 
   // One queryable row per run/exit (job_runs, migration 0029) so a silently-
   // failing daily job is visible (edge logs are console-only + ~1 day on free
@@ -558,7 +585,7 @@ Deno.serve(async (req) => {
     for (const t of stale) {
       if (Date.now() - started > MAX_MS) { hitGuard = true; break; }
       try {
-        await refreshTitle(admin, tmdbKey, t);
+        await refreshTitle(admin, tmdbKey, t, allImdbSeasons);
         refreshed++;
       } catch (err) {
         errors.push(`${t.tmdb_id}: ${String(err)}`);
@@ -580,6 +607,9 @@ Deno.serve(async (req) => {
       errors: errors.length,
       hitGuard,
       remaining: hitGuard ? stale.length - refreshed - errors.length : 0,
+      // Which mode produced these numbers: an all-seasons IMDb run covers far
+      // fewer titles per invocation, so without this the counts look alarming.
+      allImdbSeasons,
       sample: errors.slice(0, 5),
     });
   })();

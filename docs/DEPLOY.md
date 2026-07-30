@@ -97,11 +97,26 @@ select jobname, schedule, active from cron.job;   -- expect both jobs, active
 
 `schedule-jobs.sql` also fires a one-time `episode-refresh?force=1`. With
 `OMDB_API_KEY` already set (step 3), that same run backfills the **IMDb** show
-rating and the latest two seasons' episode ratings across the followed library
-(older seasons fill lazily the first time someone opens them). On the free OMDb
-tier the force run exhausts the daily 1,000 quota partway through; the nightly
-cron finishes over the next couple of days. Re-run the force curl (step 7) any
-time to resume.
+rating and the latest two seasons' episode ratings across the followed library.
+On the free OMDb tier the force run exhausts the daily 1,000 quota partway
+through; the nightly cron finishes over the next couple of days. Re-run the force
+curl (step 7) any time to resume — each invocation covers ~90 titles before the
+wall guard stops it, oldest-refreshed first, so a full library takes several.
+
+For the **episode-rating graph** add `&imdbSeasons=all`, which widens the IMDb
+pass from the latest two seasons to every season:
+
+```bash
+curl -X POST "https://<ref>.supabase.co/functions/v1/episode-refresh?force=1&imdbSeasons=all" \
+  -H "Authorization: Bearer <SERVICE_ROLE_KEY>"
+```
+
+Without it, only the two newest seasons of each show get episode ratings and the
+rest fill in one at a time, whenever someone opens them — which leaves most of a
+long-running show ungraphed (measured after the first backfill: 1048 of 1851
+seasons had no rating). It costs one extra OMDb request per season, so it is a
+one-off worth running while on the paid tier; the nightly cron stays on the
+latest two, which is all that can still change.
 
 ## 6. Deploy the frontend (Vercel)
 

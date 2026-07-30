@@ -24,6 +24,21 @@ export function average(values: (number | null | undefined)[]): number | null {
 export const seasonImdbAverage = (eps: RatedEpisode[]): number | null =>
   average(eps.map((e) => e.imdb_rating));
 
+const isRated = (e: RatedEpisode): boolean =>
+  typeof e.imdb_rating === "number" && Number.isFinite(e.imdb_rating);
+
+/* A line needs somewhere to go before it means anything. One or two rated
+   episodes don't describe a season's shape — and worse, a single dot on an axis
+   reads as "this season has one episode", which is how a currently-airing season
+   (IMDb rates episodes as they air) looked before this floor existed. Below it we
+   render nothing at all, including the average: the mean of one episode is not a
+   season rating. */
+export const MIN_CHART_POINTS = 3;
+
+/** Whether a season has enough rated episodes to be worth charting. */
+export const hasChartableRatings = (eps: RatedEpisode[]): boolean =>
+  eps.filter(isRated).length >= MIN_CHART_POINTS;
+
 export interface ChartPoint {
   x: number;
   y: number;
@@ -66,10 +81,9 @@ export function chartGeometry(
   h: number,
   padding: ChartPadding,
 ): ChartGeometry | null {
-  const rated = eps
-    .map((e, i) => ({ e, i }))
-    .filter((x) => typeof x.e.imdb_rating === "number" && Number.isFinite(x.e.imdb_rating as number));
-  if (!rated.length) return null;
+  const rated = eps.map((e, i) => ({ e, i })).filter((x) => isRated(x.e));
+  // Below the floor there is no chart to draw — see MIN_CHART_POINTS.
+  if (rated.length < MIN_CHART_POINTS) return null;
 
   const values = rated.map((x) => x.e.imdb_rating as number);
   const min = Math.min(...values);

@@ -25,6 +25,7 @@ import {
 } from "@/features/detail/data";
 import { EpisodeSheet } from "@/features/detail/EpisodeSheet";
 import { SeasonChart } from "@/features/detail/SeasonChart";
+import { hasChartableRatings } from "@/domain/episodeRatings";
 
 /* Show detail sheet — port of prototype screens.tsx DetailSheet on live data.
    Opened globally via ?title=<tmdbId>; episode marking is wired in P2-C4 and
@@ -632,9 +633,11 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 <div>
                   <SeasonTabs seasons={regularSeasons} active={activeSeason} onPick={setSeason} />
                   {/* IMDb episode-rating graph for the chosen season, above its
-                      episode list. Renders only once the season has IMDb scores;
+                      episode list. Needs enough rated episodes to mean anything
+                      (hasChartableRatings — a currently-airing season starts with
+                      one rated episode, and a lone dot read as "one episode");
                       dims with the list while switching seasons. */}
-                  {episodes.some((e) => e.imdb_rating != null) && (
+                  {hasChartableRatings(episodes) && (
                     <div
                       style={{ margin: "14px 0 4px", opacity: changingSeason ? 0.45 : 1, transition: "opacity .15s ease" }}
                       aria-busy={changingSeason}
