@@ -103,8 +103,21 @@ through; the nightly cron finishes over the next couple of days. Re-run the forc
 curl (step 7) any time to resume — each invocation covers ~90 titles before the
 wall guard stops it, oldest-refreshed first, so a full library takes several.
 
-For the **episode-rating graph** add `&imdbSeasons=all`, which widens the IMDb
-pass from the latest two seasons to every season:
+For the **episode-rating graph**, which plots TMDB's per-episode scores, add
+`&seasons=all` so every season's episodes (and therefore their scores) are
+pulled, not just the newest two:
+
+```bash
+curl -X POST "https://<ref>.supabase.co/functions/v1/episode-refresh?force=1&seasons=all" \
+  -H "Authorization: Bearer <SERVICE_ROLE_KEY>"
+```
+
+One extra TMDB request per season, inside the existing rate limiter — free, but
+it makes each invocation cover far fewer titles, so expect several runs.
+`job_runs.summary.allSeasons` records which mode produced a given run's counts.
+
+To refresh **IMDb** scores across every season too, add `&imdbSeasons=all`, which
+widens the IMDb pass the same way:
 
 ```bash
 curl -X POST "https://<ref>.supabase.co/functions/v1/episode-refresh?force=1&imdbSeasons=all" \

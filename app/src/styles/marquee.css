@@ -505,23 +505,27 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .ep-title { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; }
 .ep-date { flex: 0 0 auto; font-size: 12px; color: var(--text-dim); }
 .ep-unaired .ep-title, .ep-unaired .ep-num { opacity: .6; }
-/* Compact IMDb score on the row — the gold star is its identity; the number
-   stays in --text for contrast. TMDB's per-episode score lives on the sheet. */
+/* Compact score on the row. It shows the same number the graph plots (TMDB), so
+   a point and its row can't disagree — hence --accent, not the IMDb gold. Both
+   sources sit side by side on the episode sub-sheet. */
 .ep-imdb { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 750; }
-.ep-imdb svg { color: var(--imdb); }
+.ep-imdb svg { color: var(--accent); }
 
-/* Season episode-rating graph (IMDb). Hand-rolled SVG — no chart dependency,
-   theme-aware through the tokens. */
+/* Season episode-rating graph (TMDB — see domain/episodeRatings.ts for why not
+   IMDb). Hand-rolled SVG, no chart dependency, theme-aware through the tokens.
+   Drawn in --accent, not the IMDb gold: the gold is reserved for figures that
+   really come from IMDb, so the colour alone tells you which source you're
+   reading. */
 .season-chart { display: flex; flex-direction: column; gap: 8px; }
 .season-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .season-chart-agg { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; font-size: 14px; }
-.season-chart-agg svg { color: var(--imdb); }
+.season-chart-agg svg { color: var(--accent); }
 .season-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 .season-chart .grid-line { stroke: var(--border); stroke-width: 1; }
 .season-chart .grid-label { fill: var(--text-mute); font-size: 10px; }
-.season-chart .rating-line { fill: none; stroke: var(--imdb); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.season-chart .rating-dot { fill: var(--surface); stroke: var(--imdb); stroke-width: 2; cursor: pointer; transition: r .12s ease; }
-.season-chart .rating-dot:hover { r: 5.5; fill: var(--imdb); }
+.season-chart .rating-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.season-chart .rating-dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2; cursor: pointer; transition: r .12s ease; }
+.season-chart .rating-dot:hover { r: 5.5; fill: var(--accent); }
 .season-chart .rating-hit { fill: transparent; cursor: pointer; }
 .season-chart .x-label { fill: var(--text-mute); font-size: 10px; text-anchor: middle; }
 

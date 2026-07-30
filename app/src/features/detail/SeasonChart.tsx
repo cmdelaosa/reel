@@ -1,15 +1,17 @@
 import { Star } from "lucide-react";
 import type { EpisodeRow } from "@/lib/schemas";
 import { t as tr, tv } from "@/lib/i18n";
-import { chartGeometry, seasonImdbAverage } from "@/domain/episodeRatings";
+import { chartGeometry, seasonAverage } from "@/domain/episodeRatings";
 
-/* Per-season IMDb episode-rating graph — a single hand-rolled SVG line (no chart
-   dependency), theme-aware through the tokens. Plots IMDb ratings only, by
-   design; TMDB's per-episode score sits on the episode sub-sheet. The season
-   picker above the episode list drives which season is shown, so this component
-   just renders whatever season it's handed. Tapping a point opens that episode's
-   sub-sheet — the same action as its row below. Renders nothing until at least
-   one episode in the season carries an IMDb rating. */
+/* Per-season episode-rating graph — a single hand-rolled SVG line (no chart
+   dependency), theme-aware through the tokens. Plots TMDB scores: they're the
+   only source complete enough to draw a line through (see episodeRatings.ts for
+   the comparison that settled it), and thin-voted episodes are filtered out
+   there rather than plotted as noise. IMDb's per-episode figure is still shown,
+   beside TMDB's, on the episode sub-sheet. The season picker above the episode
+   list drives which season is shown, so this component just renders whatever
+   season it's handed. Tapping a point opens that episode's sub-sheet — the same
+   action as its row below. */
 
 // viewBox units; the SVG scales to its container width (width:100%, height:auto).
 const W = 680;
@@ -19,7 +21,7 @@ const PAD = { top: 14, right: 14, bottom: 26, left: 34 };
 export function SeasonChart({ episodes, onPick }: { episodes: EpisodeRow[]; onPick: (e: EpisodeRow) => void }) {
   const geo = chartGeometry(episodes, W, H, PAD);
   if (!geo) return null;
-  const avg = seasonImdbAverage(episodes);
+  const avg = seasonAverage(episodes);
 
   // Label a handful of x positions (first, last, and a few between) so a long
   // season doesn't smear its episode numbers into an unreadable band. Pixel
@@ -31,10 +33,10 @@ export function SeasonChart({ episodes, onPick }: { episodes: EpisodeRow[]; onPi
       <div className="season-chart-head">
         <div className="eyebrow">{tr("Episode ratings")}</div>
         {avg != null && (
-          <div className="season-chart-agg" title={tr("Season average (IMDb)")}>
+          <div className="season-chart-agg" title={tr("Season average (TMDB)")}>
             <Star size={14} fill="currentColor" strokeWidth={0} />
             {avg.toFixed(1)}
-            <span className="mute" style={{ fontWeight: 600, fontSize: 12 }}>IMDb</span>
+            <span className="mute" style={{ fontWeight: 600, fontSize: 12 }}>TMDB</span>
           </div>
         )}
       </div>
@@ -43,8 +45,8 @@ export function SeasonChart({ episodes, onPick }: { episodes: EpisodeRow[]; onPi
         role="img"
         aria-label={
           avg != null
-            ? tv("IMDb episode ratings for this season, averaging {avg}", { avg: avg.toFixed(1) })
-            : tr("IMDb episode ratings for this season")
+            ? tv("TMDB episode ratings for this season, averaging {avg}", { avg: avg.toFixed(1) })
+            : tr("TMDB episode ratings for this season")
         }
       >
         {/* Horizontal gridlines + their rating labels */}

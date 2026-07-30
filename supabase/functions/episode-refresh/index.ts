@@ -368,6 +368,7 @@ async function refreshTitle(
   key: string,
   row: { id: string; tmdb_id: number },
   allImdbSeasons = false,
+  allSeasons = false,
 ) {
   const d = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations,external_ids,watch/providers`);
   const es = esTranslation(d);
@@ -406,11 +407,13 @@ async function refreshTitle(
   const regular = (d.seasons ?? [])
     .filter((s: Any) => (s.season_number as number) > 0)
     .sort((a: Any, b: Any) => b.season_number - a.season_number);
-  // TMDB episode refresh stays on the latest two seasons — that's where episodes
-  // and air times still move, and it's the expensive half (a request per season
-  // plus the upserts). The IMDb pass can be widened independently: it's one
-  // request per season and older seasons are exactly the settled ones.
-  const latest = regular.slice(0, 2);
+  // TMDB episode refresh normally stays on the latest two seasons — that's where
+  // episodes and air times still move, and it's the expensive half (a request
+  // per season plus the upserts). `allSeasons` widens it for the one-off backfill
+  // that seeds per-episode TMDB scores across a show's whole run; those scores
+  // are what the season graph plots, so an unvisited old season would otherwise
+  // have no graph at all.
+  const latest = allSeasons ? regular : regular.slice(0, 2);
 
   // Read once for the whole title, before any episode write touches it.
   const keep = await keepTvmazeTimes(admin, row.id);
@@ -512,6 +515,11 @@ Deno.serve(async (req) => {
   // IMDb backfill uses so finished seasons get their episode graph without
   // waiting for someone to open them.
   const allImdbSeasons = params.get("imdbSeasons") === "all";
+  // Opt-in (manual runs only): pull EVERY season's episodes from TMDB, not just
+  // the latest two — the one-off backfill that seeds per-episode TMDB scores
+  // (what the season graph plots) across a show's whole run. One TMDB request
+  // per extra season, inside the existing rate limiter.
+  const allSeasons = params.get("seasons") === "all";
 
   // One queryable row per run/exit (job_runs, migration 0029) so a silently-
   // failing daily job is visible (edge logs are console-only + ~1 day on free
@@ -585,7 +593,7 @@ Deno.serve(async (req) => {
     for (const t of stale) {
       if (Date.now() - started > MAX_MS) { hitGuard = true; break; }
       try {
-        await refreshTitle(admin, tmdbKey, t, allImdbSeasons);
+        await refreshTitle(admin, tmdbKey, t, allImdbSeasons, allSeasons);
         refreshed++;
       } catch (err) {
         errors.push(`${t.tmdb_id}: ${String(err)}`);
@@ -607,9 +615,10 @@ Deno.serve(async (req) => {
       errors: errors.length,
       hitGuard,
       remaining: hitGuard ? stale.length - refreshed - errors.length : 0,
-      // Which mode produced these numbers: an all-seasons IMDb run covers far
-      // fewer titles per invocation, so without this the counts look alarming.
+      // Which mode produced these numbers: an all-seasons run covers far fewer
+      // titles per invocation, so without this the counts look alarming.
       allImdbSeasons,
+      allSeasons,
       sample: errors.slice(0, 5),
     });
   })();

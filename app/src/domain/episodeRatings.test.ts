@@ -4,15 +4,19 @@ import {
   chartGeometry,
   hasChartableRatings,
   MIN_CHART_POINTS,
-  seasonImdbAverage,
+  MIN_VOTES,
+  ratingOf,
+  seasonAverage,
   type ChartPadding,
   type RatedEpisode,
 } from "./episodeRatings";
 
-const ep = (episode_number: number, imdb?: number | null, tmdb?: number | null): RatedEpisode => ({
+/** An episode with a TMDB score; votes default to comfortably above MIN_VOTES so
+ *  the geometry tests aren't silently filtered by the vote floor. */
+const ep = (episode_number: number, tmdb?: number | null, votes = 50): RatedEpisode => ({
   episode_number,
-  imdb_rating: imdb,
   tmdb_vote_average: tmdb,
+  tmdb_vote_count: votes,
 });
 
 const PAD: ChartPadding = { top: 10, right: 10, bottom: 10, left: 10 };
@@ -32,25 +36,53 @@ describe("average", () => {
   });
 });
 
-describe("seasonImdbAverage", () => {
-  it("averages the rated episodes, skipping gaps", () => {
-    const eps = [ep(1, 9.1, 8.4), ep(2, 8.7, null), ep(3, null, 8.0)];
-    expect(seasonImdbAverage(eps)).toBe(8.9); // (9.1 + 8.7) / 2
+describe("ratingOf", () => {
+  it("requires MIN_VOTES before trusting a score", () => {
+    expect(MIN_VOTES).toBe(5);
+    expect(ratingOf(ep(1, 8.4, MIN_VOTES))).toBe(8.4);
+    // Thin-voted scores correlate with IMDb at 0.04 — noise, not a rating.
+    expect(ratingOf(ep(1, 8.4, MIN_VOTES - 1))).toBeNull();
+    expect(ratingOf(ep(1, 9.9, 0))).toBeNull();
+  });
+
+  it("treats a missing or zero score as absent", () => {
+    expect(ratingOf(ep(1, null))).toBeNull();
+    expect(ratingOf(ep(1, undefined))).toBeNull();
+    // TMDB reports 0 for an unrated episode; that's absence, not a bottom score.
+    expect(ratingOf(ep(1, 0))).toBeNull();
+  });
+
+  it("defaults a missing vote count to untrusted", () => {
+    expect(ratingOf({ episode_number: 1, tmdb_vote_average: 8 })).toBeNull();
+  });
+});
+
+describe("seasonAverage", () => {
+  it("averages the trustworthy scores, skipping gaps", () => {
+    const eps = [ep(1, 9.1), ep(2, 8.7), ep(3, null)];
+    expect(seasonAverage(eps)).toBe(8.9); // (9.1 + 8.7) / 2
+  });
+
+  it("excludes thin-voted episodes from the aggregate", () => {
+    // The 2.0 would drag the mean down if its 1 vote counted.
+    expect(seasonAverage([ep(1, 9), ep(2, 9), ep(3, 2, 1)])).toBe(9);
   });
 
   it("is null when nothing is rated", () => {
-    expect(seasonImdbAverage([ep(1, null), ep(2, null)])).toBeNull();
+    expect(seasonAverage([ep(1, null), ep(2, null)])).toBeNull();
   });
 });
 
 describe("hasChartableRatings", () => {
-  it("needs MIN_CHART_POINTS rated episodes", () => {
+  it("needs MIN_CHART_POINTS trustworthy scores", () => {
     expect(MIN_CHART_POINTS).toBe(3);
     expect(hasChartableRatings([ep(1, null), ep(2, null)])).toBe(false);
-    // A season that just started airing: IMDb has rated episode 1 only.
+    // A season that just started airing: only episode 1 scored.
     expect(hasChartableRatings([ep(1, 7.3), ep(2, null), ep(3, null)])).toBe(false);
     expect(hasChartableRatings([ep(1, 7.3), ep(2, 8), ep(3, null)])).toBe(false);
     expect(hasChartableRatings([ep(1, 7.3), ep(2, 8), ep(3, 8.4)])).toBe(true);
+    // Thin votes don't count toward the floor.
+    expect(hasChartableRatings([ep(1, 7.3), ep(2, 8), ep(3, 8.4, 1)])).toBe(false);
   });
 });
 
@@ -60,14 +92,12 @@ describe("chartGeometry", () => {
   });
 
   it("returns null below the point floor — a lone dot is not a chart", () => {
-    // The Silo case: season 3 airing, only episode 1 rated. Rendering it drew a
-    // single dot that read as "this season has one episode".
     expect(chartGeometry([ep(1, 7.3), ep(2, null), ep(3, null)], 300, 120, PAD)).toBeNull();
     expect(chartGeometry([ep(1, 8.5)], 210, 120, PAD)).toBeNull();
     expect(chartGeometry([ep(1, 7), ep(2, 9)], 210, 120, PAD)).toBeNull();
   });
 
-  it("plots only rated episodes but keeps their x-slot", () => {
+  it("plots only trustworthy scores but keeps their x-slot", () => {
     const eps = [ep(1, 8), ep(2, null), ep(3, 9), ep(4, 8.5)];
     const g = chartGeometry(eps, 310, 120, PAD)!;
     expect(g.points).toHaveLength(3);
@@ -81,6 +111,11 @@ describe("chartGeometry", () => {
     expect(g.xs).toHaveLength(4);
     expect(g.xs[0]).toBeCloseTo(g.points[0].x);
     expect(g.xs[3]).toBeCloseTo(g.points[2].x);
+  });
+
+  it("skips a thin-voted episode the same way it skips a missing one", () => {
+    const g = chartGeometry([ep(1, 8), ep(2, 2, 1), ep(3, 9), ep(4, 8.5)], 310, 120, PAD)!;
+    expect(g.points.map((p) => p.episode_number)).toEqual([1, 3, 4]);
   });
 
   it("orders the path low→high by episode and maps the top rating higher on screen", () => {

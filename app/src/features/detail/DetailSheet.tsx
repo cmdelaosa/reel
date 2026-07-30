@@ -25,7 +25,7 @@ import {
 } from "@/features/detail/data";
 import { EpisodeSheet } from "@/features/detail/EpisodeSheet";
 import { SeasonChart } from "@/features/detail/SeasonChart";
-import { hasChartableRatings } from "@/domain/episodeRatings";
+import { hasChartableRatings, ratingOf } from "@/domain/episodeRatings";
 
 /* Show detail sheet — port of prototype screens.tsx DetailSheet on live data.
    Opened globally via ?title=<tmdbId>; episode marking is wired in P2-C4 and
@@ -632,10 +632,10 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
               {regularSeasons.length > 0 && (
                 <div>
                   <SeasonTabs seasons={regularSeasons} active={activeSeason} onPick={setSeason} />
-                  {/* IMDb episode-rating graph for the chosen season, above its
-                      episode list. Needs enough rated episodes to mean anything
-                      (hasChartableRatings — a currently-airing season starts with
-                      one rated episode, and a lone dot read as "one episode");
+                  {/* Episode-rating graph (TMDB) for the chosen season, above its
+                      episode list. Needs enough trustworthy scores to mean
+                      anything (hasChartableRatings — a lone dot read as "this
+                      season has one episode", and thin-voted scores are noise);
                       dims with the list while switching seasons. */}
                   {hasChartableRatings(episodes) && (
                     <div
@@ -681,10 +681,12 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                             <button className="ep-main" onClick={() => setEpisodeOpen(e)} title={e.name ?? undefined}>
                               <span className="ep-num">E{e.episode_number}</span>
                               <span className="ep-title truncate">{e.name ?? `Episode ${e.episode_number}`}</span>
-                              {e.imdb_rating != null && (
+                              {/* Same score the season graph plots, so a row and
+                                  its point can never disagree. */}
+                              {ratingOf(e) != null && (
                                 <span className="ep-imdb">
                                   <Star size={12} fill="currentColor" strokeWidth={0} />
-                                  {e.imdb_rating.toFixed(1)}
+                                  {ratingOf(e)!.toFixed(1)}
                                 </span>
                               )}
                               <span className="ep-date">{fmtDate(e.air_datetime)}</span>
