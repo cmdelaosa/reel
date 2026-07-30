@@ -28,6 +28,19 @@ const STALE_MS = 20 * 60 * 60 * 1000; // 20h
 const LIMIT = 40;
 const WINDOW_MS = 10_000;
 
+/* Every upstream call is capped. Without this a third party that accepts the
+   connection but never answers hangs `await fetch` forever: the refresh loop's
+   wall guard is only checked BETWEEN titles, so one stalled request freezes the
+   whole run until the platform kills the invocation — which also loses the
+   job_runs bookkeeping written after the loop (observed 2026-07-30: a forced
+   backfill run stopped ~2.5 min in having refreshed 90 titles and never logged).
+   A rejected fetch, by contrast, is already handled everywhere: TMDB throws and
+   the per-title try/catch records it, TVmaze/OMDb degrade to a silent no-op.
+   10s is generous for all three (p99 well under 1s) while keeping the worst-case
+   per-title cost bounded — a handful of fetches, so tens of seconds, comfortably
+   inside the margin the guard leaves. */
+const UPSTREAM_TIMEOUT_MS = 10_000;
+
 // deno-lint-ignore no-explicit-any
 type Any = any;
 
@@ -80,7 +93,9 @@ async function throttle() {
 
 async function tmdb(key: string, path: string): Promise<Any> {
   await throttle();
-  const res = await fetch(`${TMDB}${path}${path.includes("?") ? "&" : "?"}api_key=${key}`);
+  const res = await fetch(`${TMDB}${path}${path.includes("?") ? "&" : "?"}api_key=${key}`, {
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`TMDB ${path}: ${res.status}`);
   return res.json();
 }
@@ -106,7 +121,7 @@ async function cacheNetworkLogos(admin: SupabaseClient, networks: Any) {
 const TVMAZE_GAP_MS = 250;
 const tvmaze = async (path: string): Promise<Response> => {
   await new Promise((r) => setTimeout(r, TVMAZE_GAP_MS));
-  return fetch(`${TVMAZE}${path}`);
+  return fetch(`${TVMAZE}${path}`, { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
 };
 
 /** Air times already resolved from TVmaze, keyed `season x episode`.
@@ -203,15 +218,12 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
 // its daily quota, but we pace it with a flat gap like TVmaze above. Best-effort
 // and idempotent: no key, no imdb_id, or an OMDb miss is a silent no-op.
 const OMDB_GAP_MS = 120;
-// Cap every call: enrichImdb runs inline inside the wall-guarded refresh loop,
-// so a hung OMDb connection (the wall guard only checks between titles) could
-// otherwise freeze the whole run until the platform kills it. The timeout
-// rejects, which the catch turns into null — the same no-op as any OMDb miss.
-const OMDB_TIMEOUT_MS = 8000;
 const omdbFetch = async (apiKey: string, params: string): Promise<Any | null> => {
   await new Promise((r) => setTimeout(r, OMDB_GAP_MS));
+  // Capped like every upstream call (see UPSTREAM_TIMEOUT_MS). The timeout
+  // rejects, which the catch turns into null — the same no-op as an OMDb miss.
   const res = await fetch(`${OMDB}/?apikey=${apiKey}&${params}`, {
-    signal: AbortSignal.timeout(OMDB_TIMEOUT_MS),
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   }).catch(() => null);
   if (!res || !res.ok) return null;
   const d = await res.json().catch(() => null);
@@ -528,14 +540,23 @@ Deno.serve(async (req) => {
   // so the gateway's request timeout never truncates a big backfill. A wall
   // guard stops before the runtime's hard limit; leftovers stay stale and the
   // next scheduled run picks them up (refreshTitle is idempotent).
-  const MAX_MS = 330_000;
+  //
+  // 300s, down from 330s: the guard is only consulted between titles, so the
+  // margin it leaves has to cover one whole title's worst case. Since IMDb
+  // enrichment joined the per-title work that worst case grew (more upstream
+  // calls), and a run really did get killed mid-title without logging. Capping
+  // every fetch (UPSTREAM_TIMEOUT_MS) bounds a title; this widens the margin
+  // that bound has to fit inside. Costs ~30s of throughput per run — the
+  // leftovers are picked up by the next one either way.
+  const MAX_MS = 300_000;
   const started = Date.now();
 
   const work = (async () => {
     let refreshed = 0;
+    let hitGuard = false;
     const errors: string[] = [];
     for (const t of stale) {
-      if (Date.now() - started > MAX_MS) break;
+      if (Date.now() - started > MAX_MS) { hitGuard = true; break; }
       try {
         await refreshTitle(admin, tmdbKey, t);
         refreshed++;
@@ -544,14 +565,21 @@ Deno.serve(async (req) => {
       }
     }
     console.log(
-      `episode-refresh done: ${refreshed}/${stale.length} refreshed, ${errors.length} errors`,
+      `episode-refresh done: ${refreshed}/${stale.length} refreshed, ${errors.length} errors` +
+        (hitGuard ? ` (stopped at the ${MAX_MS / 1000}s guard)` : ""),
       errors.slice(0, 5),
     );
+    // hitGuard distinguishes "worked through the whole list" from "ran out of
+    // time with N left" — without it a truncated backfill and a complete run
+    // look identical in job_runs, which is the only place these runs are
+    // visible once the edge logs age out.
     await logRun(errors.length === 0, {
       followed: ids.length,
       stale: stale.length,
       refreshed,
       errors: errors.length,
+      hitGuard,
+      remaining: hitGuard ? stale.length - refreshed - errors.length : 0,
       sample: errors.slice(0, 5),
     });
   })();
