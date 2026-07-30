@@ -43,7 +43,7 @@ reel/
 ## Environment & secrets
 
 - `app/.env.local` (gitignored): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
-- Edge function secrets (`supabase secrets set`): `TMDB_API_KEY`, `RESEND_API_KEY`.
+- Edge function secrets (`supabase secrets set`): `TMDB_API_KEY`, `RESEND_API_KEY`, `OMDB_API_KEY` (optional — IMDb ratings; unset just leaves the IMDb columns null).
 - The author's TV Time zip lives **outside the repo** (`~/tvtime-export/`); scripts take a path arg.
 - CI (GitHub Actions): `npm run check` = `tsc --noEmit && eslint . && vitest run` in `app/`.
 
@@ -97,6 +97,7 @@ titles (
                                            -- there, and the UI shows no logo. Canonical extraction
                                            -- spec + tests: app/src/domain/watchProviders.ts.
   episode_run_time int, vote_average numeric, popularity numeric,
+  imdb_rating numeric, imdb_votes int,     -- IMDb score via OMDb, bridged by imdb_id (0057)
   aired_count int,                         -- authoritative aired regular-season episodes (0028)
   last_refreshed_at timestamptz
 )
@@ -110,12 +111,20 @@ episodes (
   season_number int not null, episode_number int not null,
   name text, overview text, runtime int,
   air_datetime timestamptz,                -- UTC; client renders local
+  tmdb_vote_average numeric, tmdb_vote_count int,  -- per-episode TMDB score (0057)
+  imdb_rating numeric, imdb_votes int, imdb_id text, -- per-episode IMDb score via OMDb (0057)
   unique (title_id, season_number, episode_number)
 )
 ```
 
 - RLS: `select` for authenticated; writes only via Edge Functions (service role).
 - Season 0 (specials) is stored but **excluded from all derivations**.
+- **IMDb ratings** (show + per-episode) come from OMDb, not TMDB, bridged through
+  the `imdb_id` TMDB gives us — the same bridge TVmaze air times use. The Edge
+  Functions fill them best-effort and idempotently (`enrichImdb*`), mirroring the
+  air-time pass: no `OMDB_API_KEY` / no `imdb_id` / an OMDb miss just leaves the
+  columns null, which the UI reads as "hide". Season aggregates (the season
+  rating) are derived client-side from the episode rows (`app/src/domain/episodeRatings.ts`).
 
 ### User data
 

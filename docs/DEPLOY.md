@@ -44,6 +44,7 @@ first would make metadata requests return 401 until the migration lands.
 
 ```bash
 supabase secrets set TMDB_API_KEY=...        # TMDB v3 API key
+supabase secrets set OMDB_API_KEY=...         # OMDb key — IMDb ratings (optional)
 supabase secrets set RESEND_API_KEY=...       # Resend API key
 supabase secrets set RESEND_FROM="Reel <alerts@yourdomain.com>"   # verified domain
 ```
@@ -51,6 +52,14 @@ supabase secrets set RESEND_FROM="Reel <alerts@yourdomain.com>"   # verified dom
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected
 automatically. Without `RESEND_FROM` the alerts function **skips email** (it will
 not fall back to resend.dev, which only delivers to the account owner).
+
+`OMDB_API_KEY` (from omdbapi.com — free 1,000/day, or $1/mo for 100,000/day)
+powers the IMDb rating on the detail sheet and the per-season episode graph.
+It is **optional**: leave it unset and the IMDb columns simply stay null and the
+IMDb UI hides itself — TMDB scores are unaffected. **Set it before the backfill
+below**, or the first force-run enriches nothing (the daily cron and lazy
+on-view fill catch up once the key is present). The paid tier clears the ~600-show
+library backfill in one run; the free tier trickles it over ~3 days (1,000/day).
 
 ## 4. Configure Auth (hosted dashboard → Authentication)
 
@@ -85,6 +94,14 @@ Then confirm:
 ```sql
 select jobname, schedule, active from cron.job;   -- expect both jobs, active
 ```
+
+`schedule-jobs.sql` also fires a one-time `episode-refresh?force=1`. With
+`OMDB_API_KEY` already set (step 3), that same run backfills the **IMDb** show
+rating and the latest two seasons' episode ratings across the followed library
+(older seasons fill lazily the first time someone opens them). On the free OMDb
+tier the force run exhausts the daily 1,000 quota partway through; the nightly
+cron finishes over the next couple of days. Re-run the force curl (step 7) any
+time to resume.
 
 ## 6. Deploy the frontend (Vercel)
 

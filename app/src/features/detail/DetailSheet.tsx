@@ -3,8 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { Bell, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, User, X } from "lucide-react";
 import { getCredits, tmdbImg } from "@/lib/tmdb";
-import { fmtAirDateLong, fmtPlainDate } from "@/lib/region";
-import { isEs, t as tr, tGenre, tv } from "@/lib/i18n";
+import { fmtAirDate, fmtPlainDate } from "@/lib/region";
+import { dateLocale, isEs, t as tr, tGenre, tv } from "@/lib/i18n";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
 import { useIgnored, useIgnore, useUnignore } from "@/lib/ignore";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
@@ -23,13 +23,17 @@ import {
   useWatched,
   useDetailProgress,
 } from "@/features/detail/data";
+import { EpisodeSheet } from "@/features/detail/EpisodeSheet";
+import { SeasonChart } from "@/features/detail/SeasonChart";
 
 /* Show detail sheet — port of prototype screens.tsx DetailSheet on live data.
    Opened globally via ?title=<tmdbId>; episode marking is wired in P2-C4 and
    rating persistence in P2-C5. */
 
-/** Episode air_datetime — an instant, rendered in the viewer's air-time zone. */
-const fmtDate = (iso: string | null) => (iso ? fmtAirDateLong(iso) : tr("TBA"));
+/** Episode air_datetime for the dense list row — short form (no year) so the
+ *  title keeps room next to the IMDb badge on a phone. The episode sub-sheet
+ *  shows the full long date. */
+const fmtDate = (iso: string | null) => (iso ? fmtAirDate(iso) : tr("TBA"));
 
 function Skeleton() {
   return (
@@ -249,6 +253,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const markSeries = useMarkSeries(titleId);
   const undoMarks = useUndoMarks(titleId);
   const [pending, setPending] = useState<EpisodeRow | null>(null);
+  const [episodeOpen, setEpisodeOpen] = useState<EpisodeRow | null>(null);
   const [toast, setToast] = useState<{ ids: string[]; count: number } | null>(null);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [posterOpen, setPosterOpen] = useState(false);
@@ -380,12 +385,13 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
     const h = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (posterOpen) setPosterOpen(false);
+      else if (episodeOpen) setEpisodeOpen(null);
       else if (friendsOpen) setFriendsOpen(false);
       else onClose();
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onClose, friendsOpen, posterOpen]);
+  }, [onClose, friendsOpen, posterOpen, episodeOpen]);
 
   const toggleFollow = () => {
     if (!title) return;
@@ -533,8 +539,11 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 )}
               </div>
 
-              {/* Ratings — own balanced line: yours | TMDB | friends */}
-              <div className="ratings-row">
+              {/* Ratings — own balanced line: yours | TMDB | IMDb | friends.
+                  Four cells can't share a phone line, so that case reflows to a
+                  2×2 grid (ratings-row-grid). IMDb rides along only once OMDb has
+                  resolved a score for the show. */}
+              <div className={`ratings-row${2 + (title.imdb_rating != null ? 1 : 0) + (friendsAvg != null ? 1 : 0) >= 4 ? " ratings-row-grid" : ""}`}>
                 <div className="ratings-cell">
                   <div className="eyebrow">{tr("Your rating")}</div>
                   <RatingStars value={rating} onRate={(v) => rateTitle.mutate(v)} />
@@ -542,13 +551,23 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 <div className="ratings-divider" />
                 <div className="ratings-cell">
                   <div className="eyebrow">TMDB</div>
-                  <div className="flex items-center justify-center gap-1.5">
+                  <div className="ratings-value">
                     <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                    <span style={{ fontWeight: 850, fontSize: 17 }}>
-                      {title.vote_average ? title.vote_average.toFixed(1) : "—"}
-                    </span>
+                    <span>{title.vote_average ? title.vote_average.toFixed(1) : "—"}</span>
                   </div>
                 </div>
+                {title.imdb_rating != null && (
+                  <>
+                    <div className="ratings-divider" />
+                    <div className="ratings-cell">
+                      <div className="eyebrow">IMDb</div>
+                      <div className="ratings-value" title={title.imdb_votes ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : undefined}>
+                        <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--imdb)" }} />
+                        <span>{title.imdb_rating.toFixed(1)}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
                 {friendsAvg != null && (
                   <>
                     <div className="ratings-divider" />
@@ -612,6 +631,17 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
               {regularSeasons.length > 0 && (
                 <div>
                   <SeasonTabs seasons={regularSeasons} active={activeSeason} onPick={setSeason} />
+                  {/* IMDb episode-rating graph for the chosen season, above its
+                      episode list. Renders only once the season has IMDb scores;
+                      dims with the list while switching seasons. */}
+                  {episodes.some((e) => e.imdb_rating != null) && (
+                    <div
+                      style={{ margin: "14px 0 4px", opacity: changingSeason ? 0.45 : 1, transition: "opacity .15s ease" }}
+                      aria-busy={changingSeason}
+                    >
+                      <SeasonChart episodes={episodes} onPick={setEpisodeOpen} />
+                    </div>
+                  )}
                   <div style={{ position: "relative", minHeight: episodes.length ? undefined : 310 }}>
                     {episodes.length === 0 && seasonFetching && <EpisodeSkeleton />}
                     {episodes.length === 0 && !seasonFetching && (
@@ -630,13 +660,32 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                         const aired = Boolean(e.air_datetime && e.air_datetime <= now);
                         const isWatched = watched?.has(e.id) ?? false;
                         return (
-                          <div key={e.id} className="ep-row" style={aired ? undefined : { opacity: 0.55, cursor: "default" }} onClick={() => onEpClick(e)}>
-                            <div className={`check ${isWatched ? "on" : ""}`}><Check size={15} strokeWidth={3} /></div>
-                            <div className="mute" style={{ fontSize: 13, width: 42, flex: "0 0 auto" }}>E{e.episode_number}</div>
-                            <div className="flex-1 min-w-0">
-                              <div style={{ fontSize: 14, fontWeight: 600 }} className="truncate">{e.name ?? `Episode ${e.episode_number}`}</div>
-                            </div>
-                            <div className="mute" style={{ fontSize: 12 }}>{fmtDate(e.air_datetime)}</div>
+                          <div key={e.id} className={`ep-row${aired ? "" : " ep-unaired"}`}>
+                            {/* The check is now the only watched toggle; the rest
+                                of the row opens the episode sub-sheet. */}
+                            <button
+                              className={`check ${isWatched ? "on" : ""}`}
+                              disabled={!aired}
+                              aria-label={
+                                isWatched
+                                  ? tr("Watched — tap to clear")
+                                  : tv("Mark {name} {se} watched", { name: displayName, se: `S${e.season_number}·E${e.episode_number}` })
+                              }
+                              onClick={() => onEpClick(e)}
+                            >
+                              <Check size={15} strokeWidth={3} />
+                            </button>
+                            <button className="ep-main" onClick={() => setEpisodeOpen(e)} title={e.name ?? undefined}>
+                              <span className="ep-num">E{e.episode_number}</span>
+                              <span className="ep-title truncate">{e.name ?? `Episode ${e.episode_number}`}</span>
+                              {e.imdb_rating != null && (
+                                <span className="ep-imdb">
+                                  <Star size={12} fill="currentColor" strokeWidth={0} />
+                                  {e.imdb_rating.toFixed(1)}
+                                </span>
+                              )}
+                              <span className="ep-date">{fmtDate(e.air_datetime)}</span>
+                            </button>
                           </div>
                         );
                       })}
@@ -680,6 +729,31 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
           </div>
         </>
       )}
+
+      {/* Episode sub-sheet — synopsis + per-episode scores (TMDB · IMDb) +
+          mark-watched. Toggles this one episode only; the list's check keeps the
+          "mark all up to here" prompt. */}
+      {episodeOpen && (() => {
+        const epAired = Boolean(episodeOpen.air_datetime && episodeOpen.air_datetime <= now);
+        const eventId = watched?.get(episodeOpen.id);
+        const isW = Boolean(eventId);
+        return (
+          <EpisodeSheet
+            episode={episodeOpen}
+            aired={epAired}
+            watched={isW}
+            busy={markWatched.isPending || unmarkWatched.isPending}
+            onToggleWatched={() => {
+              if (isW) {
+                if (eventId && eventId !== "optimistic") unmarkWatched.mutate(eventId);
+              } else {
+                markWatched.mutate(episodeOpen.id);
+              }
+            }}
+            onClose={() => setEpisodeOpen(null)}
+          />
+        );
+      })()}
 
       {/* Full-size poster lightbox (poster click in the hero) */}
       {posterOpen && posterFull && (
