@@ -4,7 +4,7 @@ import { useNavigate } from "react-router";
 import { Bell, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, User, X } from "lucide-react";
 import { getCredits, tmdbImg } from "@/lib/tmdb";
 import { fmtAirDate, fmtPlainDate } from "@/lib/region";
-import { isEs, t as tr, tGenre, tv } from "@/lib/i18n";
+import { dateLocale, isEs, t as tr, tGenre, tv } from "@/lib/i18n";
 import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
 import { useIgnored, useIgnore, useUnignore } from "@/lib/ignore";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
@@ -561,7 +561,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                     <div className="ratings-divider" />
                     <div className="ratings-cell">
                       <div className="eyebrow">IMDb</div>
-                      <div className="ratings-value" title={title.imdb_votes ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString() }) : undefined}>
+                      <div className="ratings-value" title={title.imdb_votes ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : undefined}>
                         <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--imdb)" }} />
                         <span>{title.imdb_rating.toFixed(1)}</span>
                       </div>

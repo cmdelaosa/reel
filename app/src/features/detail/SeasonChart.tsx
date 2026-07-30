@@ -22,10 +22,9 @@ export function SeasonChart({ episodes, onPick }: { episodes: EpisodeRow[]; onPi
   const avg = seasonImdbAverage(episodes);
 
   // Label a handful of x positions (first, last, and a few between) so a long
-  // season doesn't smear its episode numbers into an unreadable band.
+  // season doesn't smear its episode numbers into an unreadable band. Pixel
+  // positions come from geo.xs — chartGeometry owns the x scale.
   const step = Math.max(1, Math.ceil(episodes.length / 8));
-  const xFor = (i: number) =>
-    PAD.left + (episodes.length <= 1 ? (W - PAD.left - PAD.right) / 2 : (i / (episodes.length - 1)) * (W - PAD.left - PAD.right));
 
   return (
     <div className="season-chart">
@@ -49,17 +48,14 @@ export function SeasonChart({ episodes, onPick }: { episodes: EpisodeRow[]; onPi
         }
       >
         {/* Horizontal gridlines + their rating labels */}
-        {geo.ticks.map((tick) => {
-          const y = PAD.top + (1 - (tick - geo.domain[0]) / (geo.domain[1] - geo.domain[0])) * (H - PAD.top - PAD.bottom);
-          return (
-            <g key={tick}>
-              <line className="grid-line" x1={PAD.left} y1={y} x2={W - PAD.right} y2={y} />
-              <text className="grid-label" x={PAD.left - 6} y={y} dominantBaseline="middle" textAnchor="end">
-                {tick.toFixed(1)}
-              </text>
-            </g>
-          );
-        })}
+        {geo.ticks.map((tick) => (
+          <g key={tick.value}>
+            <line className="grid-line" x1={PAD.left} y1={tick.y} x2={W - PAD.right} y2={tick.y} />
+            <text className="grid-label" x={PAD.left - 6} y={tick.y} dominantBaseline="middle" textAnchor="end">
+              {tick.value.toFixed(1)}
+            </text>
+          </g>
+        ))}
 
         {/* The rating line, then the dots on top */}
         <path className="rating-line" d={geo.path} />
@@ -79,7 +75,7 @@ export function SeasonChart({ episodes, onPick }: { episodes: EpisodeRow[]; onPi
         {/* Episode-number ticks along the bottom */}
         {episodes.map((e, i) =>
           i % step === 0 || i === episodes.length - 1 ? (
-            <text key={e.id} className="x-label" x={xFor(i)} y={H - 6}>
+            <text key={e.id} className="x-label" x={geo.xs[i]} y={H - 6}>
               {e.episode_number}
             </text>
           ) : null,

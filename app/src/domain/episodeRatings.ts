@@ -24,10 +24,6 @@ export function average(values: (number | null | undefined)[]): number | null {
 export const seasonImdbAverage = (eps: RatedEpisode[]): number | null =>
   average(eps.map((e) => e.imdb_rating));
 
-/** A season's TMDB aggregate — the mean of its episodes' TMDB vote averages. */
-export const seasonTmdbAverage = (eps: RatedEpisode[]): number | null =>
-  average(eps.map((e) => e.tmdb_vote_average));
-
 export interface ChartPoint {
   x: number;
   y: number;
@@ -35,11 +31,17 @@ export interface ChartPoint {
   index: number; // 0-based slot within the season (drives the x position)
   episode_number: number;
 }
+/** A y-axis gridline: its rating `value` and the pixel `y` it sits at. */
+export interface ChartTick {
+  value: number;
+  y: number;
+}
 export interface ChartGeometry {
   points: ChartPoint[];
   path: string; // polyline "M x y L x y …" through the rated points, in order
   domain: [number, number]; // [lo, hi] rating bounds the y-axis spans
-  ticks: number[]; // y values to draw gridlines/labels at, low→high
+  ticks: ChartTick[]; // gridlines to draw, low→high, with pixel y precomputed
+  xs: number[]; // x pixel of every episode slot, index-aligned to the input eps
 }
 
 export interface ChartPadding {
@@ -97,8 +99,13 @@ export function chartGeometry(
     .join(" ");
 
   // Three gridlines: the two bounds and a midpoint snapped to 0.5 (deduped for a
-  // narrow domain where the midpoint collides with a bound).
+  // narrow domain where the midpoint collides with a bound). Pixel y is computed
+  // here — the single owner of the domain→y scale — so the chart never restates
+  // it. Likewise the per-episode x positions.
   const mid = half((domain[0] + domain[1]) / 2);
-  const ticks = [...new Set([domain[0], mid, domain[1]])].sort((a, b) => a - b);
-  return { points, path, domain, ticks };
+  const ticks: ChartTick[] = [...new Set([domain[0], mid, domain[1]])]
+    .sort((a, b) => a - b)
+    .map((value) => ({ value, y: yFor(value) }));
+  const xs = eps.map((_, i) => xFor(i));
+  return { points, path, domain, ticks, xs };
 }

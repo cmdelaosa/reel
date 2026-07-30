@@ -492,23 +492,29 @@ const parseImdbVotes = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+// A hung OMDb connection must not stall the request (or, on the cron mirror, the
+// whole run): cap every call. AbortSignal.timeout rejects, which the catch maps
+// to null — the same silent no-op as any other OMDb miss.
+const OMDB_TIMEOUT_MS = 8000;
+
 async function omdb(apiKey: string, params: string): Promise<Any | null> {
-  const res = await fetch(`${OMDB}/?apikey=${apiKey}&${params}`).catch(() => null);
+  const res = await fetch(`${OMDB}/?apikey=${apiKey}&${params}`, {
+    signal: AbortSignal.timeout(OMDB_TIMEOUT_MS),
+  }).catch(() => null);
   if (!res || !res.ok) return null;
   const d = await res.json().catch(() => null);
   // OMDb answers 200 with { Response: "False", Error } for misses and quota hits.
   return d && d.Response !== "False" ? d : null;
 }
 
-/** Show-level IMDb rating → titles.imdb_rating/imdb_votes. Only overwrites when
- *  OMDb returns a real score, so a transient "N/A" never wipes a good value. */
-async function enrichImdbShowRating(admin: SupabaseClient, titleId: string) {
+/** Show-level IMDb rating → titles.imdb_rating/imdb_votes. `imdbId` is passed in
+ *  (callers already hold the title row), so this makes no DB read of its own.
+ *  Only overwrites when OMDb returns a real score, so a transient "N/A" never
+ *  wipes a good value. */
+async function enrichImdbShowRating(admin: SupabaseClient, titleId: string, imdbId: string | null) {
   const apiKey = Deno.env.get("OMDB_API_KEY");
-  if (!apiKey) return;
-  const { data: title } = await admin
-    .from("titles").select("imdb_id").eq("id", titleId).maybeSingle();
-  if (!title?.imdb_id) return;
-  const d = await omdb(apiKey, `i=${encodeURIComponent(title.imdb_id)}`);
+  if (!apiKey || !imdbId) return;
+  const d = await omdb(apiKey, `i=${encodeURIComponent(imdbId)}`);
   const rating = parseImdbRating(d?.imdbRating);
   if (rating == null) return;
   await admin
@@ -519,7 +525,11 @@ async function enrichImdbShowRating(admin: SupabaseClient, titleId: string) {
 
 /** One season's per-episode IMDb ratings → episodes.imdb_rating/imdb_id, matched
  *  to our rows by episode number (IMDb and TMDB agree on it save for rare
- *  ordering quirks). One OMDb request covers the whole season. */
+ *  ordering quirks). One OMDb request covers the whole season. Only rated
+ *  episodes are written: an episode OMDb reports as "N/A" is left untouched, so a
+ *  transient/lagging listing can never null out a rating (and imdb_id, needed
+ *  only for a future per-episode fetch, rides along with the rating it belongs
+ *  to). */
 async function enrichImdbSeasonRatings(admin: SupabaseClient, titleId: string, seasonNumber: number) {
   const apiKey = Deno.env.get("OMDB_API_KEY");
   if (!apiKey) return;
@@ -543,7 +553,7 @@ async function enrichImdbSeasonRatings(admin: SupabaseClient, titleId: string, s
     .eq("season_number", seasonNumber);
   const rows = (ours ?? [])
     .map((e: Any) => ({ e, m: byNum.get(e.episode_number) }))
-    .filter((x) => x.m && (x.m.rating != null || x.m.imdbId != null))
+    .filter((x) => x.m && x.m.rating != null)
     .map((x) => ({
       title_id: x.e.title_id,
       season_number: x.e.season_number,
@@ -582,7 +592,7 @@ async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: numbe
   const d = await fetchTmdb(apiKey, `/tv/${tmdbId}?append_to_response=translations,external_ids,watch/providers`);
   const [title] = await upsertReturning(admin, "titles", titleRow(d), "tmdb_id");
   inBackground(cacheNetworkLogos(admin, d.networks));
-  inBackground(enrichImdbShowRating(admin, title.id));
+  inBackground(enrichImdbShowRating(admin, title.id, title.imdb_id));
   const seasons = (d.seasons ?? []).length
     ? await upsertReturning(admin, "seasons", d.seasons.map((s: Any) => seasonRow(title.id, s)), "title_id,number")
     : [];
@@ -1042,7 +1052,7 @@ Deno.serve(async (req) => {
         // Fresh row that predates OMDb enrichment (or a first-ever view): fill
         // the IMDb score lazily. A stale row is skipped — its refresh above does
         // the same enrichment, and firing both would burn an OMDb request.
-        else if (title.imdb_rating == null && title.imdb_id) inBackground(enrichImdbShowRating(admin, title.id));
+        else if (title.imdb_rating == null && title.imdb_id) inBackground(enrichImdbShowRating(admin, title.id, title.imdb_id));
         return json({ title, seasons }, 200, detailHeaders(stale ? "STALE" : "HIT", dbMs));
       }
       const fillStarted = performance.now();
@@ -1061,7 +1071,7 @@ Deno.serve(async (req) => {
       const n = Number(mSeason[2]);
       const dbStarted = performance.now();
       const { data: existing } = await admin
-        .from("titles").select("id, last_refreshed_at").eq("tmdb_id", tmdbId).maybeSingle();
+        .from("titles").select("id, last_refreshed_at, imdb_id").eq("tmdb_id", tmdbId).maybeSingle();
       const title = existing ?? (await refreshTitle(admin, apiKey, tmdbId)).title;
       const { data: season } = await admin
         .from("seasons").select("*, episodes(*)").eq("title_id", title.id).eq("number", n).maybeSingle();
@@ -1075,10 +1085,12 @@ Deno.serve(async (req) => {
           if (stale) inBackground(refreshSeason(admin, apiKey, tmdbId, title.id, n));
           // Lazy IMDb fill for a season we've never rated (older seasons stay a
           // cache hit forever, so their refresh never runs to trigger it). Gated
-          // on "no episode rated yet", not "any missing", so a currently-airing
-          // season whose latest episode has no IMDb score yet isn't re-fetched
-          // on every open — the cron keeps the newest seasons current.
-          else if (!episodes.some((e: Any) => e.imdb_rating != null)) {
+          // on the title carrying an imdb_id — without one OMDb can never answer,
+          // and firing on every open of an uncovered show's season would be a DB
+          // read that can never populate anything. Also gated on "no episode
+          // rated yet" (not "any missing"), so a currently-airing season whose
+          // latest episode has no IMDb score yet isn't re-fetched on every open.
+          else if (title.imdb_id && !episodes.some((e: Any) => e.imdb_rating != null)) {
             inBackground(enrichImdbSeasonRatings(admin, title.id, n));
           }
           return json({ season: seasonRow, episodes }, 200, detailHeaders(stale ? "STALE" : "HIT", dbMs));

@@ -203,9 +203,16 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
 // its daily quota, but we pace it with a flat gap like TVmaze above. Best-effort
 // and idempotent: no key, no imdb_id, or an OMDb miss is a silent no-op.
 const OMDB_GAP_MS = 120;
+// Cap every call: enrichImdb runs inline inside the wall-guarded refresh loop,
+// so a hung OMDb connection (the wall guard only checks between titles) could
+// otherwise freeze the whole run until the platform kills it. The timeout
+// rejects, which the catch turns into null — the same no-op as any OMDb miss.
+const OMDB_TIMEOUT_MS = 8000;
 const omdbFetch = async (apiKey: string, params: string): Promise<Any | null> => {
   await new Promise((r) => setTimeout(r, OMDB_GAP_MS));
-  const res = await fetch(`${OMDB}/?apikey=${apiKey}&${params}`).catch(() => null);
+  const res = await fetch(`${OMDB}/?apikey=${apiKey}&${params}`, {
+    signal: AbortSignal.timeout(OMDB_TIMEOUT_MS),
+  }).catch(() => null);
   if (!res || !res.ok) return null;
   const d = await res.json().catch(() => null);
   // OMDb answers 200 with { Response: "False" } for misses and quota hits.
@@ -226,8 +233,8 @@ const parseImdbVotes = (v: unknown): number | null => {
 /** Refresh the show's IMDb rating and the given seasons' per-episode ratings
  *  from OMDb. `seasons` are the numbers we just pulled from TMDB (the latest
  *  two), so the graph's newest data stays current without re-fetching a show's
- *  whole back catalogue every night. Only overwrites the show score when OMDb
- *  returns a real one, so a transient "N/A" never wipes a good value. */
+ *  whole back catalogue every night. Only writes real scores — both the show
+ *  and each episode — so a transient/lagging "N/A" never wipes a good value. */
 async function enrichImdb(admin: SupabaseClient, titleId: string, imdbId: string | null, seasons: number[]) {
   const apiKey = Deno.env.get("OMDB_API_KEY");
   if (!apiKey || !imdbId) return;
@@ -254,7 +261,8 @@ async function enrichImdb(admin: SupabaseClient, titleId: string, imdbId: string
       .eq("title_id", titleId).eq("season_number", n);
     const rows = (ours ?? [])
       .map((e: Any) => ({ e, m: byNum.get(e.episode_number) }))
-      .filter((x) => x.m && (x.m.rating != null || x.m.imdbId != null))
+      // Only rated episodes: an "N/A" listing must not null out a stored rating.
+      .filter((x) => x.m && x.m.rating != null)
       .map((x) => ({
         title_id: x.e.title_id,
         season_number: x.e.season_number,

@@ -3,7 +3,6 @@ import {
   average,
   chartGeometry,
   seasonImdbAverage,
-  seasonTmdbAverage,
   type ChartPadding,
   type RatedEpisode,
 } from "./episodeRatings";
@@ -31,14 +30,13 @@ describe("average", () => {
   });
 });
 
-describe("season aggregates", () => {
-  it("averages each source independently, skipping gaps", () => {
+describe("seasonImdbAverage", () => {
+  it("averages the rated episodes, skipping gaps", () => {
     const eps = [ep(1, 9.1, 8.4), ep(2, 8.7, null), ep(3, null, 8.0)];
     expect(seasonImdbAverage(eps)).toBe(8.9); // (9.1 + 8.7) / 2
-    expect(seasonTmdbAverage(eps)).toBe(8.2); // (8.4 + 8.0) / 2
   });
 
-  it("is null when a source has no ratings at all", () => {
+  it("is null when nothing is rated", () => {
     expect(seasonImdbAverage([ep(1, null), ep(2, null)])).toBeNull();
   });
 });
@@ -58,6 +56,10 @@ describe("chartGeometry", () => {
     expect(g.points[1].x).toBeCloseTo(200);
     expect(g.points[0].index).toBe(0);
     expect(g.points[1].index).toBe(2);
+    // xs carries every slot (incl. the unrated one) and agrees with the points.
+    expect(g.xs).toHaveLength(3);
+    expect(g.xs[0]).toBeCloseTo(g.points[0].x);
+    expect(g.xs[2]).toBeCloseTo(g.points[1].x);
   });
 
   it("orders the path low→high by episode and maps the top rating higher on screen", () => {
@@ -80,10 +82,13 @@ describe("chartGeometry", () => {
     expect(g.points[0].x).toBeCloseTo(105); // padding.left + innerW/2 = 10 + 190/2
   });
 
-  it("keeps y ticks within the domain, low→high", () => {
+  it("keeps y ticks within the domain, low→high, with pixel y precomputed", () => {
     const g = chartGeometry([ep(1, 6.2), ep(2, 9.4)], 300, 120, PAD)!;
-    expect(g.ticks[0]).toBe(g.domain[0]);
-    expect(g.ticks[g.ticks.length - 1]).toBe(g.domain[1]);
-    for (let i = 1; i < g.ticks.length; i++) expect(g.ticks[i]).toBeGreaterThan(g.ticks[i - 1]);
+    const last = g.ticks[g.ticks.length - 1];
+    expect(g.ticks[0].value).toBe(g.domain[0]);
+    expect(last.value).toBe(g.domain[1]);
+    for (let i = 1; i < g.ticks.length; i++) expect(g.ticks[i].value).toBeGreaterThan(g.ticks[i - 1].value);
+    // y grows downward, so the lowest rating sits below the highest.
+    expect(g.ticks[0].y).toBeGreaterThan(last.y);
   });
 });
