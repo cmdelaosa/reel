@@ -2,7 +2,13 @@ name: check
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+# A superseded run's verdict is worthless — only the newest commit's counts.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
