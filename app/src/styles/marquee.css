@@ -362,8 +362,11 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
    empty outline (bg) under a filled copy (fg) clipped to 0/50/100% width. Two
    half-width hit zones drive half-point hover/click. While previewing a hovered
    value the fill dims so you can tell it isn't committed yet. */
-.rating-stars { display: inline-flex; gap: 3px; }
-.rating-star { position: relative; display: inline-block; width: 24px; height: 24px; line-height: 0; color: var(--text-mute); }
+/* nowrap + a non-shrinking star: the five must stay on one line whatever the
+   cell width. Without flex: 0 0 auto they shrink while the 24px <svg> inside
+   them doesn't, so the glyphs overlap and the row reads as broken. */
+.rating-stars { display: inline-flex; gap: 3px; flex-wrap: nowrap; }
+.rating-star { flex: 0 0 auto; position: relative; display: inline-block; width: 24px; height: 24px; line-height: 0; color: var(--text-mute); }
 .rating-star-bg { display: block; }
 .rating-star-fg { position: absolute; inset: 0; overflow: hidden; color: var(--accent); pointer-events: none; }
 .rating-star-fg svg { display: block; }
@@ -403,7 +406,15 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 .ratings-row { display: flex; align-items: stretch; justify-content: space-evenly; gap: 8px; }
 .ratings-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; text-align: center; }
 .ratings-divider { width: 1px; background: var(--border); flex: 0 0 auto; }
-.rating-num { font-weight: 800; font-size: 15px; min-width: 42px; }
+/* A FIXED width, not a min-width: sized for the widest value ("10/10"), so the
+   stars beside it don't shift as the score changes or while hovering a preview.
+   tabular-nums keeps 1 and 8 the same width, which min-width alone did not —
+   reaching 10 used to widen the box by 2px and nudge the whole group. */
+.rating-num {
+  flex: 0 0 auto;
+  width: 42px; text-align: center;
+  font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums;
+}
 /* The static score cells (TMDB, IMDb) share the shape of the interactive one. */
 .ratings-value { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 850; font-size: 17px; }
 .ratings-value svg { flex: 0 0 auto; }
@@ -412,8 +423,12 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
   .ratings-row { justify-content: space-between; gap: 6px; }
   .ratings-row .rating-stars { gap: 2px; }
   .ratings-row .rating-star,
-  .ratings-row .rating-star svg { width: 19px; height: 19px; }
-  .ratings-row .rating-num { font-size: 13.5px; min-width: 34px; }
+  .ratings-row .rating-star svg { width: 17px; height: 17px; }
+  /* Tighter than the default 10px so the five stars plus the number clear a
+     half-width cell: at 360px that group had been landing on exactly the cell's
+     width, with nothing to spare. */
+  .ratings-row .rating-stars + .rating-num { margin-left: -4px; }
+  .ratings-row .rating-num { font-size: 13.5px; width: 38px; }
   .ratings-row .eyebrow { font-size: 10.5px; }
   .ratings-value { font-size: 15px; }
 }
@@ -423,6 +438,11 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 @media (max-width: 520px) {
   .ratings-row-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 10px; }
   .ratings-row-grid .ratings-divider { display: none; }
+}
+/* Below this a half-width cell can no longer hold five stars and their score at
+   any legible size, so the four cells stack instead of being squeezed. */
+@media (max-width: 359px) {
+  .ratings-row-grid { grid-template-columns: 1fr; gap: 14px; }
 }
 
 /* Cast rail — arrows floating over the row's edges; swipe instead on touch */
