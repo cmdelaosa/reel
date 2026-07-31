@@ -127,12 +127,24 @@ test("a friend's reaction lands on the row, rings the bell, and groups", async (
     // The whole burst, counted over the day rather than over the row budget.
     await expect(row).toContainText("3 episodes");
 
-    await row.getByRole("button", { name: "React" }).click();
-    await ana.page.getByRole("button", { name: "Brilliant" }).click();
+    await row.getByRole("button", { name: "React", exact: true }).click();
+    // Exact: a chip's own label starts with the same word ("Brilliant, 2: …").
+    await ana.page.getByRole("button", { name: "Brilliant", exact: true }).click();
 
+    // The chip shows the emoji plus faces; who and how many live in its label,
+    // which is also what a screen reader gets.
     const anasChip = row.locator(".rx-chip.rx-mine");
     await expect(anasChip).toContainText("🔥");
-    await expect(anasChip).toContainText("1");
+    await expect(anasChip).toHaveAttribute("aria-label", "Brilliant, 1: Ana Ruiz");
+
+    // Tapping a chip opens who reacted with what, and offers the toggle there.
+    await anasChip.click();
+    const detail = ana.page.locator(".rx-detail");
+    // Ana is looking at her own reaction, so the list names her "You".
+    await expect(detail).toContainText("You");
+    await expect(detail.locator(".rx-detail-act")).toContainText("Remove my");
+    await ana.page.keyboard.press("Escape");
+    await expect(detail).toHaveCount(0);
 
     // Carlos never reloaded: Realtime carries the insert.
     await expect(carlos.page.locator(".mq-belldot")).toBeVisible({ timeout: 15_000 });
