@@ -57,7 +57,8 @@ function body(n: Notification): string {
       // and only quotes an emoji while there is a single one to quote.
       const reactors = Array.isArray(p.reactors) ? (p.reactors as { name?: string; emoji?: string }[]) : [];
       const who = nameList(
-        reactors.map((r) => r.name ?? ""),
+        // A private reactor comes back nameless from the trigger, on purpose.
+        reactors.map((r) => r.name ?? tr("Someone")),
         (a, b) => tv("{a} and {b}", { a, b }),
         (a, n) => tv("{a} and {n} more", { a, n }),
       );

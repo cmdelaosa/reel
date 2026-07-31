@@ -1278,7 +1278,7 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   animation: friends-pop-in 0.12s ease;
 }
 @keyframes friends-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
-@media (prefers-reduced-motion: reduce) { .friends-pop { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .friends-pop, .rx-pop { animation: none; } }
 .friends-pop-row {
   display: flex; align-items: center; gap: 10px;
   padding: 7px 8px; border-radius: var(--r-sm); cursor: pointer;

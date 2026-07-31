@@ -106,11 +106,12 @@ const activitySchema = z.array(
     season_number: z.number().int().nullable(),
     episode_number: z.number().int().nullable().optional(),
     at: z.string(),
-    /* 0058 fields, optional so a client that ships before the migration still
-       renders a feed: the row loses its reactions and a binge arrives as one
-       row per episode, but nothing throws. */
+    /* 0058 fields. event_key and ep_count stay optional so a client that
+       somehow reaches production before the migration still renders a feed —
+       the rows lose their reactions and their episode ranges, but nothing
+       throws. (title_id is returned too; the client no longer needs it, since
+       0058 derives the reaction's target from the key itself.) */
     event_key: z.string().optional(),
-    title_id: z.string().uuid().optional(),
     to_season: z.number().int().nullable().optional(),
     to_episode: z.number().int().nullable().optional(),
     ep_count: z.number().int().optional(),

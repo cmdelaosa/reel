@@ -188,6 +188,11 @@ activity_reactions (                        -- 0058: one emoji per person per fe
   created_at timestamptz, updated_at timestamptz,
   primary key (user_id, event_key)
 )
+-- actor_id and title_id are DERIVED from event_key by a before-insert trigger and
+-- never accepted from the client, and the write policy calls activity_event_exists()
+-- to refuse a key that names no real rating/add/burst. Without both, a friend could
+-- post a key naming a show you never watched and have the trigger deliver it to your
+-- inbox. Writes also carry 0027's is_invited() gate, like every other user table.
 notification_prefs (
   user_id uuid fk, type text,
   inapp boolean not null default true, email boolean not null default false,
@@ -207,10 +212,11 @@ Friend-read RLS (Phase 4): `library_entries`, `watch_events`, `ratings`, `profil
 `security definer` helper. Aggregation RPCs (below) are `security invoker` so they respect it.
 
 `activity_reactions` is gated by the **event**, not by the reactor: you read (and write) reactions
-on rows that are yours or a friend's, which means a reaction by someone you are not friends with
-is visible to you — otherwise the counts on a shared friend's row would lie. Their name and face
-come from `rpc_event_reactions` (`security definer`, same event gate), never from a widened read
-on `profiles`.
+on rows that are yours or a friend's — and, as everywhere else, only while that friend is not
+private. A reaction by someone you are not friends with is still visible to you, otherwise the
+counts on a shared friend's row would lie; their name and face come from `rpc_event_reactions`
+(`security definer`, same event gate), never from a widened read on `profiles`, and come back
+**null** for a private reactor you have no claim on (rendered as "Someone").
 
 ## Core derivations (pure functions in `app/src/domain/`, unit-tested)
 
@@ -276,9 +282,12 @@ documented in [DETAIL-PERFORMANCE.md](DETAIL-PERFORMANCE.md).
 - Server aggregates (stats, friend sections) are **Postgres RPCs**, not client math over big sets:
   `rpc_user_stats()`, `rpc_up_next()`, `rpc_calendar_feed(from,to)`, `rpc_popular_with_friends()`,
   `rpc_best_rated_by_friends()`, `rpc_friend_activity(limit)`, `rpc_event_reactions(keys[])`.
-- Realtime: only the notifications inbox subscribes (Phase 3); everything else refetches. A
-  reaction notification arriving is also what tells the feed its chips are stale — reactions
-  themselves do not stream (0058).
+- Realtime: only the notifications inbox subscribes (Phase 3); everything else refetches. An
+  *unread* reaction notification arriving is also what tells the feed its chips are stale —
+  reactions themselves do not stream (0058). That subscription listens to INSERT/UPDATE/DELETE,
+  which is why 0058 sets `replica identity full` on `notifications`: under the default identity a
+  delete carries only the primary key, so the subscription's `user_id` filter could never match it
+  and a withdrawn reaction's notification would linger on screen.
 
 ## TMDB integration
 

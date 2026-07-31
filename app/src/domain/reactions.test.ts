@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { byEvent, chipsFor, myEmoji, nameList, REACTIONS, type ReactionRow } from "./reactions";
+import {
+  byEvent, chipsFor, myEmoji, nameList, REACTIONS, REACTION_LABELS, type ReactionRow,
+} from "./reactions";
 
 const row = (over: Partial<ReactionRow> & { emoji: string; user_id: string }): ReactionRow => ({
   event_key: "w:actor:title:2026-07-31",
@@ -83,5 +85,19 @@ describe("REACTIONS", () => {
   it("is the seven-emoji palette the DB constraint allows", () => {
     expect(REACTIONS).toEqual(["❤️", "🔥", "😂", "😱", "🍿", "💤", "💩"]);
     expect(new Set(REACTIONS).size).toBe(REACTIONS.length);
+  });
+
+  it("gives every emoji a spoken name, since a screen reader gets none", () => {
+    for (const emoji of REACTIONS) expect(REACTION_LABELS[emoji]).toBeTruthy();
+  });
+});
+
+describe("a reactor with no name", () => {
+  it("still counts, and leaves a null for the caller to label", () => {
+    const chips = chipsFor(
+      [row({ emoji: "🔥", user_id: "ana" }), { ...row({ emoji: "🔥", user_id: "x" }), display_name: null }],
+      "carlos",
+    );
+    expect(chips).toEqual([{ emoji: "🔥", count: 2, names: ["ana", null], mine: false }]);
   });
 });

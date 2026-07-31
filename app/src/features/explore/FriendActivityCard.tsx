@@ -2,15 +2,20 @@ import { Fragment, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useFriendActivity, type ActivityItem } from "@/lib/explore";
 import { useEventReactions } from "@/lib/reactions";
-import { byEvent } from "@/domain/reactions";
+import { byEvent, type ReactionRow } from "@/domain/reactions";
 import { relativeTime } from "@/domain/time";
 import { tmdbImg } from "@/lib/tmdb";
 import { dateLocale, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { useOpenTitle } from "@/lib/useOpenTitle";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { useShowMore } from "@/ui/ShowMore";
 import { posterBg } from "@/ui/posterBg";
 import { ReactionBar } from "@/features/explore/ReactionBar";
+
+/* One shared empty list, so a row with no reactions doesn't hand ReactionBar a
+   fresh array identity on every render. */
+const EMPTY: ReactionRow[] = [];
 
 /* The group's wall (P4-C4, reactions in 0058) — every episode watched, plus
    adds and ratings, yours among them.
@@ -21,7 +26,10 @@ import { ReactionBar } from "@/features/explore/ReactionBar";
    each viewer's local day did not give one. A row from an older RPC has no
    event_key — it renders un-collapsed and without reactions rather than
    breaking. The started/finished_season branches only render against a
-   pre-0040 RPC. */
+   pre-0040 RPC.
+
+   Reactions travel by event_key alone: whose event it is and which show it is
+   about are derived from that key in Postgres, never sent from here. */
 
 function epRange(a: ActivityItem): React.ReactNode {
   const toS = a.to_season ?? a.season_number;
@@ -78,21 +86,25 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
   const esNames = useEsNames();
   const { session } = useAuth();
   const me = session?.user.id ?? "";
+  // The shared opener, which also warms the detail cache — the inline copy this
+  // replaced opened every activity row cold.
+  const openTitle = useOpenTitle();
 
-  const rows = items.slice(0, 30);
-
-  // A reaction notification links straight at its row, which may sit below the
-  // fold of the progressive reveal — so reveal down to it.
+  // A reaction notification links straight at its row, which may sit anywhere
+  // in the page — so search all of it, not just the first screenful, and reveal
+  // down to the row. Slicing to 30 here used to make a link to row 31+ a
+  // silent no-op even though the row had been fetched.
   const flashKey = searchParams.get("event");
-  const flashAt = flashKey ? rows.findIndex((r) => r.event_key === flashKey) : -1;
-  const { shown, more } = useShowMore(rows, 10, flashAt < 0 ? 0 : flashAt + 1);
+  const flashAt = flashKey ? items.findIndex((r) => r.event_key === flashKey) : -1;
+  const { shown, more } = useShowMore(items, 10, flashAt < 0 ? 0 : flashAt + 1);
 
   const flashRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (flashAt < 0) return;
-    flashRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-    // Drop the parameter once it has done its job, so a reload (or a back and
-    // forth) doesn't flash a row the reader has already dealt with.
+    if (!flashKey) return;
+    if (flashAt >= 0) flashRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    // Dropped even when the row was not found — otherwise a stale ?event= rides
+    // along in the URL for the rest of the session and flashes a row the reader
+    // already dealt with if it ever floats back up.
     const timer = setTimeout(() => {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
@@ -101,7 +113,11 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
       }, { replace: true });
     }, 2600);
     return () => clearTimeout(timer);
-  }, [flashAt, setSearchParams]);
+    // setSearchParams is a fresh identity on every URL change, so it stays out
+    // of the deps: with it, opening a show mid-flash restarted the timer and
+    // yanked the feed back into view behind the sheet.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flashKey, flashAt]);
 
   const keys = useMemo(
     () => shown.map((r) => r.event_key).filter((k): k is string => Boolean(k)),
@@ -112,12 +128,6 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
 
   if (!enabled || items.length === 0) return null;
 
-  const openTitle = (tmdbId: number) =>
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set("title", String(tmdbId));
-      return next;
-    });
   const openFriend = (id: string) => navigate(`/friend/${id}`);
 
   return (
@@ -157,10 +167,10 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
                   <span className="mute" style={{ fontSize: 11.5 }}>
                     {relativeTime(a.at, new Date(), dateLocale())}{count > 1 && <> · {count} {tr("episodes")}</>}
                   </span>
-                  {a.event_key && a.title_id && (
+                  {a.event_key && (
                     <ReactionBar
-                      target={{ eventKey: a.event_key, actorId: a.friend_id, titleId: a.title_id }}
-                      rows={reactions.get(a.event_key) ?? []}
+                      eventKey={a.event_key}
+                      rows={reactions.get(a.event_key) ?? EMPTY}
                       me={me}
                     />
                   )}

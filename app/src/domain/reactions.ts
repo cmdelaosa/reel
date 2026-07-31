@@ -7,11 +7,26 @@
 export const REACTIONS = ["❤️", "🔥", "😂", "😱", "🍿", "💤", "💩"] as const;
 export type Emoji = (typeof REACTIONS)[number];
 
+/** What each one means, for the screen reader: an emoji has no accessible name
+ *  of its own, and "2, pressed, button" tells a blind reader nothing about
+ *  whether the row got a 🔥 or a 💩. Dictionary keys — translated at the edge. */
+export const REACTION_LABELS: Record<string, string> = {
+  "❤️": "Love it",
+  "🔥": "Brilliant",
+  "😂": "Funny",
+  "😱": "Shocking",
+  "🍿": "Want to watch",
+  "💤": "Boring",
+  "💩": "Rubbish",
+};
+
 export interface ReactionRow {
   event_key: string;
   emoji: string;
   user_id: string;
-  display_name: string;
+  /** Null when the reactor keeps a private profile and is nobody you know —
+   *  the reaction still counts, it just doesn't come with a name. */
+  display_name: string | null;
   avatar_url: string | null;
   created_at: string;
 }
@@ -19,8 +34,9 @@ export interface ReactionRow {
 export interface ReactionChip {
   emoji: string;
   count: number;
-  /** Who is behind the count, oldest reaction first. */
-  names: string[];
+  /** Who is behind the count, oldest reaction first; null for a name the
+   *  caller isn't allowed to see (rendered as "Someone" at the edge). */
+  names: (string | null)[];
   /** Whether the caller is one of them — the chip renders lit. */
   mine: boolean;
 }
