@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { SmilePlus } from "lucide-react";
-import { chipsFor, myEmoji, REACTIONS, REACTION_LABELS, type ReactionRow } from "@/domain/reactions";
+import {
+  chipsFor, myEmoji, REACTIONS, REACTION_LABELS,
+  type ReactionPerson, type ReactionRow,
+} from "@/domain/reactions";
 import { useSetReaction } from "@/lib/reactions";
+import { FriendStack } from "@/ui/FriendAvatar";
 import { t as tr, tv } from "@/lib/i18n";
 
 /* The reaction strip under an activity row: the chips already left, plus the
@@ -55,7 +59,7 @@ export function ReactionBar({ eventKey, rows, me }: {
   };
 
   const label = (emoji: string) => tr(REACTION_LABELS[emoji] ?? emoji);
-  const who = (names: (string | null)[]) => names.map((n) => n ?? tr("Someone")).join(", ");
+  const who = (people: ReactionPerson[]) => people.map((p) => p.name ?? tr("Someone")).join(", ");
 
   return (
     <div className="rx-bar" ref={ref} onClick={(e) => e.stopPropagation()}>
@@ -63,15 +67,21 @@ export function ReactionBar({ eventKey, rows, me }: {
         <button
           key={c.emoji}
           className={`rx-chip${c.mine ? " rx-mine" : ""}`}
-          title={who(c.names)}
+          title={who(c.people)}
           aria-pressed={c.mine}
           aria-label={tv("{reaction}, {count}: {names}", {
-            reaction: label(c.emoji), count: c.count, names: who(c.names),
+            reaction: label(c.emoji), count: c.count, names: who(c.people),
           })}
           onClick={() => pick(c.emoji)}
         >
           <span aria-hidden>{c.emoji}</span>
-          <span className="rx-count" aria-hidden>{c.count}</span>
+          {/* Faces rather than a number: with a group this size you read who
+              reacted at a glance, and a tooltip is no use on a phone. */}
+          <FriendStack
+            fans={c.people.map((p) => ({ id: p.id, name: p.name ?? tr("Someone"), avatarUrl: p.avatarUrl }))}
+            size={16}
+            max={3}
+          />
         </button>
       ))}
 

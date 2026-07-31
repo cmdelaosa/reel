@@ -29,7 +29,15 @@ describe("chipsFor", () => {
       [row({ emoji: "🔥", user_id: "ana" }), row({ emoji: "🔥", user_id: "leo" })],
       "carlos",
     );
-    expect(chips).toEqual([{ emoji: "🔥", count: 2, names: ["ana", "leo"], mine: false }]);
+    expect(chips).toEqual([{
+      emoji: "🔥",
+      count: 2,
+      people: [
+        { id: "ana", name: "ana", avatarUrl: null },
+        { id: "leo", name: "leo", avatarUrl: null },
+      ],
+      mine: false,
+    }]);
   });
 
   it("lights the chip the caller is part of", () => {
@@ -98,6 +106,7 @@ describe("a reactor with no name", () => {
       [row({ emoji: "🔥", user_id: "ana" }), { ...row({ emoji: "🔥", user_id: "x" }), display_name: null }],
       "carlos",
     );
-    expect(chips).toEqual([{ emoji: "🔥", count: 2, names: ["ana", null], mine: false }]);
+    expect(chips[0].count).toBe(2);
+    expect(chips[0].people.map((p) => p.name)).toEqual(["ana", null]);
   });
 });

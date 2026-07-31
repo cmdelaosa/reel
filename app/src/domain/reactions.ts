@@ -31,12 +31,19 @@ export interface ReactionRow {
   created_at: string;
 }
 
+/** A reactor as the chip shows them: a face, and a name when there is one. */
+export interface ReactionPerson {
+  id: string;
+  /** Null for a name the caller isn't allowed to see (labelled "Someone"). */
+  name: string | null;
+  avatarUrl: string | null;
+}
+
 export interface ReactionChip {
   emoji: string;
   count: number;
-  /** Who is behind the count, oldest reaction first; null for a name the
-   *  caller isn't allowed to see (rendered as "Someone" at the edge). */
-  names: (string | null)[];
+  /** Who is behind the count, oldest reaction first. */
+  people: ReactionPerson[];
   /** Whether the caller is one of them — the chip renders lit. */
   mine: boolean;
 }
@@ -62,11 +69,11 @@ export function chipsFor(rows: ReactionRow[], me: string): ReactionChip[] {
   for (const r of rows) {
     let chip = chips.get(r.emoji);
     if (!chip) {
-      chip = { emoji: r.emoji, count: 0, names: [], mine: false };
+      chip = { emoji: r.emoji, count: 0, people: [], mine: false };
       chips.set(r.emoji, chip);
     }
     chip.count++;
-    chip.names.push(r.display_name);
+    chip.people.push({ id: r.user_id, name: r.display_name, avatarUrl: r.avatar_url });
     if (r.user_id === me) chip.mine = true;
   }
   const rank = (e: string) => ORDER.get(e) ?? REACTIONS.length;

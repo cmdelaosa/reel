@@ -976,12 +976,15 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   font-size: 12.5px; line-height: 1; cursor: pointer; transition: all .14s ease;
 }
 .rx-chip:hover { border-color: var(--border-strong); }
-.rx-count { font-size: 11.5px; font-weight: 750; color: var(--text-dim); }
+/* Faces instead of a count. The stack's rings are drawn in the chip's own
+   background so the overlap reads as depth rather than as a stray outline. */
+.rx-chip .fr-avatar { box-shadow: 0 0 0 2px var(--surface-2); }
+.rx-chip .fr-more { font-size: 8.5px; }
 .rx-chip.rx-mine {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
-.rx-chip.rx-mine .rx-count { color: var(--accent); }
+.rx-chip.rx-mine .fr-avatar { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, var(--surface)); }
 .rx-add {
   display: inline-grid; place-items: center; width: 24px; height: 24px;
   border-radius: 999px; border: 1px solid transparent; background: transparent;
@@ -1206,10 +1209,23 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    the Tonight hero the panel washed out to near-white and took its own text with
    it. Opaque glass mix instead, the same fix .filter-menu and .friends-pop
    already carry for the same reason. Top follows the bar, never a literal. */
+/* The bell owns the panel. Anchoring it to the viewport instead parked it at
+   the window's right edge while the bar's controls sit inside a centred 1280px
+   column — on an ultrawide the panel opened a screen away from the bell that
+   spawned it. The offset reproduces the old gap exactly: the bar is one control
+   plus --bar-pad-y above and below, so bell-bottom + pad + 4px is where the
+   viewport-anchored version used to land. */
+.mq-bell-wrap { position: relative; display: inline-flex; }
+/* Over everything the page can put on screen — including the floating bottom
+   nav at 45, which would otherwise swallow the tap meant to dismiss this —
+   while the bar itself rises above the scrim so the bell (and the panel hanging
+   off it) stay live. Sheets at 60 still cover both. */
+.mq-notif-scrim { position: fixed; inset: 0; z-index: 55; }
+.mq-top.notif-open { z-index: 58; }
 .mq-notif {
-  position: fixed; z-index: 56;
-  top: calc(var(--bar-h) + 4px); right: 16px;
-  width: min(380px, 92vw);
+  position: absolute; z-index: 56;
+  top: calc(100% + var(--bar-pad-y) + 4px); right: 0;
+  width: min(380px, calc(100vw - 24px));
   border-radius: var(--r-lg); overflow: hidden;
   background: color-mix(in srgb, var(--app-bg) 94%, #ffffff 6%);
   -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
@@ -1217,6 +1233,19 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   box-shadow: var(--shadow-lg);
 }
 [data-theme="light"] .mq-notif { background: rgba(255, 255, 255, 0.94); }
+/* On a phone there is no centred column to drift away from, and the bell is not
+   the last control in the bar — hanging the panel off it would run its left
+   edge off the screen. Back to the bar's own width, which is the shape a phone
+   wants anyway. (Fixed inside .mq-top resolves against the bar's box, courtesy
+   of its backdrop-filter — and the bar is full-width and pinned to the top, so
+   that lands exactly where a viewport-anchored panel used to.) */
+@media (max-width: 767px) {
+  .mq-notif {
+    position: fixed;
+    top: calc(var(--bar-h) + 4px); left: 12px; right: 12px;
+    width: auto;
+  }
+}
 
 /* ---- Command palette ---- */
 .mq-pal {
