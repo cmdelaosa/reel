@@ -137,40 +137,44 @@ test("a friend's reaction lands on the row, rings the bell, and groups", async (
     await expect(anasChip).toContainText("🔥");
     await expect(anasChip).toHaveAttribute("aria-label", "Brilliant, 1: Ana Ruiz");
 
-    // Tapping a chip opens who reacted with what, plus + / − to change yours.
+    // Tapping a chip opens who reacted with what. Ana is looking at her own
+    // reaction, so the list names her "You" — and that line is the button that
+    // takes it back (the emoji turns into a minus under the cursor).
     await anasChip.click();
     const detail = ana.page.locator(".rx-detail");
-    // Ana is looking at her own reaction, so the list names her "You".
     await expect(detail).toContainText("You");
-    await expect(detail.getByRole("button", { name: "Add a reaction" })).toBeVisible();
-    await expect(detail.getByRole("button", { name: "Remove my reaction" })).toBeVisible();
+    await expect(detail.getByRole("button", { name: "Remove my reaction" })).toHaveCount(1);
     await ana.page.keyboard.press("Escape");
     await expect(detail).toHaveCount(0);
 
     // Carlos never reloaded: Realtime carries the insert.
     await expect(carlos.page.locator(".mq-belldot")).toBeVisible({ timeout: 15_000 });
     await carlos.page.getByRole("button", { name: "Notifications" }).click();
-    await expect(carlos.page.getByText(/Ana Ruiz reacted 🔥 to/)).toBeVisible();
+    // Every assertion names the fixture show: a dev database may well hold
+    // reaction notifications about other rows, and counting all of them made
+    // this spec depend on whatever the last person to dogfood left behind.
+    await expect(carlos.page.getByText(/Ana Ruiz reacted 🔥 to E2E Reaction Show/)).toBeVisible();
 
     // Leo is not Ana's friend, but he shares Carlos: his reaction rewrites the
     // same inbox row rather than opening a second one.
+    const eventKey = await eventKeyOf(ana.session.access_token, carlos.session.user.id, titleId);
     const added = await rest(leo.session.access_token, "activity_reactions", {
       method: "POST",
       // Only the key: actor and title are derived from it server-side.
       body: JSON.stringify({
-        event_key: await eventKeyOf(ana.session.access_token, carlos.session.user.id, titleId),
+        event_key: eventKey,
         user_id: leo.session.user.id,
         emoji: "😱",
       }),
     });
     expect(added.ok, `Leo can react to an event of his own friend: ${await added.text()}`).toBeTruthy();
 
-    await expect(carlos.page.getByText(/Ana Ruiz and Leo Park reacted to/)).toBeVisible({ timeout: 15_000 });
-    await expect(carlos.page.getByText(/reacted/)).toHaveCount(1);
+    await expect(carlos.page.getByText(/Ana Ruiz and Leo Park reacted to E2E Reaction Show/)).toBeVisible({ timeout: 15_000 });
+    await expect(carlos.page.getByText(/reacted to E2E Reaction Show/)).toHaveCount(1);
 
     // Following it lands on the row itself, where both reactions are legible —
     // including Leo's, whom Ana cannot see in her own friends list.
-    await carlos.page.getByText(/Ana Ruiz and Leo Park reacted to/).click();
+    await carlos.page.getByText(/Ana Ruiz and Leo Park reacted to E2E Reaction Show/).click();
     await expect(carlos.page).toHaveURL(/\/friends\?event=/, { timeout: 2_000 });
     await expect(carlosRow.locator(".rx-chip")).toHaveCount(2);
 
@@ -184,17 +188,24 @@ test("a friend's reaction lands on the row, rings the bell, and groups", async (
     // Withdrawing the last reaction takes the notification with it — checked
     // with the panel OPEN, since a closed panel would report zero either way.
     for (const who of [ana, leo]) {
+      // Scoped to this event: these accounts may hold reactions from someone
+      // dogfooding on the same local stack, and a test does not get to bin them.
       const gone = await rest(who.session.access_token,
-        `activity_reactions?user_id=eq.${who.session.user.id}`, { method: "DELETE" });
+        `activity_reactions?user_id=eq.${who.session.user.id}&event_key=eq.${encodeURIComponent(eventKey)}`,
+        { method: "DELETE" });
       expect(gone.ok, "withdraw reaction").toBeTruthy();
     }
     await carlos.page.getByRole("button", { name: "Notifications" }).click();
-    await expect(carlos.page.getByText(/reacted/)).toHaveCount(0, { timeout: 15_000 });
-    await expect(carlos.page.locator(".mq-belldot")).toHaveCount(0);
+    // The row itself going away is the proof the delete reached the client;
+    // the bell dot is not, since anything else unread would keep it lit.
+    await expect(carlos.page.getByText(/reacted to E2E Reaction Show/)).toHaveCount(0, { timeout: 15_000 });
   } finally {
     // Cascades take the episodes, watch events and reactions with the title.
     await rest(SERVICE, `titles?tmdb_id=eq.${FIXTURE_TMDB_ID}`, { method: "DELETE" });
-    await rest(SERVICE, `notifications?type=eq.reaction`, { method: "DELETE" });
+    // Only this fixture's notification — notifications carry no FK to the
+    // title, so nothing else would clean it, and a blanket delete would take
+    // the local dogfood inbox with it.
+    await rest(SERVICE, `notifications?type=eq.reaction&payload->>event_key=like.*${titleId}*`, { method: "DELETE" });
     for (const p of [ana, leo, carlos]) await p.page.context().close();
   }
 });

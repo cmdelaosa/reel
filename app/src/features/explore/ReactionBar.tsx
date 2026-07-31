@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Minus, Plus, SmilePlus } from "lucide-react";
+import { Minus, SmilePlus } from "lucide-react";
 import {
   chipsFor, myEmoji, REACTIONS, REACTION_LABELS,
   type ReactionPerson, type ReactionRow,
@@ -11,10 +11,10 @@ import { t as tr, tv } from "@/lib/i18n";
 /* The reaction strip under an activity row: the chips already left, the palette
    that adds one, and the detail behind a chip — who reacted, with what.
 
-   Chips read, ⊕ writes. A chip used to toggle your own reaction, which is a
-   fine gesture but it can't also open a list; the toggle for that emoji now
-   lives at the foot of the detail, one tap further in and impossible to hit by
-   accident while reading who reacted.
+   One way in, one way out. Adding is always the ⊕ and its palette; removing is
+   your own line in that detail, where the emoji turns into a minus under the
+   cursor. A chip used to toggle your reaction, which is a fine gesture but it
+   cannot also open a list, and a footer of buttons made the list a form.
 
    Everything here swallows its click — the row behind it opens the show, and
    reacting is not asking for that. Emoji carry no accessible name, so every
@@ -126,44 +126,39 @@ export function ReactionBar({ eventKey, rows, me }: {
         // The whole row's reactions, not just the chip's: what you want to know
         // is who thought what, and that reads worse split across three lists.
         <div className="card friends-pop rx-detail" aria-label={tr("Reactions")}>
-          {rows.map((r) => (
-            <div key={r.user_id} className="friends-pop-row" style={{ cursor: "default" }}>
-              <FriendAvatar
-                f={{ id: r.user_id, name: r.display_name ?? tr("Someone"), avatarUrl: r.avatar_url }}
-                size={26}
-              />
-              <span className="flex-1 min-w-0 truncate" style={{ fontSize: 13, fontWeight: 650 }}>
-                {r.user_id === me ? tr("You") : (r.display_name ?? tr("Someone"))}
-              </span>
-              <span aria-label={label(r.emoji)} title={label(r.emoji)} style={{ fontSize: 15 }}>
-                {r.emoji}
-              </span>
-            </div>
-          ))}
-          {/* Plus opens the palette (any emoji), minus takes yours back — two
-              symbols instead of a sentence that had to name an emoji in the
-              middle of it, and the minus simply isn't there when you have
-              nothing to remove. */}
-          <div className="rx-detail-acts">
-            <button
-              className="rx-act"
-              aria-label={tr("Add a reaction")}
-              title={tr("Add a reaction")}
-              onClick={() => setOpen({ kind: "palette" })}
-            >
-              <Plus size={15} />
-            </button>
-            {mine && (
+          {rows.map((r) => {
+            const isMe = r.user_id === me;
+            const body = (
+              <>
+                <FriendAvatar
+                  f={{ id: r.user_id, name: r.display_name ?? tr("Someone"), avatarUrl: r.avatar_url }}
+                  size={26}
+                />
+                <span className="flex-1 min-w-0 truncate rx-who">
+                  {isMe ? tr("You") : (r.display_name ?? tr("Someone"))}
+                </span>
+                {/* Your own emoji trades places with a minus on hover: the row
+                    IS the remove button, so it says so before you press it. */}
+                <span className="rx-swap">
+                  <span className="rx-swap-emoji" title={label(r.emoji)}>{r.emoji}</span>
+                  {isMe && <span className="rx-swap-minus" aria-hidden><Minus size={14} /></span>}
+                </span>
+              </>
+            );
+            return isMe ? (
               <button
-                className="rx-act"
+                key={r.user_id}
+                className="friends-pop-row rx-me-row"
                 aria-label={tr("Remove my reaction")}
                 title={tr("Remove my reaction")}
                 onClick={() => { close(false); set.mutate({ eventKey, emoji: null }); }}
               >
-                <Minus size={15} />
+                {body}
               </button>
-            )}
-          </div>
+            ) : (
+              <div key={r.user_id} className="friends-pop-row rx-them-row">{body}</div>
+            );
+          })}
         </div>
       )}
     </div>

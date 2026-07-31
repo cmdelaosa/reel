@@ -329,7 +329,6 @@ const ES: Record<string, string> = {
   "Boring": "Qué aburrimiento",
   "Rubbish": "Vaya truño",
   "{reaction}, {count}: {names}": "{reaction}, {count}: {names}",
-  "Add a reaction": "Añadir una reacción",
   "Remove my reaction": "Quitar mi reacción",
   "Taste match": "Afinidad de gustos",
   "Friends stats": "Estadísticas de amigos",
