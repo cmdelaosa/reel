@@ -55,13 +55,16 @@ test("core loop: search → add → mark watched → tonight → calendar → ra
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "Severance" })).toBeVisible();
 
-  // Ensure followed (Add if not already)
-  const removeBtn = dialog.getByRole("button", { name: "Remove" });
-  const addBtn = dialog.getByRole("button", { name: "Add" });
-  if (await addBtn.isVisible().catch(() => false)) {
-    await addBtn.click();
-    await expect(removeBtn).toBeVisible();
-  }
+  // Ensure followed. One button carries both labels, so bind to it and read the
+  // label rather than to "Add", which is a substring match: every cast member is
+  // a role="button" too, and "Rachel Addington" answers to it. Once the cast
+  // rail lands and this button says Remove, an "Add" locator has only the cast
+  // card left to match — clicking it navigates the app to a person page and the
+  // sheet, and the rest of this test, is gone.
+  const followBtn = dialog.getByRole("button", { name: /^(Add|Remove)$/ });
+  await expect(followBtn).toBeVisible();
+  if ((await followBtn.textContent())?.trim() === "Add") await followBtn.click();
+  await expect(followBtn).toHaveText("Remove");
 
   // Rate it 8/10 (4th star)
   const starScores = dialog.locator(".rating-half.right");
@@ -70,22 +73,50 @@ test("core loop: search → add → mark watched → tonight → calendar → ra
 
   // Exercise an episode write in whichever continuation season opens. Keep the
   // smoke idempotent when the local DB retains state from an earlier run.
-  const epRows = dialog.locator(".ep-row");
+  // Unaired rows have a disabled check, so only aired ones are clickable.
+  const epRows = dialog.locator(".ep-row:not(.ep-unaired)");
   await expect(epRows.first()).toBeVisible();
-  const firstCheck = epRows.first().locator(".check");
-  if (await firstCheck.evaluate((node) => node.classList.contains("on"))) {
-    await firstCheck.click();
-    await expect(firstCheck).not.toHaveClass(/\bon\b/);
-  }
-  await firstCheck.click();
-  await expect(epRows.first().locator(".check.on")).toBeVisible();
+  const epCheck = (i: number) => epRows.nth(i).locator(".check");
+  /** Leave the episode unwatched, whatever an earlier run left behind. */
+  const clearCheck = async (i: number) => {
+    const check = epCheck(i);
+    if (await check.evaluate((node) => node.classList.contains("on"))) {
+      await check.click();
+      await expect(check).not.toHaveClass(/\bon\b/);
+    }
+  };
 
-  // Mark-up-to on a later episode → confirm dialog → Mark all
-  await epRows.nth(3).click();
+  // Toggle one episode. Since ef885f7 the check is the only watched toggle —
+  // the rest of the row opens the episode sub-sheet.
+  await clearCheck(0);
+  await epCheck(0).click();
+  await expect(epCheck(0)).toHaveClass(/\bon\b/);
+
+  // Mark-up-to, which still hangs off the check: clear the first episode again
+  // so a later one is guaranteed an unseen prior, rather than leaving the
+  // prompt to whatever the DB already had marked.
+  await clearCheck(0);
+  const target = Math.min(3, (await epRows.count()) - 1);
+  expect(target, "the open season needs a second aired episode").toBeGreaterThan(0);
+  await clearCheck(target);
+  await epCheck(target).click();
   const confirm = page.getByText("Mark earlier episodes as seen?");
-  if (await confirm.isVisible().catch(() => false)) {
-    await page.getByRole("button", { name: /Mark all/ }).click();
-  }
+  await expect(confirm).toBeVisible();
+  await page.getByRole("button", { name: /Mark all/ }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(epCheck(0)).toHaveClass(/\bon\b/);
+  await expect(epCheck(target)).toHaveClass(/\bon\b/);
+
+  // The row body opens the episode sub-sheet: a second dialog over the detail
+  // sheet, which Escape closes one layer at a time. Bind to the class — the
+  // accessible name goes through tr() and would move with the wording.
+  await epRows.nth(1).locator(".ep-main").click();
+  const epSheet = page.locator(".ep-sheet");
+  await expect(epSheet).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(2);
+  await page.keyboard.press("Escape");
+  await expect(epSheet).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(1);
 
   // Close the sheet
   await page.keyboard.press("Escape");
