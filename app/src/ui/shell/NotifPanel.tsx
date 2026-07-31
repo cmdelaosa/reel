@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { Bell, CalendarClock, Check, Download, Smile, Tv, Users } from "lucide-react";
-import { useNotifications, useMarkNotificationsRead, type Notification } from "@/lib/notifications";
+import { Bell, CalendarClock, Check, Download, Smile, Trash2, Tv, Users } from "lucide-react";
+import {
+  useNotifications, useMarkNotificationsRead, useClearNotifications, type Notification,
+} from "@/lib/notifications";
 import { nameList } from "@/domain/reactions";
 import { t as tr, tv } from "@/lib/i18n";
 
@@ -74,8 +77,18 @@ function body(n: Notification): string {
 export function NotifPanel({ onClose }: { onClose: () => void }) {
   const { data: items = [] } = useNotifications();
   const markRead = useMarkNotificationsRead();
+  const clear = useClearNotifications();
   const navigate = useNavigate();
   const [, setSearchParams] = useSearchParams();
+  const [armed, setArmed] = useState(false);
+
+  // A half-pressed "Clear" that stays armed is a trap for the next click, so it
+  // disarms itself.
+  useEffect(() => {
+    if (!armed) return;
+    const timer = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [armed]);
 
   const route = (n: Notification) => {
     if (!n.read_at) markRead.mutate([n.id]);
@@ -103,11 +116,24 @@ export function NotifPanel({ onClose }: { onClose: () => void }) {
       <div className="mq-notif sheet">
         <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: "1px solid var(--border)" }}>
           <div style={{ fontWeight: 750, fontSize: 15 }}>{tr("Notifications")}</div>
-          {items.some((n) => !n.read_at) && (
-            <button className="chip" onClick={() => markRead.mutate(undefined)}>
-              <Check size={13} />{tr("Mark all read")}
-            </button>
-          )}
+          <div className="flex items-center gap-1.5">
+            {items.some((n) => !n.read_at) && (
+              <button className="chip" onClick={() => markRead.mutate(undefined)}>
+                <Check size={13} />{tr("Mark all read")}
+              </button>
+            )}
+            {items.length > 0 && (
+              // Two taps, not a modal: emptying an inbox is not worth a dialog,
+              // but it is worth not doing by accident. The ask forgets itself
+              // after a few seconds.
+              <button
+                className={`chip${armed ? " chip-active" : ""}`}
+                onClick={() => (armed ? clear.mutate() : setArmed(true))}
+              >
+                <Trash2 size={13} />{armed ? tr("Sure?") : tr("Clear")}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col" style={{ maxHeight: "min(60vh, 480px)", overflowY: "auto" }}>

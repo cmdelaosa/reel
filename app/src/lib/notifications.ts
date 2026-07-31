@@ -59,12 +59,16 @@ export function useNotificationsRealtime() {
             // arrives with its whole old row — the subscription's user_id
             // filter has something to match, which under the default identity
             // (primary key only) it did not.
-            const goneId = (payload.old as { id?: string }).id;
-            if (!goneId) return;
+            const gone = payload.old as { id?: string; type?: string };
+            if (!gone.id) return;
             queryClient.setQueryData<Notification[]>(qk.notifications, (old = []) =>
-              old.filter((n) => n.id !== goneId),
+              old.filter((n) => n.id !== gone.id),
             );
-            queryClient.invalidateQueries({ queryKey: qk.reactions });
+            // The full old row means the type is knowable, so emptying an inbox
+            // of fifty doesn't fire fifty refetches of the feed's chips.
+            if (gone.type === "reaction") {
+              queryClient.invalidateQueries({ queryKey: qk.reactions });
+            }
             return;
           }
           const row = notificationSchema.safeParse(payload.new);
@@ -96,6 +100,31 @@ export function useNotificationsRealtime() {
       supabase.removeChannel(channel);
     };
   }, [userId, queryClient]);
+}
+
+/** Empty the inbox. Reading a notification never removed it — the importer's
+ *  "import finished" rows in particular piled up until they filled the panel's
+ *  50-row window — and RLS has allowed the owner to delete since 0004. */
+export function useClearNotifications() {
+  const queryClient = useQueryClient();
+  const { session } = useAuth();
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("user_id", session!.user.id);
+      if (error) throw error;
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: qk.notifications });
+      const prev = queryClient.getQueryData<Notification[]>(qk.notifications);
+      queryClient.setQueryData<Notification[]>(qk.notifications, []);
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => queryClient.setQueryData(qk.notifications, ctx?.prev),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: qk.notifications }),
+  });
 }
 
 export function useMarkNotificationsRead() {

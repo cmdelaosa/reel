@@ -319,6 +319,8 @@ const ES: Record<string, string> = {
   "{a} and {b}": "{a} y {b}",
   "{a} and {n} more": "{a} y {n} más",
   "Someone": "Alguien",
+  "Clear": "Vaciar",
+  "Sure?": "¿Seguro?",
   /* What each emoji means, spoken. Screen readers get no name from an emoji,
      so every chip and palette button carries one of these. */
   "Love it": "Me encanta",
