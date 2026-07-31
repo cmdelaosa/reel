@@ -66,15 +66,24 @@ export interface ChartPadding {
   left: number;
 }
 
+/* The y-axis is ALWAYS the full 0–10 rating scale, never fitted to the season on
+   screen. A fitted axis makes every season look equally dramatic — a run from 7.8
+   to 8.2 and one from 4 to 10 both fill the box — so switching seasons compared
+   nothing and a flat season read as a rollercoaster. Fixed bounds cost some
+   vertical detail (most TV sits between 7 and 9.5, so the line rides high) and buy
+   the thing a season picker is for: seasons you can hold against each other. */
+const RATING_MIN = 0;
 const RATING_MAX = 10;
-const MIN_SPAN = 1; // never squash a near-flat season into visual noise
-const half = (v: number) => Math.round(v * 2) / 2; // snap to a clean 0.5 step
+const DOMAIN: [number, number] = [RATING_MIN, RATING_MAX];
+// Gridlines at the bounds and the midpoint, i.e. 0 / 5 / 10.
+const TICK_VALUES = [RATING_MIN, (RATING_MIN + RATING_MAX) / 2, RATING_MAX];
 
 /** Lay out a season's IMDb ratings for an SVG line chart inside a w×h box with
- *  `padding` inset on each side. Unrated episodes are skipped (no point) but keep
- *  their x-slot, so the line reads against episode position — a trailing gap for
- *  a season still airing, say. Returns null when nothing in the season is rated
- *  yet (the caller hides the chart). */
+ *  `padding` inset on each side. The y-axis is always 0–10 (see DOMAIN), so two
+ *  seasons of the same show are directly comparable. Unrated episodes are skipped
+ *  (no point) but keep their x-slot, so the line reads against episode position —
+ *  a trailing gap for a season still airing, say. Returns null when the season
+ *  can't clear MIN_CHART_POINTS (the caller hides the chart). */
 export function chartGeometry(
   eps: RatedEpisode[],
   w: number,
@@ -85,15 +94,7 @@ export function chartGeometry(
   // Below the floor there is no chart to draw — see MIN_CHART_POINTS.
   if (rated.length < MIN_CHART_POINTS) return null;
 
-  const values = rated.map((x) => x.e.imdb_rating as number);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  // Pad the domain so points don't kiss the frame and a flat season keeps a
-  // readable band; snap the bounds to 0.5 for clean labels; clamp to 0–10.
-  const pad = Math.max((max - min) * 0.15, (MIN_SPAN - (max - min)) / 2, 0.25);
-  const lo = Math.max(0, half(min - pad));
-  const hi = Math.min(RATING_MAX, half(max + pad));
-  const domain: [number, number] = hi - lo < 0.5 ? [Math.max(0, hi - MIN_SPAN), hi] : [lo, hi];
+  const domain = DOMAIN;
 
   const innerW = w - padding.left - padding.right;
   const innerH = h - padding.top - padding.bottom;
@@ -112,14 +113,9 @@ export function chartGeometry(
     .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
     .join(" ");
 
-  // Three gridlines: the two bounds and a midpoint snapped to 0.5 (deduped for a
-  // narrow domain where the midpoint collides with a bound). Pixel y is computed
-  // here — the single owner of the domain→y scale — so the chart never restates
-  // it. Likewise the per-episode x positions.
-  const mid = half((domain[0] + domain[1]) / 2);
-  const ticks: ChartTick[] = [...new Set([domain[0], mid, domain[1]])]
-    .sort((a, b) => a - b)
-    .map((value) => ({ value, y: yFor(value) }));
+  // Pixel y is computed here — the single owner of the domain→y scale — so the
+  // chart never restates it. Likewise the per-episode x positions.
+  const ticks: ChartTick[] = TICK_VALUES.map((value) => ({ value, y: yFor(value) }));
   const xs = eps.map((_, i) => xFor(i));
   return { points, path, domain, ticks, xs };
 }

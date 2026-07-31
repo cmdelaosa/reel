@@ -681,12 +681,17 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                             <button className="ep-main" onClick={() => setEpisodeOpen(e)} title={e.name ?? undefined}>
                               <span className="ep-num">E{e.episode_number}</span>
                               <span className="ep-title truncate">{e.name ?? `Episode ${e.episode_number}`}</span>
-                              {e.imdb_rating != null && (
-                                <span className="ep-imdb">
-                                  <Star size={12} fill="currentColor" strokeWidth={0} />
-                                  {e.imdb_rating.toFixed(1)}
-                                </span>
-                              )}
+                              {/* Always rendered, empty when unrated: the score
+                                  and date columns must not collapse, or the rows
+                                  around a missing one shift out of line. */}
+                              <span className="ep-imdb">
+                                {e.imdb_rating != null && (
+                                  <>
+                                    <Star size={12} fill="currentColor" strokeWidth={0} />
+                                    {e.imdb_rating.toFixed(1)}
+                                  </>
+                                )}
+                              </span>
                               <span className="ep-date">{fmtDate(e.air_datetime)}</span>
                             </button>
                           </div>
