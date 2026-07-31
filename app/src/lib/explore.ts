@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { qk } from "@/lib/queryKeys";
 import { getTrending, getPopular, getPopularNow, getTopRated } from "@/lib/tmdb";
 import type { TitleRow } from "@/lib/schemas";
 
@@ -105,13 +106,21 @@ const activitySchema = z.array(
     season_number: z.number().int().nullable(),
     episode_number: z.number().int().nullable().optional(),
     at: z.string(),
+    /* 0058 fields, optional so a client that ships before the migration still
+       renders a feed: the row loses its reactions and a binge arrives as one
+       row per episode, but nothing throws. */
+    event_key: z.string().optional(),
+    title_id: z.string().uuid().optional(),
+    to_season: z.number().int().nullable().optional(),
+    to_episode: z.number().int().nullable().optional(),
+    ep_count: z.number().int().optional(),
   }),
 );
 export type ActivityItem = z.infer<typeof activitySchema>[number];
 
 export function useFriendActivity(enabled: boolean, limit = 30) {
   return useQuery({
-    queryKey: ["friendActivity", limit],
+    queryKey: qk.friendActivity(limit),
     enabled,
     queryFn: async (): Promise<ActivityItem[]> => {
       const { data, error } = await supabase.rpc("rpc_friend_activity", { p_limit: limit });

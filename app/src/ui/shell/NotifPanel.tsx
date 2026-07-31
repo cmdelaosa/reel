@@ -1,6 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router";
-import { Bell, CalendarClock, Check, Download, Tv, Users } from "lucide-react";
+import { Bell, CalendarClock, Check, Download, Smile, Tv, Users } from "lucide-react";
 import { useNotifications, useMarkNotificationsRead, type Notification } from "@/lib/notifications";
+import { nameList } from "@/domain/reactions";
 import { t as tr, tv } from "@/lib/i18n";
 
 /* Bell popover — the in-app inbox. Styling ported from prototype overlays.tsx
@@ -11,6 +12,7 @@ const ICONS: Record<string, typeof Bell> = {
   premiere: CalendarClock,
   friend_request: Users,
   import_done: Download,
+  reaction: Smile,
 };
 
 function relTime(iso: string): string {
@@ -27,6 +29,7 @@ function title(n: Notification): string {
     case "premiere": return tr("Premiere dated");
     case "friend_request": return tr("Friend request");
     case "import_done": return tr("Import finished");
+    case "reaction": return tr("Reaction");
     // The type itself, for a row this build doesn't know how to name yet.
     default: return n.type;
   }
@@ -49,6 +52,19 @@ function body(n: Notification): string {
       return tv("{show} has a premiere date", { show });
     case "import_done":
       return tv("{count} shows imported from TV Time", { count: String(p.matched ?? 0) });
+    case "reaction": {
+      // One row per event, rewritten as people pile on — so it names them all,
+      // and only quotes an emoji while there is a single one to quote.
+      const reactors = Array.isArray(p.reactors) ? (p.reactors as { name?: string; emoji?: string }[]) : [];
+      const who = nameList(
+        reactors.map((r) => r.name ?? ""),
+        (a, b) => tv("{a} and {b}", { a, b }),
+        (a, n) => tv("{a} and {n} more", { a, n }),
+      );
+      return reactors.length === 1
+        ? tv("{name} reacted {emoji} to {show}", { name: who, emoji: reactors[0].emoji ?? "", show })
+        : tv("{names} reacted to {show}", { names: who, show });
+    }
     default:
       return typeof p.message === "string" ? p.message : "";
   }
@@ -72,6 +88,11 @@ export function NotifPanel({ onClose }: { onClose: () => void }) {
       onClose();
     } else if (n.type === "import_done") {
       navigate("/settings/import");
+      onClose();
+    } else if (n.type === "reaction" && typeof p.event_key === "string") {
+      // Land on the row itself, not on the show: the reaction is about what
+      // you did, and the feed is where it is legible.
+      navigate(`/friends?event=${encodeURIComponent(p.event_key)}`);
       onClose();
     }
   };

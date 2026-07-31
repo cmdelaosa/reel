@@ -963,6 +963,54 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .fr-activity:hover { background: var(--surface-2); }
 .fr-activity + .fr-activity { margin-top: 2px; }
 
+/* ---- Reactions on an activity row ---- */
+/* The strip sits inside the row's text column, so it must never inherit the
+   row's click: ReactionBar stops it. The ⊕ stays visible at rest rather than
+   appearing on hover — on a phone there is no hover to appear on. */
+.fr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 1px; }
+.rx-bar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.rx-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 24px; padding: 0 8px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2);
+  font-size: 12.5px; line-height: 1; cursor: pointer; transition: all .14s ease;
+}
+.rx-chip:hover { border-color: var(--border-strong); }
+.rx-count { font-size: 11.5px; font-weight: 750; color: var(--text-dim); }
+.rx-chip.rx-mine {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.rx-chip.rx-mine .rx-count { color: var(--accent); }
+.rx-add {
+  display: inline-grid; place-items: center; width: 24px; height: 24px;
+  border-radius: 999px; border: 1px solid transparent; background: transparent;
+  color: var(--text-mute); cursor: pointer; transition: all .14s ease;
+}
+.rx-add:hover, .rx-add.rx-open {
+  color: var(--text-dim); background: var(--surface-2); border-color: var(--border);
+}
+.rx-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 6;
+  display: flex; gap: 2px; padding: 5px;
+  border-radius: 999px; border-color: var(--border-strong); box-shadow: var(--shadow-lg);
+  animation: friends-pop-in .12s ease;
+}
+.rx-opt {
+  width: 30px; height: 30px; border-radius: 999px; border: none; background: transparent;
+  font-size: 16px; line-height: 1; cursor: pointer;
+  transition: transform .12s ease, background .12s ease;
+}
+.rx-opt:hover { background: var(--surface-3); transform: scale(1.14); }
+.rx-opt.rx-mine { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* The row a reaction notification points at, on arrival. */
+.fr-flash { animation: fr-flash 2.4s ease; }
+@keyframes fr-flash {
+  0%, 55% { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  100% { background: transparent; }
+}
+
 /* Calendar reads best as a centered column, not full desktop width */
 /* :not(.sr-only) — Tailwind's utilities sit in a layer, so this unlayered rule
    outranks them and would stretch a visually-hidden heading to 780px wide. */

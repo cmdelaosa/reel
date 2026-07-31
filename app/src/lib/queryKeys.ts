@@ -18,6 +18,10 @@ export const qk = {
   stats: ["stats"] as const,
   watchHeatmap: ["watchHeatmap"] as const,
   notifications: ["notifications"] as const,
+  friendActivity: (limit: number) => ["friendActivity", limit] as const,
+  /* Keyed by the page's newest event and its size rather than the whole key
+     list: a new feed page changes both, and the cache key stays short. */
+  eventReactions: (head: string, count: number) => ["eventReactions", head, count] as const,
   ignored: ["ignored"] as const,
   networkLogos: ["networkLogos"] as const,
   providers: (region: string, tmdbId: number) => ["providers", region, tmdbId] as const,

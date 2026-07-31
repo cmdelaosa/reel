@@ -1,52 +1,36 @@
-import { Fragment } from "react";
+import { Fragment, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useFriendActivity, type ActivityItem } from "@/lib/explore";
+import { useEventReactions } from "@/lib/reactions";
+import { byEvent } from "@/domain/reactions";
 import { relativeTime } from "@/domain/time";
 import { tmdbImg } from "@/lib/tmdb";
 import { dateLocale, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
+import { useAuth } from "@/features/auth/AuthProvider";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { useShowMore } from "@/ui/ShowMore";
 import { posterBg } from "@/ui/posterBg";
+import { ReactionBar } from "@/features/explore/ReactionBar";
 
-/* Friend activity feed (P4-C4) — every episode watched, plus adds and ratings.
-   Episodes of the same show watched by the same friend on the same (local) day
-   collapse into one row with the episode range ("S1 · E3–E7").
-   The started/finished_season branches only render against a pre-0040 RPC. */
+/* The group's wall (P4-C4, reactions in 0058) — every episode watched, plus
+   adds and ratings, yours among them.
 
-type FeedRow = { a: ActivityItem; from: ActivityItem; to: ActivityItem; count: number };
+   Same-day episodes of one show arrive already collapsed into a single row
+   ("S1 · E3–E7"): 0058 moved that grouping into rpc_friend_activity, because a
+   reaction needs a row identity that every reader agrees on, and grouping by
+   each viewer's local day did not give one. A row from an older RPC has no
+   event_key — it renders un-collapsed and without reactions rather than
+   breaking. The started/finished_season branches only render against a
+   pre-0040 RPC. */
 
-function epOrder(a: ActivityItem, b: ActivityItem) {
-  return (a.season_number! - b.season_number!) || (a.episode_number! - b.episode_number!);
-}
-
-function groupWatched(items: ActivityItem[]): FeedRow[] {
-  const out: FeedRow[] = [];
-  const groups = new Map<string, FeedRow>();
-  for (const a of items) {
-    const row: FeedRow = { a, from: a, to: a, count: 1 };
-    if (a.verb !== "watched" || a.season_number == null || a.episode_number == null) {
-      out.push(row);
-      continue;
-    }
-    const d = new Date(a.at);
-    const key = `${a.friend_id}|${a.tmdb_id}|${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    const g = groups.get(key);
-    if (!g) {
-      groups.set(key, row);
-      out.push(row); // the group sits where its newest event does (items are desc)
-    } else {
-      g.count++;
-      if (epOrder(a, g.from) < 0) g.from = a;
-      if (epOrder(a, g.to) > 0) g.to = a;
-    }
-  }
-  return out;
-}
-
-function epRange({ from, to }: FeedRow): string {
-  if (from.season_number === to.season_number)
-    return `S${from.season_number} · E${from.episode_number}–E${to.episode_number}`;
-  return `S${from.season_number} · E${from.episode_number} – S${to.season_number} · E${to.episode_number}`;
+function epRange(a: ActivityItem): React.ReactNode {
+  const toS = a.to_season ?? a.season_number;
+  const toE = a.to_episode ?? a.episode_number;
+  if (toS === a.season_number && toE === a.episode_number)
+    return <>S{a.season_number} · E{a.episode_number}</>;
+  if (toS === a.season_number)
+    return `S${a.season_number} · E${a.episode_number}–E${toE}`;
+  return `S${a.season_number} · E${a.episode_number} – S${toS} · E${toE}`;
 }
 
 /* Slot React nodes into a translated sentence's {placeholders}. The whole
@@ -60,19 +44,25 @@ function fill(s: string, nodes: Record<string, React.ReactNode>): React.ReactNod
   });
 }
 
-function phrase(r: FeedRow, titleName: string): React.ReactNode {
-  const a = r.a;
+/* Your own rows need their own keys, not the third-person ones: English gets
+   away with one verb ("watched"), Spanish does not ("vio" / "viste"). */
+function phrase(a: ActivityItem, titleName: string, isMe: boolean): React.ReactNode {
   const name = <b style={{ fontWeight: 700 }}>{titleName}</b>;
   const eps = a.season_number != null && a.episode_number != null && (
-    <b style={{ fontWeight: 700 }}>
-      {r.count > 1 ? epRange(r) : <>S{a.season_number} · E{a.episode_number}</>}
-    </b>
+    <b style={{ fontWeight: 700 }}>{epRange(a)}</b>
   );
   switch (a.verb) {
-    case "rated": return fill(tr("rated {name}"), { name });
-    case "added": return fill(tr("added {name} to their watchlist"), { name });
-    case "watched": return fill(tr("watched {eps} of {name}"), { eps, name });
-    case "started": return fill(tr("started watching {name}"), { name });
+    case "rated":
+      return fill(tr(isMe ? "self: rated {name}" : "rated {name}"), { name });
+    case "added":
+      return fill(
+        tr(isMe ? "self: added {name} to their watchlist" : "added {name} to their watchlist"),
+        { name },
+      );
+    case "watched":
+      return fill(tr(isMe ? "self: watched {eps} of {name}" : "watched {eps} of {name}"), { eps, name });
+    case "started":
+      return fill(tr("started watching {name}"), { name });
     case "finished_season":
       // {season} is a plain number — filled first, so only {name} stays a node.
       return fill(tv("finished season {season} of {name}", { season: a.season_number ?? "" }), { name });
@@ -83,13 +73,42 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
   // Per-episode events (0040) fill a feed much faster than the old digest
   // verbs did, so pull a deeper page.
   const { data: items = [] } = useFriendActivity(enabled, 60);
-  const [, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const esNames = useEsNames();
+  const { session } = useAuth();
+  const me = session?.user.id ?? "";
 
-  // 10 events revealed at a time, up to 30.
-  const rows = groupWatched(items).slice(0, 30);
-  const { shown, more } = useShowMore(rows, 10);
+  const rows = items.slice(0, 30);
+
+  // A reaction notification links straight at its row, which may sit below the
+  // fold of the progressive reveal — so reveal down to it.
+  const flashKey = searchParams.get("event");
+  const flashAt = flashKey ? rows.findIndex((r) => r.event_key === flashKey) : -1;
+  const { shown, more } = useShowMore(rows, 10, flashAt < 0 ? 0 : flashAt + 1);
+
+  const flashRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (flashAt < 0) return;
+    flashRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    // Drop the parameter once it has done its job, so a reload (or a back and
+    // forth) doesn't flash a row the reader has already dealt with.
+    const timer = setTimeout(() => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("event");
+        return next;
+      }, { replace: true });
+    }, 2600);
+    return () => clearTimeout(timer);
+  }, [flashAt, setSearchParams]);
+
+  const keys = useMemo(
+    () => shown.map((r) => r.event_key).filter((k): k is string => Boolean(k)),
+    [shown],
+  );
+  const { data: reactionRows = [] } = useEventReactions(keys);
+  const reactions = useMemo(() => byEvent(reactionRows), [reactionRows]);
 
   if (!enabled || items.length === 0) return null;
 
@@ -105,16 +124,23 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
     <section className="flex flex-col gap-4">
       <div className="mq-sechead">
         <div>
-          <h2 className="section-title">{tr("Friend activity")}</h2>
+          <h2 className="section-title">{tr("Activity")}</h2>
         </div>
       </div>
       <div className="card" style={{ padding: 6 }}>
-        {shown.map((r) => {
-          const a = r.a;
+        {shown.map((a) => {
           const art = tmdbImg(a.poster_path, "w92");
           const titleName = locName(esNames, a.tmdb_id, a.title_name);
+          const isMe = a.friend_id === me;
+          const flashed = Boolean(a.event_key) && a.event_key === flashKey;
+          const count = a.ep_count ?? 1;
           return (
-            <div key={`${a.friend_id}|${a.tmdb_id}|${a.at}`} className="fr-activity" onClick={() => openTitle(a.tmdb_id)}>
+            <div
+              key={a.event_key ?? `${a.friend_id}|${a.tmdb_id}|${a.at}`}
+              ref={flashed ? flashRef : undefined}
+              className={`fr-activity${flashed ? " fr-flash" : ""}`}
+              onClick={() => openTitle(a.tmdb_id)}
+            >
               <span onClick={(e) => { e.stopPropagation(); openFriend(a.friend_id); }} style={{ flex: "0 0 auto" }}>
                 <FriendAvatar f={{ id: a.friend_id, name: a.friend_name, avatarUrl: a.friend_avatar }} size={38} />
               </span>
@@ -122,10 +148,22 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
                 {/* Two lines, not one: the name and verb eat the whole line on a
                     phone, and truncating left the show itself as "Ana Ruiz rated B…" */}
                 <div style={{ fontSize: 13.5 }} className="line-clamp-2">
-                  <b style={{ fontWeight: 700 }}>{a.friend_name}</b> {phrase(r, titleName)}
+                  <b style={{ fontWeight: 700 }}>{isMe ? tr("You") : a.friend_name}</b> {phrase(a, titleName, isMe)}
                 </div>
-                <div className="mute" style={{ fontSize: 11.5 }}>
-                  {relativeTime(a.at, new Date(), dateLocale())}{r.count > 1 && <> · {r.count} {tr("episodes")}</>}
+                {/* Reactions share the timestamp's line rather than opening one
+                    of their own: an unreacted row is the overwhelming case, and
+                    a lone ⊕ on its own line taxes all 30 of them. */}
+                <div className="fr-meta">
+                  <span className="mute" style={{ fontSize: 11.5 }}>
+                    {relativeTime(a.at, new Date(), dateLocale())}{count > 1 && <> · {count} {tr("episodes")}</>}
+                  </span>
+                  {a.event_key && a.title_id && (
+                    <ReactionBar
+                      target={{ eventKey: a.event_key, actorId: a.friend_id, titleId: a.title_id }}
+                      rows={reactions.get(a.event_key) ?? []}
+                      me={me}
+                    />
+                  )}
                 </div>
               </div>
               {a.verb === "rated" && a.score != null && (

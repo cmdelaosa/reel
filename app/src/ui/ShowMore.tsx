@@ -7,10 +7,18 @@ import { t as tr } from "@/lib/i18n";
    render `more` after the grid, not in the section header. Null once
    everything is shown. */
 
-export function useShowMore<T>(items: T[], pageSize: number): { shown: T[]; more: React.ReactNode } {
+/* `atLeast` reveals at least that many without a click, for the caller that
+   arrives pointing at a specific item (a notification deep-linking into the
+   activity feed) and cannot ask the reader to press "Show more" to find it. */
+export function useShowMore<T>(
+  items: T[],
+  pageSize: number,
+  atLeast = 0,
+): { shown: T[]; more: React.ReactNode } {
   const [count, setCount] = useState(pageSize);
-  const shown = items.slice(0, count);
-  if (count >= items.length) return { shown, more: null };
+  const reveal = Math.max(count, atLeast);
+  const shown = items.slice(0, reveal);
+  if (reveal >= items.length) return { shown, more: null };
   return {
     shown,
     more: (

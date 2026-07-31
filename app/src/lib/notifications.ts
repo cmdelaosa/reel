@@ -48,13 +48,38 @@ export function useNotificationsRealtime() {
     const channel = supabase.channel(`notifications:${userId}:${Math.random().toString(36).slice(2)}`);
     channel
       .on(
+        // Not just INSERT: a reaction notification is one row per event that
+        // gets rewritten as people pile on (0058), and it disappears again if
+        // they all withdraw.
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
         (payload) => {
+          if (payload.eventType === "DELETE") {
+            const goneId = (payload.old as { id?: string }).id;
+            if (!goneId) return;
+            queryClient.setQueryData<Notification[]>(qk.notifications, (old = []) =>
+              old.filter((n) => n.id !== goneId),
+            );
+            // A deleted row carries only its id, so the type is unknowable —
+            // and the one type that deletes itself is a reaction being
+            // withdrawn. Cheap query, rare event: just refetch it.
+            queryClient.invalidateQueries({ queryKey: ["eventReactions"] });
+            return;
+          }
           const row = notificationSchema.safeParse(payload.new);
           if (!row.success) return;
+          // Somebody reacted to a row of yours. The chips on screen were
+          // fetched before that happened — including on the feed this very
+          // notification links into.
+          if (row.data.type === "reaction") {
+            queryClient.invalidateQueries({ queryKey: ["eventReactions"] });
+          }
           queryClient.setQueryData<Notification[]>(qk.notifications, (old = []) =>
-            old.some((n) => n.id === row.data.id) ? old : [row.data, ...old],
+            // A rewritten row carries a fresh created_at, so re-sorting floats
+            // it back to the top the way a brand-new one arrives there.
+            [row.data, ...old.filter((n) => n.id !== row.data.id)].sort(
+              (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+            ),
           );
         },
       )
