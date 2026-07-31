@@ -540,11 +540,22 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .ep-unaired .ep-title, .ep-unaired .ep-num { opacity: .6; }
 /* Compact IMDb score on the row — the gold star is its identity; the number
    stays in --text for contrast. TMDB's per-episode score lives on the sheet. */
-.ep-imdb { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; font-size: 12.5px; font-weight: 750; }
-.ep-imdb svg { flex: 0 0 auto; color: var(--imdb); }
+/* Two fixed columns, not a right-aligned flex row: the star sits at the same x
+   in every row, so the stars read as a column down the list. Right-aligning the
+   whole badge instead pushed the star left whenever the number was wider —
+   "10.0" against "8.2" — and the stars zig-zagged. The number keeps its own
+   right edge (fixed box, right-aligned, tabular figures), so both line up. */
+.ep-imdb {
+  display: grid; grid-template-columns: 12px 26px; gap: 3px;
+  align-items: center; justify-content: start;
+  font-size: 12.5px; font-weight: 750; font-variant-numeric: tabular-nums;
+}
+.ep-imdb svg { color: var(--imdb); }
+.ep-imdb > span { text-align: right; }
 /* Narrow phones: the sheet is ~92vw, so give the title back some room. */
 @media (max-width: 480px) {
-  .ep-main { grid-template-columns: 26px minmax(0, 1fr) 40px 58px; gap: 8px; }
+  /* 44px, not 40: the score badge is 12 + 3 + 26 and must not be clipped. */
+  .ep-main { grid-template-columns: 26px minmax(0, 1fr) 44px 54px; gap: 8px; }
   .ep-row { gap: 8px; padding: 12px 10px; }
 }
 

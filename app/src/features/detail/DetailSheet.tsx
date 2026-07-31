@@ -688,7 +688,10 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                                 {e.imdb_rating != null && (
                                   <>
                                     <Star size={12} fill="currentColor" strokeWidth={0} />
-                                    {e.imdb_rating.toFixed(1)}
+                                    {/* Its own element, so the star and the
+                                        number each get a fixed grid column and
+                                        line up down the list. */}
+                                    <span>{e.imdb_rating.toFixed(1)}</span>
                                   </>
                                 )}
                               </span>
