@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SmilePlus } from "lucide-react";
+import { Minus, Plus, SmilePlus } from "lucide-react";
 import {
   chipsFor, myEmoji, REACTIONS, REACTION_LABELS,
   type ReactionPerson, type ReactionRow,
@@ -140,11 +140,30 @@ export function ReactionBar({ eventKey, rows, me }: {
               </span>
             </div>
           ))}
-          <button className="rx-detail-act" onClick={() => pick(detailEmoji)}>
-            {mine === detailEmoji
-              ? tv("Remove my {emoji}", { emoji: detailEmoji })
-              : tv("React with {emoji}", { emoji: detailEmoji })}
-          </button>
+          {/* Plus opens the palette (any emoji), minus takes yours back — two
+              symbols instead of a sentence that had to name an emoji in the
+              middle of it, and the minus simply isn't there when you have
+              nothing to remove. */}
+          <div className="rx-detail-acts">
+            <button
+              className="rx-act"
+              aria-label={tr("Add a reaction")}
+              title={tr("Add a reaction")}
+              onClick={() => setOpen({ kind: "palette" })}
+            >
+              <Plus size={15} />
+            </button>
+            {mine && (
+              <button
+                className="rx-act"
+                aria-label={tr("Remove my reaction")}
+                title={tr("Remove my reaction")}
+                onClick={() => { close(false); set.mutate({ eventKey, emoji: null }); }}
+              >
+                <Minus size={15} />
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

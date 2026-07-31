@@ -137,12 +137,13 @@ test("a friend's reaction lands on the row, rings the bell, and groups", async (
     await expect(anasChip).toContainText("🔥");
     await expect(anasChip).toHaveAttribute("aria-label", "Brilliant, 1: Ana Ruiz");
 
-    // Tapping a chip opens who reacted with what, and offers the toggle there.
+    // Tapping a chip opens who reacted with what, plus + / − to change yours.
     await anasChip.click();
     const detail = ana.page.locator(".rx-detail");
     // Ana is looking at her own reaction, so the list names her "You".
     await expect(detail).toContainText("You");
-    await expect(detail.locator(".rx-detail-act")).toContainText("Remove my");
+    await expect(detail.getByRole("button", { name: "Add a reaction" })).toBeVisible();
+    await expect(detail.getByRole("button", { name: "Remove my reaction" })).toBeVisible();
     await ana.page.keyboard.press("Escape");
     await expect(detail).toHaveCount(0);
 
