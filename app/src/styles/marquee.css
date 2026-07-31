@@ -495,20 +495,38 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 /* The rest of the episode row is one wide button that opens the episode sheet —
    the check to its left is the only thing that marks watched now. Transparent so
    the row's own hover carries the affordance. */
+/* A grid, not a flex row: the score and the date get FIXED columns so they line
+   up down the whole list. With flex they were pushed right by a title of
+   whatever width, and every row landed somewhere different — worse still where
+   an episode had no score at all and its neighbours' dates shifted left to fill
+   the gap. The cells are always rendered, empty when there's nothing, so a
+   missing score can't collapse the column. */
 .ep-main {
   flex: 1 1 auto; min-width: 0;
-  display: flex; align-items: center; gap: 12px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 44px 76px;
+  align-items: center; gap: 12px;
   padding: 0; border: 0; background: none; cursor: pointer;
   color: inherit; font: inherit; text-align: left;
 }
-.ep-num { flex: 0 0 auto; width: 42px; font-size: 13px; color: var(--text-dim); }
-.ep-title { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; }
-.ep-date { flex: 0 0 auto; font-size: 12px; color: var(--text-dim); }
+.ep-num { font-size: 13px; color: var(--text-dim); }
+.ep-title { min-width: 0; font-size: 14px; font-weight: 600; }
+/* Right-aligned so the digits stack on the same edge; the date can ellipsise
+   because "TBA" translates to a much longer phrase than any real date. */
+.ep-date {
+  font-size: 12px; color: var(--text-dim);
+  text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .ep-unaired .ep-title, .ep-unaired .ep-num { opacity: .6; }
 /* Compact IMDb score on the row — the gold star is its identity; the number
    stays in --text for contrast. TMDB's per-episode score lives on the sheet. */
-.ep-imdb { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 750; }
-.ep-imdb svg { color: var(--imdb); }
+.ep-imdb { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; font-size: 12.5px; font-weight: 750; }
+.ep-imdb svg { flex: 0 0 auto; color: var(--imdb); }
+/* Narrow phones: the sheet is ~92vw, so give the title back some room. */
+@media (max-width: 480px) {
+  .ep-main { grid-template-columns: 26px minmax(0, 1fr) 40px 58px; gap: 8px; }
+  .ep-row { gap: 8px; padding: 12px 10px; }
+}
 
 /* Season episode-rating graph (IMDb). Hand-rolled SVG — no chart dependency,
    theme-aware through the tokens. */
@@ -521,8 +539,13 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .season-chart .grid-label { fill: var(--text-mute); font-size: 10px; }
 .season-chart .rating-line { fill: none; stroke: var(--imdb); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .season-chart .rating-dot { fill: var(--surface); stroke: var(--imdb); stroke-width: 2; cursor: pointer; transition: r .12s ease; }
-.season-chart .rating-dot:hover { r: 5.5; fill: var(--imdb); }
+/* .on is set by the component while the pointer is on that point; :hover alone
+   wouldn't fire, since the transparent hit circle sits above the dot. */
+.season-chart .rating-dot.on { r: 5.5; fill: var(--imdb); }
 .season-chart .rating-hit { fill: transparent; cursor: pointer; }
+/* Hover readout: the episode's number and score, on the chart itself. */
+.season-chart .chart-tip rect { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 1; }
+.season-chart .chart-tip text { fill: var(--text); font-size: 11px; font-weight: 700; }
 .season-chart .x-label { fill: var(--text-mute); font-size: 10px; text-anchor: middle; }
 
 /* Episode sub-sheet — a small card over the detail sheet: synopsis + per-episode

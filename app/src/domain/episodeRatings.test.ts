@@ -90,20 +90,31 @@ describe("chartGeometry", () => {
     expect(g.points[2].y).toBeLessThan(g.points[0].y);
   });
 
-  it("clamps the domain to 0–10 and never squashes a flat season below MIN_SPAN", () => {
+  it("always spans the full 0–10 scale, whatever the season looks like", () => {
+    // The point of a fixed axis: a flat season and a volatile one share it, so
+    // switching seasons compares like with like.
     const flat = chartGeometry([ep(1, 8), ep(2, 8), ep(3, 8)], 300, 120, PAD)!;
-    expect(flat.domain[0]).toBeGreaterThanOrEqual(0);
-    expect(flat.domain[1]).toBeLessThanOrEqual(10);
-    expect(flat.domain[1] - flat.domain[0]).toBeGreaterThanOrEqual(1);
+    const wild = chartGeometry([ep(1, 2), ep(2, 9.8), ep(3, 5)], 300, 120, PAD)!;
+    expect(flat.domain).toEqual([0, 10]);
+    expect(wild.domain).toEqual([0, 10]);
+    // Same rating → same pixel y in both charts.
+    const flatEight = flat.points[0].y;
+    const wildY = chartGeometry([ep(1, 8), ep(2, 2), ep(3, 5)], 300, 120, PAD)!.points[0].y;
+    expect(wildY).toBeCloseTo(flatEight);
   });
 
-  it("keeps y ticks within the domain, low→high, with pixel y precomputed", () => {
+  it("maps the scale ends to the padded box, and 5 to its middle", () => {
+    const g = chartGeometry([ep(1, 0), ep(2, 10), ep(3, 5)], 300, 120, PAD)!;
+    const [bottom, top, mid] = g.points;
+    expect(top.y).toBeCloseTo(PAD.top); // 10 → top inset
+    expect(bottom.y).toBeCloseTo(120 - PAD.bottom); // 0 → bottom inset
+    expect(mid.y).toBeCloseTo((PAD.top + (120 - PAD.bottom)) / 2);
+  });
+
+  it("puts gridlines at 0 / 5 / 10, low→high, with pixel y precomputed", () => {
     const g = chartGeometry([ep(1, 6.2), ep(2, 8), ep(3, 9.4)], 300, 120, PAD)!;
-    const last = g.ticks[g.ticks.length - 1];
-    expect(g.ticks[0].value).toBe(g.domain[0]);
-    expect(last.value).toBe(g.domain[1]);
-    for (let i = 1; i < g.ticks.length; i++) expect(g.ticks[i].value).toBeGreaterThan(g.ticks[i - 1].value);
-    // y grows downward, so the lowest rating sits below the highest.
-    expect(g.ticks[0].y).toBeGreaterThan(last.y);
+    expect(g.ticks.map((t) => t.value)).toEqual([0, 5, 10]);
+    // y grows downward, so 0 sits below 10.
+    expect(g.ticks[0].y).toBeGreaterThan(g.ticks[2].y);
   });
 });
