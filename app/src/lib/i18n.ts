@@ -303,6 +303,33 @@ const ES: Record<string, string> = {
   "watched {eps} of {name}": "vio {eps} de {name}",
   "started watching {name}": "empezó a ver {name}",
   "finished season {season} of {name}": "terminó la temporada {season} de {name}",
+  /* Your own rows in that same feed. English reuses the third-person verb and
+     Spanish cannot ("vio" vs "viste"), so these are separate keys — prefixed,
+     with an English entry below, since "self:" must never reach the screen. */
+  "self: rated {name}": "puntuaste {name}",
+  "self: added {name} to their watchlist": "añadiste {name} a tu lista",
+  "self: watched {eps} of {name}": "viste {eps} de {name}",
+  // Reactions on those rows (0058)
+  "React": "Reaccionar",
+  "Reaction": "Reacción",
+  "Reactions": "Reacciones",
+  "When someone reacts to your activity": "Cuando alguien reacciona a tu actividad",
+  "{name} reacted {emoji} to {show}": "{name} reaccionó {emoji} a {show}",
+  "{names} reacted to {show}": "{names} reaccionaron a {show}",
+  "{a} and {b}": "{a} y {b}",
+  "{a} and {n} more": "{a} y {n} más",
+  "Someone": "Alguien",
+  /* What each emoji means, spoken. Screen readers get no name from an emoji,
+     so every chip and palette button carries one of these. */
+  "Love it": "Me encanta",
+  "Brilliant": "Brutal",
+  "Funny": "Qué risa",
+  "Shocking": "Qué fuerte",
+  "Want to watch": "Me lo apunto",
+  "Boring": "Qué aburrimiento",
+  "Rubbish": "Vaya truño",
+  "{reaction}, {count}: {names}": "{reaction}, {count}: {names}",
+  "Remove my reaction": "Quitar mi reacción",
   "Taste match": "Afinidad de gustos",
   "Friends stats": "Estadísticas de amigos",
   "What to watch next, score comparisons, shared stinkers": "Qué ver, comparativa de notas y los truños compartidos",
@@ -590,6 +617,9 @@ const EN: Record<string, string> = {
   "activity: Watched": "Watched",
   "activity: Rated": "Rated",
   "activity: Added": "Added",
+  "self: rated {name}": "rated {name}",
+  "self: added {name} to their watchlist": "added {name} to your watchlist",
+  "self: watched {eps} of {name}": "watched {eps} of {name}",
 };
 
 /** Dictionaries by language. */

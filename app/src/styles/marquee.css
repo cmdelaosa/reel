@@ -963,6 +963,100 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .fr-activity:hover { background: var(--surface-2); }
 .fr-activity + .fr-activity { margin-top: 2px; }
 
+/* ---- Reactions on an activity row ---- */
+/* The strip sits inside the row's text column, so it must never inherit the
+   row's click: ReactionBar stops it. The ⊕ stays visible at rest rather than
+   appearing on hover — on a phone there is no hover to appear on. */
+.fr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 1px; }
+.rx-bar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.rx-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 24px; padding: 0 8px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2);
+  font-size: 12.5px; line-height: 1; cursor: pointer; transition: all .14s ease;
+}
+.rx-chip:hover { border-color: var(--border-strong); }
+/* Faces instead of a count. The stack's rings are drawn in the chip's own
+   background so the overlap reads as depth rather than as a stray outline. */
+.rx-chip .fr-avatar { box-shadow: 0 0 0 2px var(--surface-2); }
+.rx-chip .fr-more { font-size: 8.5px; }
+.rx-chip.rx-mine {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.rx-chip.rx-mine .fr-avatar { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+.rx-add {
+  display: inline-grid; place-items: center; width: 24px; height: 24px;
+  border-radius: 999px; border: 1px solid transparent; background: transparent;
+  color: var(--text-mute); cursor: pointer; transition: all .14s ease;
+}
+.rx-add:hover, .rx-add.rx-open {
+  color: var(--text-dim); background: var(--surface-2); border-color: var(--border);
+}
+.rx-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 6;
+  display: flex; gap: 2px; padding: 5px;
+  border-radius: 999px; border-color: var(--border-strong); box-shadow: var(--shadow-lg);
+  animation: friends-pop-in .12s ease;
+}
+.rx-opt {
+  width: 30px; height: 30px; border-radius: 999px; border: none; background: transparent;
+  font-size: 16px; line-height: 1; cursor: pointer;
+  transition: transform .12s ease, background .12s ease;
+}
+.rx-opt:hover { background: var(--surface-3); transform: scale(1.14); }
+.rx-opt.rx-mine { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* Who reacted with what. Borrows .friends-pop wholesale — same glass and
+   reduced-motion treatment as the ratings popover in the detail sheet — and
+   only flips the anchor, since this one hangs off a chip on the left. */
+.rx-detail { left: 0; right: auto; width: 232px; }
+.rx-who { font-size: 13px; font-weight: 650; text-align: left; }
+/* Only your own line is a control — the others are just names, so they don't
+   light up under the cursor pretending otherwise. Qualified by .rx-detail to
+   outrank .friends-pop-row, which sets the pointer further down this file. */
+.rx-detail .rx-them-row { cursor: default; }
+.rx-detail .rx-them-row:hover { background: transparent; }
+.rx-me-row {
+  border: none; background: transparent; color: inherit; font: inherit; width: 100%;
+}
+/* Emoji and minus share one cell and cross-fade: the row keeps its width, and
+   the swap reads as "this is the thing you'd be removing". */
+.rx-swap { display: grid; place-items: center; width: 22px; height: 22px; flex: 0 0 auto; }
+.rx-swap-emoji, .rx-swap-minus {
+  grid-area: 1 / 1; display: grid; place-items: center;
+  transition: opacity .16s ease, transform .16s cubic-bezier(.16, 1, .3, 1);
+}
+.rx-swap-emoji { font-size: 15px; }
+.rx-swap-minus {
+  width: 22px; height: 22px; border-radius: 999px;
+  background: var(--surface-3); color: var(--text-dim);
+  opacity: 0; transform: scale(.55);
+}
+.rx-me-row:hover .rx-swap-emoji,
+.rx-me-row:focus-visible .rx-swap-emoji { opacity: 0; transform: scale(.55); }
+.rx-me-row:hover .rx-swap-minus,
+.rx-me-row:focus-visible .rx-swap-minus { opacity: 1; transform: none; }
+.rx-me-row:hover .rx-swap-minus { color: var(--text); }
+/* No hover to reveal it on a phone: the minus sits beside the emoji instead of
+   on top of it, so the row still says what tapping it does. */
+@media (hover: none) {
+  .rx-swap { grid-auto-flow: column; width: auto; gap: 6px; }
+  .rx-swap-emoji, .rx-swap-minus { grid-area: auto; }
+  .rx-swap-minus { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rx-swap-emoji, .rx-swap-minus { transition: opacity .16s ease; transform: none; }
+  .rx-me-row:hover .rx-swap-emoji, .rx-me-row:focus-visible .rx-swap-emoji { transform: none; }
+}
+
+/* The row a reaction notification points at, on arrival. */
+.fr-flash { animation: fr-flash 2.4s ease; }
+@keyframes fr-flash {
+  0%, 55% { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  100% { background: transparent; }
+}
+
 /* Calendar reads best as a centered column, not full desktop width */
 /* :not(.sr-only) — Tailwind's utilities sit in a layer, so this unlayered rule
    outranks them and would stretch a visually-hidden heading to 780px wide. */
@@ -1158,10 +1252,23 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    the Tonight hero the panel washed out to near-white and took its own text with
    it. Opaque glass mix instead, the same fix .filter-menu and .friends-pop
    already carry for the same reason. Top follows the bar, never a literal. */
+/* The bell owns the panel. Anchoring it to the viewport instead parked it at
+   the window's right edge while the bar's controls sit inside a centred 1280px
+   column — on an ultrawide the panel opened a screen away from the bell that
+   spawned it. The offset reproduces the old gap exactly: the bar is one control
+   plus --bar-pad-y above and below, so bell-bottom + pad + 4px is where the
+   viewport-anchored version used to land. */
+.mq-bell-wrap { position: relative; display: inline-flex; }
+/* Over everything the page can put on screen — including the floating bottom
+   nav at 45, which would otherwise swallow the tap meant to dismiss this —
+   while the bar itself rises above the scrim so the bell (and the panel hanging
+   off it) stay live. Sheets at 60 still cover both. */
+.mq-notif-scrim { position: fixed; inset: 0; z-index: 55; }
+.mq-top.notif-open { z-index: 58; }
 .mq-notif {
-  position: fixed; z-index: 56;
-  top: calc(var(--bar-h) + 4px); right: 16px;
-  width: min(380px, 92vw);
+  position: absolute; z-index: 56;
+  top: calc(100% + var(--bar-pad-y) + 4px); right: 0;
+  width: min(380px, calc(100vw - 24px));
   border-radius: var(--r-lg); overflow: hidden;
   background: color-mix(in srgb, var(--app-bg) 94%, #ffffff 6%);
   -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
@@ -1169,6 +1276,19 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   box-shadow: var(--shadow-lg);
 }
 [data-theme="light"] .mq-notif { background: rgba(255, 255, 255, 0.94); }
+/* On a phone there is no centred column to drift away from, and the bell is not
+   the last control in the bar — hanging the panel off it would run its left
+   edge off the screen. Back to the bar's own width, which is the shape a phone
+   wants anyway. (Fixed inside .mq-top resolves against the bar's box, courtesy
+   of its backdrop-filter — and the bar is full-width and pinned to the top, so
+   that lands exactly where a viewport-anchored panel used to.) */
+@media (max-width: 767px) {
+  .mq-notif {
+    position: fixed;
+    top: calc(var(--bar-h) + 4px); left: 12px; right: 12px;
+    width: auto;
+  }
+}
 
 /* ---- Command palette ---- */
 .mq-pal {
@@ -1230,7 +1350,7 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   animation: friends-pop-in 0.12s ease;
 }
 @keyframes friends-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
-@media (prefers-reduced-motion: reduce) { .friends-pop { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .friends-pop, .rx-pop { animation: none; } }
 .friends-pop-row {
   display: flex; align-items: center; gap: 10px;
   padding: 7px 8px; border-radius: var(--r-sm); cursor: pointer;

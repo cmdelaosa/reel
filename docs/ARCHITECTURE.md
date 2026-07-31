@@ -175,10 +175,24 @@ friendships (
 )
 notifications (
   id uuid pk, user_id uuid fk,
-  type text not null,                       -- new_episode | premiere | friend_request | import_done | …
+  type text not null,                       -- new_episode | premiere | friend_request | import_done | reaction | …
   payload jsonb not null default '{}',
   read_at timestamptz, created_at timestamptz
 )
+activity_reactions (                        -- 0058: one emoji per person per feed row
+  event_key text not null,                  -- minted by rpc_friend_activity: w:<actor>:<title>:<day>
+  user_id uuid fk,                          --   (r:/a: for a rating / an add). The feed is a derived
+  actor_id uuid fk,                         --   union, so the row's identity comes from the RPC, and
+  title_id uuid fk,                         --   the day bucket is Europe/Madrid — never the viewer's
+  emoji text not null,                      --   zone, or two friends would react to different rows.
+  created_at timestamptz, updated_at timestamptz,
+  primary key (user_id, event_key)
+)
+-- actor_id and title_id are DERIVED from event_key by a before-insert trigger and
+-- never accepted from the client, and the write policy calls activity_event_exists()
+-- to refuse a key that names no real rating/add/burst. Without both, a friend could
+-- post a key naming a show you never watched and have the trigger deliver it to your
+-- inbox. Writes also carry 0027's is_invited() gate, like every other user table.
 notification_prefs (
   user_id uuid fk, type text,
   inapp boolean not null default true, email boolean not null default false,
@@ -196,6 +210,13 @@ import_jobs (
 Friend-read RLS (Phase 4): `library_entries`, `watch_events`, `ratings`, `profiles` gain a
 `select` policy `is_friend(auth.uid(), user_id) and not profile_is_private(user_id)` via a
 `security definer` helper. Aggregation RPCs (below) are `security invoker` so they respect it.
+
+`activity_reactions` is gated by the **event**, not by the reactor: you read (and write) reactions
+on rows that are yours or a friend's — and, as everywhere else, only while that friend is not
+private. A reaction by someone you are not friends with is still visible to you, otherwise the
+counts on a shared friend's row would lie; their name and face come from `rpc_event_reactions`
+(`security definer`, same event gate), never from a widened read on `profiles`, and come back
+**null** for a private reactor you have no claim on (rendered as "Someone").
 
 ## Core derivations (pure functions in `app/src/domain/`, unit-tested)
 
@@ -260,8 +281,13 @@ documented in [DETAIL-PERFORMANCE.md](DETAIL-PERFORMANCE.md).
 - All supabase rows validated with Zod schemas in `lib/schemas.ts` before use.
 - Server aggregates (stats, friend sections) are **Postgres RPCs**, not client math over big sets:
   `rpc_user_stats()`, `rpc_up_next()`, `rpc_calendar_feed(from,to)`, `rpc_popular_with_friends()`,
-  `rpc_best_rated_by_friends()`, `rpc_friend_activity(limit)`.
-- Realtime: only the notifications inbox subscribes (Phase 3); everything else refetches.
+  `rpc_best_rated_by_friends()`, `rpc_friend_activity(limit)`, `rpc_event_reactions(keys[])`.
+- Realtime: only the notifications inbox subscribes (Phase 3); everything else refetches. An
+  *unread* reaction notification arriving is also what tells the feed its chips are stale —
+  reactions themselves do not stream (0058). That subscription listens to INSERT/UPDATE/DELETE,
+  which is why 0058 sets `replica identity full` on `notifications`: under the default identity a
+  delete carries only the primary key, so the subscription's `user_id` filter could never match it
+  and a withdrawn reaction's notification would linger on screen.
 
 ## TMDB integration
 

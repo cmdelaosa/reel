@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { qk } from "@/lib/queryKeys";
 import { getTrending, getPopular, getPopularNow, getTopRated } from "@/lib/tmdb";
 import type { TitleRow } from "@/lib/schemas";
 
@@ -105,13 +106,22 @@ const activitySchema = z.array(
     season_number: z.number().int().nullable(),
     episode_number: z.number().int().nullable().optional(),
     at: z.string(),
+    /* 0058 fields. event_key and ep_count stay optional so a client that
+       somehow reaches production before the migration still renders a feed —
+       the rows lose their reactions and their episode ranges, but nothing
+       throws. (title_id is returned too; the client no longer needs it, since
+       0058 derives the reaction's target from the key itself.) */
+    event_key: z.string().optional(),
+    to_season: z.number().int().nullable().optional(),
+    to_episode: z.number().int().nullable().optional(),
+    ep_count: z.number().int().optional(),
   }),
 );
 export type ActivityItem = z.infer<typeof activitySchema>[number];
 
 export function useFriendActivity(enabled: boolean, limit = 30) {
   return useQuery({
-    queryKey: ["friendActivity", limit],
+    queryKey: qk.friendActivity(limit),
     enabled,
     queryFn: async (): Promise<ActivityItem[]> => {
       const { data, error } = await supabase.rpc("rpc_friend_activity", { p_limit: limit });

@@ -96,7 +96,7 @@ export function Shell() {
   return (
     <div className="mq">
       {/* ---- Top bar ---- */}
-      <header className={`mq-top ${scrolled ? "scrolled" : ""}`}>
+      <header className={`mq-top ${scrolled ? "scrolled" : ""}${notifOpen ? " notif-open" : ""}`}>
         <div className="mq-top-inner">
           <div className="mq-brand" onClick={() => navigate("/tonight")}>
             <span className="mq-brand-ico"><Play size={14} fill="currentColor" strokeWidth={0} /></span>
@@ -118,10 +118,18 @@ export function Shell() {
               <span className="mq-searchbtn-label">{t("Search")}</span>
               <kbd className="mq-kbd">⌘K</kbd>
             </button>
-            <button className="btn btn-ghost btn-icon relative" title={t("Notifications")} onClick={() => setNotifOpen((v) => !v)}>
-              <Bell size={18} />
-              {unread > 0 && <span className="mq-belldot" />}
-            </button>
+            {/* The panel hangs off this wrapper, not off the window: the bar's
+                content is centred in a 1280px column, so a viewport-anchored
+                panel drifted further from its own bell the wider the screen
+                got. Its scrim stays down in Overlays — fixed positioning inside
+                the bar would be trapped by the bar's backdrop-filter. */}
+            <span className="mq-bell-wrap">
+              <button className="btn btn-ghost btn-icon relative" title={t("Notifications")} onClick={() => setNotifOpen((v) => !v)}>
+                <Bell size={18} />
+                {unread > 0 && <span className="mq-belldot" />}
+              </button>
+              {notifOpen && <NotifPanel onClose={() => setNotifOpen(false)} />}
+            </span>
             <button className="btn btn-ghost btn-icon" title={t("Settings")} onClick={() => setSettingsOpen(true)}>
               <Sliders size={18} />
             </button>
@@ -154,7 +162,9 @@ export function Shell() {
       {/* ---- Overlays ---- */}
       {paletteOpen && <Palette onClose={() => setPaletteOpen(false)} onOpen={openTitle} />}
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
-      {notifOpen && <NotifPanel onClose={() => setNotifOpen(false)} />}
+      {/* Click-anywhere-to-close for the bell panel. It sits below the bar's
+          z-index so the bar (and the bell itself) stay live above it. */}
+      {notifOpen && <div className="mq-notif-scrim" onClick={() => setNotifOpen(false)} />}
       {/* key on the tmdb id so switching titles (⌘K, notification) while the
           sheet is open remounts it — otherwise stale season/pending/toast state
           carries over from the previous show. */}

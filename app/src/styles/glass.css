@@ -90,9 +90,13 @@
 
 /* Friends dropdown: frosted-opaque like the avatar — it floats over sheet text,
    and a nested backdrop-filter inside the sheet's own frost doesn't blur it. */
-[data-look="glass"] .friends-pop {
+/* The reaction palette floats over the feed the same way and needs the same
+   opaque treatment. */
+[data-look="glass"] .friends-pop,
+[data-look="glass"] .rx-pop {
   background: color-mix(in srgb, var(--bg) 80%, #ffffff 6%);
 }
-[data-look="glass"][data-theme="light"] .friends-pop {
+[data-look="glass"][data-theme="light"] .friends-pop,
+[data-look="glass"][data-theme="light"] .rx-pop {
   background: rgba(255, 255, 255, 0.92);
 }

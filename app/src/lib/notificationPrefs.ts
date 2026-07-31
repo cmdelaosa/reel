@@ -10,6 +10,7 @@ export const NOTIFICATION_TYPES = [
   { type: "new_episode", label: "New episodes", sub: "When a show you follow airs" },
   { type: "premiere", label: "Premieres", sub: "When a followed upcoming show gets a date" },
   { type: "friend_request", label: "Friend requests", sub: "When someone adds you" },
+  { type: "reaction", label: "Reactions", sub: "When someone reacts to your activity" },
 ] as const;
 
 export interface Pref {

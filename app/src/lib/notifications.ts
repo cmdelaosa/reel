@@ -48,14 +48,47 @@ export function useNotificationsRealtime() {
     const channel = supabase.channel(`notifications:${userId}:${Math.random().toString(36).slice(2)}`);
     channel
       .on(
+        // Not just INSERT: a reaction notification is one row per event that
+        // gets rewritten as people pile on (0058), and it disappears again if
+        // they all withdraw.
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
         (payload) => {
+          if (payload.eventType === "DELETE") {
+            // 0058 sets `replica identity full` on this table, so a delete
+            // arrives with its whole old row — the subscription's user_id
+            // filter has something to match, which under the default identity
+            // (primary key only) it did not.
+            const goneId = (payload.old as { id?: string }).id;
+            if (!goneId) return;
+            queryClient.setQueryData<Notification[]>(qk.notifications, (old = []) =>
+              old.filter((n) => n.id !== goneId),
+            );
+            queryClient.invalidateQueries({ queryKey: qk.reactions });
+            return;
+          }
           const row = notificationSchema.safeParse(payload.new);
           if (!row.success) return;
-          queryClient.setQueryData<Notification[]>(qk.notifications, (old = []) =>
-            old.some((n) => n.id === row.data.id) ? old : [row.data, ...old],
-          );
+          // Somebody reacted to a row of yours: the chips on screen were
+          // fetched before that happened, including on the feed this very
+          // notification links into. Only for a row that comes in UNREAD —
+          // "mark all read" echoes one update per row through here, and none of
+          // them changes a single reaction.
+          if (row.data.type === "reaction" && !row.data.read_at) {
+            queryClient.invalidateQueries({ queryKey: qk.reactions });
+          }
+          queryClient.setQueryData<Notification[]>(qk.notifications, (old = []) => {
+            const known = old.some((n) => n.id === row.data.id);
+            // An update to a row outside the fetched window is not ours to add;
+            // marking 200 notifications read would otherwise grow the panel to
+            // 200 rows, well past the 50 it asked for.
+            if (!known && payload.eventType === "UPDATE") return old;
+            // A rewritten row carries a fresh created_at, so re-sorting floats
+            // it back to the top the way a brand-new one arrives there.
+            return [row.data, ...old.filter((n) => n.id !== row.data.id)].sort(
+              (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+            );
+          });
         },
       )
       .subscribe();
