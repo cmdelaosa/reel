@@ -25,7 +25,10 @@
  * to go if that ever changes.
  *
  * WHAT IT DOES
- *   1. Reads our titles that carry an imdb_id (the followed library).
+ *   1. Reads our titles that carry an imdb_id — every cached show, not just the
+ *      followed ones, since episode-refresh?backfillImdbIds=1 resolves the id for
+ *      the whole cache. A title without an imdb_id is invisible here, which is
+ *      exactly why shows nobody follows used to have no episode graph.
  *   2. Reads our episodes, so it only ever UPDATES rows we already have — it
  *      must never invent episode rows — and so it knows their air dates.
  *   3. Streams title.episode.tsv.gz, keeping only episodes of our shows.

@@ -92,10 +92,55 @@ immediately instead of waiting for the daily run to reach it. Re-run that curl
 (step 7) any time — each invocation covers a few hundred titles before the wall
 guard stops it, oldest-refreshed first, so a full library takes several.
 
-IMDb ratings are not part of this job at all — they come from the weekly
+IMDb ratings are not part of this job at all — they come from the daily
 `imdb-ratings` GitHub Action (see ARCHITECTURE → Metadata cache), which needs the
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` **repo secrets** rather than
 Supabase function secrets.
+
+### One-off backfills (run in rounds, driven by the data)
+
+Fire these **from the SQL editor**, the way the cron does — `net.http_post` with
+the key read out of the Vault. A `curl` needs the service key in your shell, and
+the header has to match `SUPABASE_SERVICE_ROLE_KEY` exactly, which the dashboard's
+newer `sb_secret_…` key is not. Check the secret's name first: this project's is
+`episode_refresh_service_key`, not the `service_role_key` that
+`schedule-jobs.sql` creates.
+
+```sql
+select name from vault.secrets;   -- whatever it is called here
+```
+
+```sql
+select net.http_post(
+  url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/episode-refresh?backfillImdbIds=1',
+  headers := jsonb_build_object(
+    'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'episode_refresh_service_key'),
+    'Content-Type', 'application/json'
+  ),
+  body    := '{}'::jsonb
+);
+-- the response lands here a moment later; 401 usually means the secret name is wrong
+select status_code, content from net._http_response order by id desc limit 1;
+```
+
+Each round works until the runtime stops it and commits as it goes, so re-running
+is always safe — but these rounds are killed on the runtime's CPU limit **before**
+they write their `job_runs` row (observed: ~2 min in, ~260 titles done, no log
+line). Judge progress by the counts, never by the run log:
+
+```sql
+-- re-fire until it stops falling
+select count(*) from titles where imdb_id is null;
+select count(*) from episodes where season_number > 0 and tmdb_vote_average is null;
+```
+
+1. **`?backfillImdbIds=1`** — `imdb_id` across the whole cache. Without it the
+   ratings importer cannot see a show at all, which is why titles nobody follows
+   had no episode graph. ~260 titles a round, so a few thousand takes several.
+   What stays null is real: shows TMDB has no IMDb id for, plus the odd deleted
+   tmdb_id (a 404).
+2. **`?force=1&allSeasons=1`** — per-episode TMDB scores on the older seasons the
+   daily run never touches. The heavier of the two.
 
 ## 6. Deploy the frontend (Vercel)
 

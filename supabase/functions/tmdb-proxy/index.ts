@@ -18,6 +18,11 @@
 // *user* JWT is required (the anon key alone is rejected). The response shape is
 // mirrored (minimally, no cross-runtime import) by app/src/lib/schemas.ts.
 //
+// Filling a season from scratch (nobody had opened this show before) also pulls
+// the show's remaining seasons in behind the response — see fillWholeShow. The
+// IMDb ratings importer can only rate episode rows we already hold, so a show
+// half-ingested is a show half-graphed.
+//
 // air_datetime: TMDB gives an air_date (day) but no time, so the upsert stamps
 // 21:00 UTC as a placeholder and a background pass overwrites it with TVmaze's
 // real airstamp where TVmaze carries the show (see enrichAirTimes). Rows keep
@@ -341,12 +346,18 @@ function searchRow(r: Any) {
   };
 }
 
+/* episode_count rides along only when the payload carries it: the title payload
+   does, a season payload does not. Omitted rather than nulled — the rule the
+   translations and providers above already follow — because fetching a season
+   directly would otherwise wipe the announced count the title refresh wrote, and
+   that count is exactly what /season compares its row count against to notice a
+   season has gained an episode. */
 const seasonRow = (titleId: string, s: Any) => ({
   title_id: titleId,
   tmdb_id: s.id ?? null,
   number: s.season_number,
   name: s.name ?? null,
-  episode_count: s.episode_count ?? null,
+  ...(s.episode_count != null ? { episode_count: s.episode_count } : {}),
   air_date: s.air_date || null,
 });
 
@@ -516,8 +527,17 @@ async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: numbe
 }
 
 /** TMDB → cache refresh of one season's episodes; returns the
- *  GET /title/:id/season/:n response shape. */
-async function refreshSeason(admin: SupabaseClient, apiKey: string, tmdbId: number, titleId: string, n: number) {
+ *  GET /title/:id/season/:n response shape. `enrich` is turned off by the
+ *  whole-show fill below, which runs a single TVmaze pass at the end instead of
+ *  one per season — they all fetch the same show's episode list. */
+async function refreshSeason(
+  admin: SupabaseClient,
+  apiKey: string,
+  tmdbId: number,
+  titleId: string,
+  n: number,
+  enrich = true,
+) {
   const s = await fetchTmdb(apiKey, `/tv/${tmdbId}/season/${n}`);
   const [season] = await upsertReturning(admin, "seasons", seasonRow(titleId, s), "title_id,number");
   // Read before the first episode write, so the upsert can carry known air
@@ -534,8 +554,68 @@ async function refreshSeason(admin: SupabaseClient, apiKey: string, tmdbId: numb
   // Off the hot path, like the network logos above. Episodes we had already
   // dated keep their real time in the response; only genuinely new ones can
   // still read as an estimate until the background pass lands.
-  if (episodes.length) inBackground(enrichAirTimes(admin, titleId));
+  if (episodes.length && enrich) inBackground(enrichAirTimes(admin, titleId));
   return { season, episodes };
+}
+
+/** The regular (non-special) season numbers we hold for a title, ascending. */
+async function regularSeasons(admin: SupabaseClient, titleId: string): Promise<number[]> {
+  const { data } = await admin
+    .from("seasons").select("number").eq("title_id", titleId).gt("number", 0).order("number");
+  return (data ?? []).map((s: Any) => s.number as number);
+}
+
+/* Pull a whole show into the cache, behind the response, the first time one of
+   its seasons has to be filled from scratch — i.e. the first time anyone opens a
+   show nobody follows.
+
+   WHY THE WHOLE SHOW. Episode rows are what the IMDb ratings importer
+   (scripts/imdb-ratings) rates: it only ever UPDATES rows we already hold, never
+   invents them. Filling just the season on screen means tonight's run rates only
+   that one, and tomorrow the season picker has a graph on the season somebody
+   happened to open and nothing on the rest — which reads as broken rather than
+   as pending. The same fetch also writes each episode's TMDB score, so the
+   episode sub-sheet fills in too.
+
+   Idempotent and self-limiting: seasons that already hold episodes are skipped,
+   so a later cold season (a premiere) costs one request, not a whole show.
+
+   `seeded` says whether the caller's own season wrote any episodes — it refreshed
+   with enrichment off on the promise that the single TVmaze pass at the end
+   covers it. */
+async function fillWholeShow(
+  admin: SupabaseClient,
+  apiKey: string,
+  tmdbId: number,
+  titleId: string,
+  seeded: boolean,
+) {
+  let seasons = await regularSeasons(admin, titleId);
+  // No season list cached yet: the client's /title call may still be in flight,
+  // or the row came from popular-now, which writes titles without seasons. The
+  // title refresh writes every season row — and, the reason it earns its place
+  // here, the imdb_id the ratings importer matches this show by. Without it the
+  // episodes we are about to write could never be rated.
+  if (seasons.length <= 1) {
+    await refreshTitle(admin, apiKey, tmdbId);
+    seasons = await regularSeasons(admin, titleId);
+  }
+  let wrote = seeded;
+  for (const n of seasons) {
+    const { count } = await admin
+      .from("episodes")
+      .select("id", { count: "exact", head: true })
+      .eq("title_id", titleId)
+      .eq("season_number", n);
+    if (count) continue; // already held — the caller's season, or an earlier fill
+    const { episodes } = await refreshSeason(admin, apiKey, tmdbId, titleId, n, false);
+    if (episodes.length) wrote = true;
+  }
+  // One TVmaze pass for the lot — it fetches the show's whole episode list
+  // either way. Skipped when nothing was written: a season TMDB has no episodes
+  // for yet (an announced one) MISSes on every single open, and re-dating a show
+  // that gained no rows is pure upstream traffic.
+  if (wrote) await enrichAirTimes(admin, titleId);
 }
 
 const fetchTmdb = async (apiKey: string, p: string) => {
@@ -727,10 +807,16 @@ Deno.serve(async (req) => {
         const CHUNK = 20;
         for (let i = 0; i < pool.length; i += CHUNK) {
           const details = await Promise.all(
-            // Same request count with the append, and it means a trending row
-            // already carries its providers the first time it's rendered.
+            // Same request count with the appends, and it means a discover row
+            // already carries its providers and Spanish title the first time it
+            // is rendered. external_ids is not a nicety here: titleRow stamps
+            // last_refreshed_at, so a payload without it writes a row that looks
+            // fully refreshed to /title while imdb_id stays null — and imdb_id is
+            // the ONLY key the ratings importer matches a show by, so those
+            // titles were invisible to it for good (no episode graph, no IMDb
+            // score on the sheet). Keep this append in step with refreshTitle's.
             pool.slice(i, i + CHUNK).map((c) =>
-              fetchTmdb(apiKey, `/tv/${c.id}?append_to_response=watch/providers`).catch(() => null)),
+              fetchTmdb(apiKey, `/tv/${c.id}?append_to_response=translations,external_ids,watch/providers`).catch(() => null)),
           );
           for (const d of details) {
             if (!d) continue;
@@ -998,7 +1084,10 @@ Deno.serve(async (req) => {
         }
       }
       const fillStarted = performance.now();
-      const filled = await refreshSeason(admin, apiKey, tmdbId, title.id, n);
+      // enrich=false: fillWholeShow runs the single TVmaze pass for this season
+      // and every other one it brings in, right after.
+      const filled = await refreshSeason(admin, apiKey, tmdbId, title.id, n, false);
+      inBackground(fillWholeShow(admin, apiKey, tmdbId, title.id, filled.episodes.length > 0));
       return json(filled, 200, detailHeaders("MISS", dbMs, performance.now() - fillStarted));
     }
 

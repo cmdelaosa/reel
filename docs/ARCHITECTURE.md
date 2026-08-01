@@ -132,6 +132,18 @@ episodes (
   too thinly voted (`MIN_VOTES`) or too freshly aired (`MIN_AGE_DAYS`) to have
   settled. Season aggregates are derived client-side (`app/src/domain/episodeRatings.ts`).
   The datasets are licensed for personal, non-commercial use.
+- **What a show needs before it can be rated**, since both halves used to be
+  filled for followed titles only — which is why a show nobody had added showed
+  neither per-episode scores nor the season graph:
+  1. `titles.imdb_id` — the only key the importer matches a show by. Written by
+     any full title refresh (they all append `external_ids`), and backfilled
+     across the whole cache by `episode-refresh?backfillImdbIds=1`.
+  2. `episodes` rows — the importer updates, never inserts. The first time anyone
+     opens a show, `tmdb-proxy` ingests **every** regular season behind the
+     response (`fillWholeShow`), so the next nightly run rates all of it rather
+     than the one season that happened to be on screen.
+  Both land before the 04:00 UTC import, so a show opened today is graphed
+  tomorrow morning.
 
 ### User data
 
@@ -297,6 +309,10 @@ documented in [DETAIL-PERFORMANCE.md](DETAIL-PERFORMANCE.md).
 - `episode-refresh` scheduled function (daily): for every title referenced by any
   `library_entries.followed`, refresh future episodes + title status; upsert changes; enqueue
   `new_episode` notifications for `notify=true` followers (Phase 3 wires delivery).
+  Manual modes, never on the schedule: `?force=1` (ignore staleness),
+  `?allSeasons=1` (whole show, not the latest two — backfills the per-episode
+  TMDB score), `?backfillImdbIds=1` (resolve `titles.imdb_id` across the entire
+  cache, in rounds until `remaining` is 0).
 - Network logos: static SVGs in `app/public/logos/` (already sourced in the prototype —
   Netflix/Apple/Disney official vectors, styled wordmark tiles for the rest).
 

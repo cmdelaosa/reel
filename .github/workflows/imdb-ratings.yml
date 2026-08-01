@@ -1,6 +1,6 @@
 name: imdb-ratings
 
-# Weekly IMDb rating import from the official datasets (scripts/imdb-ratings).
+# Daily IMDb rating import from the official datasets (scripts/imdb-ratings).
 #
 # It runs here rather than as an edge function because the input is a ~52 MB
 # gzipped TSV with ~8.5M rows: the script streams it, but a runner has the time
@@ -13,6 +13,15 @@ name: imdb-ratings
 # long a newly-followed show waits for a rating. A whole run takes ~25s and IMDb
 # regenerates the files daily, so weekly bought nothing. What keeps a just-aired
 # episode's volatile score out is MIN_AGE_DAYS, not the schedule.
+#
+# PLANNED: hourly ("0 * * * *"), once this repo is public. The cadence is not
+# about fresher data — IMDb publishes once a day — it is about how long a show
+# waits after someone first OPENS it: tmdb-proxy ingests the episode rows on the
+# spot, and they stay unrated until the next run here, so daily means up to 24h
+# with no episode graph. Hourly cuts that to one. What is holding it back is
+# purely the bill: 24 runs/day of runner time is billed on a private repo, and
+# this account's Actions have already been failing over payment. Free minutes on
+# a public repo remove the objection. Nothing else needs to change.
 #
 # SECRETS (repo → Settings → Secrets and variables → Actions):
 #   SUPABASE_URL                — https://<ref>.supabase.co
