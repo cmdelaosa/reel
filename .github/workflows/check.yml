@@ -26,8 +26,11 @@ jobs:
       - run: npm ci
       - run: npm run check
 
-  # The Deno edge functions aren't covered by the app's tsc — type-check them
-  # here so the unattended crons + importer can't ship a type error (audit D2).
+  # The Deno edge functions aren't covered by the app's tsc or vitest — type-check
+  # them here so the unattended crons + importer can't ship a type error (audit
+  # D2), and run whatever *_test.ts they carry. Function logic worth testing goes
+  # in a sibling module (index.ts serves on import, so it can't be imported by a
+  # test) — see tmdb-proxy/rank.ts.
   edge:
     runs-on: ubuntu-latest
     steps:
@@ -49,3 +52,6 @@ jobs:
               deno check "$f"
             fi
           done
+      - name: Test edge functions
+        # No test files is a pass, not a failure — most functions have none yet.
+        run: deno test --permit-no-files supabase/functions/
