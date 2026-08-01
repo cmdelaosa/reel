@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { Bell, CalendarClock, Check, Download, Smile, Trash2, Tv, Users } from "lucide-react";
+import { Bell, Check, Download, Smile, Trash2, Tv, Users } from "lucide-react";
 import {
   useNotifications, useMarkNotificationsRead, useClearNotifications, type Notification,
 } from "@/lib/notifications";
@@ -12,7 +12,6 @@ import { t as tr, tv } from "@/lib/i18n";
 
 const ICONS: Record<string, typeof Bell> = {
   new_episode: Tv,
-  premiere: CalendarClock,
   friend_request: Users,
   import_done: Download,
   reaction: Smile,
@@ -29,7 +28,6 @@ function relTime(iso: string): string {
 function title(n: Notification): string {
   switch (n.type) {
     case "new_episode": return tr("New episode");
-    case "premiere": return tr("Premiere dated");
     case "friend_request": return tr("Friend request");
     case "import_done": return tr("Import finished");
     case "reaction": return tr("Reaction");
@@ -51,8 +49,6 @@ function body(n: Notification): string {
         episode: String(p.episode_number),
         name: p.episode_name ? ` "${p.episode_name}"` : "",
       });
-    case "premiere":
-      return tv("{show} has a premiere date", { show });
     case "import_done":
       return tv("{count} shows imported from TV Time", { count: String(p.matched ?? 0) });
     case "reaction": {

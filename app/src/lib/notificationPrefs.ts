@@ -6,11 +6,21 @@ import { useAuth } from "@/features/auth/AuthProvider";
 /* Per-type notification preferences. Absent row = default (in-app on, email
    off) — materialized lazily on first toggle. */
 
-export const NOTIFICATION_TYPES = [
-  { type: "new_episode", label: "New episodes", sub: "When a show you follow airs" },
-  { type: "premiere", label: "Premieres", sub: "When a followed upcoming show gets a date" },
-  { type: "friend_request", label: "Friend requests", sub: "When someone adds you" },
-  { type: "reaction", label: "Reactions", sub: "When someone reacts to your activity" },
+/* Only new_episode has an email channel (the alerts digest); the rest are
+   in-app only, so their Email chip is hidden rather than shown inert. */
+export type NotificationChannel = "inapp" | "email";
+export interface NotificationTypeSpec {
+  type: string;
+  label: string;
+  sub: string;
+  channels: readonly NotificationChannel[];
+}
+
+export const NOTIFICATION_TYPES: readonly NotificationTypeSpec[] = [
+  { type: "new_episode", label: "New episodes", sub: "Only shows you're watching or waiting for", channels: ["inapp", "email"] },
+  { type: "friend_request", label: "Friend requests", sub: "When someone adds you", channels: ["inapp"] },
+  { type: "reaction", label: "Reactions", sub: "When someone reacts to your activity", channels: ["inapp"] },
+  { type: "import_done", label: "Imports", sub: "When a TV Time import finishes", channels: ["inapp"] },
 ] as const;
 
 export interface Pref {
