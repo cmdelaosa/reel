@@ -158,8 +158,6 @@ const ES: Record<string, string> = {
   "Stop": "Parar",
   "All watched": "Todo visto",
   "Resume": "Reanudar",
-  "Notify me": "Avisarme",
-  "Tracking": "Siguiendo",
   "Ignore": "Ignorar",
   "Un-ignore": "Restaurar",
   "Ignore — hide from suggestions": "Ignorar — ocultar de las sugerencias",

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { Bell, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, User, X } from "lucide-react";
+import { Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, User, X } from "lucide-react";
 import { getCredits, tmdbImg } from "@/lib/tmdb";
 import { fmtAirDate, fmtPlainDate } from "@/lib/region";
 import { dateLocale, isEs, t as tr, tGenre, tv } from "@/lib/i18n";
-import { useLibrary, useFollow, useUnfollow, useToggleNotify, useSetStopped } from "@/lib/library";
+import { useLibrary, useFollow, useUnfollow, useSetStopped } from "@/lib/library";
 import { useIgnored, useIgnore, useUnignore } from "@/lib/ignore";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
 import { useFriendships } from "@/lib/friends";
@@ -202,7 +202,6 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const { data: library = [] } = useLibrary();
   const follow = useFollow();
   const unfollow = useUnfollow();
-  const toggleNotify = useToggleNotify();
   const setStopped = useSetStopped();
   const { isIgnored } = useIgnored();
   const ignore = useIgnore();
@@ -507,14 +506,6 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                     title={tr(isIgnored(title.tmdb_id) ? "Un-ignore — show in suggestions again" : "Ignore — hide from suggestions")}
                   >
                     {isIgnored(title.tmdb_id) ? <><Eye size={16} />{tr("Un-ignore")}</> : <><EyeOff size={16} />{tr("Ignore")}</>}
-                  </button>
-                )}
-                {added && entry && isUpcoming && !entry.stopped && (
-                  <button
-                    className={`btn ${entry.notify ? "btn-accent" : "btn-outline"}`}
-                    onClick={() => toggleNotify.mutate({ titleId: entry.title_id, notify: !entry.notify })}
-                  >
-                    <Bell size={16} />{entry.notify ? tr("Tracking") : tr("Notify me")}
                   </button>
                 )}
                 {added && entry && (
