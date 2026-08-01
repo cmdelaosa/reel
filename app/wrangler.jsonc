@@ -6,7 +6,6 @@
   // Static-only Worker: no `main`, the build output is served directly.
   // `single-page-application` returns index.html (200) for any path that
   // isn't a built asset, which is what React Router needs on deep links.
-  // This replaces the rewrite in vercel.json.
   "assets": {
     "directory": "./dist/",
     "not_found_handling": "single-page-application"

@@ -1,14 +1,12 @@
-# Deploy runbook — hosted Supabase + Vercel
+# Deploy runbook — hosted Supabase + Cloudflare
 
-> **Frontend section superseded.** The app has since moved to **Cloudflare
-> Workers** at [reel-app.com](https://reel-app.com) — §6 (Vercel) is kept as the
-> record of the original cutover, and the current hosting setup lives in
-> [MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md). The Supabase-side steps
-> are still the reference.
+The ordered, one-time cutover to production. The frontend is a static Vite build
+served by a Cloudflare Worker; the backend is a hosted Supabase project. Do the
+Supabase steps **before** the frontend step so the client has a backend to talk to.
 
-The ordered, one-time cutover to production (PLAN.md P1-C5). The frontend is a
-static Vite build on Vercel; the backend is a hosted Supabase project. Do the
-Supabase steps **before** the Vercel step so the client has a backend to talk to.
+> The app originally launched on Vercel and moved to Cloudflare in July 2026;
+> [MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md) records that move and the
+> reasoning. Nothing on Vercel remains.
 
 > Why this doc exists: the app is invite-only *and* leans entirely on RLS +
 > scheduled edge functions. Several production requirements have no local
@@ -60,9 +58,10 @@ not fall back to resend.dev, which only delivers to the account owner).
 
 ## 4. Configure Auth (hosted dashboard → Authentication)
 
-- **URL Configuration**: set **Site URL** to your Vercel domain and add it (plus
-  `http://localhost:5173` for local) to **Redirect URLs**. Magic-link and OAuth
-  redirects fail without this.
+- **URL Configuration**: set **Site URL** to the app's public domain and add it
+  (plus `http://localhost:5173` for local) to **Redirect URLs**. Magic-link and
+  OAuth redirects fail without this. Prune stale origins here whenever the app
+  moves host — a redirect allowlist that still names a dead domain is a loose end.
 - **SMTP (required for real users)**: Auth → **SMTP Settings** → enable custom
   SMTP using your Resend SMTP credentials from the verified domain. Supabase's
   built-in mailer is test-only, rate-limited to a few/hour, and on newer projects
@@ -148,15 +147,25 @@ select count(*) from episodes where season_number > 0 and tmdb_vote_average is n
 2. **`?force=1&allSeasons=1`** — per-episode TMDB scores on the older seasons the
    daily run never touches. The heavier of the two.
 
-## 6. Deploy the frontend (Vercel)
+## 6. Deploy the frontend (Cloudflare Workers)
 
-- Import the repo; set the **Root Directory** to `app/`.
-- Build command `npm run build`, output `dist` (SPA rewrite is in
-  `app/vercel.json`).
-- Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (and
-  `VITE_GOOGLE_AUTH=true` only if you enabled Google in step 4).
+- Cloudflare dashboard → **Workers & Pages → Create → Connect a repository**.
+- **Worker name** `reel` — it must match `name` in `app/wrangler.jsonc` or the
+  build fails. **Root directory** `app`. **Build command**
+  `npm run check && npm run build` (lint + unit tests gate the deploy).
+  Deploy command: `npx wrangler deploy`. The SPA fallback lives in
+  `wrangler.jsonc` (`not_found_handling`), not in a rewrite file.
+- Build variables — **Settings → Build → Build Variables and Secrets**, *not*
+  the runtime "Variables & Secrets": Vite inlines them at build time.
+  `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_GOOGLE_AUTH=true`
+  only if you enabled Google in step 4.
 - Do **not** set `VITE_DEV_AUTOLOGIN_*` — dev-only, and inert in a prod build
   anyway (`import.meta.env.DEV` is false).
+
+⚠️ Missing build vars do **not** fail the build: it goes green and serves a
+blank app from a vendor-only bundle (~30 KB of JS). Verify by bundle size
+(~800 KB+), never by the green check. Full setup, DNS and the custom-domain
+steps: [MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md).
 
 ## 7. Verify (do all of these before inviting anyone)
 
