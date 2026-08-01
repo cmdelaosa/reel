@@ -16,6 +16,15 @@
 //
 // AUTH: headless job — requires the service-role key as the bearer token.
 //
+// MANUAL MODES (query params; the schedule uses none of them):
+//   ?force=1            ignore the staleness gate, recompute every followed title
+//   ?allSeasons=1       refresh every regular season, not just the latest two —
+//                       backfills the per-episode TMDB score on older seasons
+//   ?backfillImdbIds=1  resolve titles.imdb_id for EVERY cached title that lacks
+//                       one (not just the followed): without it the ratings
+//                       importer cannot see a show at all. Run in rounds until
+//                       job_runs reports remaining: 0.
+//
 // SCHEDULING (documented choice: pg_cron on hosted):
 //   select cron.schedule('episode-refresh-daily', '0 5 * * *', $$
 //     select net.http_post(
@@ -33,6 +42,16 @@ const AIR_TIME = "T21:00:00Z"; // placeholder; enrichAirTimes replaces it below
 const STALE_MS = 20 * 60 * 60 * 1000; // 20h
 const LIMIT = 40;
 const WINDOW_MS = 10_000;
+
+/* Wall guard on a run's background work — every pass here is idempotent, so
+   whatever is left over is picked up by the next run (or the next manual round).
+   300s, down from 330s: the guard is only consulted between titles, so the margin
+   it leaves has to cover one whole title's worst case. That case grew when
+   enrichment joined the per-title work (more upstream calls), and a run really
+   did get killed mid-title without logging. Capping every fetch
+   (UPSTREAM_TIMEOUT_MS) bounds a title; this widens the margin that bound has to
+   fit inside. Costs ~30s of throughput per run. */
+const MAX_MS = 300_000;
 
 /* Every upstream call is capped. Without this a third party that accepts the
    connection but never answers hangs `await fetch` forever: the refresh loop's
@@ -284,7 +303,12 @@ function providerMap(d: Any): Record<string, { name: string; logo_path: string |
   return out;
 }
 
-async function refreshTitle(admin: SupabaseClient, key: string, row: { id: string; tmdb_id: number }) {
+async function refreshTitle(
+  admin: SupabaseClient,
+  key: string,
+  row: { id: string; tmdb_id: number },
+  allSeasons = false,
+) {
   const d = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations,external_ids,watch/providers`);
   const es = esTranslation(d);
   const providers = providerMap(d);
@@ -324,9 +348,21 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
     .sort((a: Any, b: Any) => b.season_number - a.season_number);
   // TMDB episode refresh stays on the latest two seasons — that's where episodes
   // and air times still move, and it's the expensive half (a request per season
-  // plus the upserts). The IMDb pass can be widened independently: it's one
-  // request per season and older seasons are exactly the settled ones.
-  const latest = regular.slice(0, 2);
+  // plus the upserts).
+  //
+  // ?allSeasons=1 widens it to the whole show, for manual backfills only: the
+  // per-episode TMDB score arrived with migration 0057 and is only ever written
+  // by a season fetch, so every season older than the two this cron touches has
+  // been sitting there without one. Do NOT put it on the schedule — it turns a
+  // ~600-request nightly run into a ~2.500-request one to rewrite settled rows.
+  //
+  // Such a round is heavy enough that the runtime kills the isolate on its CPU
+  // limit before the wall guard is ever consulted — locally, ~90s in, with no
+  // job_runs row written. Harmless (every upsert is committed as it goes, and
+  // re-running just re-refreshes), but it means these rounds are driven by the
+  // DATA — count the seasons still missing a tmdb_vote_average — not by the run
+  // log, which may never appear.
+  const latest = allSeasons ? regular : regular.slice(0, 2);
 
   // Read once for the whole title, before any episode write touches it.
   const keep = await keepTvmazeTimes(admin, row.id);
@@ -394,6 +430,98 @@ async function refreshTitle(admin: SupabaseClient, key: string, row: { id: strin
   // IMDb's own published datasets. See the header note.
 }
 
+/* Resolve titles.imdb_id for every cached title that lacks one — ?backfillImdbIds=1.
+ *
+ * The ratings importer (scripts/imdb-ratings) matches our shows to IMDb's
+ * datasets by imdb_id and nothing else, so a title without one is invisible to
+ * it: no episode graph, no IMDb score on the sheet. Only the followed set ever
+ * had one filled, because this cron and /title's refresh path are the only
+ * writers and neither covers a title nobody follows — which left the other ~80%
+ * of the cache unrateable.
+ *
+ * /tv/:id/external_ids is the cheapest endpoint TMDB has (a dozen ids, no
+ * appends). The pass is idempotent and meant to be run in rounds: rows resolved
+ * by an earlier round drop out of the query, so repeat until the count of titles
+ * with a null imdb_id stops falling. Drive it by that count, NOT by this run's
+ * `remaining` — these rounds are killed on the runtime's CPU limit long before
+ * the wall guard, so the job_runs row often never gets written.
+ *
+ * THE QUEUE IS SHUFFLED, and that is not a detail. Shows TMDB genuinely has no
+ * IMDb id for stay null forever, so they accumulate at the head of an ordered
+ * queue and every later round spends its whole budget re-asking the same known
+ * misses. Measured in production: yield per round fell 209 → 75 while a random
+ * sample said ~65% of the remainder was still resolvable, and the first 20 rows
+ * of the queue were misses to a title. Shuffling gives every title an even chance
+ * of being reached, which is what makes the rounds converge instead of stalling
+ * with hundreds of shows still unresolved.
+ *
+ * Titles are handled in small concurrent batches: done one at a time the pass
+ * runs at the round-trip latency (~1/s) and leaves three quarters of the rate
+ * limiter's budget unused, which turns a hand-driven backfill of a few thousand
+ * titles into a whole evening of rounds.
+ */
+const BACKFILL_BATCH = 8;
+
+async function backfillImdbIds(admin: SupabaseClient, key: string, maxMs: number) {
+  const started = Date.now();
+  const PAGE = 1000;
+  const rows: Any[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin
+      .from("titles")
+      .select("id, tmdb_id")
+      .is("imdb_id", null)
+      .order("id")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`titles: ${error.message}`);
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+  }
+
+  // Fisher-Yates — see the note above on why the order matters.
+  for (let i = rows.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rows[i], rows[j]] = [rows[j], rows[i]];
+  }
+
+  let resolved = 0, none = 0, done = 0, hitGuard = false;
+  const errors: string[] = [];
+  for (let i = 0; i < rows.length; i += BACKFILL_BATCH) {
+    // Checked between batches, like the refresh loop above: throttle() already
+    // holds the window, so a batch is bounded by one title's worst case times
+    // the batch size, well inside the margin MAX_MS leaves.
+    if (Date.now() - started > maxMs) { hitGuard = true; break; }
+    const batch = rows.slice(i, i + BACKFILL_BATCH);
+    const outcomes = await Promise.all(batch.map(async (t: Any) => {
+      try {
+        const d = await tmdb(key, `/tv/${t.tmdb_id}/external_ids`);
+        const imdbId = d?.imdb_id || null;
+        if (!imdbId) return "none"; // TMDB has no IMDb id for this show
+        const { error } = await admin.from("titles").update({ imdb_id: imdbId }).eq("id", t.id);
+        if (error) throw new Error(error.message);
+        return "resolved";
+      } catch (err) {
+        errors.push(`${t.tmdb_id}: ${String(err)}`);
+        return "error";
+      }
+    }));
+    for (const o of outcomes) {
+      if (o === "resolved") resolved++;
+      else if (o === "none") none++;
+    }
+    done += batch.length;
+  }
+  return {
+    missing: rows.length,
+    resolved,
+    noImdbId: none,
+    errors: errors.length,
+    hitGuard,
+    remaining: rows.length - done,
+    sample: errors.slice(0, 5),
+  };
+}
+
 Deno.serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const auth = req.headers.get("Authorization") ?? "";
@@ -413,19 +541,45 @@ Deno.serve(async (req) => {
   // respecting staleness to stay within the TMDB budget.
   const params = new URL(req.url).searchParams;
   const force = params.get("force") === "1";
+  // Manual backfill of the per-episode TMDB score across the seasons the daily
+  // run never touches. See refreshTitle — not for the schedule.
+  const allSeasons = params.get("allSeasons") === "1";
+  // Manual pass, run in rounds until `remaining` is 0. See backfillImdbIds.
+  const backfillIds = params.get("backfillImdbIds") === "1";
 
   // One queryable row per run/exit (job_runs, migration 0029) so a silently-
   // failing daily job is visible (edge logs are console-only + ~1 day on free
   // tier). Best-effort — never fail the run on the log write.
   const startedAt = new Date().toISOString();
-  const logRun = (ok: boolean, summary: unknown) =>
+  const logRun = (ok: boolean, summary: unknown, job = "episode-refresh") =>
     admin.from("job_runs").insert({
-      job: "episode-refresh",
+      job,
       started_at: startedAt,
       finished_at: new Date().toISOString(),
       ok,
       summary,
     }).then(() => {}, () => {});
+
+  // The imdb_id pass shares nothing with the refresh below — a different set of
+  // titles (every cached one, not the followed) and a different endpoint — so it
+  // short-circuits here rather than threading a mode through the whole run. Same
+  // respond-now-work-later shape, under its own job name.
+  if (backfillIds) {
+    const work = backfillImdbIds(admin, tmdbKey, MAX_MS).then(
+      (summary) => {
+        console.log(`imdb-id-backfill done: ${summary.resolved} resolved, ${summary.remaining} left`);
+        return logRun(summary.errors === 0, summary, "imdb-id-backfill");
+      },
+      (err) => logRun(false, { error: String(err) }, "imdb-id-backfill"),
+    );
+    // deno-lint-ignore no-explicit-any
+    const rt = (globalThis as Any).EdgeRuntime;
+    if (rt?.waitUntil) rt.waitUntil(work);
+    else await work;
+    return new Response(JSON.stringify({ job: "imdb-id-backfill", processing: true }), {
+      headers: { "content-type": "application/json" },
+    });
+  }
 
   // distinct followed titles (service role sees all users). The !inner embed
   // filters titles to those with ≥1 followed entry — parent rows stay unique,
@@ -465,18 +619,9 @@ Deno.serve(async (req) => {
   });
 
   // Respond immediately and refresh in the background (EdgeRuntime.waitUntil)
-  // so the gateway's request timeout never truncates a big backfill. A wall
-  // guard stops before the runtime's hard limit; leftovers stay stale and the
-  // next scheduled run picks them up (refreshTitle is idempotent).
-  //
-  // 300s, down from 330s: the guard is only consulted between titles, so the
-  // margin it leaves has to cover one whole title's worst case. Since IMDb
-  // enrichment joined the per-title work that worst case grew (more upstream
-  // calls), and a run really did get killed mid-title without logging. Capping
-  // every fetch (UPSTREAM_TIMEOUT_MS) bounds a title; this widens the margin
-  // that bound has to fit inside. Costs ~30s of throughput per run — the
-  // leftovers are picked up by the next one either way.
-  const MAX_MS = 300_000;
+  // so the gateway's request timeout never truncates a big backfill. The wall
+  // guard (MAX_MS) stops before the runtime's hard limit; leftovers stay stale
+  // and the next scheduled run picks them up (refreshTitle is idempotent).
   const started = Date.now();
 
   const work = (async () => {
@@ -486,7 +631,7 @@ Deno.serve(async (req) => {
     for (const t of stale) {
       if (Date.now() - started > MAX_MS) { hitGuard = true; break; }
       try {
-        await refreshTitle(admin, tmdbKey, t);
+        await refreshTitle(admin, tmdbKey, t, allSeasons);
         refreshed++;
       } catch (err) {
         errors.push(`${t.tmdb_id}: ${String(err)}`);
@@ -505,6 +650,8 @@ Deno.serve(async (req) => {
       followed: ids.length,
       stale: stale.length,
       refreshed,
+      // Marks the manual whole-show rounds apart from the nightly two-season one.
+      ...(allSeasons ? { allSeasons: true } : {}),
       errors: errors.length,
       hitGuard,
       remaining: hitGuard ? stale.length - refreshed - errors.length : 0,
