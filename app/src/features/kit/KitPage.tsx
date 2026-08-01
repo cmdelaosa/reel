@@ -86,7 +86,7 @@ export default function KitPage() {
           <button className="btn btn-accent"><Plus size={16} /> Add show</button>
           <button className="btn btn-outline">Outline</button>
           <button className="btn btn-ghost">Ghost</button>
-          <button className="btn btn-ghost btn-sm"><Bell size={14} /> Notify me</button>
+          <button className="btn btn-ghost btn-sm"><Bell size={14} /> Small ghost</button>
           <button className="btn btn-ghost btn-icon" aria-label="Watched"><Check size={16} /></button>
         </div>
       </Section>

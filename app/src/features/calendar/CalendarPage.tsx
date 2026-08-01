@@ -1,9 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Bell } from "lucide-react";
 import { clusterFeed, dayLabel, groupFeed, type FeedCluster } from "@/domain/calendar";
 import { premiereMs } from "@/domain/tonight";
 import { useCalendarFeed, type FeedRow } from "@/lib/calendar";
-import { useLibrary, useToggleNotify, type LibraryShow } from "@/lib/library";
+import { useLibrary, type LibraryShow } from "@/lib/library";
 import { useUndoMarks } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { TabMenu, WatchOn } from "@/ui";
@@ -304,8 +303,6 @@ function PremieresList({ kind }: { kind: "returning" | "new" }) {
 
 function UpcomingRow({ s, at, announced }: { s: LibraryShow; at: number | null; announced: boolean }) {
   const open = useOpenTitle();
-  const toggleNotify = useToggleNotify();
-  const notify = s.notify; // persisted flag (optimistic via the library cache)
   const art = tmdbImg(s.poster_path, "w92");
   const esNames = useEsNames();
   const name = locName(esNames, s.tmdb_id, s.name);
@@ -332,12 +329,6 @@ function UpcomingRow({ s, at, announced }: { s: LibraryShow; at: number | null; 
           <div className="dim truncate" style={{ fontSize: 13 }}>{s.genres.slice(0, 2).map(tGenre).join(", ") || "—"}</div>
         )}
       </div>
-      <button
-        className={`btn btn-sm ${notify ? "btn-accent" : "btn-outline"}`}
-        onClick={(e) => { e.stopPropagation(); toggleNotify.mutate({ titleId: s.title_id, notify: !notify }); }}
-      >
-        <Bell size={15} />{notify ? tr("Tracking") : tr("Notify me")}
-      </button>
     </div>
   );
 }
