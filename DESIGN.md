@@ -5,7 +5,7 @@ the author and later a small circle of friends. Web-first, with native iOS/Andro
 follow. This document is the outcome of a structured design interview and is the
 authoritative record of **product decisions**; update it as decisions change.
 
-> **Execution:** the build itself is planned commit-by-commit in [PLAN.md](PLAN.md)
+> **Execution:** the build itself is planned commit-by-commit in [docs/PLAN.md](docs/PLAN.md)
 > (status table) + [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) + `docs/phases/PHASE-N.md`.
 > The Roadmap section below is superseded by those files.
 
@@ -26,7 +26,7 @@ authoritative record of **product decisions**; update it as decisions change.
 | Platform strategy | **Web app first (Vite + React, evolved from the prototype)**; native route decided in Phase 6 (Capacitor wrap vs Expo rebuild spike) | *Changed 2026-07:* the validated UI already exists in web React (glass look relies on CSS `backdrop-filter`, poor fit for RN); reuse beats the single-codebase promise while native is deferred anyway. Pure `domain/` logic layer keeps the Expo option open |
 | Web vs native | **Ship web first**, native later (see above) | App-like product; add-to-home-screen in the meantime |
 | Backend | **Supabase** (Postgres + Auth + Realtime + Storage) | Relational data; generous free tier |
-| Social | **Light social** (friends + activity feed) | Modeled from day one, shipped Phase 4 of PLAN.md. Full concept validated in the prototype: friend profiles (stats, match %, watching-now, follows, top ratings) + friend-powered Explore |
+| Social | **Light social** (friends + activity feed) | Modeled from day one, shipped Phase 4 of docs/PLAN.md. Full concept validated in the prototype: friend profiles (stats, match %, watching-now, follows, top ratings) + friend-powered Explore |
 | Content scope | **TV shows only for now** | Movies **deferred** to a later phase; model kept movie-ready (movie = ~1-episode case) |
 | Offline | **Online-first + optimistic UI** | TanStack Query; revisit true offline later |
 | Auth | **Email magic link + Google** now; **Apple** at iOS publish | Apple required by App Store once Google login ships |
@@ -65,7 +65,7 @@ Principle: **the user owns their data** — easy full export is a design goal (w
 
 ## Roadmap
 
-> **Superseded:** kept for historical context. The live plan is [PLAN.md](PLAN.md).
+> **Superseded:** kept for historical context. The live plan is [docs/PLAN.md](docs/PLAN.md).
 
 ### Phase 0 — Foundations
 Repo scaffold (Expo + NativeWind + TS + TanStack Query). Supabase project: schema + RLS +
@@ -100,6 +100,9 @@ since the schema is kept movie-ready from the start.
 - ~~App name + domain~~ → **resolved (P1 grill)**: name stays **Reel**; private
   beta ships on a free `*.vercel.app` subdomain (exact URL fixed at first deploy —
   a custom domain later only adds an entry to the Supabase auth allowlist).
+  *Since then:* the custom domain happened — the app lives at
+  [reel-app.com](https://reel-app.com), hosted on Cloudflare Workers
+  ([docs/MIGRATION-CLOUDFLARE.md](docs/MIGRATION-CLOUDFLARE.md)).
 - Exact set of notification types and their default on/off.
 - FilmAffinity scrape feasibility (auth, pagination, HTML stability) — validate in a Phase 3 spike.
 - Whether a small folders/collections feature (TV Time "folders") is worth carrying over.

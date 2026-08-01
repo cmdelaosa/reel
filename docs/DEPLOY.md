@@ -1,5 +1,11 @@
 # Deploy runbook — hosted Supabase + Vercel
 
+> **Frontend section superseded.** The app has since moved to **Cloudflare
+> Workers** at [reel-app.com](https://reel-app.com) — §6 (Vercel) is kept as the
+> record of the original cutover, and the current hosting setup lives in
+> [MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md). The Supabase-side steps
+> are still the reference.
+
 The ordered, one-time cutover to production (PLAN.md P1-C5). The frontend is a
 static Vite build on Vercel; the backend is a hosted Supabase project. Do the
 Supabase steps **before** the Vercel step so the client has a backend to talk to.

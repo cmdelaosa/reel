@@ -1,5 +1,11 @@
 # Build plan — prototype → production
 
+> **Process record.** This is the plan the app was actually built from: every feature was
+> specified as a commit in `docs/phases/PHASE-N.md` and executed in order, mostly by a
+> coding agent under review, with `npm run check` green on every commit. Codes like
+> `P2-C4` ("phase 2, commit 4") appear across the codebase's comments and link back to
+> the specs here. The status table below is the build's history, not a live backlog.
+
 This is the **master execution plan** to take the validated prototype (`prototype/`) to a
 production app with a real backend and full functionality. It is written to be executed
 **commit by commit, in order, by a coding agent** — each commit is specified in a phase file
@@ -7,9 +13,9 @@ under `docs/phases/` with steps, acceptance criteria, and verification.
 
 Companion docs:
 
-- [DESIGN.md](DESIGN.md) — product vision + locked decisions (updated, still authoritative for *what*).
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — stack, repo layout, full DB schema, RLS, derivations, conventions (authoritative for *how*).
-- [docs/DETAIL-PERFORMANCE.md](docs/DETAIL-PERFORMANCE.md) — durable metadata cache, title/season hot paths, prefetch, stable transitions, diagnostics, and rollout notes.
+- [DESIGN.md](../DESIGN.md) — product vision + locked decisions (updated, still authoritative for *what*).
+- [docs/ARCHITECTURE.md](ARCHITECTURE.md) — stack, repo layout, full DB schema, RLS, derivations, conventions (authoritative for *how*).
+- [docs/DETAIL-PERFORMANCE.md](DETAIL-PERFORMANCE.md) — durable metadata cache, title/season hot paths, prefetch, stable transitions, diagnostics, and rollout notes.
 - `docs/phases/PHASE-N.md` — the commit specs (authoritative for *do this next*).
 
 ## How to execute this plan (instructions for the agent)
@@ -79,7 +85,7 @@ runs `npm run check` in `app/` on every push and PR.
 
 Tick a box **in the same commit** that completes it.
 
-### Phase 0 — Foundations ([docs/phases/PHASE-0.md](docs/phases/PHASE-0.md))
+### Phase 0 — Foundations ([docs/phases/PHASE-0.md](phases/PHASE-0.md))
 
 - [x] **P0-C1** `docs: add architecture and phase plans` (this commit)
 - [x] **P0-C2** `chore: scaffold app/ workspace (Vite+React+TS+Router+Query+Zod, lint, vitest)`
@@ -92,15 +98,15 @@ Tick a box **in the same commit** that completes it.
 - [x] **P0-C9** `feat(edge): tmdb proxy function with metadata upsert + typed client`
 - [x] **P0-C10** `feat(scripts): TV Time zip seed importer (author data, TVDB→TMDB)`
 
-### Phase 1 — Auth + shell ([docs/phases/PHASE-1.md](docs/phases/PHASE-1.md))
+### Phase 1 — Auth + shell ([docs/phases/PHASE-1.md](phases/PHASE-1.md))
 
 - [x] **P1-C1** `feat(auth): supabase auth client, session store, magic-link + Google sign-in screen`
 - [x] **P1-C2** `feat(auth): invite-code gate on first sign-in`
 - [x] **P1-C3** `feat(app): marquee shell — top tabs, routes, mobile dock, settings sheet`
 - [x] **P1-C4** `feat(app): onboarding — display name, handle, avatar upload`
-- [ ] **P1-C5** `chore: deploy web app (Vercel) + auth redirect config` → **login on prod URL** — full runbook: [docs/DEPLOY.md](docs/DEPLOY.md) (Supabase link/push, functions, secrets, SMTP, cron scheduling)
+- [ ] **P1-C5** `chore: deploy web app (Vercel) + auth redirect config` → **login on prod URL** — full runbook: [docs/DEPLOY.md](DEPLOY.md) (Supabase link/push, functions, secrets, SMTP, cron scheduling)
 
-### Phase 2 — Core library loop ([docs/phases/PHASE-2.md](docs/phases/PHASE-2.md))
+### Phase 2 — Core library loop ([docs/phases/PHASE-2.md](phases/PHASE-2.md))
 
 - [x] **P2-C1** `feat(search): ⌘K palette searching TMDB via edge proxy`
 - [x] **P2-C2** `feat(library): follow/unfollow (Add) + watchlist model + Shows grid with status buckets`
@@ -113,7 +119,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P2-C9** `feat(you): profile stats (episodes, time, shows, coming soon, avg rating)`
 - [x] **P2-C10** `feat(notify): per-title "Notify me" flag` → **Dogfood milestone**
 
-### Phase 3 — Round out + onboard friends ([docs/phases/PHASE-3.md](docs/phases/PHASE-3.md))
+### Phase 3 — Round out + onboard friends ([docs/phases/PHASE-3.md](phases/PHASE-3.md))
 
 - [x] **P3-C1** `feat(notifications): in-app inbox + bell + read state`
 - [ ] **P3-C2** `feat(edge): new-episode alert job → inbox rows + Resend email`
@@ -122,14 +128,14 @@ Tick a box **in the same commit** that completes it.
 - [x] **P3-C5** `feat(invites): create/share invite codes UI`
 - [x] **P3-C6** `feat(export): download-my-data (JSON + CSV)`
 
-### Phase 4 — Social ([docs/phases/PHASE-4.md](docs/phases/PHASE-4.md))
+### Phase 4 — Social ([docs/phases/PHASE-4.md](phases/PHASE-4.md))
 
 - [x] **P4-C1** `feat(social): friendships — request, accept, remove; friends section in You`
 - [x] **P4-C2** `feat(social): friend profile sheet (stats, match %, watching now, follows, top ratings)`
 - [x] **P4-C3** `feat(social): explore sections — popular with friends, best rated by friends (RPCs)`
 - [x] **P4-C4** `feat(social): activity feed (rated/finished/added/started) in Explore`
 
-### Phase 5 — Explore + polish ([docs/phases/PHASE-5.md](docs/phases/PHASE-5.md))
+### Phase 5 — Explore + polish ([docs/phases/PHASE-5.md](phases/PHASE-5.md))
 
 - [x] **P5-C1** `feat(explore): trending via TMDB, genre chips, discover grid with Add`
 - [x] **P5-C2** `feat(explore): curated collections`
@@ -138,7 +144,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P5-C5** `feat(a11y): keyboard nav, focus traps in sheets, reduced-motion`
 - [x] **P5-C6** `test(e2e): playwright smoke — login, add show, mark watched, calendar`
 
-### Phase 6 — Native + public ([docs/phases/PHASE-6.md](docs/phases/PHASE-6.md))
+### Phase 6 — Native + public ([docs/phases/PHASE-6.md](phases/PHASE-6.md))
 
 Outline only — see the phase file. Specced when Phase 5 ships.
 

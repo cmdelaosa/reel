@@ -1,6 +1,6 @@
 -- 0001_profiles_invites.sql
 -- Identity & access: profiles (1:1 with auth.users) + invite-gated signup.
--- See docs/ARCHITECTURE.md → Identity & access; PLAN.md P0-C5.
+-- See docs/ARCHITECTURE.md → Identity & access; docs/PLAN.md P0-C5.
 --
 -- Grants are made deterministic (revoke-all then grant-specific) so this
 -- migration behaves identically whether or not the hosted project has
