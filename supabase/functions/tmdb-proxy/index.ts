@@ -93,8 +93,10 @@ const NON_WESTERN_MAX = 0.1; // at most 1 slot in 10
 // prefix: Western titles keep their order, and the best-ranked non-Western
 // ones are demoted into slots 10, 20, 30… (not dropped — a #1 global hit still
 // shows, just below the Western top 9). The prefix property means truncating
-// the result anywhere preserves the ratio. Ends with the Western supply, so a
-// mostly-Asian tail can't form.
+// the result anywhere preserves the ratio, for as long as Western supply lasts.
+// Re-ranking only: every input row comes out, so a thin or genuinely
+// non-Western pool (a narrow genre/era filter) still fills the grid instead of
+// collapsing to the handful of Western rows it happened to contain.
 // deno-lint-ignore no-explicit-any
 const capNonWestern = (rows: any[]): any[] => {
   const isWestern = (r: Any) => WESTERN_LANGS.has(r?.original_language ?? "");
@@ -106,6 +108,11 @@ const capNonWestern = (rows: any[]): any[] => {
     if (n < rest.length && n + 1 <= (out.length + 1) * NON_WESTERN_MAX) out.push(rest[n++]);
     else out.push(western[w++]);
   }
+  // Western supply exhausted — nothing left to space the remaining non-Western
+  // titles against, so they keep their order at the tail. Only reachable once
+  // the cap has already placed every Western row, which is exactly when a
+  // Western-only tail is impossible to build.
+  while (n < rest.length) out.push(rest[n++]);
   return out;
 };
 
