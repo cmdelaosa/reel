@@ -71,7 +71,10 @@ function NotificationsSection() {
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Toggle on={p.inapp} icon={Bell} label={t("App")} onClick={() => setPref.mutate({ type: n.type, pref: { ...p, inapp: !p.inapp } })} />
-                <Toggle on={p.email} icon={Mail} label={t("Email")} onClick={() => setPref.mutate({ type: n.type, pref: { ...p, email: !p.email } })} />
+                {/* Email only where a sender exists — see NOTIFICATION_TYPES. */}
+                {n.channels.includes("email") && (
+                  <Toggle on={p.email} icon={Mail} label={t("Email")} onClick={() => setPref.mutate({ type: n.type, pref: { ...p, email: !p.email } })} />
+                )}
               </div>
             </div>
           );

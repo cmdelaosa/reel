@@ -92,11 +92,11 @@ const ES: Record<string, string> = {
     "Determina dónde puedes ver cada serie y la zona horaria de las horas de emisión.",
   "Available on {providers}": "Disponible en {providers}",
   "New episodes": "Nuevos episodios",
-  "When a show you follow airs": "Cuando emite una serie que sigues",
-  "Premieres": "Estrenos",
-  "When a followed upcoming show gets a date": "Cuando una serie que esperas tiene fecha",
+  "Only shows you're watching or waiting for": "Solo las series que ves o que esperas",
   "Friend requests": "Solicitudes de amistad",
   "When someone adds you": "Cuando alguien te añade",
+  "Imports": "Importaciones",
+  "When a TV Time import finishes": "Cuando termina una importación de TV Time",
   "App": "App",
   "Email": "Email",
   "Your data": "Tus datos",
@@ -574,14 +574,12 @@ const ES: Record<string, string> = {
   "You're all caught up.": "Estás al día.",
   // Row titles (singular — the settings toggles above use the plural forms).
   "New episode": "Nuevo episodio",
-  "Premiere dated": "Estreno con fecha",
   "Friend request": "Solicitud de amistad",
   "Import finished": "Importación terminada",
   // Row bodies. {name} carries the already-quoted episode title or "" — the
   // whole clause is one key so a language can move it off the end.
   "A show": "Una serie",
   "{show} S{season} · E{episode}{name} just aired": "{show} S{season} · E{episode}{name} acaba de emitirse",
-  "{show} has a premiere date": "{show} ya tiene fecha de estreno",
   "{count} shows imported from TV Time": "{count} series importadas de TV Time",
 
   // ---- Import ----

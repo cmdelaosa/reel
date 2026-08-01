@@ -158,11 +158,17 @@ Deno.serve(async (req) => {
       await admin.from("import_jobs")
         .update({ status: "done", report: { ...report, total: shows.length, done: shows.length, waiting: false }, finished_at: new Date().toISOString() })
         .eq("id", job_id);
-      await admin.from("notifications").insert({
-        user_id: user.id,
-        type: "import_done",
-        payload: { matched: report.matched, watch_events: report.watchEvents, unmatched: report.unmatched.length },
-      });
+      // Honour the Settings toggle, absent row = on (same default as the
+      // reaction/friend-request triggers). This one used to notify regardless.
+      const { data: pref } = await admin.from("notification_prefs")
+        .select("inapp").eq("user_id", user.id).eq("type", "import_done").maybeSingle();
+      if (pref?.inapp !== false) {
+        await admin.from("notifications").insert({
+          user_id: user.id,
+          type: "import_done",
+          payload: { matched: report.matched, watch_events: report.watchEvents, unmatched: report.unmatched.length },
+        });
+      }
       // best-effort cleanup of the uploaded zip
       await admin.storage.from("imports").remove([path]);
     } catch (e) {
