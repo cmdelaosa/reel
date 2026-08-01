@@ -11,6 +11,10 @@
 --   • IMDb ratings are not in TMDB at all. They come from OMDb (omdbapi.com),
 --     bridged through the imdb_id TMDB hands us (0051), and are written by the
 --     Edge Functions best-effort, the same way TVmaze air times are.
+--     (Since superseded: OMDb proved stale and incomplete, so these columns are
+--     now written by scripts/imdb-ratings from IMDb's own published datasets —
+--     see that script's header. Column semantics are unchanged; the OMDb
+--     references below are the original rationale, kept as-is.)
 --
 -- Season aggregates (the "season rating") are derived client-side from the
 -- episode rows — OMDb exposes no season-level number — so no column for them.

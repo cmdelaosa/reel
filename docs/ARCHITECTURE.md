@@ -12,17 +12,18 @@ repeating decisions. If something here conflicts with code, this doc wins until 
 | Backend | **Supabase** — Postgres, Auth, RLS, Edge Functions, Storage, Realtime | Free tier. All authorization in RLS; client talks to Postgres directly via supabase-js. |
 | Metadata | **TMDB** via an Edge Function proxy | API key never reaches the client. Responses upserted into our cache tables. |
 | Email | **Resend** from scheduled Edge Functions | Alerts + magic links (magic links are Supabase-native). |
-| Hosting | **Vercel** (static build + SPA rewrites) | Domain decided before P1-C5. |
+| Hosting | **Cloudflare Workers** (static assets + SPA fallback), live at [reel-app.com](https://reel-app.com) | Launched on Vercel, migrated later — see [MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md). |
 | Tests | **vitest** (pure logic), **Playwright** (Phase 5 smoke) | Derivations must be unit-tested. |
 
 ## Repo layout
 
 ```
 reel/
+├── README.md               start here
 ├── DESIGN.md               product decisions (what)
-├── PLAN.md                 master execution plan (status table)
 ├── docs/
 │   ├── ARCHITECTURE.md     this file (how)
+│   ├── PLAN.md             master execution plan (status table)
 │   └── phases/PHASE-N.md   commit specs (do this next)
 ├── prototype/              FROZEN reference — read, never edit
 ├── app/                    production web client (created P0-C2)

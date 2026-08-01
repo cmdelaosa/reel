@@ -542,8 +542,8 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
 
               {/* Ratings — own balanced line: yours | TMDB | IMDb | friends.
                   Four cells can't share a phone line, so that case reflows to a
-                  2×2 grid (ratings-row-grid). IMDb rides along only once OMDb has
-                  resolved a score for the show. */}
+                  2×2 grid (ratings-row-grid). IMDb rides along only once the
+                  ratings import (scripts/imdb-ratings) has scored the show. */}
               <div className={`ratings-row${2 + (title.imdb_rating != null ? 1 : 0) + (friendsAvg != null ? 1 : 0) >= 4 ? " ratings-row-grid" : ""}`}>
                 <div className="ratings-cell">
                   <div className="eyebrow">{tr("Your rating")}</div>
