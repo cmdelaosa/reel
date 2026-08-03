@@ -34,6 +34,7 @@ const CARLOS = "cmo@example.com";
 const ANA = "ana@example.com";
 const LEO = "leo@example.com";
 const FIXTURE_TMDB_ID = 999000058; // outside TMDB's real id space
+const FIXTURE_SHOW = "E2E Reaction Show";
 
 interface Session {
   access_token: string;
@@ -78,12 +79,29 @@ async function rest(token: string, path: string, init: RequestInit = {}) {
   });
 }
 
+/** Everything this spec ever writes, gone: the fixture show (episodes, watch
+ *  events and reactions cascade with it) and the inbox row its reactions
+ *  minted, which carries no FK to the title and so outlives it. Named rather
+ *  than blanket deletes — the local stack is also somebody's dogfood database.
+ *  Run before seeding as well as after, so a run killed mid-test (Ctrl-C, a
+ *  timeout) doesn't leave a duplicate title behind to fail the next one's
+ *  insert, or a stale "…reacted to E2E Reaction Show" row to fail its count. */
+async function clearFixture(): Promise<void> {
+  await rest(SERVICE, `titles?tmdb_id=eq.${FIXTURE_TMDB_ID}`, { method: "DELETE" });
+  await rest(SERVICE,
+    `notifications?type=eq.reaction&payload->>show_name=eq.${encodeURIComponent(FIXTURE_SHOW)}`,
+    { method: "DELETE" });
+}
+
 async function seedBinge(watcherId: string): Promise<{ titleId: string }> {
-  // Three episodes of one show, all watched a minute ago: one same-day burst,
-  // and the newest thing in anyone's feed, so it lands at the top.
+  // Three episodes of one show, all watched now: one same-day burst, and the
+  // newest thing in anyone's feed. Stamping it a minute in the past used to
+  // sink it below the fold — see fixtureRow — whenever a spec earlier in the
+  // run had written activity for Carlos in that minute, which alerts.spec
+  // does eleven times over.
   const title = await (await rest(SERVICE, "titles", {
     method: "POST",
-    body: JSON.stringify({ tmdb_id: FIXTURE_TMDB_ID, kind: "tv", name: "E2E Reaction Show" }),
+    body: JSON.stringify({ tmdb_id: FIXTURE_TMDB_ID, kind: "tv", name: FIXTURE_SHOW }),
   })).json();
   const titleId = title[0].id as string;
 
@@ -94,7 +112,7 @@ async function seedBinge(watcherId: string): Promise<{ titleId: string }> {
     }))),
   })).json();
 
-  const watchedAt = new Date(Date.now() - 60_000).toISOString();
+  const watchedAt = new Date().toISOString();
   const events = await rest(SERVICE, "watch_events", {
     method: "POST",
     body: JSON.stringify((episodes as { id: string }[]).map((e) => ({
@@ -105,12 +123,34 @@ async function seedBinge(watcherId: string): Promise<{ titleId: string }> {
   return { titleId };
 }
 
+/** The fixture's row on the wall, paged into view if it isn't on the first
+ *  screenful. The wall opens on ten rows and reveals the rest ten at a time
+ *  ("Show more", ShowMore's pageSize) out of the 60 the RPC returns, so where
+ *  the fixture lands depends on how much OTHER activity the shared local
+ *  database holds — and every spec in the run writes to it as the same seeded
+ *  user. Being the newest event is what usually puts it first; paging down is
+ *  what stops that from being an assumption. */
+async function fixtureRow(page: Page) {
+  const row = page.locator(".fr-activity", { hasText: FIXTURE_SHOW }).first();
+  // Distinguishes "the feed hasn't loaded" from "the row isn't in it".
+  await expect(page.locator(".fr-activity").first()).toBeVisible();
+  // Six clicks exhaust the page; the bound is only a guard against looping on
+  // a button that stops paging, and failing here reads better than hanging.
+  for (let i = 0; i < 8 && (await row.count()) === 0; i++) {
+    const more = page.getByRole("button", { name: "Show more" });
+    if ((await more.count()) === 0) break;
+    await more.click();
+  }
+  return row;
+}
+
 test("a friend's reaction lands on the row, rings the bell, and groups", async ({ browser }) => {
   test.skip(!SERVICE, "needs E2E_SERVICE_ROLE_KEY to seed the fixture show");
 
   const ana = await signedIn(browser, ANA);
   const leo = await signedIn(browser, LEO);
   const carlos = await signedIn(browser, CARLOS);
+  await clearFixture();
   const { titleId } = await seedBinge(carlos.session.user.id);
 
   try {
@@ -118,11 +158,11 @@ test("a friend's reaction lands on the row, rings the bell, and groups", async (
     await expect(carlos.page.getByRole("heading", { name: "Activity" })).toBeVisible();
     // The wall shows Carlos his own rows — otherwise reactions to them would be
     // invisible to the one person they are about.
-    const carlosRow = carlos.page.locator(".fr-activity", { hasText: "E2E Reaction Show" }).first();
+    const carlosRow = await fixtureRow(carlos.page);
     await expect(carlosRow).toContainText("You watched");
 
     await ana.page.goto("/friends");
-    const row = ana.page.locator(".fr-activity", { hasText: "E2E Reaction Show" }).first();
+    const row = await fixtureRow(ana.page);
     await expect(row).toContainText("Carlos watched");
     // The whole burst, counted over the day rather than over the row budget.
     await expect(row).toContainText("3 episodes");
@@ -182,8 +222,8 @@ test("a friend's reaction lands on the row, rings the bell, and groups", async (
     // chips catch up on the next fetch rather than streaming in — deliberate:
     // one live channel (the inbox) is enough for a group this size.
     await ana.page.reload();
-    await expect(ana.page.locator(".fr-activity", { hasText: "E2E Reaction Show" }).first()
-      .locator(".rx-chip")).toHaveCount(2, { timeout: 15_000 });
+    await expect((await fixtureRow(ana.page)).locator(".rx-chip"))
+      .toHaveCount(2, { timeout: 15_000 });
 
     // Withdrawing the last reaction takes the notification with it — checked
     // with the panel OPEN, since a closed panel would report zero either way.
@@ -200,12 +240,7 @@ test("a friend's reaction lands on the row, rings the bell, and groups", async (
     // the bell dot is not, since anything else unread would keep it lit.
     await expect(carlos.page.getByText(/reacted to E2E Reaction Show/)).toHaveCount(0, { timeout: 15_000 });
   } finally {
-    // Cascades take the episodes, watch events and reactions with the title.
-    await rest(SERVICE, `titles?tmdb_id=eq.${FIXTURE_TMDB_ID}`, { method: "DELETE" });
-    // Only this fixture's notification — notifications carry no FK to the
-    // title, so nothing else would clean it, and a blanket delete would take
-    // the local dogfood inbox with it.
-    await rest(SERVICE, `notifications?type=eq.reaction&payload->>event_key=like.*${titleId}*`, { method: "DELETE" });
+    await clearFixture();
     for (const p of [ana, leo, carlos]) await p.page.context().close();
   }
 });
