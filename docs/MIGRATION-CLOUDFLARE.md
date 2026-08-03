@@ -275,7 +275,9 @@ intermediate state, not a bug.
    - [x] Magic-link login to a non-team address delivered from
          `noreply@mail.reel-app.com` (custom SMTP proven).
    - [x] Google button renders on the new domain.
-   - [ ] `www.reel-app.com` redirect — verified earlier at DNS/edge level.
+   - [x] `www.reel-app.com` redirect — 301 to the apex at the Cloudflare edge,
+         path and query preserved (`/login?invite=TEST123` survives). Verified
+         over HTTP 2026-08-01, not just at DNS level.
    - [ ] Manual `alerts` invoke from `alerts@mail.reel-app.com` — not yet run
          (digest email; secret is set, but no digest has fired).
 
@@ -308,12 +310,20 @@ execute, and anyone still on the old address got a blank page. Any deploy that
 changed the bundle hash would have done it; forwarding the root removes the
 failure mode entirely.
 
-Remaining, in the Vercel and Supabase dashboards (nothing left in this repo):
+**Finished 2026-08-01.** The Vercel project is gone and `app/vercel.json` with
+it (#22), and the old origin no longer appears in Supabase → Authentication →
+Redirect URLs. Order mattered: the project had to die before the file was
+dropped, or the old origin would have started serving a second, independent
+copy of the app instead of forwarding to the real one.
 
-- Delete the Vercel project. **Drop `app/vercel.json` only after that** — remove
-  it while the project still builds and the old origin starts serving a second,
-  independent copy of the app instead of forwarding to the real one.
-- Remove the old origin from Supabase → Authentication → Redirect URLs.
+**Watch the allowlist when you prune it.** The cleanup took the four local dev
+origins with it (`localhost`/`127.0.0.1` on 4321 and 4322, the ones in
+`supabase/config.toml`). `app/.env.local` points at the *hosted* project, and
+LoginPage sends `window.location.origin` as the redirect, so signing in from
+`npm run dev` silently lands on reel-app.com instead of the dev server —
+GoTrue falls back to `site_url` rather than erroring. Existing sessions mask it
+until a re-login is needed, and the e2e suite never sees it (password grant
+against the local stack). Put those four back.
 
 ## Rollback
 
