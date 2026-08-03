@@ -1,20 +1,14 @@
 import { useSyncExternalStore } from "react";
 import { WifiOff } from "lucide-react";
+import { isOffline, subscribeConnection } from "@/lib/connection";
 import { t as tr } from "@/lib/i18n";
 
-function subscribe(cb: () => void) {
-  window.addEventListener("online", cb);
-  window.addEventListener("offline", cb);
-  return () => {
-    window.removeEventListener("online", cb);
-    window.removeEventListener("offline", cb);
-  };
-}
-
-/* Fixed toast shown while the browser reports no network. */
+/* Fixed toast shown while the app cannot reach the network.
+   Driven by observed traffic and our own probes, never by navigator.onLine —
+   see domain/connection.ts for why that flag is not allowed a vote. */
 export function OfflineToast() {
-  const online = useSyncExternalStore(subscribe, () => navigator.onLine, () => true);
-  if (online) return null;
+  const offline = useSyncExternalStore(subscribeConnection, isOffline, () => false);
+  if (!offline) return null;
   return (
     <div
       className="card sheet fixed flex items-center gap-2.5"

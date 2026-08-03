@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { trackedFetch } from "@/lib/connection";
 import { isEs } from "@/lib/i18n";
 import {
   searchResponseSchema,
@@ -36,7 +37,9 @@ async function call(path: string): Promise<unknown> {
   } = await supabase.auth.getSession();
   if (!session) throw new Error("Not authenticated");
 
-  const res = await fetch(`${FUNCTION_URL}${path}`, {
+  // trackedFetch, not fetch: the edge function is the other half of the app's
+  // real traffic, and the offline toast is only as good as what it observes.
+  const res = await trackedFetch(`${FUNCTION_URL}${path}`, {
     headers: {
       Authorization: `Bearer ${session.access_token}`,
       apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
