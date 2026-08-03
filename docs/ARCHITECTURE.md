@@ -116,6 +116,7 @@ episodes (
   id uuid pk, title_id uuid fk, season_id uuid fk, tmdb_id int,
   season_number int not null, episode_number int not null,
   name text, overview text, runtime int,
+  air_date date,                           -- TMDB's bare day, the anchor (0060)
   air_datetime timestamptz,                -- UTC; client renders local
   tmdb_vote_average numeric, tmdb_vote_count int,  -- per-episode TMDB score (0057)
   imdb_rating numeric, imdb_votes int, imdb_id text, -- per-episode IMDb score (0057)
@@ -125,6 +126,17 @@ episodes (
 
 - RLS: `select` for authenticated; writes only via Edge Functions (service role).
 - Season 0 (specials) is stored but **excluded from all derivations**.
+- **Air times have two sources and one rule.** `air_date` is TMDB's day and is
+  authoritative; `air_datetime` may be TVmaze's real `airstamp` (a printable
+  clock — `air_time_source = 'tvmaze'`) or the 21:00 UTC placeholder over that
+  same day (`'estimated'`, no clock shown). **TVmaze may set the hour, never the
+  day.** The two catalogues do not number episodes identically — TMDB's Hot Ones
+  season 30 is thirteen episodes and TVmaze's eleven — so pairing them on
+  `season × number` alone dated a whole season off other episodes' broadcasts,
+  which the alert window and the aired/up-next gates then acted on. The pairing
+  matches TVmaze's local `airdate` against `air_date`, spec in
+  `app/src/domain/airPairing.ts`, hand-mirrored into both ingest paths and held
+  there by `airPairing.mirror.test.ts`.
 - **IMDb ratings** (`imdb_rating` / `imdb_votes`, on both titles and episodes) are
   owned by ONE writer: the weekly GitHub Action `scripts/imdb-ratings`, which
   reads IMDb's own published datasets. Nothing else writes those columns.
