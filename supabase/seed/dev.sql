@@ -49,10 +49,23 @@ begin
     -- onboard: replace the signup-trigger placeholder handle with the real one
     update public.profiles set handle = demo.handle, display_name = demo.name where id = demo.id;
 
-    -- gate: mark invited so they clear RequireInvited
+    -- gate: mark invited so they clear RequireInvited.
+    --
+    -- Two statements, because since 0062 the gate is the PERSON, not the code:
+    -- is_invited() reads profiles.invited_at and never looks at invites.used_by
+    -- again. The invite row still goes in — it is what a real signup would leave
+    -- behind, and /you renders the codes — but on its own it no longer opens
+    -- anything, so a seeded stack would land every user on /invite.
+    --
+    -- Seeds run as the postgres superuser, so profiles_protect_invited_at (which
+    -- only blanks the column for 'authenticated') lets this through.
     insert into public.invites (code, created_by, used_by)
     values ('SEED-' || demo.handle, demo.id, demo.id)
     on conflict (code) do nothing;
+
+    update public.profiles
+       set invited_at = coalesce(invited_at, now())
+     where id = demo.id;
   end loop;
 
   -- Carlos is accepted friends with both others (canonical a < b).

@@ -62,6 +62,7 @@ profiles (
   display_name text not null,
   avatar_url text, bio text, country text,
   is_private boolean not null default false,
+  invited_at timestamptz,                 -- sealed on redemption; the invite pass
   created_at timestamptz
 )
 invites (
@@ -73,7 +74,11 @@ invites (
 ```
 
 - Trigger `on auth.users insert` → create `profiles` row (handle placeholder until onboarding).
-- Invite gate: an `is_invited(uid)` SQL function; a `redeem_invite(code)` RPC marks `used_by`.
+- Invite gate: `is_invited(uid)` reads `profiles.invited_at`, which `redeem_invite(code)` seals
+  once (0062). The pass belongs to the person, not to the code: `invites.used_by` and
+  `invite_redemptions` record which code was burned, but expiring, revoking or deleting a code
+  never puts a redeemer back outside. A trigger keeps `invited_at` out of reach of the blanket
+  UPDATE grant on `profiles`, so the gate can't be self-served.
   Profiles of un-invited users stay locked out by app routing **and** RLS on user-data tables.
 
 ### Metadata cache (TMDB mirror — public read, service-role write)
