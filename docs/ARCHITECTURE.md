@@ -11,7 +11,7 @@ repeating decisions. If something here conflicts with code, this doc wins until 
 | Styling | Plain CSS with **design tokens as CSS variables** + Tailwind 4 utilities | Port `prototype/src/index.css` glass look (plain CSS — Tailwind-version-independent). `data-theme` / `data-accent` on `<html>`. Tailwind 4 is CSS-first: `@import "tailwindcss"` + `@theme`, `@tailwindcss/vite` plugin, no tailwind.config/postcss. |
 | Backend | **Supabase** — Postgres, Auth, RLS, Edge Functions, Storage, Realtime | Free tier. All authorization in RLS; client talks to Postgres directly via supabase-js. |
 | Metadata | **TMDB** via an Edge Function proxy | API key never reaches the client. Responses upserted into our cache tables. |
-| Email | **Resend** from scheduled Edge Functions | Alerts + magic links (magic links are Supabase-native). |
+| Email | **Resend** from Edge Functions | The nightly `alerts` digest (new episodes), plus `friend-request-email`, which a database trigger fires through pg_net so the mail lands while the request is still news (0061). Magic links are Supabase-native. Every type with an Email chip in Settings has a producer here — that is what the chip means. |
 | Hosting | **Cloudflare Workers** (static assets + SPA fallback), live at [reel-app.com](https://reel-app.com) | Launched on Vercel, migrated later — see [MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md). |
 | Tests | **vitest** (pure logic), **Playwright** (Phase 5 smoke) | Derivations must be unit-tested. |
 
@@ -36,7 +36,8 @@ reel/
 │   └── …vite config, tsconfig, eslint, vitest
 ├── supabase/               created P0-C4
 │   ├── migrations/         numbered SQL, never edited after merge — always add a new one
-│   ├── functions/          tmdb-proxy/, episode-refresh/, alerts/, importer/
+│   ├── functions/          tmdb-proxy/, episode-refresh/, alerts/, importer/,
+│   │                       export/, friend-request-email/
 │   └── seed/               dev fixtures
 └── scripts/                offline tooling (tvtime-import/)
 ```

@@ -36,13 +36,18 @@ linked hosted DB.
 ## 2. Deploy the edge functions
 
 ```bash
-supabase functions deploy tmdb-proxy episode-refresh alerts importer export
+supabase functions deploy tmdb-proxy episode-refresh alerts importer export \
+  friend-request-email
 ```
 
 Deploy migrations before the functions. `tmdb-proxy` uses the
 `is_current_user_invited()` function introduced in migration 0033 to combine
 JWT/invite validation into one database round trip. Deploying the function
 first would make metadata requests return 401 until the migration lands.
+The same order matters for 0060 (both ingest paths write `episodes.air_date`,
+which that migration adds) and for 0061 (the friend-request trigger calls
+`friend-request-email` through pg_net — the reverse order just means no mail
+until the function lands, which pg_net swallows silently).
 
 ## 3. Set edge-function secrets
 
@@ -54,7 +59,14 @@ supabase secrets set RESEND_FROM="Reel <alerts@yourdomain.com>"   # verified dom
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected
 automatically. Without `RESEND_FROM` the alerts function **skips email** (it will
-not fall back to resend.dev, which only delivers to the account owner).
+not fall back to resend.dev, which only delivers to the account owner), and so
+does `friend-request-email` — both record the skip in `job_runs` rather than
+sending from an address nobody receives.
+
+`friend-request-email` is called by a database trigger through pg_net, which
+reads the service-role key from Vault under the name `service_role_key` — the
+same secret `supabase/deploy/schedule-jobs.sql` sets up for the crons. Without
+it the trigger silently sends nothing (the in-app notification is unaffected).
 
 ## 4. Configure Auth (hosted dashboard → Authentication)
 

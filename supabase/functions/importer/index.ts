@@ -158,8 +158,13 @@ Deno.serve(async (req) => {
       await admin.from("import_jobs")
         .update({ status: "done", report: { ...report, total: shows.length, done: shows.length, waiting: false }, finished_at: new Date().toISOString() })
         .eq("id", job_id);
-      // Honour the Settings toggle, absent row = on (same default as the
-      // reaction/friend-request triggers). This one used to notify regardless.
+      // Absent row = on, the same default as the reaction/friend-request
+      // triggers. There is no longer a Settings toggle writing this row — the
+      // Imports switch was dropped in 0063, which also deleted the rows it had
+      // left behind, so in practice this branch always notifies. The check stays
+      // because the row is what the preference means, not the chip: a future
+      // toggle (or an admin mute) writes the same row and this honours it
+      // without a second code path.
       const { data: pref } = await admin.from("notification_prefs")
         .select("inapp").eq("user_id", user.id).eq("type", "import_done").maybeSingle();
       if (pref?.inapp !== false) {
