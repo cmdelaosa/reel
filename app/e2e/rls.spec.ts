@@ -88,9 +88,59 @@ test("RLS: cross-tenant isolation + invite gate", async () => {
       .insert({ user_id: bId, title_id: titleId, followed: true, stopped: false });
     expect(bGateErr, "un-invited B must NOT be able to insert").not.toBeNull();
 
-    // Now invite B (service-role) so the remaining checks isolate RLS, not the gate.
-    await admin.from("invites").insert({ code: `RLS-B-${bId.slice(0, 8)}`, used_by: bId });
+    // Now invite B, so that the remaining checks isolate RLS rather than the gate.
+    //
+    // B redeems a code for real, rather than a column being poked. Since 0062 the
+    // pass is profiles.invited_at, and only redeem_invite() (security definer) can
+    // seal it: the service role holds no DML on invites or profiles, and B itself
+    // is held off by profiles_protect_invited_at. The old line here wrote
+    // invites.used_by with the service role — which the grants refused and the
+    // new is_invited() would ignore anyway — so B silently stayed un-invited and
+    // every isolation check below passed for the wrong reason: B turned away as
+    // un-invited, never as the wrong tenant. Hence the two guards after this.
+    //
+    // Only an invited user may create a code, so it has to come from A, and
+    // redeeming a code friends redeemer and inviter. Friends can read each other's
+    // library_entries ("friends read"), which is exactly what this test asserts
+    // they cannot — so the friendship is torn down before any check runs.
+    //
+    // A reusable spare is preferred over a fresh code: nothing may DELETE from
+    // invites (no grant, either role), so a run that dies between insert and
+    // redeem would otherwise leak an unused code toward A's cap of 10.
+    const { data: spare } = await aClient
+      .from("invites")
+      .select("code")
+      .eq("created_by", a.id)
+      .is("used_by", null)
+      .eq("multi_use", false)
+      .limit(1);
+    let bCode = spare?.[0]?.code as string | undefined;
+    if (!bCode) {
+      bCode = `RLS-B-${bId.slice(0, 8)}`;
+      const { error: cInvErr } = await aClient.from("invites").insert({
+        code: bCode,
+        created_by: a.id,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      });
+      expect(cInvErr, `A creates B's code: ${cInvErr?.message}`).toBeNull();
+    }
+
+    const { error: redeemErr } = await asUser((await passwordToken(B_EMAIL, B_PASSWORD)).token)
+      .rpc("redeem_invite", { p_code: bCode });
+    expect(redeemErr, `B redeems: ${redeemErr?.message}`).toBeNull();
+
+    // Undo the friendship redemption just created (service role: the only one
+    // holding DELETE on friendships regardless of who the participants are).
+    await admin.from("friendships").delete().or(`a.eq.${bId},b.eq.${bId}`);
+
     const bClient = asUser((await passwordToken(B_EMAIL, B_PASSWORD)).token);
+
+    // Guard the guards. Un-invited or still friends, and every check below is
+    // vacuous — passing on a rule other than the one under test.
+    const { data: bInvited } = await bClient.rpc("is_invited", { uid: bId });
+    expect(bInvited, "B must be invited, or the isolation checks prove nothing").toBe(true);
+    const { data: stillFriends } = await admin.rpc("is_friend", { u1: a.id, u2: bId });
+    expect(stillFriends, "A and B must be strangers, or 'friends read' grants the access").toBe(false);
 
     // ── Cross-tenant READ: B cannot see A's rows. ──
     const { data: bReadsA } = await bClient.from("library_entries").select("*").eq("user_id", a.id);
@@ -123,9 +173,11 @@ test("RLS: cross-tenant isolation + invite gate", async () => {
       .single();
     expect(survived?.followed, "A's row must be intact").toBe(true);
   } finally {
-    // Best-effort cleanup so reruns are clean.
+    // Best-effort cleanup so reruns are clean. Not B's invite row: no role holds
+    // DELETE on invites, so that line only ever looked like cleanup. Redeemed, it
+    // no longer counts against A's cap, and deleting the user takes the rest.
     await admin.from("library_entries").delete().eq("user_id", a.id).eq("title_id", titleId);
-    await admin.from("invites").delete().eq("used_by", bId);
+    await admin.from("friendships").delete().or(`a.eq.${bId},b.eq.${bId}`);
     await admin.from("titles").delete().eq("id", titleId);
     await admin.auth.admin.deleteUser(bId);
   }

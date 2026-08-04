@@ -38,8 +38,17 @@ jobs:
           API=http://127.0.0.1:54321
           USER_ID=$(curl -s -X POST $API/auth/v1/admin/users -H "apikey: $SR" -H "Authorization: Bearer $SR" -H "Content-Type: application/json" \
             -d '{"email":"e2e@example.com","password":"password123","email_confirm":true,"user_metadata":{"name":"E2E Tester"}}' | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
-          docker exec -i $(docker ps --format '{{.Names}}' | grep supabase_db) psql -U postgres -d postgres -c \
-            "insert into public.invites(code, used_by) values ('E2E-SEED', '$USER_ID'); update public.profiles set handle='e2etester', display_name='E2E Tester' where id='$USER_ID';"
+          # Since 0062 the gate is the PERSON, not the code: is_invited() reads
+          # profiles.invited_at and never looks at invites.used_by again. The
+          # invite row still goes in — it is what a real signup leaves behind,
+          # and /you renders the codes — but sealing invited_at is what actually
+          # clears RequireInvited and the write policies. Seeding only the code
+          # left this user on /invite and failed every spec but the two that
+          # never sign in. psql connects as postgres, so
+          # profiles_protect_invited_at (which only blanks the column for
+          # 'authenticated') lets this through. Mirrors supabase/seed/dev.sql.
+          docker exec -i $(docker ps --format '{{.Names}}' | grep supabase_db) psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c \
+            "insert into public.invites(code, used_by) values ('E2E-SEED', '$USER_ID'); update public.profiles set handle='e2etester', display_name='E2E Tester', invited_at=now() where id='$USER_ID';"
 
       - uses: actions/setup-node@v4
         with:
