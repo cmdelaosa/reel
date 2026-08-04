@@ -32,5 +32,18 @@ export default defineConfig({
     environment: "jsdom",
     globals: false,
     include: ["src/**/*.{test,spec}.{ts,tsx}"], // e2e/ is Playwright, not vitest
+    /* Placeholders, so importing lib/supabase.ts is never what decides whether a
+       suite runs. It throws at import without these, which made any test that
+       reached it — directly or through a lib/ module, as notificationPrefs.test
+       does — pass locally off the developer's .env.local and fail on CI, where
+       no .env.local exists.
+
+       Pinned rather than borrowed: these override .env.local, so a unit test can
+       never point a client at the real project. Nothing here talks to the
+       network — the specs that do are Playwright's, against the local stack. */
+    env: {
+      VITE_SUPABASE_URL: "http://127.0.0.1:54321",
+      VITE_SUPABASE_ANON_KEY: "test-anon-key",
+    },
   },
 });
