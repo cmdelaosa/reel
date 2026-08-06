@@ -78,9 +78,15 @@ function phrase(a: ActivityItem, titleName: string, isMe: boolean): React.ReactN
   }
 }
 
+/* How many rows the feed reveals before the first "Show more". The skeleton
+   below draws exactly this many, so the placeholder and the feed are the same
+   height — hardcoding 6 here against a page of 10 left the Invites card to be
+   shoved down four rows once the feed landed. */
+const FEED_PAGE = 10;
+
 /* Header + rows at the exact geometry of a real .fr-activity row, so the feed
    swaps in place instead of unfolding the page under the reader. */
-function ActivitySkeleton({ count = 6 }: { count?: number }) {
+function ActivitySkeleton({ count = FEED_PAGE }: { count?: number }) {
   return (
     <section className="flex flex-col gap-4">
       <div className="mq-sechead">
@@ -131,7 +137,7 @@ export function FriendActivityCard() {
   // silent no-op even though the row had been fetched.
   const flashKey = searchParams.get("event");
   const flashAt = flashKey ? items.findIndex((r) => r.event_key === flashKey) : -1;
-  const { shown, more } = useShowMore(items, 10, flashAt < 0 ? 0 : flashAt + 1);
+  const { shown, more } = useShowMore(items, FEED_PAGE, flashAt < 0 ? 0 : flashAt + 1);
 
   const flashRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
