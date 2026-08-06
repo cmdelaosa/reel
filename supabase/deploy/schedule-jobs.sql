@@ -5,8 +5,9 @@
 --
 -- Before running: replace <PROJECT_REF> below with your project ref (the
 -- subdomain of your project's API URL, e.g. abcdefgh in
--- https://abcdefgh.supabase.co), and set the service_role_key secret in the
--- Vault step. Run it in the hosted SQL editor (or `supabase db execute`).
+-- https://abcdefgh.supabase.co), and set the service-role key secret in the
+-- Vault step (mind its name — see step 2). Run it in the hosted SQL editor
+-- (or `supabase db execute`).
 
 -- 1. Extensions: cron scheduler + HTTP client for pg_cron → edge function calls.
 create extension if not exists pg_cron;
@@ -17,8 +18,20 @@ create extension if not exists pg_net;
 --    tmdb-proxy/warm rejects anything that is not this exact key). Get it from
 --    Dashboard → Project Settings → API → service_role key. Idempotent-ish:
 --    if you re-run, delete the old secret first
---    (`select vault.delete_secret('service_role_key');`) to avoid duplicates.
-select vault.create_secret('<SERVICE_ROLE_KEY>', 'service_role_key');
+--    (`select vault.delete_secret('episode_refresh_service_key');`) to avoid
+--    duplicates.
+--
+--    THE NAME IS LOAD-BEARING and it is not the obvious one. The live project
+--    stores this as `episode_refresh_service_key` — named after the first cron
+--    that needed it, and since inherited by every other. This file used to say
+--    `service_role_key`, which no project has ever held; the subquery then
+--    returned NULL, `'Bearer ' || NULL` collapsed to NULL, and the header was
+--    dropped from the request entirely. What comes back is a platform-gateway
+--    401 (`UNAUTHORIZED_NO_AUTH_HEADER`) that looks exactly like a bad key, so
+--    it reads as "wrong secret" rather than "no secret by that name" — and
+--    pg_net swallows it into net._http_response, where nobody is looking.
+--    If you rename it, rename it in all five call sites below at the same time.
+select vault.create_secret('<SERVICE_ROLE_KEY>', 'episode_refresh_service_key');
 
 -- 3a. episode-refresh — daily 05:00 UTC. Refreshes titles + latest seasons.
 select cron.schedule(
@@ -28,7 +41,7 @@ select cron.schedule(
     select net.http_post(
       url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/episode-refresh',
       headers := jsonb_build_object(
-        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'),
+        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'episode_refresh_service_key'),
         'Content-Type', 'application/json'
       ),
       body    := '{}'::jsonb
@@ -53,7 +66,7 @@ select cron.schedule(
     select net.http_post(
       url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/tmdb-proxy/warm',
       headers := jsonb_build_object(
-        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'),
+        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'episode_refresh_service_key'),
         'Content-Type', 'application/json'
       ),
       body    := '{}'::jsonb,
@@ -70,7 +83,7 @@ select cron.schedule(
     select net.http_post(
       url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/alerts',
       headers := jsonb_build_object(
-        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'),
+        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'episode_refresh_service_key'),
         'Content-Type', 'application/json'
       ),
       body    := '{}'::jsonb
@@ -85,7 +98,7 @@ select cron.schedule(
 select net.http_post(
   url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/episode-refresh?force=1',
   headers := jsonb_build_object(
-    'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'),
+    'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'episode_refresh_service_key'),
     'Content-Type', 'application/json'
   ),
   body    := '{}'::jsonb
@@ -97,7 +110,7 @@ select net.http_post(
 select net.http_post(
   url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/tmdb-proxy/warm',
   headers := jsonb_build_object(
-    'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'),
+    'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'episode_refresh_service_key'),
     'Content-Type', 'application/json'
   ),
   body    := '{}'::jsonb,
