@@ -9,6 +9,7 @@ import type { TitleRow } from "@/lib/schemas";
 import { tmdbImg } from "@/lib/tmdb";
 import { isEs, locName, t as tr, tv, tGenre, useEsNames } from "@/lib/i18n";
 import { Rail, TabMenu } from "@/ui";
+import { PosterGridSkeleton, RailCardsSkeleton, RowsSkeleton } from "@/ui/Skeleton";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
@@ -247,7 +248,7 @@ const TABS: { key: Tab; label: string }[] = [
 type DiscoverItem = { t: TitleRow; score: number | null; friends: FriendLike[] | null; friendCount: number };
 
 export function DiscoverSections() {
-  const { data: trendingRaw = [] } = useTrending();
+  const { data: trendingRaw = [], isLoading: trendingLoading } = useTrending();
   const { data: library = [] } = useLibrary();
   const { data: friendships = [] } = useFriendships();
   const { isIgnored, ignored } = useIgnored();
@@ -273,12 +274,29 @@ export function DiscoverSections() {
   // shows "Popular now" (recent/imminent premieres); picking a year falls back
   // to the classic catalog query. Top-rated filters year+genre server-side;
   // With-friends filters client-side (the RPC takes no params).
+  //
+  // Each pool is gated on the tab that shows it, so opening Explore costs one
+  // discover request instead of four fired at the same cold edge isolate. The
+  // 1h staleTime means the second visit to a tab is instant.
   const catalogMode = fromYear != null || toYear != null;
-  const { data: popularNowRaw = [] } = usePopularNow(!catalogMode);
-  const { data: catalogRaw = [] } = usePopular(fromYear, toYear, catalogMode);
+  const popularNow = usePopularNow(tab === "popular" && !catalogMode);
+  const catalog = usePopular(fromYear, toYear, tab === "popular" && catalogMode);
   const genreIds = selectedGenres.map((g) => GENRES[g]).filter(Boolean);
-  const { data: ratedRaw = [] } = useTopRated(fromYear, toYear, genreIds);
-  const { data: friendsRaw = [] } = usePopularWithFriends(hasFriends);
+  const rated = useTopRated(fromYear, toYear, genreIds, tab === "rated");
+  const friendsPool = usePopularWithFriends(hasFriends && tab === "friends");
+  const popularNowRaw = popularNow.data ?? [];
+  const catalogRaw = catalog.data ?? [];
+  const ratedRaw = rated.data ?? [];
+  const friendsRaw = friendsPool.data ?? [];
+
+  // Whichever pool the visible tab draws from. `isLoading` (not `isPending`)
+  // is what a skeleton wants: it stays false for a query that is merely
+  // disabled, and false while placeholderData holds the previous grid on
+  // screen through a filter change.
+  const gridLoading =
+    tab === "popular" ? (catalogMode ? catalog.isLoading : popularNow.isLoading)
+    : tab === "rated" ? rated.isLoading
+    : friendsPool.isLoading;
 
   const [, setSearchParams] = useSearchParams();
 
@@ -376,14 +394,16 @@ export function DiscoverSections() {
 
   return (
     <>
-      {trending.length > 0 && (
+      {(trendingLoading || trending.length > 0) && (
         <section className="flex flex-col gap-4">
           <Rail title={tr("Trending this week")}>
-            {trending.map((t, i) => (
-              <div key={t.tmdb_id} style={{ width: "var(--rail-pw)" }}>
-                <TitlePoster t={t} rank={i + 1} onOpen={() => open(t.tmdb_id)} />
-              </div>
-            ))}
+            {trendingLoading
+              ? <RailCardsSkeleton count={8} />
+              : trending.map((t, i) => (
+                  <div key={t.tmdb_id} style={{ width: "var(--rail-pw)" }}>
+                    <TitlePoster t={t} rank={i + 1} onOpen={() => open(t.tmdb_id)} />
+                  </div>
+                ))}
           </Rail>
         </section>
       )}
@@ -465,7 +485,10 @@ export function DiscoverSections() {
           </div>
         )}
 
-        {visible.length === 0 ? (
+        {gridLoading ? (
+          // 104px = .mq-row's 78px art plus its padding and border.
+          view === "list" ? <RowsSkeleton count={6} height={104} /> : <PosterGridSkeleton count={PAGE_SIZE} action />
+        ) : visible.length === 0 ? (
           <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{emptyMsg}</p>
         ) : view === "list" ? (
           <div className="flex flex-col gap-2">
@@ -493,7 +516,15 @@ export function DiscoverSections() {
           </div>
         )}
 
-        {shown < items.length && (
+        {gridLoading ? (
+          // Hold the button's row as well. Every pool here runs deeper than one
+          // page in practice, so it is all but certain to appear — and being the
+          // last thing on the section, it was pushing Collections down 58px on
+          // its own once the grid had stopped doing so.
+          <div className="show-more">
+            <div className="skeleton" style={{ height: "var(--ctl-h)", width: 128 }} />
+          </div>
+        ) : shown < items.length && (
           <div className="show-more">
             <button className="btn btn-outline" onClick={() => setShown((s) => s + PAGE_SIZE)}>
               {tr("Show more")}

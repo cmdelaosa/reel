@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useFriendActivity, type ActivityItem } from "@/lib/explore";
+import { useFriendships } from "@/lib/friends";
 import { useEventReactions } from "@/lib/reactions";
 import { byEvent, type ReactionRow } from "@/domain/reactions";
 import { relativeTime } from "@/domain/time";
@@ -77,10 +78,44 @@ function phrase(a: ActivityItem, titleName: string, isMe: boolean): React.ReactN
   }
 }
 
-export function FriendActivityCard({ enabled }: { enabled: boolean }) {
+/* Header + rows at the exact geometry of a real .fr-activity row, so the feed
+   swaps in place instead of unfolding the page under the reader. */
+function ActivitySkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="mq-sechead">
+        <div>
+          <h2 className="section-title">{tr("Activity")}</h2>
+        </div>
+      </div>
+      <div className="card" style={{ padding: 6 }}>
+        {Array.from({ length: count }).map((_, i) => (
+          <div key={i} className="fr-activity">
+            <div className="skeleton" style={{ width: 38, height: 38, borderRadius: 999, flex: "0 0 auto" }} />
+            <div className="flex-1 min-w-0 flex flex-col gap-2">
+              <div className="skeleton" style={{ height: 13, width: "72%" }} />
+              <div className="skeleton" style={{ height: 11, width: "34%" }} />
+            </div>
+            <div className="skeleton" style={{ width: 34, height: 50, flex: "0 0 auto" }} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function FriendActivityCard() {
+  /* Whether this section belongs on the page at all, and its contents, are two
+     independent questions — so they are two independent requests. Taking
+     `hasFriends` as a prop meant the feed could not even be requested until
+     rpc_my_friendships had answered, putting the page's slowest RPC second in a
+     chain. Reading friendships here instead hits the same cached query key (no
+     extra traffic) while the feed loads alongside it. */
+  const { data: friendships = [], isLoading: friendshipsLoading } = useFriendships();
+  const hasFriends = friendships.some((f) => f.status === "accepted");
   // Per-episode events (0040) fill a feed much faster than the old digest
   // verbs did, so pull a deeper page.
-  const { data: items = [] } = useFriendActivity(enabled, 60);
+  const { data: items = [], isLoading: activityLoading } = useFriendActivity(60);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const esNames = useEsNames();
@@ -126,7 +161,11 @@ export function FriendActivityCard({ enabled }: { enabled: boolean }) {
   const { data: reactionRows = [] } = useEventReactions(keys);
   const reactions = useMemo(() => byEvent(reactionRows), [reactionRows]);
 
-  if (!enabled || items.length === 0) return null;
+  // Nothing is drawn until friendships answers: it is the fast query, and a
+  // skeleton shown to someone with no friends would only collapse again.
+  if (friendshipsLoading || !hasFriends) return null;
+  if (activityLoading) return <ActivitySkeleton />;
+  if (items.length === 0) return null;
 
   const openFriend = (id: string) => navigate(`/friend/${id}`);
 

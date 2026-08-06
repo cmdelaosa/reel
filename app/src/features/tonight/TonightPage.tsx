@@ -9,6 +9,7 @@ import { useMarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
 import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { Poster, Rail, WatchOn } from "@/ui";
+import { HeroSkeleton, RailCardsSkeleton, RowsSkeleton } from "@/ui/Skeleton";
 import { posterBg } from "@/ui/posterBg";
 import { useTitleIntent } from "@/lib/useOpenTitle";
 
@@ -39,8 +40,8 @@ function airLabel(iso: string | null): string | null {
 
 
 export default function TonightPage() {
-  const { data: upNext = [], isPending } = useUpNext();
-  const { data: feed = [] } = useCalendarFeed(1);
+  const { data: upNext = [], isLoading } = useUpNext();
+  const { data: feed = [], isLoading: feedLoading } = useCalendarFeed(1);
   const [, setSearchParams] = useSearchParams();
   // bumped after marking from the continue rail → smooth-scroll it back to the
   // front, following the just-marked show to its new position.
@@ -86,6 +87,12 @@ export default function TonightPage() {
           the subject of the page, not a label for it. */}
       <h1 className="sr-only">{tr("Tonight")}</h1>
 
+      {isLoading && (
+        <div className="mq-bento">
+          <HeroSkeleton />
+        </div>
+      )}
+
       {hero && (
         <div className="mq-bento">
           <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} {...heroIntent} style={{ background: posterBg(hero.name) }}>
@@ -115,7 +122,7 @@ export default function TonightPage() {
         </div>
       )}
 
-      {!isPending && !hero && (
+      {!isLoading && !hero && (
         <div className="card" style={{ padding: "28px 24px" }}>
           <p className="dim" style={{ margin: 0, fontSize: 14 }}>
             {tr("Nothing in progress — add a show with {key} and mark where you are.")
@@ -125,7 +132,13 @@ export default function TonightPage() {
         </div>
       )}
 
-      {rest.length > 0 && (
+      {isLoading ? (
+        <section className="flex flex-col gap-4">
+          <Rail title={tr("Continue watching")}>
+            <RailCardsSkeleton caption />
+          </Rail>
+        </section>
+      ) : rest.length > 0 && (
         <section className="flex flex-col gap-4">
           <Rail title={tr("Continue watching")} scrollToStartKey={followKey}>
             {rest.map((r) => (
@@ -142,7 +155,9 @@ export default function TonightPage() {
             <Link to="/calendar" className="btn btn-ghost btn-sm">{tr("See all")} <ChevronRight size={14} /></Link>
           </div>
           <div className="flex flex-col gap-3">
-            {freshFeed.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("Nothing new in the last 5 days.")}</p>}
+            {/* 106px = .cal-ep's 80px art plus its padding and border. */}
+            {feedLoading && <RowsSkeleton count={3} height={106} />}
+            {!feedLoading && freshFeed.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("Nothing new in the last 5 days.")}</p>}
             {freshFeed.map((ep) => (
               <CalEpRow key={ep.episode_id} ep={ep} now={now} />
             ))}
@@ -155,7 +170,8 @@ export default function TonightPage() {
             <Link to="/calendar" className="btn btn-ghost btn-sm">{tr("See all")} <ChevronRight size={14} /></Link>
           </div>
           <div className="flex flex-col gap-3">
-            {soon.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No dated premieres yet.")}</p>}
+            {feedLoading && <RowsSkeleton count={3} height={106} />}
+            {!feedLoading && soon.length === 0 && <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No dated premieres yet.")}</p>}
             {soon.map((ep) => (
               <CalEpRow key={ep.episode_id} ep={ep} now={now} later />
             ))}

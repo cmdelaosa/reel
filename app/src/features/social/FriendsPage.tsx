@@ -13,23 +13,35 @@ import { t as tr } from "@/lib/i18n";
    Everything friend-powered lights up from the first accepted friend. */
 
 export default function FriendsPage() {
-  const { data: friendships = [] } = useFriendships();
+  const { data: friendships = [], isLoading } = useFriendships();
   const hasFriends = friendships.some((f) => f.status === "accepted");
 
   return (
     <div className="screen mq-page">
       <h1 className="sr-only">{tr("Friends")}</h1>
 
-      {hasFriends && (
+      {/* The teasers hold their row while friendships loads — they sit above
+          everything else on the page, so appearing late shoved the whole thing
+          down a beat after it painted. */}
+      {(isLoading || hasFriends) && (
         <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
-          <TasteCard />
-          <StatsCard />
+          {isLoading ? (
+            <>
+              <div className="skeleton" style={{ height: 64 }} />
+              <div className="skeleton" style={{ height: 64 }} />
+            </>
+          ) : (
+            <>
+              <TasteCard />
+              <StatsCard />
+            </>
+          )}
         </div>
       )}
 
       <FriendsSection />
 
-      <FriendActivityCard enabled={hasFriends} />
+      <FriendActivityCard />
 
       <InvitesCard />
     </div>

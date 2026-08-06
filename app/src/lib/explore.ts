@@ -41,10 +41,15 @@ export function usePopular(from: number | null, to: number | null, enabled: bool
  *  year range and genre set. Genre filtering is server-side (unlike the
  *  Popular-now grid): a niche genre's top shows rarely survive inside a global
  *  popularity pool, so the proxy queries TMDB per genre. Keyed on all filters;
- *  keeps the prior grid on screen while a new combination loads. */
-export function useTopRated(from: number | null, to: number | null, genreIds: number[]) {
+ *  keeps the prior grid on screen while a new combination loads.
+ *
+ *  `enabled` is the tab gate. This used to fetch on every Explore load whether
+ *  or not the reader ever opened the tab — a fourth proxy request racing the
+ *  three the page actually renders, over the same cold edge isolate. */
+export function useTopRated(from: number | null, to: number | null, genreIds: number[], enabled: boolean) {
   return useQuery({
     queryKey: ["topRated", from, to, [...genreIds].sort((a, b) => a - b).join(",")],
+    enabled,
     staleTime: 60 * 60 * 1000,
     placeholderData: (prev) => prev,
     queryFn: (): Promise<TitleRow[]> => getTopRated(from, to, genreIds),
@@ -78,6 +83,10 @@ const popularSchema = z.array(
 );
 export type PopularWithFriends = z.infer<typeof popularSchema>[number];
 
+/** Shows your circle follows, for the With-friends tab. `enabled` carries both
+ *  the "has friends at all" check and the tab gate — same reason as
+ *  {@link useTopRated}: an RPC nobody is looking at should not be competing for
+ *  the page's first paint. */
 export function usePopularWithFriends(enabled: boolean) {
   return useQuery({
     queryKey: ["popularWithFriends"],
@@ -119,10 +128,14 @@ const activitySchema = z.array(
 );
 export type ActivityItem = z.infer<typeof activitySchema>[number];
 
-export function useFriendActivity(enabled: boolean, limit = 30) {
+/** The circle's wall. Deliberately ungated: the RPC builds the circle from
+ *  `friendships` itself, so asking the caller to prove it has friends first
+ *  only bought a second round trip's worth of latency in front of the app's
+ *  most expensive query. With no friends the circle is you alone and this
+ *  returns your own rows cheaply — the *display* gate lives in the component. */
+export function useFriendActivity(limit = 30) {
   return useQuery({
     queryKey: qk.friendActivity(limit),
-    enabled,
     queryFn: async (): Promise<ActivityItem[]> => {
       const { data, error } = await supabase.rpc("rpc_friend_activity", { p_limit: limit });
       if (error) throw error;

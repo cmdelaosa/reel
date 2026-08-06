@@ -1,11 +1,25 @@
 import { useNavigate } from "react-router";
 import { useCollections } from "@/lib/collections";
+import { TileGridSkeleton } from "@/ui/Skeleton";
 import { t as tr } from "@/lib/i18n";
 
 /* Explore collection tiles — 16:9 gradient cards → /collection/:slug. */
 export function CollectionsSection() {
-  const { data: collections = [] } = useCollections();
+  const { data: collections = [], isLoading } = useCollections();
   const navigate = useNavigate();
+
+  if (isLoading) {
+    return (
+      <section className="flex flex-col gap-4">
+        <div className="mq-sechead">
+          <div>
+            <h2 className="section-title">{tr("Collections")}</h2>
+          </div>
+        </div>
+        <TileGridSkeleton />
+      </section>
+    );
+  }
 
   if (collections.length === 0) return null;
 

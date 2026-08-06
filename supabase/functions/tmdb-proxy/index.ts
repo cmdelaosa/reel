@@ -9,6 +9,7 @@
 //   GET /collection/:slug          → { results: TitleRow[] }
 //   GET /title/:tmdbId             → { title: TitleRow, seasons: SeasonRow[] }
 //   GET /title/:tmdbId/season/:n   → { season: SeasonRow, episodes: EpisodeRow[] }
+//   POST /warm                     → { ok, summary }  (service-role cron only)
 //
 // Every response is served from the metadata cache (rows written with the
 // service-role key) — the client never sees raw TMDB payloads. /title and
@@ -17,6 +18,10 @@
 // background, and only never-cached data blocks on a TMDB fetch. A valid
 // *user* JWT is required (the anon key alone is rejected). The response shape is
 // mirrored (minimally, no cross-runtime import) by app/src/lib/schemas.ts.
+//
+// The four discovery routes each cache the ORDER they resolved to (24h) rather
+// than re-deriving it per request — see the "discovery caches" block. /warm
+// rebuilds all four on a schedule so no reader ever pays for a cold one.
 //
 // Filling a season from scratch (nobody had opened this show before) also pulls
 // the show's remaining seasons in behind the response — see fillWholeShow. The
@@ -702,20 +707,341 @@ const fetchTmdb = async (apiKey: string, p: string) => {
   return res.json();
 };
 
+/* ── discovery caches ────────────────────────────────────────────────────────
+   Four routes feed Explore, and all four are the same shape: work out an
+   ORDER over tmdb_ids (the expensive part — several TMDB pages, sometimes a
+   detail check per candidate), then hand back the title rows we already hold.
+   Only the order is worth caching, and it is what these resolvers cache.
+
+   /trending and /popular-now keep their own tables (they predate this and the
+   client reads trending_cache's shape nowhere, so there was nothing to gain by
+   merging them). /popular and /top-rated had no cache at all until 0064: every
+   request re-fetched 5–8 TMDB pages and re-upserted a couple of hundred rows
+   before answering, which is most of why opening a discover tab cold took
+   seconds.
+
+   `force` is the warming cron's flag: rebuild regardless of freshness, so the
+   cron does not have to race the very TTL it exists to stay ahead of. */
+const DISCOVER_TTL_MS = 24 * 3600 * 1000;
+
+/** Title rows for an ordered tmdb_id list, in that order. */
+async function titlesInOrder(admin: SupabaseClient, tmdbIds: number[]): Promise<Any[]> {
+  if (tmdbIds.length === 0) return [];
+  const { data } = await admin.from("titles").select("*").in("tmdb_id", tmdbIds);
+  const byTmdb = new Map((data ?? []).map((r: Any) => [r.tmdb_id, r]));
+  return tmdbIds.map((id) => byTmdb.get(id)).filter(Boolean);
+}
+
+async function readDiscoverCache(admin: SupabaseClient, key: string): Promise<number[] | null> {
+  const { data } = await admin
+    .from("discover_cache")
+    .select("tmdb_ids, cached_at")
+    .eq("cache_key", key)
+    .maybeSingle();
+  if (!data) return null;
+  if (Date.now() - new Date(data.cached_at).getTime() >= DISCOVER_TTL_MS) return null;
+  const ids = (data.tmdb_ids ?? []).map(Number);
+  return ids.length > 0 ? ids : null;
+}
+
+async function writeDiscoverCache(admin: SupabaseClient, key: string, ids: number[]) {
+  // Never cache an empty pool: that only happens when TMDB is failing, and
+  // remembering the failure for 24h would turn a blip into a dead tab.
+  if (ids.length === 0) return;
+  await admin
+    .from("discover_cache")
+    .upsert(
+      { cache_key: key, tmdb_ids: ids, cached_at: new Date().toISOString() },
+      { onConflict: "cache_key" },
+    );
+}
+
+/** Dedupe a set of TMDB discover pages, dropping hidden genres. A repeated
+ *  tmdb_id inside one upsert batch errors ("cannot affect row a second time"),
+ *  so this runs before every write, not just for tidiness. */
+function dedupeVisible(pages: Any[]): Any[] {
+  const seen = new Set<number>();
+  const out: Any[] = [];
+  for (const r of pages.flatMap((d) => d.results ?? [])) {
+    if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); out.push(r); }
+  }
+  return out;
+}
+
+/** TMDB /trending/tv/week, cached 24h in trending_cache. */
+async function resolveTrending(admin: SupabaseClient, apiKey: string, force = false): Promise<number[]> {
+  if (!force) {
+    const dayAgo = new Date(Date.now() - DISCOVER_TTL_MS).toISOString();
+    const { data: fresh } = await admin
+      .from("trending_cache")
+      .select("tmdb_id, rank")
+      .gte("cached_at", dayAgo)
+      .order("rank");
+    if (fresh && fresh.length > 0) return fresh.map((r: Any) => r.tmdb_id as number);
+  }
+  // Pull a couple of pages: after hiding anime/soaps/reality/etc a single
+  // 20-item page thins out, so we go wider and keep the top TREND_KEEP.
+  const TREND_PAGES = 2;
+  const TREND_KEEP = 24;
+  const pages = await Promise.all(
+    Array.from({ length: TREND_PAGES }, (_, i) => fetchTmdb(apiKey, `/trending/tv/week?page=${i + 1}`)),
+  );
+  const results = capNonWestern(dedupeVisible(pages));
+  results.length = Math.min(results.length, TREND_KEEP);
+  if (results.length === 0) return [];
+  await upsertReturning(admin, "titles", results.map(searchRow), "tmdb_id");
+  const ranked = results.map((r, i) => ({ tmdb_id: r.id as number, rank: i + 1 }));
+  // Upsert (not delete+insert) so two concurrent cold-cache refreshes can't
+  // collide on the PK. Stale rows keep their old cached_at and are filtered out
+  // by the 24h window above.
+  const now = new Date().toISOString();
+  await admin
+    .from("trending_cache")
+    .upsert(ranked.map((r) => ({ ...r, cached_at: now })), { onConflict: "tmdb_id" });
+  return ranked.map((r) => r.tmdb_id);
+}
+
+/** Shows with a *season premiere* (S1 or a new season) in the last 90 days or
+ *  the next 30, ranked by TMDB popularity, cached 24h in popular_now_cache.
+ *
+ *  Raw popularity.desc favours long-running syndicated shows (SVU, Grey's…);
+ *  gating on a premiere keeps the grid about things happening *now*. Discover
+ *  can't see season dates, so we detail-check the top candidates — which is why
+ *  a cold rebuild here is the slowest thing the proxy does, and why the warming
+ *  cron exists. */
+async function resolvePopularNow(admin: SupabaseClient, apiKey: string, force = false): Promise<number[]> {
+  if (!force) {
+    const dayAgo = new Date(Date.now() - DISCOVER_TTL_MS).toISOString();
+    const { data: fresh } = await admin
+      .from("popular_now_cache")
+      .select("tmdb_id, rank")
+      .gte("cached_at", dayAgo)
+      .order("rank");
+    if (fresh && fresh.length > 0) return fresh.map((r: Any) => r.tmdb_id as number);
+  }
+  const DAY = 24 * 3600 * 1000;
+  const since = new Date(Date.now() - 90 * DAY).toISOString().slice(0, 10);
+  const until = new Date(Date.now() + 30 * DAY).toISOString().slice(0, 10);
+  const CANDIDATES = 80; // detail fetches per cold refresh
+  const KEEP = 48;
+  // Candidate pool: shows with episodes airing in the window, plus shows
+  // *first* airing in it (covers upcoming S1s with nothing aired yet).
+  const queries = [
+    ...Array.from({ length: 4 }, (_, i) =>
+      `/discover/tv?sort_by=popularity.desc&include_adult=false&air_date.gte=${since}&air_date.lte=${until}&page=${i + 1}`),
+    ...Array.from({ length: 2 }, (_, i) =>
+      `/discover/tv?sort_by=popularity.desc&include_adult=false&first_air_date.gte=${since}&first_air_date.lte=${until}&page=${i + 1}`),
+    // Spanish supply for the boostSpanish floor: same premiere windows,
+    // Spain-only. Global pages rarely carry Spanish shows deep enough.
+    `/discover/tv?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&air_date.gte=${since}&air_date.lte=${until}&page=1`,
+    `/discover/tv?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&first_air_date.gte=${since}&first_air_date.lte=${until}&page=1`,
+  ];
+  const pages = await Promise.all(queries.map((q) => fetchTmdb(apiKey, q)));
+  const candidates = dedupeVisible(pages);
+  candidates.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+  // Cap + boost before the detail-check so the fetch budget isn't spent on
+  // titles the quota would drop anyway (and so Spanish candidates survive into
+  // the top CANDIDATES); both run again after the premiere gate below, since
+  // dropping non-premiering rows skews ratios back.
+  const pool = capNonWestern(boostSpanish(candidates));
+  pool.length = Math.min(pool.length, CANDIDATES);
+  // Detail-check in chunks (TMDB rate limit): keep shows with a real season
+  // (not specials) premiering inside the window.
+  const premiered: Any[] = [];
+  const CHUNK = 20;
+  for (let i = 0; i < pool.length; i += CHUNK) {
+    const details = await Promise.all(
+      // Same request count with the appends, and it means a discover row
+      // already carries its providers and Spanish title the first time it
+      // is rendered. external_ids is not a nicety here: titleRow stamps
+      // last_refreshed_at, so a payload without it writes a row that looks
+      // fully refreshed to /title while imdb_id stays null — and imdb_id is
+      // the ONLY key the ratings importer matches a show by, so those
+      // titles were invisible to it for good (no episode graph, no IMDb
+      // score on the sheet). Keep this append in step with refreshTitle's.
+      pool.slice(i, i + CHUNK).map((c) =>
+        fetchTmdb(apiKey, `/tv/${c.id}?append_to_response=translations,external_ids,watch/providers`).catch(() => null)),
+    );
+    for (const d of details) {
+      if (!d) continue;
+      const hasPremiere = (d.seasons ?? []).some((s: Any) =>
+        (s.season_number ?? 0) > 0 && s.air_date && s.air_date >= since && s.air_date <= until);
+      if (hasPremiere) premiered.push(d);
+    }
+  }
+  premiered.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+  const keep = capNonWestern(boostSpanish(premiered));
+  keep.length = Math.min(keep.length, KEEP);
+  if (keep.length === 0) return [];
+  // We hold full details here, so upsert the rich row (network, status…).
+  await upsertReturning(admin, "titles", keep.map(titleRow), "tmdb_id");
+  await cacheNetworkLogos(admin, keep.flatMap((d: Any) => d.networks ?? []));
+  const ranked = keep.map((d, i) => ({ tmdb_id: d.id as number, rank: i + 1 }));
+  const now = new Date().toISOString();
+  await admin
+    .from("popular_now_cache")
+    .upsert(ranked.map((r) => ({ ...r, cached_at: now })), { onConflict: "tmdb_id" });
+  return ranked.map((r) => r.tmdb_id);
+}
+
+/** Popular TV by popularity, optionally inside a first-air-year range. */
+async function resolvePopular(
+  admin: SupabaseClient, apiKey: string, from: string | null, to: string | null, force = false,
+): Promise<number[]> {
+  const key = `popular:${from ?? ""}:${to ?? ""}`;
+  if (!force) {
+    const hit = await readDiscoverCache(admin, key);
+    if (hit) return hit;
+  }
+  const yearParams =
+    (from ? `&first_air_date.gte=${from}-01-01` : "") +
+    (to ? `&first_air_date.lte=${to}-12-31` : "");
+  const PAGES = 5;
+  const ES_PAGES = 2; // Spanish supply for the boostSpanish floor
+  const pages = await Promise.all([
+    ...Array.from({ length: PAGES }, (_, i) =>
+      fetchTmdb(apiKey, `/discover/tv?sort_by=popularity.desc&include_adult=false&page=${i + 1}${yearParams}`)),
+    ...Array.from({ length: ES_PAGES }, (_, i) =>
+      fetchTmdb(apiKey, `/discover/tv?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&page=${i + 1}${yearParams}`)),
+  ]);
+  const uniq = capNonWestern(boostSpanish(dedupeVisible(pages)));
+  if (uniq.length === 0) return [];
+  await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
+  const ids = uniq.map((r) => r.id as number);
+  await writeDiscoverCache(admin, key, ids);
+  return ids;
+}
+
+/** Top-rated TV (TMDB /discover/tv sorted by rating; genre ids are OR-ed).
+ *
+ *  The vote_count floor is the honesty knob — fan-niche titles rate 8.6+ on few
+ *  votes — but a fixed high floor starves filtered charts (the 1970s have two
+ *  1000-vote shows, Documentary has zero at 3000), so it slides with the era and
+ *  drops when a genre is picked. When `from` sits in the last few years the
+ *  whole range is too young to have accrued votes (a 2026 premiere can't reach
+ *  1000), so the floor collapses as `from` approaches today. boostSpanish is
+ *  deliberately skipped: injecting lower-rated titles would falsify a by-rating
+ *  chart; capNonWestern only demotes, so the order within Western titles stays
+ *  honest. */
+async function resolveTopRated(
+  admin: SupabaseClient, apiKey: string, from: string | null, to: string | null,
+  genres: string[], force = false,
+): Promise<number[]> {
+  const key = `top-rated:${from ?? ""}:${to ?? ""}:${genres.join(",")}`;
+  if (!force) {
+    const hit = await readDiscoverCache(admin, key);
+    if (hit) return hit;
+  }
+  const thisYear = new Date().getUTCFullYear();
+  const era = Number(from ?? to); // older bound of the range
+  const eraFloor =
+    !from && !to ? 3000
+    : Number(from) >= thisYear - 1 ? 50 // range is brand-new — votes haven't accrued yet
+    : Number(from) >= thisYear - 4 ? 300
+    : era >= 2005 ? 1000
+    : era >= 1990 ? 500
+    : 200;
+  const minVotes = genres.length ? Math.min(eraFloor, 500) : eraFloor;
+  const params =
+    `&sort_by=vote_average.desc&vote_count.gte=${minVotes}` +
+    (from ? `&first_air_date.gte=${from}-01-01` : "") +
+    (to ? `&first_air_date.lte=${to}-12-31` : "") +
+    (genres.length ? `&with_genres=${genres.join("%7C")}` : "");
+  const PAGES = 8;
+  const pages = await Promise.all(
+    Array.from({ length: PAGES }, (_, i) =>
+      fetchTmdb(apiKey, `/discover/tv?include_adult=false${params}&page=${i + 1}`)),
+  );
+  const uniq = capNonWestern(dedupeVisible(pages));
+  if (uniq.length === 0) return [];
+  await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
+  const ids = uniq.map((r) => r.id as number);
+  await writeDiscoverCache(admin, key, ids);
+  return ids;
+}
+
+/* ── invite gate ─────────────────────────────────────────────────────────────
+   The gate is a PostgREST round trip, and it used to run on every single
+   request. Explore alone opens with several — same reader, same token, same
+   question, asked concurrently — and each one paid for it before touching a
+   cache that was already warm.
+
+   So memoise the verdict against the exact access token that earned it. What
+   makes this sound rather than a hole: the key IS the credential. Nothing can
+   read a cached entry without presenting the very token that was verified, so
+   this can never admit a request the RPC would have turned away. It can only
+   serve a verdict slightly late — an invite revoked mid-session stays usable
+   for up to a minute, and the invite gate is advisory anyway (RLS on the user
+   tables is the actual wall, and it is not cached here).
+
+   Only "invited" is cached. A rejection isn't, so redeeming an invite takes
+   effect on the very next request instead of stranding the new user for a
+   minute on the gate they just cleared. */
+const GATE_TTL_MS = 60_000;
+const GATE_MAX_ENTRIES = 500;
+const gateCache = new Map<string, number>(); // token → epoch ms the verdict expires
+
+/** The `exp` a JWT carries, in epoch ms. Unverified — read only to shorten the
+ *  memo, never to lengthen it, so a forged claim buys nothing. */
+function jwtExpiry(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const exp = JSON.parse(json)?.exp;
+    return typeof exp === "number" ? exp * 1000 : null;
+  } catch {
+    return null; // opaque or malformed — the RPC is about to reject it anyway
+  }
+}
+
+function gateHit(token: string): boolean {
+  const until = gateCache.get(token);
+  if (until == null) return false;
+  if (until <= Date.now()) {
+    gateCache.delete(token);
+    return false;
+  }
+  return true;
+}
+
+function rememberGate(token: string) {
+  const exp = jwtExpiry(token);
+  const until = Math.min(Date.now() + GATE_TTL_MS, exp ?? Infinity);
+  if (until <= Date.now()) return; // already expired — nothing worth holding
+  // Plain FIFO eviction. The isolate is short-lived and the map only ever holds
+  // the handful of tokens it has served; the cap is a memory backstop, not a
+  // policy.
+  if (gateCache.size >= GATE_MAX_ENTRIES) {
+    const oldest = gateCache.keys().next().value;
+    if (oldest !== undefined) gateCache.delete(oldest);
+  }
+  gateCache.set(token, until);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const requestStarted = performance.now();
 
-  // --- auth + invite gate in one PostgREST round trip ---
-  const userClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } },
-  );
-  const { data: invited, error: gateError } = await userClient.rpc("is_current_user_invited");
-  if (gateError) return json({ error: "unauthorized" }, 401);
-  if (!invited) return json({ error: "not invited" }, 403);
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const isCron = bearer.length > 0 && bearer === serviceKey;
+
+  // --- auth + invite gate (one PostgREST round trip, memoised per token) ---
+  // The warming cron presents the service-role key and skips the gate: there is
+  // no user behind it to invite, and it only ever rebuilds caches.
+  if (!isCron && !gateHit(bearer)) {
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } },
+    );
+    const { data: invited, error: gateError } = await userClient.rpc("is_current_user_invited");
+    if (gateError) return json({ error: "unauthorized" }, 401);
+    if (!invited) return json({ error: "not invited" }, 403);
+    rememberGate(bearer);
+  }
   const gateFinished = performance.now();
 
   const apiKey = Deno.env.get("TMDB_API_KEY");
@@ -742,6 +1068,57 @@ Deno.serve(async (req) => {
   });
 
   try {
+    // POST /warm — service-role only. Rebuilds every discovery cache ahead of
+    // the readers, so nobody has to stand behind a cold one.
+    //
+    // The caches expire on a 24h TTL, which means somebody always paid to
+    // rebuild them: the first person to open Explore after they lapsed wore the
+    // whole cost, and on a small user base that is the same handful of people
+    // every day. popular-now is the worst of it — 8 discover pages plus up to
+    // 80 sequential TMDB detail fetches, the ~5s the grid used to take to
+    // appear. This moves that work to 04:40 UTC, before anyone is looking.
+    //
+    // Rebuilds unconditionally rather than honouring the TTL: the cron fires on
+    // roughly the same period as the TTL it exists to stay ahead of, so a
+    // freshness check would have it skip a cache about to expire an hour later.
+    //
+    // Only the UNFILTERED pools are warmed. Filtered ones (a year range, a
+    // genre) are a combinatorial space nobody could pre-compute, and they are
+    // reached by deliberate interaction — where a skeleton and a beat's wait
+    // read as the filter working, not as the app being slow.
+    if (path === "/warm") {
+      if (!isCron) return json({ error: "unauthorized" }, 401);
+      const startedAt = new Date().toISOString();
+      const jobs: [string, () => Promise<number[]>][] = [
+        ["trending", () => resolveTrending(admin, apiKey, true)],
+        ["popular-now", () => resolvePopularNow(admin, apiKey, true)],
+        ["popular", () => resolvePopular(admin, apiKey, null, null, true)],
+        ["top-rated", () => resolveTopRated(admin, apiKey, null, null, [], true)],
+      ];
+      // Sequentially: these are the heaviest TMDB consumers in the codebase and
+      // running them at once is how a rate limit turns four warm caches into
+      // four cold ones. Nobody is waiting on this response.
+      const summary: Record<string, number | string> = {};
+      let ok = true;
+      for (const [name, run] of jobs) {
+        try {
+          summary[name] = (await run()).length;
+        } catch (e) {
+          ok = false;
+          summary[name] = `error: ${e instanceof Error ? e.message : String(e)}`;
+        }
+      }
+      // Best-effort bookkeeping — never fail the run on the log write (0029).
+      await admin.from("job_runs").insert({
+        job: "discover-warm",
+        started_at: startedAt,
+        finished_at: new Date().toISOString(),
+        ok,
+        summary,
+      }).then(() => {}, () => {});
+      return json({ ok, summary }, ok ? 200 : 500);
+    }
+
     // GET /search?q=&lang=es — TMDB matches translated names/AKAs regardless of
     // the language param (a query in Spanish already finds the show); lang=es
     // additionally fetches the es-ES translation set and patches name_es/
@@ -786,220 +1163,31 @@ Deno.serve(async (req) => {
 
     // GET /trending  (TMDB /trending/tv/week, cached 24h in trending_cache)
     if (path === "/trending") {
-      const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-      const { data: fresh } = await admin
-        .from("trending_cache")
-        .select("tmdb_id, rank")
-        .gte("cached_at", dayAgo)
-        .order("rank");
-      let ranked: { tmdb_id: number; rank: number }[] = fresh ?? [];
-      if (ranked.length === 0) {
-        // Pull a couple of pages: after hiding anime/soaps/reality/etc a single
-        // 20-item page thins out, so we go wider and keep the top TREND_KEEP.
-        const TREND_PAGES = 2;
-        const TREND_KEEP = 24;
-        const pages = await Promise.all(
-          Array.from({ length: TREND_PAGES }, (_, i) =>
-            fetchTmdb(apiKey, `/trending/tv/week?page=${i + 1}`)
-          ),
-        );
-        // Dedupe across pages (trending repeats titles) before dropping hidden.
-        const seen = new Set<number>();
-        const deduped: Any[] = [];
-        for (const r of pages.flatMap((d) => d.results ?? [])) {
-          if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); deduped.push(r); }
-        }
-        const results = capNonWestern(deduped);
-        results.length = Math.min(results.length, TREND_KEEP);
-        if (results.length) {
-          await upsertReturning(admin, "titles", results.map(searchRow), "tmdb_id");
-          ranked = results.map((r, i) => ({ tmdb_id: r.id as number, rank: i + 1 }));
-          // Upsert (not delete+insert) so two concurrent cold-cache refreshes
-          // can't collide on the PK. Stale rows keep their old cached_at and are
-          // filtered out by the 24h window above.
-          const now = new Date().toISOString();
-          await admin
-            .from("trending_cache")
-            .upsert(ranked.map((r) => ({ ...r, cached_at: now })), { onConflict: "tmdb_id" });
-        }
-      }
-      if (ranked.length === 0) return json({ results: [] });
-      const { data: rows } = await admin
-        .from("titles")
-        .select("*")
-        .in("tmdb_id", ranked.map((r) => r.tmdb_id));
-      const byTmdb = new Map((rows ?? []).map((r: Any) => [r.tmdb_id, r]));
-      return json({ results: ranked.map((r) => byTmdb.get(r.tmdb_id)).filter(Boolean) });
+      return json({ results: await titlesInOrder(admin, await resolveTrending(admin, apiKey)) });
     }
 
-    // GET /popular-now  — shows with a *season premiere* (S1 or a new season)
-    // in the last 90 days or the next 30, ranked by TMDB popularity. Raw
-    // popularity.desc favours long-running syndicated shows (SVU, Grey's…);
-    // gating on a premiere keeps the grid about things happening *now*.
-    // Discover can't see season dates, so we detail-check the top candidates
-    // and cache the resulting order 24h in popular_now_cache.
+    // GET /popular-now  — see resolvePopularNow.
     if (path === "/popular-now") {
-      const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-      const { data: fresh } = await admin
-        .from("popular_now_cache")
-        .select("tmdb_id, rank")
-        .gte("cached_at", dayAgo)
-        .order("rank");
-      let ranked: { tmdb_id: number; rank: number }[] = fresh ?? [];
-      if (ranked.length === 0) {
-        const DAY = 24 * 3600 * 1000;
-        const since = new Date(Date.now() - 90 * DAY).toISOString().slice(0, 10);
-        const until = new Date(Date.now() + 30 * DAY).toISOString().slice(0, 10);
-        const CANDIDATES = 80; // detail fetches per cold refresh
-        const KEEP = 48;
-        // Candidate pool: shows with episodes airing in the window, plus shows
-        // *first* airing in it (covers upcoming S1s with nothing aired yet).
-        const queries = [
-          ...Array.from({ length: 4 }, (_, i) =>
-            `/discover/tv?sort_by=popularity.desc&include_adult=false&air_date.gte=${since}&air_date.lte=${until}&page=${i + 1}`),
-          ...Array.from({ length: 2 }, (_, i) =>
-            `/discover/tv?sort_by=popularity.desc&include_adult=false&first_air_date.gte=${since}&first_air_date.lte=${until}&page=${i + 1}`),
-          // Spanish supply for the boostSpanish floor: same premiere windows,
-          // Spain-only. Global pages rarely carry Spanish shows deep enough.
-          `/discover/tv?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&air_date.gte=${since}&air_date.lte=${until}&page=1`,
-          `/discover/tv?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&first_air_date.gte=${since}&first_air_date.lte=${until}&page=1`,
-        ];
-        const pages = await Promise.all(queries.map((q) => fetchTmdb(apiKey, q)));
-        const seen = new Set<number>();
-        const candidates: Any[] = [];
-        for (const r of pages.flatMap((d) => d.results ?? [])) {
-          if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); candidates.push(r); }
-        }
-        candidates.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
-        // Cap + boost before the detail-check so the fetch budget isn't spent
-        // on titles the quota would drop anyway (and so Spanish candidates
-        // survive into the top CANDIDATES); both run again after the premiere
-        // gate below, since dropping non-premiering rows skews ratios back.
-        const pool = capNonWestern(boostSpanish(candidates));
-        pool.length = Math.min(pool.length, CANDIDATES);
-        // Detail-check in chunks (TMDB rate limit): keep shows with a real
-        // season (not specials) premiering inside the window.
-        const premiered: Any[] = [];
-        const CHUNK = 20;
-        for (let i = 0; i < pool.length; i += CHUNK) {
-          const details = await Promise.all(
-            // Same request count with the appends, and it means a discover row
-            // already carries its providers and Spanish title the first time it
-            // is rendered. external_ids is not a nicety here: titleRow stamps
-            // last_refreshed_at, so a payload without it writes a row that looks
-            // fully refreshed to /title while imdb_id stays null — and imdb_id is
-            // the ONLY key the ratings importer matches a show by, so those
-            // titles were invisible to it for good (no episode graph, no IMDb
-            // score on the sheet). Keep this append in step with refreshTitle's.
-            pool.slice(i, i + CHUNK).map((c) =>
-              fetchTmdb(apiKey, `/tv/${c.id}?append_to_response=translations,external_ids,watch/providers`).catch(() => null)),
-          );
-          for (const d of details) {
-            if (!d) continue;
-            const hasPremiere = (d.seasons ?? []).some((s: Any) =>
-              (s.season_number ?? 0) > 0 && s.air_date && s.air_date >= since && s.air_date <= until);
-            if (hasPremiere) premiered.push(d);
-          }
-        }
-        premiered.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
-        const keep = capNonWestern(boostSpanish(premiered));
-        keep.length = Math.min(keep.length, KEEP);
-        if (keep.length) {
-          // We hold full details here, so upsert the rich row (network, status…).
-          await upsertReturning(admin, "titles", keep.map(titleRow), "tmdb_id");
-          await cacheNetworkLogos(admin, keep.flatMap((d: Any) => d.networks ?? []));
-          ranked = keep.map((d, i) => ({ tmdb_id: d.id as number, rank: i + 1 }));
-          const now = new Date().toISOString();
-          await admin
-            .from("popular_now_cache")
-            .upsert(ranked.map((r) => ({ ...r, cached_at: now })), { onConflict: "tmdb_id" });
-        }
-      }
-      if (ranked.length === 0) return json({ results: [] });
-      const { data: rows } = await admin
-        .from("titles")
-        .select("*")
-        .in("tmdb_id", ranked.map((r) => r.tmdb_id));
-      const byTmdb = new Map((rows ?? []).map((r: Any) => [r.tmdb_id, r]));
-      return json({ results: ranked.map((r) => byTmdb.get(r.tmdb_id)).filter(Boolean) });
+      return json({ results: await titlesInOrder(admin, await resolvePopularNow(admin, apiKey)) });
     }
 
-    // GET /popular?from=YYYY&to=YYYY  (TMDB /discover/tv by popularity, with an
-    // optional first-air-year range). Pulls a few pages so the grid has depth.
+    // GET /popular?from=YYYY&to=YYYY  — see resolvePopular.
     if (path === "/popular") {
-      const from = url.searchParams.get("from");
-      const to = url.searchParams.get("to");
-      const yearParams =
-        (from ? `&first_air_date.gte=${from}-01-01` : "") +
-        (to ? `&first_air_date.lte=${to}-12-31` : "");
-      const PAGES = 5;
-      const ES_PAGES = 2; // Spanish supply for the boostSpanish floor
-      const pages = await Promise.all([
-        ...Array.from({ length: PAGES }, (_, i) =>
-          fetchTmdb(apiKey, `/discover/tv?sort_by=popularity.desc&include_adult=false&page=${i + 1}${yearParams}`)),
-        ...Array.from({ length: ES_PAGES }, (_, i) =>
-          fetchTmdb(apiKey, `/discover/tv?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&page=${i + 1}${yearParams}`)),
-      ]);
-      // Dedupe across pages before upserting — a repeated tmdb_id in one upsert
-      // batch errors ("cannot affect row a second time").
-      const seen = new Set<number>();
-      const deduped: Any[] = [];
-      for (const r of pages.flatMap((d) => d.results ?? [])) {
-        if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); deduped.push(r); }
-      }
-      const uniq = capNonWestern(boostSpanish(deduped));
-      if (uniq.length === 0) return json({ results: [] });
-      const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
-      const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
-      return json({ results: uniq.map((r) => byTmdb.get(r.id)).filter(Boolean) });
+      const ids = await resolvePopular(admin, apiKey, url.searchParams.get("from"), url.searchParams.get("to"));
+      return json({ results: await titlesInOrder(admin, ids) });
     }
 
-    // GET /top-rated?from=YYYY&to=YYYY&genres=18,80  (TMDB /discover/tv sorted
-    // by rating; genre ids are OR-ed). The vote_count floor is the honesty
-    // knob — fan-niche titles rate 8.6+ on few votes — but a fixed high floor
-    // starves filtered charts (the 1970s have two 1000-vote shows, Documentary
-    // has zero at 3000), so it slides with the era and drops when a genre is
-    // picked. When `from` sits in the last few years the whole range is too
-    // young to have accrued votes (a 2026 premiere can't reach 1000), so the
-    // floor collapses as `from` approaches today. boostSpanish is deliberately
-    // skipped: injecting lower-rated titles would falsify a by-rating chart;
-    // capNonWestern only demotes, so the order within Western titles stays
-    // honest.
+    // GET /top-rated?from=YYYY&to=YYYY&genres=18,80  — see resolveTopRated.
     if (path === "/top-rated") {
-      const from = url.searchParams.get("from") || null;
-      const to = url.searchParams.get("to") || null;
       const genres = (url.searchParams.get("genres") ?? "")
         .split(",").map((s) => s.trim()).filter((s) => /^\d+$/.test(s));
-      const thisYear = new Date().getUTCFullYear();
-      const era = Number(from ?? to); // older bound of the range
-      const eraFloor =
-        !from && !to ? 3000
-        : Number(from) >= thisYear - 1 ? 50 // range is brand-new — votes haven't accrued yet
-        : Number(from) >= thisYear - 4 ? 300
-        : era >= 2005 ? 1000
-        : era >= 1990 ? 500
-        : 200;
-      const minVotes = genres.length ? Math.min(eraFloor, 500) : eraFloor;
-      const params =
-        `&sort_by=vote_average.desc&vote_count.gte=${minVotes}` +
-        (from ? `&first_air_date.gte=${from}-01-01` : "") +
-        (to ? `&first_air_date.lte=${to}-12-31` : "") +
-        (genres.length ? `&with_genres=${genres.join("%7C")}` : "");
-      const PAGES = 8;
-      const pages = await Promise.all(
-        Array.from({ length: PAGES }, (_, i) =>
-          fetchTmdb(apiKey, `/discover/tv?include_adult=false${params}&page=${i + 1}`)),
+      const ids = await resolveTopRated(
+        admin, apiKey,
+        url.searchParams.get("from") || null,
+        url.searchParams.get("to") || null,
+        genres,
       );
-      const seen = new Set<number>();
-      const deduped: Any[] = [];
-      for (const r of pages.flatMap((d) => d.results ?? [])) {
-        if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); deduped.push(r); }
-      }
-      const uniq = capNonWestern(deduped);
-      if (uniq.length === 0) return json({ results: [] });
-      const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
-      const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
-      return json({ results: uniq.map((r) => byTmdb.get(r.id)).filter(Boolean) });
+      return json({ results: await titlesInOrder(admin, ids) });
     }
 
     // GET /collection/:slug  (TMDB /discover/tv per curated-collection criteria;

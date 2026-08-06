@@ -89,25 +89,31 @@ it the trigger silently sends nothing (the in-app notification is unaffected).
 
 ## 5. Schedule the cron jobs
 
-The daily `episode-refresh` and `alerts` jobs have **no automatic scheduling** —
-nothing in the migrations sets them up. Provision them once:
+The daily `episode-refresh`, `discover-warm` and `alerts` jobs have **no
+automatic scheduling** — nothing in the migrations sets them up. Provision them
+once:
 
 1. Open `supabase/deploy/schedule-jobs.sql`.
-2. Replace `<PROJECT_REF>` (both jobs) and `<SERVICE_ROLE_KEY>` (Vault step, from
+2. Replace `<PROJECT_REF>` (every job) and `<SERVICE_ROLE_KEY>` (Vault step, from
    Dashboard → Project Settings → API).
 3. Run it in the hosted **SQL Editor**.
 
 Then confirm:
 
 ```sql
-select jobname, schedule, active from cron.job;   -- expect both jobs, active
+select jobname, schedule, active from cron.job;   -- expect all three, active
 ```
 
-`schedule-jobs.sql` also fires a one-time `episode-refresh?force=1`, which
-recomputes every followed title's derivations (aired_count, upcoming_season_…)
-immediately instead of waiting for the daily run to reach it. Re-run that curl
-(step 7) any time — each invocation covers a few hundred titles before the wall
-guard stops it, oldest-refreshed first, so a full library takes several.
+`schedule-jobs.sql` also fires two one-time calls:
+
+- `episode-refresh?force=1`, which recomputes every followed title's derivations
+  (aired_count, upcoming_season_…) immediately instead of waiting for the daily
+  run to reach it. Re-run that curl (step 7) any time — each invocation covers a
+  few hundred titles before the wall guard stops it, oldest-refreshed first, so a
+  full library takes several.
+- `tmdb-proxy/warm`, which fills the Explore discovery caches. Skipping it isn't
+  harmful, only slow: the first person to open Explore rebuilds them instead,
+  and a cold `popular-now` costs ~80 sequential TMDB fetches.
 
 IMDb ratings are not part of this job at all — they come from the daily
 `imdb-ratings` GitHub Action (see ARCHITECTURE → Metadata cache), which needs the
@@ -189,6 +195,10 @@ steps: [MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md).
       curl -X POST https://<ref>.supabase.co/functions/v1/episode-refresh \
         -H "Authorization: Bearer <SERVICE_ROLE_KEY>"
       curl -X POST https://<ref>.supabase.co/functions/v1/alerts \
+        -H "Authorization: Bearer <SERVICE_ROLE_KEY>"
+      # expect {"ok":true,"summary":{"trending":24,"popular-now":48,…}} — a zero
+      # or an "error: …" string in any slot means that cache stayed cold.
+      curl -X POST https://<ref>.supabase.co/functions/v1/tmdb-proxy/warm \
         -H "Authorization: Bearer <SERVICE_ROLE_KEY>"
       ```
 - [ ] After ~a day (or a manual run), `select jobname, status, return_message
