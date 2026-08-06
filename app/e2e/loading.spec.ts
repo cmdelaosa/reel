@@ -226,10 +226,19 @@ async function expectNoShift(page: Page, waitFor: () => Promise<unknown>) {
   await waitFor();
   await expect(page.locator(".skeleton")).toHaveCount(0, { timeout: 20_000 });
   const after = await offsets(page);
+
+  // A section that placeholders and then renders nothing is the same bug seen
+  // from the other side, and defaulting its missing offset to the old one would
+  // wave it through — so compare the shape first.
+  expect(
+    Object.keys(after).length,
+    "a section that drew a placeholder is no longer on the page",
+  ).toBe(Object.keys(before).length);
+
   for (const [key, top] of Object.entries(before)) {
     expect(
-      Math.abs((after[key] ?? top) - top),
-      `section ${key} moved ${(after[key] ?? top) - top}px between the skeleton and the content`,
+      Math.abs(after[key] - top),
+      `section ${key} moved ${after[key] - top}px between the skeleton and the content`,
     ).toBeLessThanOrEqual(SHIFT_TOLERANCE_PX);
   }
 }
