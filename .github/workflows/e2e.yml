@@ -15,9 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned, not `latest`. With `latest` this job broke on 2026-08-08 without a
+      # commit: CLI 2.112.0 (released 07-08, the Go→TypeScript port of `functions
+      # serve` among much else) brought edge-runtime v1.74.3, and from that run on
+      # tmdb-proxy answered /search with 500 — the smoke spec's only failure, the
+      # other twelve kept passing. The last green run used 2.111.0 / v1.74.2.
+      # Everything else here is pinned already; the CLI that boots the stack was
+      # the one moving part left. Move it forward deliberately, watching this job.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.111.0
 
       - name: Start Supabase
         run: supabase start
@@ -73,6 +80,14 @@ jobs:
           export VITE_SUPABASE_URL=http://127.0.0.1:54321
           export VITE_SUPABASE_ANON_KEY=$E2E_ANON_KEY
           npm run test:e2e
+
+      # `functions serve` runs under nohup and its output has been going to a file
+      # nobody ever read: when tmdb-proxy started answering 500 the trace showed
+      # the status and the runner threw away the reason. Anything the function
+      # prints on its way to failing belongs in the log of the job it failed.
+      - name: tmdb-proxy log
+        if: failure()
+        run: cat /tmp/functions.log
 
       # The `list` reporter writes no playwright-report/, so the old path
       # uploaded nothing. Traces (retain-on-failure) land in test-results/.

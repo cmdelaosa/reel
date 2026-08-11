@@ -139,7 +139,7 @@ episodes (
   `app/src/domain/airPairing.ts`, hand-mirrored into both ingest paths and held
   there by `airPairing.mirror.test.ts`.
 - **IMDb ratings** (`imdb_rating` / `imdb_votes`, on both titles and episodes) are
-  owned by ONE writer: the weekly GitHub Action `scripts/imdb-ratings`, which
+  owned by ONE writer: the hourly GitHub Action `scripts/imdb-ratings`, which
   reads IMDb's own published datasets. Nothing else writes those columns.
   OMDb used to fill them nightly and was removed: it is both incomplete (it
   returns `"N/A"` for a large minority of episodes even asked directly, while

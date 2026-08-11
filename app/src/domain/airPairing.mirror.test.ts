@@ -63,11 +63,20 @@ describe("the edge functions mirror the air-pairing spec", () => {
     expect(code).toMatch(/resolveAirTime\(/);
   });
 
-  it.each(MIRRORS)("%s only enriches after a successful TVmaze read", (mirror) => {
-    // resolveAirTime answers for every anchored row, demotion included, so an
-    // empty index must short-circuit before the loop or an outage would strip a
-    // whole title's clocks.
-    expect(sources[mirror]).toMatch(/if \(!idx\.size\) return;/);
+  it.each(MIRRORS)("%s never lets a failed TVmaze read demote a clock", (mirror) => {
+    // resolveAirTime answers for every anchored row, demotion included. An empty
+    // index used to short-circuit the whole pass; since 0065 the pass still runs
+    // (a platform rule needs no TVmaze at all), so the guard moved inside the
+    // loop and covers exactly the rows TVmaze had dated.
+    expect(sources[mirror]).toMatch(/if \(!idx\.size && e\.air_time_source === "tvmaze"\) continue;/);
+  });
+
+  it.each(MIRRORS)("%s asks the platform table before falling back", (mirror) => {
+    // The two ingest paths must agree on which titles get a release rule and on
+    // the day it is applied to, or a show would be dated differently depending
+    // on whether you opened it or waited for the nightly job.
+    expect(sources[mirror]).toMatch(/platformRelease\(title\.network\)/);
+    expect(sources[mirror]).toMatch(/realign: alignedSeasons\(eps, idx\)/);
   });
 
   it.each(MIRRORS)("%s writes the TMDB day it anchors against", (mirror) => {

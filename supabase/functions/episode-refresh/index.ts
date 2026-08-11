@@ -68,10 +68,12 @@ const UPSTREAM_TIMEOUT_MS = 10_000;
 // deno-lint-ignore no-explicit-any
 type Any = any;
 
-/* Which TVmaze stamp may time one of our episodes — TMDB's day is the anchor
-   and TVmaze may only set the hour within it. Hand-mirror of
-   app/src/domain/airPairing.ts (canonical spec + unit tests + a source-vs-source
-   mirror test); the block below is compared verbatim, so edit it there. */
+/* Which instant an episode is released, and who gets to say so: a broadcaster's
+   own clock from TVmaze, else the platform's standing release rule, else the
+   placeholder. TMDB's day is still the anchor, and only a platform rule under
+   three locks may move it (0065). Hand-mirror of app/src/domain/airPairing.ts
+   (canonical spec + unit tests + a source-vs-source mirror test); the block
+   below is compared verbatim, so edit it there. */
 // ── air-time pairing ─────────────────────────────────────────────────────────
 // Spec + tests: app/src/domain/airPairing.ts — keep the three copies identical.
 
@@ -81,12 +83,47 @@ type Any = any;
  *  order the calendar and decide what has aired. */
 export const AIR_TIME = "T21:00:00Z";
 
+/** When a platform releases, as a wall clock in its own zone — the form the
+ *  streamers themselves announce ("midnight PT"), and the only form that
+ *  survives DST without a table of exceptions.
+ *
+ *  Keyed by TMDB's `networks[0].name`, which is what titles.network holds.
+ *  Deliberately short: Max, Hulu and the rest vary per title or per region, and
+ *  an invented hour presented as fact is the bug this file exists to prevent.
+ *  Broadcasters are absent on purpose — TVmaze knows their schedule, and a real
+ *  `airtime` always wins over anything here.
+ *
+ *  `days` are the weekdays (0 = Sunday) a platform releases on, and only Apple
+ *  needs them: it is the one streamer whose TMDB dates are filed in a zone far
+ *  enough west to fall on the previous day. See releaseDay. */
+export interface PlatformRelease {
+  at: string;
+  tz: string;
+  days?: readonly number[];
+}
+
+export const PLATFORM_RELEASE: Readonly<Record<string, PlatformRelease>> = {
+  // 21:00 PT the evening before, which is this, and is why `days` is here.
+  "Apple TV": { at: "00:00", tz: "America/New_York", days: [3, 5] },
+  "Apple TV+": { at: "00:00", tz: "America/New_York", days: [3, 5] },
+  Netflix: { at: "00:00", tz: "America/Los_Angeles" },
+  "Disney+": { at: "00:00", tz: "America/Los_Angeles" },
+  "Prime Video": { at: "00:00", tz: "America/Los_Angeles" },
+  "Amazon Prime Video": { at: "00:00", tz: "America/Los_Angeles" },
+};
+
+export const platformRelease = (network: string | null | undefined): PlatformRelease | null =>
+  (network && PLATFORM_RELEASE[network]) || null;
+
 /** One episode as TVmaze publishes it. `airdate` is the broadcaster's local
- *  day — the field we pair on; `airstamp` is the absolute instant we store. */
+ *  day — the field we pair on; `airstamp` is the absolute instant we store;
+ *  `airtime` is empty for everything that isn't scheduled broadcast, and is the
+ *  only proof that the stamp beside it means anything. */
 export interface TvmazeEpisode {
   season?: number | null;
   number?: number | null;
   airdate?: string | null;
+  airtime?: string | null;
   airstamp?: string | null;
 }
 
@@ -99,39 +136,83 @@ export interface AnchoredEpisode {
   air_date?: string | null;
 }
 
-export type AirTimeSource = "tvmaze" | "estimated";
+export type AirTimeSource = "tvmaze" | "platform" | "estimated";
 
 export interface AirTime {
   air_datetime: string;
   air_time_source: AirTimeSource;
 }
 
-/** TVmaze's episodes under both keys the pairing needs: the number it claims,
- *  and the day it actually aired. */
+/** TVmaze's episodes under every key the pairing needs: the number it claims,
+ *  the day it actually aired, and how many it carries per season — the last one
+ *  only so alignedSeasons can compare catalogue sizes. */
 export interface TvmazeIndex {
   byNumber: Map<string, TvmazeEpisode>;
   byDate: Map<string, TvmazeEpisode[]>;
+  perSeason: Map<number, number>;
   size: number;
 }
 
 export function indexTvmaze(eps: readonly TvmazeEpisode[] | null | undefined): TvmazeIndex {
   const byNumber = new Map<string, TvmazeEpisode>();
   const byDate = new Map<string, TvmazeEpisode[]>();
+  const perSeason = new Map<number, number>();
   for (const e of eps ?? []) {
     // Specials are out of scope on both sides of the comparison, the way every
-    // gate in the app filters season_number > 0.
+    // gate in the app filters season_number > 0. Entries with no stamp carry
+    // neither a day nor an hour worth pairing on.
     if (!e?.airstamp || e.season == null || e.number == null || e.season <= 0) continue;
     byNumber.set(`${e.season}x${e.number}`, e);
+    perSeason.set(e.season, (perSeason.get(e.season) ?? 0) + 1);
     if (e.airdate) {
       const sameDay = byDate.get(e.airdate);
       if (sameDay) sameDay.push(e);
       else byDate.set(e.airdate, [e]);
     }
   }
-  return { byNumber, byDate, size: byNumber.size };
+  return { byNumber, byDate, perSeason, size: byNumber.size };
 }
 
-/** The stamp TVmaze offers for this row, or null when it can't prove one.
+const MS_DAY = 86_400_000;
+const asUtcDay = (ymd: string): number => Date.parse(`${ymd}T00:00:00Z`);
+const addDays = (ymd: string, n: number): string =>
+  new Date(asUtcDay(ymd) + n * MS_DAY).toISOString().slice(0, 10);
+/** 0 = Sunday. Read in UTC because a bare date has no zone to read it in. */
+const weekday = (ymd: string): number => new Date(asUtcDay(ymd)).getUTCDay();
+
+/** How far a zone was from UTC at a given instant, in ms — positive west of
+ *  Greenwich, i.e. the amount to ADD to a wall clock to get back to UTC. */
+function zoneOffsetMs(instant: number, tz: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(instant));
+  const f: Record<string, string> = {};
+  for (const p of parts) f[p.type] = p.value;
+  const local = Date.UTC(+f.year, +f.month - 1, +f.day, +f.hour, +f.minute, +f.second);
+  return instant - local;
+}
+
+/** The instant at which `tz` read `ymd` at `at` on its own clock.
+ *
+ *  A zone offset is only defined for an instant, and we start from a wall clock,
+ *  so it takes two passes: the first lands within an hour of the answer, which
+ *  is close enough for the second to be reading the right side of any DST
+ *  change. Both are needed — one pass alone is off by an hour twice a year, and
+ *  an hour is a day for anything released at midnight. */
+function zonedInstant(ymd: string, at: string, tz: string): string {
+  const wall = Date.parse(`${ymd}T${at}:00Z`);
+  const once = wall + zoneOffsetMs(wall, tz);
+  return new Date(wall + zoneOffsetMs(once, tz)).toISOString();
+}
+
+/** The TVmaze episode that can speak for one of ours, or null.
  *
  *  Two ways to match, in order. The same season × number, WHEN it agrees with
  *  TMDB's day — the ordinary case, and the cheap one. Failing that, the single
@@ -140,31 +221,118 @@ export function indexTvmaze(eps: readonly TvmazeEpisode[] | null | undefined): T
  *  safety of the fallback — a day carrying two or more episodes (a double bill,
  *  a season dumped at once) can't be resolved by date, so it gets no clock
  *  rather than a coin flip. */
-function pairedStamp(ep: AnchoredEpisode, idx: TvmazeIndex): string | null {
+function paired(ep: AnchoredEpisode, idx: TvmazeIndex): TvmazeEpisode | null {
   const sameNumber = idx.byNumber.get(`${ep.season_number}x${ep.episode_number}`);
-  if (sameNumber && sameNumber.airdate === ep.air_date) return new Date(sameNumber.airstamp!).toISOString();
+  if (sameNumber && sameNumber.airdate === ep.air_date) return sameNumber;
   const sameDay = idx.byDate.get(ep.air_date!) ?? [];
-  return sameDay.length === 1 ? new Date(sameDay[0].airstamp!).toISOString() : null;
+  return sameDay.length === 1 ? sameDay[0] : null;
 }
 
-/** The air time a row should hold, given TMDB's day and what TVmaze published.
+/** The seasons where TVmaze's day may override TMDB's.
+ *
+ *  Three locks, and the middle one is the load-bearing one: TVmaze must carry
+ *  exactly as many episodes of that season as we do. A catalogue that counts
+ *  differently is precisely the Hot Ones failure — thirteen against eleven —
+ *  and every mis-stamped row there came from pairing across that gap. Then no
+ *  episode may be more than a day off (a weekly drift is seven), and each must
+ *  pair by its own number, so nothing here re-derives what `paired` already
+ *  refuses.
+ *
+ *  Callers pass every episode of the title; seasons absent from either side
+ *  simply never make the set, which leaves them on TMDB's day. */
+export function alignedSeasons(
+  ours: readonly AnchoredEpisode[],
+  idx: TvmazeIndex,
+): Set<number> {
+  const mine = new Map<number, AnchoredEpisode[]>();
+  for (const e of ours) {
+    if (e.season_number <= 0 || !e.air_date) continue;
+    const held = mine.get(e.season_number);
+    if (held) held.push(e);
+    else mine.set(e.season_number, [e]);
+  }
+  const aligned = new Set<number>();
+  for (const [season, eps] of mine) {
+    if (eps.length !== (idx.perSeason.get(season) ?? 0)) continue;
+    const everyOneClose = eps.every((e) => {
+      const theirs = idx.byNumber.get(`${season}x${e.episode_number}`);
+      if (!theirs?.airdate) return false;
+      const off = (asUtcDay(theirs.airdate) - asUtcDay(e.air_date!)) / MS_DAY;
+      return off === 0 || off === 1;
+    });
+    if (everyOneClose) aligned.add(season);
+  }
+  return aligned;
+}
+
+/** What the caller knows about the title beyond its episodes: which platform
+ *  it streams on (TMDB's network name), and which of its seasons TVmaze is
+ *  trusted to re-date (alignedSeasons). Both optional — without them the rule
+ *  degrades to what it was before 0065. */
+export interface AirContext {
+  platform?: string | null;
+  realign?: ReadonlySet<number>;
+}
+
+/** The day the platform actually released this episode.
+ *
+ *  TVmaze's, when the season passed alignedSeasons and TVmaze places the
+ *  episode under our own number: direct evidence beats inference. Otherwise the
+ *  weekday tells us — a date the platform never releases on, one day before a
+ *  date it does, is the Pacific evening before that release. Anything else is
+ *  taken at face value. */
+function releaseDay(
+  ep: AnchoredEpisode,
+  idx: TvmazeIndex,
+  rule: PlatformRelease,
+  realign: ReadonlySet<number> | undefined,
+): string {
+  const theirs = idx.byNumber.get(`${ep.season_number}x${ep.episode_number}`);
+  if (realign?.has(ep.season_number) && theirs?.airdate) return theirs.airdate;
+  const next = addDays(ep.air_date!, 1);
+  if (rule.days && !rule.days.includes(weekday(ep.air_date!)) && rule.days.includes(weekday(next))) {
+    return next;
+  }
+  return ep.air_date!;
+}
+
+/** The air time a row should hold, given TMDB's day, what TVmaze published and
+ *  which platform it streams on. Three sources, in descending order of proof:
+ *
+ *   - `tvmaze`   — a scheduled broadcaster's own clock. Only when `airtime` is
+ *                  set: the bare `airstamp` of a streaming title is TVmaze's
+ *                  noon-UTC filler, and printing it was how Stranger Things
+ *                  claimed to arrive at 14:00.
+ *   - `platform` — the streamer's standing release time, resolved in its own
+ *                  zone on the day it really releases (releaseDay).
+ *   - `estimated`— the 21:00 UTC placeholder, which the UI prints no clock for.
  *
  *  null means "leave this row alone": without an anchor there is nothing to
  *  judge a stamp against, and guessing is how the rows got wrong in the first
  *  place.
  *
  *  Otherwise the answer is total, and that matters — a row TVmaze can no longer
- *  account for is handed back to TMDB's day with the placeholder, rather than
- *  keeping an instant nothing supports any more. That is what repairs the
- *  episodes the old number-only pairing mis-stamped. Callers must therefore
- *  only reach here on a SUCCESSFUL TVmaze read (idx.size > 0); an outage that
- *  returned nothing would otherwise demote a whole title's calendar. */
-export function resolveAirTime(ep: AnchoredEpisode, idx: TvmazeIndex): AirTime | null {
+ *  account for is re-derived from scratch rather than keeping an instant nothing
+ *  supports any more. That is what repairs the episodes the old number-only
+ *  pairing mis-stamped. Callers must therefore not hand an empty index to a row
+ *  already sourced from `tvmaze`: an outage that returned nothing would
+ *  otherwise demote a whole broadcaster's calendar. */
+export function resolveAirTime(
+  ep: AnchoredEpisode,
+  idx: TvmazeIndex,
+  ctx: AirContext = {},
+): AirTime | null {
   if (!ep.air_date) return null;
-  const stamp = pairedStamp(ep, idx);
-  return stamp
-    ? { air_datetime: stamp, air_time_source: "tvmaze" }
-    : { air_datetime: `${ep.air_date}${AIR_TIME}`, air_time_source: "estimated" };
+  const onDay = paired(ep, idx);
+  if (onDay?.airtime && onDay.airstamp) {
+    return { air_datetime: new Date(onDay.airstamp).toISOString(), air_time_source: "tvmaze" };
+  }
+  const rule = platformRelease(ctx.platform);
+  if (rule) {
+    const day = releaseDay(ep, idx, rule, ctx.realign);
+    return { air_datetime: zonedInstant(day, rule.at, rule.tz), air_time_source: "platform" };
+  }
+  return { air_datetime: `${ep.air_date}${AIR_TIME}`, air_time_source: "estimated" };
 }
 // ── end air-time pairing ─────────────────────────────────────────────────────
 
@@ -265,19 +433,29 @@ const tvmaze = async (path: string): Promise<Response> => {
  *  dropped and the episode goes back to the placeholder for the enrichment pass
  *  to re-pair. That is also what repairs the mis-stamped rows when TVmaze
  *  happens to be unreachable, since this runs before the pass, not after it. */
-async function keepTvmazeTimes(
+interface ResolvedTime {
+  at: string;
+  airDate: string | null;
+  source: AirTimeSource;
+}
+
+async function keepResolvedTimes(
   admin: SupabaseClient,
   titleId: string,
-): Promise<Map<string, { at: string; airDate: string | null }>> {
+): Promise<Map<string, ResolvedTime>> {
   const { data } = await admin
     .from("episodes")
-    .select("season_number, episode_number, air_datetime, air_date")
+    .select("season_number, episode_number, air_datetime, air_date, air_time_source")
     .eq("title_id", titleId)
-    .eq("air_time_source", "tvmaze");
-  const keep = new Map<string, { at: string; airDate: string | null }>();
+    .in("air_time_source", ["tvmaze", "platform"]);
+  const keep = new Map<string, ResolvedTime>();
   for (const e of (data ?? []) as Any[]) {
     if (e.air_datetime) {
-      keep.set(`${e.season_number}x${e.episode_number}`, { at: e.air_datetime, airDate: e.air_date ?? null });
+      keep.set(`${e.season_number}x${e.episode_number}`, {
+        at: e.air_datetime,
+        airDate: e.air_date ?? null,
+        source: e.air_time_source,
+      });
     }
   }
   return keep;
@@ -295,34 +473,47 @@ async function tvmazeShowId(admin: SupabaseClient, title: Any): Promise<number |
   return id;
 }
 
-/** Replace this title's 21:00 UTC placeholders with TVmaze's real airstamps,
- *  within the day TMDB reports and never outside it (resolveAirTime).
- *  Best-effort: a miss leaves the estimates and their marker untouched. */
+/** TVmaze's episodes for a title, or an empty index when there is nothing to
+ *  read (no IMDb id, not in their catalogue, upstream down) — all normal
+ *  outcomes, and none of them fatal now that a platform rule can date the title
+ *  on its own. */
+async function tvmazeIndex(admin: SupabaseClient, title: Any): Promise<TvmazeIndex> {
+  const showId = await tvmazeShowId(admin, title);
+  if (!showId) return indexTvmaze([]);
+  const res = await tvmaze(`/shows/${showId}/episodes`);
+  if (!res.ok) return indexTvmaze([]);
+  return indexTvmaze(await res.json());
+}
+
+/** Replace this title's 21:00 UTC placeholders with the real release instant —
+ *  TVmaze's airstamp for a broadcaster, the platform's release rule for a
+ *  streamer (resolveAirTime decides which, and on what day). Best-effort: a miss
+ *  on both leaves the estimates and their marker untouched. */
 async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
   const { data: title } = await admin
-    .from("titles").select("id, imdb_id, tvmaze_id").eq("id", titleId).maybeSingle();
+    .from("titles").select("id, imdb_id, tvmaze_id, network").eq("id", titleId).maybeSingle();
   if (!title) return;
 
-  const showId = await tvmazeShowId(admin, title);
-  if (!showId) return;
-
-  const res = await tvmaze(`/shows/${showId}/episodes`);
-  if (!res.ok) return;
-  const idx = indexTvmaze(await res.json());
-  // Nothing usable came back (outage, empty catalogue). Returning here is what
-  // makes resolveAirTime's total answer safe to act on below: a bad read must
-  // never be read as "TVmaze no longer accounts for any of these episodes".
-  if (!idx.size) return;
+  const idx = await tvmazeIndex(admin, title);
+  // Neither source has anything to say about this title.
+  if (!idx.size && !platformRelease(title.network)) return;
 
   const { data: ours } = await admin
     .from("episodes")
     .select("title_id, season_number, episode_number, air_date, air_datetime, air_time_source")
     .eq("title_id", titleId)
     .gt("season_number", 0);
+  const eps = (ours ?? []) as Any[];
+  const ctx = { platform: title.network as string | null, realign: alignedSeasons(eps, idx) };
 
   const rows: Any[] = [];
-  for (const e of (ours ?? []) as Any[]) {
-    const want = resolveAirTime(e, idx);
+  for (const e of eps) {
+    // Nothing usable came back (outage, empty catalogue). resolveAirTime answers
+    // for every anchored row, demotion included, so without this guard a bad
+    // read would be taken as "TVmaze no longer accounts for any of these" and
+    // strip a whole broadcaster's clocks.
+    if (!idx.size && e.air_time_source === "tvmaze") continue;
+    const want = resolveAirTime(e, idx, ctx);
     if (!want) continue; // no TMDB day recorded yet — nothing to judge it against
     // Instants, not strings: Postgres renders timestamptz with +00:00 where
     // toISOString() writes Z, so a textual diff would rewrite everything daily.
@@ -342,7 +533,7 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
 
   const { error } = await admin
     .from("episodes").upsert(rows, { onConflict: "title_id,season_number,episode_number" });
-  if (error) console.error(`tvmaze air times: ${error.message}`);
+  if (error) console.error(`air times: ${error.message}`);
 }
 
 // es-ES translation (plain es fallback) from a payload fetched with
@@ -473,7 +664,7 @@ async function refreshTitle(
   const latest = allSeasons ? regular : regular.slice(0, 2);
 
   // Read once for the whole title, before any episode write touches it.
-  const keep = await keepTvmazeTimes(admin, row.id);
+  const keep = await keepResolvedTimes(admin, row.id);
 
   for (const s of latest) {
     const { data: season, error: se } = await admin
@@ -504,7 +695,7 @@ async function refreshTitle(
       // episode's time — drops back to the placeholder, and the enrichment pass
       // below re-pairs it against the day.
       const held = keep.get(`${e.season_number}x${e.episode_number}`);
-      const known = held && held.airDate && held.airDate === (e.air_date || null) ? held.at : null;
+      const known = held && held.airDate && held.airDate === (e.air_date || null) ? held : null;
       return {
         title_id: row.id,
         season_id: season.id,
@@ -522,8 +713,8 @@ async function refreshTitle(
         // TMDB's bare day, kept as the anchor every TVmaze stamp is checked
         // against (0060) — the instant beside it may be TVmaze's.
         air_date: e.air_date || null,
-        air_datetime: known ?? airDatetime(e.air_date),
-        air_time_source: known ? "tvmaze" : "estimated",
+        air_datetime: known ? known.at : airDatetime(e.air_date),
+        air_time_source: known ? known.source : "estimated",
       };
     });
     if (eps.length) {

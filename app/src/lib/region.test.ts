@@ -107,8 +107,11 @@ describe("fmtPlainDate", () => {
 });
 
 describe("hasRealAirTime", () => {
-  it("only TVmaze-sourced rows carry a printable clock", () => {
+  it("prints a clock for anything but the placeholder", () => {
     expect(hasRealAirTime("tvmaze")).toBe(true);
+    // A streamer's release time is derived, not fetched, but it is the real
+    // instant the episode appears — it prints like any other (0065).
+    expect(hasRealAirTime("platform")).toBe(true);
     expect(hasRealAirTime("estimated")).toBe(false);
     expect(hasRealAirTime(null)).toBe(false);
     expect(hasRealAirTime(undefined)).toBe(false);
