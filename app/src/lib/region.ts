@@ -75,6 +75,9 @@ export const fmtPlainDate = (ymd: string): string =>
     timeZone: "UTC",
   });
 
-/** True when the row carries a real broadcast time worth printing. */
+/** True when the row carries a real release instant worth printing — a
+ *  broadcaster's own clock ('tvmaze') or a streamer's standing release time
+ *  resolved in its own zone ('platform', migration 0065). Only 'estimated' is
+ *  the 21:00 UTC placeholder, and only it goes unprinted. */
 export const hasRealAirTime = (source: string | null | undefined): boolean =>
-  source === "tvmaze";
+  source === "tvmaze" || source === "platform";
