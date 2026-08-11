@@ -115,7 +115,7 @@ select jobname, schedule, active from cron.job;   -- expect all three, active
   harmful, only slow: the first person to open Explore rebuilds them instead,
   and a cold `popular-now` costs ~80 sequential TMDB fetches.
 
-IMDb ratings are not part of this job at all — they come from the daily
+IMDb ratings are not part of this job at all — they come from the hourly
 `imdb-ratings` GitHub Action (see ARCHITECTURE → Metadata cache), which needs the
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` **repo secrets** rather than
 Supabase function secrets.
