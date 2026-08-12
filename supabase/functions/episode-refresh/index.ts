@@ -2,8 +2,11 @@
 //
 // For every DISTINCT followed title (any user): refresh the title row (status,
 // dates, scores) and the latest two regular seasons' episodes from TMDB,
-// upserting diffs into the metadata cache. Titles refreshed < 20h ago are
-// skipped, so a daily schedule self-heals without hammering TMDB. Rate-limited
+// upserting diffs into the metadata cache. Titles whose EPISODES were refreshed
+// < 20h ago are skipped — `titles.episodes_refreshed_at`, which only this job
+// and tmdb-proxy's whole-show fill write, never `last_refreshed_at`, which the
+// discovery warm-up also writes (migration 0066). A daily schedule therefore
+// self-heals without hammering TMDB. Rate-limited
 // to ≤ 40 TMDB requests per 10s (fixed window — mirrors the unit-tested
 // planner in app/src/domain/rateLimit.ts).
 //
@@ -35,10 +38,10 @@
 //   --env-file supabase/.env` + curl with the local service key.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { needsEpisodeRefresh } from "./stale.ts";
 
 const TMDB = "https://api.themoviedb.org/3";
 const TVMAZE = "https://api.tvmaze.com";
-const STALE_MS = 20 * 60 * 60 * 1000; // 20h
 const LIMIT = 40;
 const WINDOW_MS = 10_000;
 
@@ -737,6 +740,19 @@ async function refreshTitle(
 
   // No IMDb pass here any more: scripts/imdb-ratings owns those columns, from
   // IMDb's own published datasets. See the header note.
+
+  // Last, and deliberately not up with the title columns: this is the mark the
+  // staleness gate reads back tomorrow, so it may only be written once the
+  // episodes it claims to describe are actually in. Any throw above (a season
+  // upsert, a TMDB season fetch) leaves it untouched, and the title comes back
+  // at the head of the next run's queue instead of looking done. The enrich
+  // failure just above is the one exception — it is caught, because a TVmaze
+  // outage must not cost us the TMDB refresh we did land.
+  const { error: me } = await admin
+    .from("titles")
+    .update({ episodes_refreshed_at: new Date().toISOString() })
+    .eq("id", row.id);
+  if (me) throw new Error(`episodes_refreshed_at: ${me.message}`);
 }
 
 /* Resolve titles.imdb_id for every cached title that lacks one — ?backfillImdbIds=1.
@@ -895,16 +911,23 @@ Deno.serve(async (req) => {
   // and no giant `.in(id, …)` URI is needed. Ordered oldest-refreshed first so
   // the wall guard becomes a rotating window (no title starves), and paged past
   // PostgREST's 1000-row cap so the whole followed set is considered. `id` is
-  // the tiebreaker: last_refreshed_at ties exactly across the never-refreshed
-  // (NULL) cohort, and untied pages can skip/duplicate rows across boundaries.
+  // the tiebreaker: episodes_refreshed_at ties exactly across the
+  // never-refreshed (NULL) cohort, and untied pages can skip/duplicate rows
+  // across boundaries.
+  //
+  // Ordered and gated on episodes_refreshed_at, never last_refreshed_at: the
+  // latter only means the title row's detail was refetched, and the discovery
+  // warm-up refetches detail for the whole popular-now pool at 04:40 without
+  // touching an episode. Keying off it made this run skip every followed title
+  // in that pool, daily and indefinitely (migration 0066, stale_test.ts).
   const PAGE = 1000;
   const titles: Any[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error: te } = await admin
       .from("titles")
-      .select("id, tmdb_id, status, last_refreshed_at, library_entries!inner(followed)")
+      .select("id, tmdb_id, status, episodes_refreshed_at, library_entries!inner(followed)")
       .eq("library_entries.followed", true)
-      .order("last_refreshed_at", { ascending: true, nullsFirst: true })
+      .order("episodes_refreshed_at", { ascending: true, nullsFirst: true })
       .order("id")
       .range(from, from + PAGE - 1);
     if (te) {
@@ -916,16 +939,9 @@ Deno.serve(async (req) => {
   }
   const ids = titles.map((t: Any) => t.id);
 
-  // Ended/Canceled shows never gain episodes, so touch them at most monthly
-  // instead of every daily run — that removes the bulk of a mature library's
-  // TMDB calls and keeps the daily budget for shows that actually change.
+  // The gate itself lives in stale.ts, with its thresholds and its tests.
   const now = Date.now();
-  const ENDED_STALE_MS = 30 * 24 * 60 * 60 * 1000; // 30d
-  const isDone = (s: string | null) => s === "Ended" || s === "Canceled";
-  const stale = force ? titles : titles.filter((t: Any) => {
-    const age = t.last_refreshed_at ? now - new Date(t.last_refreshed_at).getTime() : Infinity;
-    return age > (isDone(t.status) ? ENDED_STALE_MS : STALE_MS);
-  });
+  const stale = force ? titles : titles.filter((t: Any) => needsEpisodeRefresh(t, now));
 
   // Respond immediately and refresh in the background (EdgeRuntime.waitUntil)
   // so the gateway's request timeout never truncates a big backfill. The wall

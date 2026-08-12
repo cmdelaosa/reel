@@ -106,7 +106,14 @@ titles (
   episode_run_time int, vote_average numeric, popularity numeric,
   imdb_rating numeric, imdb_votes int,     -- IMDb score, from IMDb's datasets (0057)
   aired_count int,                         -- authoritative aired regular-season episodes (0028)
-  last_refreshed_at timestamptz
+  last_refreshed_at timestamptz,           -- the title row's DETAIL was refetched. Written by every
+                                           -- full /tv/:id fetch, the discovery warm-up included.
+                                           -- Gates /title's cache-first read, nothing else.
+  episodes_refreshed_at timestamptz        -- the title's EPISODES were refetched (0066). Written
+                                           -- only by episode-refresh and tmdb-proxy's whole-show
+                                           -- fill. Gates /season's read and the nightly cron's
+                                           -- staleness filter. Sharing one column for both facts
+                                           -- let the 04:40 warm-up silence the 05:00 cron.
 )
 seasons (
   id uuid pk, title_id uuid fk, tmdb_id int,

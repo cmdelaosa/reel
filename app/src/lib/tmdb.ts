@@ -154,11 +154,16 @@ export async function getTitle(tmdbId: number): Promise<TitleResponse> {
   return titleResponseSchema.parse(json);
 }
 
+/** `episodesRefreshedAt` is the title's EPISODE freshness mark, deliberately not
+ *  its detail one: the discovery warm-up refetches detail for every title in the
+ *  popular-now pool nightly without touching a single episode, so keying this
+ *  revalidation off `last_refreshed_at` left those shows' seasons never nudged
+ *  (migration 0066). */
 export async function getSeason(
   tmdbId: number,
   n: number,
   titleId?: string,
-  titleRefreshedAt?: string | null,
+  episodesRefreshedAt?: string | null,
 ): Promise<SeasonResponse> {
   if (titleId) {
     const { data, error } = await supabase
@@ -174,7 +179,7 @@ export async function getSeason(
         episodes: [...data.episodes].sort((a, b) => a.episode_number - b.episode_number),
       });
       const complete = parsed.season.episode_count == null || parsed.episodes.length >= parsed.season.episode_count;
-      if (!complete || !isFresh(titleRefreshedAt)) {
+      if (!complete || !isFresh(episodesRefreshedAt)) {
         void call(`/title/${tmdbId}/season/${n}`).catch(() => {});
       }
       return parsed;
