@@ -89,8 +89,30 @@ export const PLATFORM_RELEASE: Readonly<Record<string, PlatformRelease>> = {
   "Amazon Prime Video": { at: "00:00", tz: "America/Los_Angeles" },
 };
 
-export const platformRelease = (network: string | null | undefined): PlatformRelease | null =>
-  (network && PLATFORM_RELEASE[network]) || null;
+export const platformRelease = (name: string | null | undefined): PlatformRelease | null =>
+  (name && PLATFORM_RELEASE[name]) || null;
+
+/** Countries whose provider list fills in for a network with no rule, in order.
+ *  Hand-mirror of episode-refresh/platform.ts, which carries the reasoning and
+ *  the tests — in short, TMDB's `network` is the ORIGINAL BROADCASTER, so
+ *  Futurama is filed under FOX and Adults under FX while both stream on Disney+
+ *  here. Keep the two in sync. */
+const PROVIDER_COUNTRIES = ["ES", "US"] as const;
+
+/** The network if it has a rule, else the first provider that does, ES first.
+ *  "First WITH A RULE", not "first provider": a Spanish list often opens with
+ *  Movistar Plus+, and stopping there would drop a title the next entry could
+ *  have dated. The network goes first because a provider list is ordered by
+ *  commercial prominence, not by who releases the show — Apple sells itself as
+ *  a channel inside Prime, so Ted Lasso and Silo both list Prime Video ahead of
+ *  Apple TV+. Purely additive: a title that had a clock keeps the one it had. */
+function rulePlatform(title: Any): string | null {
+  const names: (string | null | undefined)[] = [title?.network];
+  for (const country of PROVIDER_COUNTRIES) {
+    for (const p of (title?.providers?.[country] ?? []) as Any[]) names.push(p?.name);
+  }
+  return names.find((name) => platformRelease(name)) ?? null;
+}
 
 /** One episode as TVmaze publishes it. `airdate` is the broadcaster's local
  *  day — the field we pair on; `airstamp` is the absolute instant we store;
@@ -761,12 +783,15 @@ async function tvmazeIndex(admin: SupabaseClient, title: Any): Promise<TvmazeInd
  *  season_number > 0 anyway. */
 async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
   const { data: title } = await admin
-    .from("titles").select("id, imdb_id, tvmaze_id, network").eq("id", titleId).maybeSingle();
+    .from("titles").select("id, imdb_id, tvmaze_id, network, providers").eq("id", titleId).maybeSingle();
   if (!title) return;
+
+  // What streams it beats where it once aired — see rulePlatform above.
+  const platform = rulePlatform(title);
 
   const idx = await tvmazeIndex(admin, title);
   // Neither source has anything to say about this title.
-  if (!idx.size && !platformRelease(title.network)) return;
+  if (!idx.size && !platform) return;
 
   const eps = await pageAll<Any>((from, to) =>
     admin
@@ -778,7 +803,7 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
       .order("episode_number")
       .range(from, to)
   );
-  const ctx = { platform: title.network as string | null, realign: alignedSeasons(eps, idx) };
+  const ctx = { platform, realign: alignedSeasons(eps, idx) };
 
   const rows: Any[] = [];
   for (const e of eps) {

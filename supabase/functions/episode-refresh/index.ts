@@ -40,6 +40,7 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { needsEpisodeRefresh } from "./stale.ts";
 import { pageAll } from "./paging.ts";
+import { type PlatformRelease, platformRelease, rulePlatform } from "./platform.ts";
 
 const TMDB = "https://api.themoviedb.org/3";
 const TVMAZE = "https://api.tvmaze.com";
@@ -87,37 +88,10 @@ type Any = any;
  *  order the calendar and decide what has aired. */
 export const AIR_TIME = "T21:00:00Z";
 
-/** When a platform releases, as a wall clock in its own zone — the form the
- *  streamers themselves announce ("midnight PT"), and the only form that
- *  survives DST without a table of exceptions.
- *
- *  Keyed by TMDB's `networks[0].name`, which is what titles.network holds.
- *  Deliberately short: Max, Hulu and the rest vary per title or per region, and
- *  an invented hour presented as fact is the bug this file exists to prevent.
- *  Broadcasters are absent on purpose — TVmaze knows their schedule, and a real
- *  `airtime` always wins over anything here.
- *
- *  `days` are the weekdays (0 = Sunday) a platform releases on, and only Apple
- *  needs them: it is the one streamer whose TMDB dates are filed in a zone far
- *  enough west to fall on the previous day. See releaseDay. */
-export interface PlatformRelease {
-  at: string;
-  tz: string;
-  days?: readonly number[];
-}
-
-export const PLATFORM_RELEASE: Readonly<Record<string, PlatformRelease>> = {
-  // 21:00 PT the evening before, which is this, and is why `days` is here.
-  "Apple TV": { at: "00:00", tz: "America/New_York", days: [3, 5] },
-  "Apple TV+": { at: "00:00", tz: "America/New_York", days: [3, 5] },
-  Netflix: { at: "00:00", tz: "America/Los_Angeles" },
-  "Disney+": { at: "00:00", tz: "America/Los_Angeles" },
-  "Prime Video": { at: "00:00", tz: "America/Los_Angeles" },
-  "Amazon Prime Video": { at: "00:00", tz: "America/Los_Angeles" },
-};
-
-export const platformRelease = (network: string | null | undefined): PlatformRelease | null =>
-  (network && PLATFORM_RELEASE[network]) || null;
+/* The release rules themselves, and which platform a title is dated by, live in
+   platform.ts — they are pure, they are the part that keeps needing judgement,
+   and they carry the tests. Broadcasters are absent from that table on purpose:
+   TVmaze knows their schedule, and a real `airtime` always wins over a rule. */
 
 /** One episode as TVmaze publishes it. `airdate` is the broadcaster's local
  *  day — the field we pair on; `airstamp` is the absolute instant we store;
@@ -503,12 +477,15 @@ async function tvmazeIndex(admin: SupabaseClient, title: Any): Promise<TvmazeInd
  *  on both leaves the estimates and their marker untouched. */
 async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
   const { data: title } = await admin
-    .from("titles").select("id, imdb_id, tvmaze_id, network").eq("id", titleId).maybeSingle();
+    .from("titles").select("id, imdb_id, tvmaze_id, network, providers").eq("id", titleId).maybeSingle();
   if (!title) return;
+
+  // What streams it beats where it once aired — see platform.ts.
+  const platform = rulePlatform(title);
 
   const idx = await tvmazeIndex(admin, title);
   // Neither source has anything to say about this title.
-  if (!idx.size && !platformRelease(title.network)) return;
+  if (!idx.size && !platform) return;
 
   // Paged: unpaged, this read stopped at PostgREST's 1000th row, so on a show
   // long enough to pass that mark the episodes still to air — the whole point
@@ -523,7 +500,7 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
       .order("episode_number")
       .range(from, to)
   );
-  const ctx = { platform: title.network as string | null, realign: alignedSeasons(eps, idx) };
+  const ctx = { platform, realign: alignedSeasons(eps, idx) };
 
   const rows: Any[] = [];
   for (const e of eps) {
