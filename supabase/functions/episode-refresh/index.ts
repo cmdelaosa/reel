@@ -91,9 +91,12 @@ export const AIR_TIME = "T21:00:00Z";
  *  streamers themselves announce ("midnight PT"), and the only form that
  *  survives DST without a table of exceptions.
  *
- *  Keyed by TMDB's `networks[0].name`, which is what titles.network holds.
- *  Deliberately short: Max, Hulu and the rest vary per title or per region, and
- *  an invented hour presented as fact is the bug this file exists to prevent.
+ *  Keyed by a platform's display name, from either titles.network or
+ *  titles.providers — see rulePlatform.
+ *  Deliberately short: Hulu, Peacock, HBO Max and SkyShowtime all carry titles
+ *  in this library and none is here, because no source we have states when they
+ *  drop, and an invented hour presented as fact is the bug this file exists to
+ *  prevent. Those titles keep the placeholder and the UI shows the day alone.
  *  Broadcasters are absent on purpose — TVmaze knows their schedule, and a real
  *  `airtime` always wins over anything here.
  *
@@ -116,8 +119,55 @@ export const PLATFORM_RELEASE: Readonly<Record<string, PlatformRelease>> = {
   "Amazon Prime Video": { at: "00:00", tz: "America/Los_Angeles" },
 };
 
-export const platformRelease = (network: string | null | undefined): PlatformRelease | null =>
-  (network && PLATFORM_RELEASE[network]) || null;
+export const platformRelease = (name: string | null | undefined): PlatformRelease | null =>
+  (name && PLATFORM_RELEASE[name]) || null;
+
+/** Countries whose provider list fills in for a network with no rule, in order.
+ *
+ *  ES first because it is the market every viewer here watches from (the app's
+ *  FALLBACK_COUNTRY, and no profile has ever set another), so when a show runs
+ *  on different services either side of the Atlantic, the Spanish one decides.
+ *  US second for the reach: a title absent from Spain often still resolves
+ *  there, and every rule in the table above is a worldwide simultaneous drop,
+ *  so borrowing the American service's clock does not move the instant. */
+export const PROVIDER_COUNTRIES = ["ES", "US"] as const;
+
+/** Where a title can be watched, as titles.providers holds it. */
+export interface PlatformSource {
+  providers?: Record<string, { name?: string | null }[] | null | undefined> | null;
+  network?: string | null;
+}
+
+/** The platform whose release rule dates this title: the network if it has one,
+ *  else the first provider that does.
+ *
+ *  `network` alone was the whole lookup, and it is where TMDB files the
+ *  ORIGINAL BROADCASTER — for a streaming show either wrong or archaeology.
+ *  Adults is filed under FX and Futurama under FOX; both stream on Disney+ in
+ *  Spain and Hulu in the States, and neither got a clock though a rule for
+ *  their real platform sat in the table above. So providers answer for the
+ *  titles the network cannot.
+ *
+ *  They answer SECOND, and that order was arrived at the hard way. A provider
+ *  list is ordered by TMDB's display_priority — commercial prominence, not who
+ *  releases the thing: in Spain both Ted Lasso and Silo list "Prime Video"
+ *  ahead of "Apple TV+", because Apple sells itself as a channel inside Prime.
+ *  Reading providers first pulled two Apple originals off Apple's own
+ *  convention (midnight ET, day-shifted) and onto midnight Pacific. When the
+ *  network IS a streamer we have a rule for, it stays the best evidence about
+ *  who releases it.
+ *
+ *  And it takes the first name WITH A RULE, not the first name: a Spanish list
+ *  often opens with Movistar Plus+, and stopping there would drop a title the
+ *  next entry could have dated. Between the two, the lookup is purely additive
+ *  — a title that had a clock keeps exactly the one it had. */
+export function rulePlatform(title: PlatformSource): string | null {
+  const names: (string | null | undefined)[] = [title.network];
+  for (const country of PROVIDER_COUNTRIES) {
+    for (const p of title.providers?.[country] ?? []) names.push(p?.name);
+  }
+  return names.find((name) => platformRelease(name)) ?? null;
+}
 
 /** One episode as TVmaze publishes it. `airdate` is the broadcaster's local
  *  day — the field we pair on; `airstamp` is the absolute instant we store;
@@ -503,12 +553,15 @@ async function tvmazeIndex(admin: SupabaseClient, title: Any): Promise<TvmazeInd
  *  on both leaves the estimates and their marker untouched. */
 async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
   const { data: title } = await admin
-    .from("titles").select("id, imdb_id, tvmaze_id, network").eq("id", titleId).maybeSingle();
+    .from("titles").select("id, imdb_id, tvmaze_id, network, providers").eq("id", titleId).maybeSingle();
   if (!title) return;
+
+  // What streams it beats where it once aired — see platform.ts.
+  const platform = rulePlatform(title);
 
   const idx = await tvmazeIndex(admin, title);
   // Neither source has anything to say about this title.
-  if (!idx.size && !platformRelease(title.network)) return;
+  if (!idx.size && !platform) return;
 
   // Paged: unpaged, this read stopped at PostgREST's 1000th row, so on a show
   // long enough to pass that mark the episodes still to air — the whole point
@@ -523,7 +576,7 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
       .order("episode_number")
       .range(from, to)
   );
-  const ctx = { platform: title.network as string | null, realign: alignedSeasons(eps, idx) };
+  const ctx = { platform, realign: alignedSeasons(eps, idx) };
 
   const rows: Any[] = [];
   for (const e of eps) {
