@@ -39,6 +39,7 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { needsEpisodeRefresh } from "./stale.ts";
+import { pageAll } from "./paging.ts";
 
 const TMDB = "https://api.themoviedb.org/3";
 const TVMAZE = "https://api.tvmaze.com";
@@ -446,13 +447,21 @@ async function keepResolvedTimes(
   admin: SupabaseClient,
   titleId: string,
 ): Promise<Map<string, ResolvedTime>> {
-  const { data } = await admin
-    .from("episodes")
-    .select("season_number, episode_number, air_datetime, air_date, air_time_source")
-    .eq("title_id", titleId)
-    .in("air_time_source", ["tvmaze", "platform"]);
+  // Paged and ordered: a long-running show has more episodes than the 1000 rows
+  // PostgREST returns by default, and the ones past the cap are the newest —
+  // the ones whose clocks this map exists to protect. See paging.ts.
+  const data = await pageAll<Any>((from, to) =>
+    admin
+      .from("episodes")
+      .select("season_number, episode_number, air_datetime, air_date, air_time_source")
+      .eq("title_id", titleId)
+      .in("air_time_source", ["tvmaze", "platform"])
+      .order("season_number")
+      .order("episode_number")
+      .range(from, to)
+  );
   const keep = new Map<string, ResolvedTime>();
-  for (const e of (data ?? []) as Any[]) {
+  for (const e of data) {
     if (e.air_datetime) {
       keep.set(`${e.season_number}x${e.episode_number}`, {
         at: e.air_datetime,
@@ -501,12 +510,19 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
   // Neither source has anything to say about this title.
   if (!idx.size && !platformRelease(title.network)) return;
 
-  const { data: ours } = await admin
-    .from("episodes")
-    .select("title_id, season_number, episode_number, air_date, air_datetime, air_time_source")
-    .eq("title_id", titleId)
-    .gt("season_number", 0);
-  const eps = (ours ?? []) as Any[];
+  // Paged: unpaged, this read stopped at PostgREST's 1000th row, so on a show
+  // long enough to pass that mark the episodes still to air — the whole point
+  // of the pass — were never even considered. See paging.ts.
+  const eps = await pageAll<Any>((from, to) =>
+    admin
+      .from("episodes")
+      .select("title_id, season_number, episode_number, air_date, air_datetime, air_time_source")
+      .eq("title_id", titleId)
+      .gt("season_number", 0)
+      .order("season_number")
+      .order("episode_number")
+      .range(from, to)
+  );
   const ctx = { platform: title.network as string | null, realign: alignedSeasons(eps, idx) };
 
   const rows: Any[] = [];
