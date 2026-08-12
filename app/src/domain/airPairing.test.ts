@@ -6,6 +6,7 @@ import {
   alignedSeasons,
   indexTvmaze,
   resolveAirTime,
+  rulePlatform,
 } from "@/domain/airPairing";
 
 /* The regression these tests exist for is Hot Ones season 30, reproduced from
@@ -321,5 +322,75 @@ describe("indexTvmaze", () => {
     expect(indexTvmaze([]).size).toBe(0);
     expect(indexTvmaze(null).size).toBe(0);
     expect(indexTvmaze(undefined).size).toBe(0);
+  });
+});
+
+/* Which platform's rule dates a title. The rows are the real ones this lookup
+   was written for, copied from production on 2026-08-12 — the two that made
+   `network` untenable (Futurama filed under FOX and Adults under FX, both
+   streaming on Disney+ in Spain), the two that pin the order (Apple originals
+   that Spain lists under Prime), and the junk entry TMDB ships as a provider
+   named literally "The" — that is "The Roku Channel" with the reseller suffix
+   stripped. */
+describe("rulePlatform", () => {
+  const p = (...names: string[]) => names.map((name) => ({ name }));
+
+  it("dates a show by what streams it, not by the broadcaster it left", () => {
+    expect(rulePlatform({
+      network: "FOX", // Futurama, which FOX stopped carrying in 2013
+      providers: { ES: p("Disney+"), US: p("Hulu", "fuboTV", "YouTube TV", "FXNow") },
+    })).toBe("Disney+");
+    expect(rulePlatform({
+      network: "FX", // Adults
+      providers: { ES: p("Disney+"), US: p("Hulu", "fuboTV", "Tubi TV") },
+    })).toBe("Disney+");
+  });
+
+  it("never lets a reseller overrule the streaming network itself", () => {
+    // Ted Lasso and Silo: Apple sells itself as a channel inside Prime, so TMDB
+    // lists Prime first in both markets. Reading providers before the network
+    // moved these two off Apple's convention (midnight ET, day-shifted) and
+    // onto midnight Pacific.
+    expect(rulePlatform({
+      network: "Apple TV",
+      providers: { ES: p("Prime Video", "Apple TV+"), US: p("Prime Video", "Apple TV+") },
+    })).toBe("Apple TV");
+  });
+
+  it("prefers Spain when both markets carry a rule", () => {
+    expect(rulePlatform({ network: null, providers: { ES: p("Netflix"), US: p("Prime Video") } }))
+      .toBe("Netflix");
+  });
+
+  it("keeps looking past a service it has no rule for", () => {
+    // A Spanish list usually opens with Movistar; the next entry must still count.
+    expect(rulePlatform({ network: "HBO", providers: { ES: p("Movistar Plus+ Ficción Total", "Netflix") } }))
+      .toBe("Netflix");
+  });
+
+  it("leaves no title worse off than the network alone left it", () => {
+    expect(rulePlatform({ network: "Netflix", providers: {} })).toBe("Netflix");
+    expect(rulePlatform({ network: "Netflix", providers: null })).toBe("Netflix");
+    expect(rulePlatform({ network: "Netflix" })).toBe("Netflix");
+    // An unknown provider list must not shadow a network that does have a rule.
+    expect(rulePlatform({ network: "Netflix", providers: { ES: p("Movistar Plus+") } })).toBe("Netflix");
+  });
+
+  it("answers nothing for the platforms we cannot time honestly", () => {
+    // Conan (HBO Max), The Paper (SkyShowtime/Peacock), Hot Ones (a US long tail).
+    expect(rulePlatform({ network: "HBO", providers: { ES: p("Movistar Plus+ Ficción Total", "HBO Max") } })).toBeNull();
+    expect(rulePlatform({ network: "Peacock", providers: { ES: p("SkyShowtime"), US: p("Peacock Premium") } })).toBeNull();
+    expect(rulePlatform({ network: "YouTube", providers: { ES: [], US: p("Pluto TV", "Tubi TV") } })).toBeNull();
+  });
+
+  it("consults no country beyond ES and US", () => {
+    expect(rulePlatform({ network: "BBC One", providers: { GB: p("Netflix") } })).toBeNull();
+  });
+
+  it("steps over malformed provider entries", () => {
+    expect(rulePlatform({
+      network: null,
+      providers: { US: [{ name: "The" }, { name: null }, {}, { name: "Netflix" }] },
+    })).toBe("Netflix");
   });
 });

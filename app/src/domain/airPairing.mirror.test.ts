@@ -75,8 +75,21 @@ describe("the edge functions mirror the air-pairing spec", () => {
     // The two ingest paths must agree on which titles get a release rule and on
     // the day it is applied to, or a show would be dated differently depending
     // on whether you opened it or waited for the nightly job.
-    expect(sources[mirror]).toMatch(/platformRelease\(title\.network\)/);
+    //
+    // Which platform is asked about is itself part of the spec now: `network`
+    // is TMDB's ORIGINAL BROADCASTER, so a mirror that went back to reading it
+    // directly would silently stop dating every streaming show whose network is
+    // the channel it left (Futurama under FOX, Adults under FX).
+    expect(sources[mirror]).toMatch(/const platform = rulePlatform\(title\);/);
+    expect(sources[mirror]).not.toMatch(/platformRelease\(title\.network\)/);
     expect(sources[mirror]).toMatch(/realign: alignedSeasons\(eps, idx\)/);
+  });
+
+  it.each(MIRRORS)("%s reads the providers column the rule now depends on", (mirror) => {
+    // rulePlatform can only fill a gap if the row it is handed carries the
+    // column; a select that forgot it would degrade in silence, back to exactly
+    // the network-only behaviour this replaced.
+    expect(sources[mirror]).toMatch(/select\("id, imdb_id, tvmaze_id, network, providers"\)/);
   });
 
   it.each(MIRRORS)("%s writes the TMDB day it anchors against", (mirror) => {

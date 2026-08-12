@@ -64,9 +64,12 @@ export const AIR_TIME = "T21:00:00Z";
  *  streamers themselves announce ("midnight PT"), and the only form that
  *  survives DST without a table of exceptions.
  *
- *  Keyed by TMDB's `networks[0].name`, which is what titles.network holds.
- *  Deliberately short: Max, Hulu and the rest vary per title or per region, and
- *  an invented hour presented as fact is the bug this file exists to prevent.
+ *  Keyed by a platform's display name, from either titles.network or
+ *  titles.providers — see rulePlatform.
+ *  Deliberately short: Hulu, Peacock, HBO Max and SkyShowtime all carry titles
+ *  in this library and none is here, because no source we have states when they
+ *  drop, and an invented hour presented as fact is the bug this file exists to
+ *  prevent. Those titles keep the placeholder and the UI shows the day alone.
  *  Broadcasters are absent on purpose — TVmaze knows their schedule, and a real
  *  `airtime` always wins over anything here.
  *
@@ -93,23 +96,48 @@ export const platformRelease = (name: string | null | undefined): PlatformReleas
   (name && PLATFORM_RELEASE[name]) || null;
 
 /** Countries whose provider list fills in for a network with no rule, in order.
- *  Hand-mirror of episode-refresh/platform.ts, which carries the reasoning and
- *  the tests — in short, TMDB's `network` is the ORIGINAL BROADCASTER, so
- *  Futurama is filed under FOX and Adults under FX while both stream on Disney+
- *  here. Keep the two in sync. */
-const PROVIDER_COUNTRIES = ["ES", "US"] as const;
+ *
+ *  ES first because it is the market every viewer here watches from (the app's
+ *  FALLBACK_COUNTRY, and no profile has ever set another), so when a show runs
+ *  on different services either side of the Atlantic, the Spanish one decides.
+ *  US second for the reach: a title absent from Spain often still resolves
+ *  there, and every rule in the table above is a worldwide simultaneous drop,
+ *  so borrowing the American service's clock does not move the instant. */
+export const PROVIDER_COUNTRIES = ["ES", "US"] as const;
 
-/** The network if it has a rule, else the first provider that does, ES first.
- *  "First WITH A RULE", not "first provider": a Spanish list often opens with
- *  Movistar Plus+, and stopping there would drop a title the next entry could
- *  have dated. The network goes first because a provider list is ordered by
- *  commercial prominence, not by who releases the show — Apple sells itself as
- *  a channel inside Prime, so Ted Lasso and Silo both list Prime Video ahead of
- *  Apple TV+. Purely additive: a title that had a clock keeps the one it had. */
-function rulePlatform(title: Any): string | null {
-  const names: (string | null | undefined)[] = [title?.network];
+/** Where a title can be watched, as titles.providers holds it. */
+export interface PlatformSource {
+  providers?: Record<string, { name?: string | null }[] | null | undefined> | null;
+  network?: string | null;
+}
+
+/** The platform whose release rule dates this title: the network if it has one,
+ *  else the first provider that does.
+ *
+ *  `network` alone was the whole lookup, and it is where TMDB files the
+ *  ORIGINAL BROADCASTER — for a streaming show either wrong or archaeology.
+ *  Adults is filed under FX and Futurama under FOX; both stream on Disney+ in
+ *  Spain and Hulu in the States, and neither got a clock though a rule for
+ *  their real platform sat in the table above. So providers answer for the
+ *  titles the network cannot.
+ *
+ *  They answer SECOND, and that order was arrived at the hard way. A provider
+ *  list is ordered by TMDB's display_priority — commercial prominence, not who
+ *  releases the thing: in Spain both Ted Lasso and Silo list "Prime Video"
+ *  ahead of "Apple TV+", because Apple sells itself as a channel inside Prime.
+ *  Reading providers first pulled two Apple originals off Apple's own
+ *  convention (midnight ET, day-shifted) and onto midnight Pacific. When the
+ *  network IS a streamer we have a rule for, it stays the best evidence about
+ *  who releases it.
+ *
+ *  And it takes the first name WITH A RULE, not the first name: a Spanish list
+ *  often opens with Movistar Plus+, and stopping there would drop a title the
+ *  next entry could have dated. Between the two, the lookup is purely additive
+ *  — a title that had a clock keeps exactly the one it had. */
+export function rulePlatform(title: PlatformSource): string | null {
+  const names: (string | null | undefined)[] = [title.network];
   for (const country of PROVIDER_COUNTRIES) {
-    for (const p of (title?.providers?.[country] ?? []) as Any[]) names.push(p?.name);
+    for (const p of title.providers?.[country] ?? []) names.push(p?.name);
   }
   return names.find((name) => platformRelease(name)) ?? null;
 }

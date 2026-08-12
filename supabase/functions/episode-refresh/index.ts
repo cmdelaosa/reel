@@ -40,7 +40,6 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { needsEpisodeRefresh } from "./stale.ts";
 import { pageAll } from "./paging.ts";
-import { type PlatformRelease, platformRelease, rulePlatform } from "./platform.ts";
 
 const TMDB = "https://api.themoviedb.org/3";
 const TVMAZE = "https://api.tvmaze.com";
@@ -88,10 +87,87 @@ type Any = any;
  *  order the calendar and decide what has aired. */
 export const AIR_TIME = "T21:00:00Z";
 
-/* The release rules themselves, and which platform a title is dated by, live in
-   platform.ts — they are pure, they are the part that keeps needing judgement,
-   and they carry the tests. Broadcasters are absent from that table on purpose:
-   TVmaze knows their schedule, and a real `airtime` always wins over a rule. */
+/** When a platform releases, as a wall clock in its own zone — the form the
+ *  streamers themselves announce ("midnight PT"), and the only form that
+ *  survives DST without a table of exceptions.
+ *
+ *  Keyed by a platform's display name, from either titles.network or
+ *  titles.providers — see rulePlatform.
+ *  Deliberately short: Hulu, Peacock, HBO Max and SkyShowtime all carry titles
+ *  in this library and none is here, because no source we have states when they
+ *  drop, and an invented hour presented as fact is the bug this file exists to
+ *  prevent. Those titles keep the placeholder and the UI shows the day alone.
+ *  Broadcasters are absent on purpose — TVmaze knows their schedule, and a real
+ *  `airtime` always wins over anything here.
+ *
+ *  `days` are the weekdays (0 = Sunday) a platform releases on, and only Apple
+ *  needs them: it is the one streamer whose TMDB dates are filed in a zone far
+ *  enough west to fall on the previous day. See releaseDay. */
+export interface PlatformRelease {
+  at: string;
+  tz: string;
+  days?: readonly number[];
+}
+
+export const PLATFORM_RELEASE: Readonly<Record<string, PlatformRelease>> = {
+  // 21:00 PT the evening before, which is this, and is why `days` is here.
+  "Apple TV": { at: "00:00", tz: "America/New_York", days: [3, 5] },
+  "Apple TV+": { at: "00:00", tz: "America/New_York", days: [3, 5] },
+  Netflix: { at: "00:00", tz: "America/Los_Angeles" },
+  "Disney+": { at: "00:00", tz: "America/Los_Angeles" },
+  "Prime Video": { at: "00:00", tz: "America/Los_Angeles" },
+  "Amazon Prime Video": { at: "00:00", tz: "America/Los_Angeles" },
+};
+
+export const platformRelease = (name: string | null | undefined): PlatformRelease | null =>
+  (name && PLATFORM_RELEASE[name]) || null;
+
+/** Countries whose provider list fills in for a network with no rule, in order.
+ *
+ *  ES first because it is the market every viewer here watches from (the app's
+ *  FALLBACK_COUNTRY, and no profile has ever set another), so when a show runs
+ *  on different services either side of the Atlantic, the Spanish one decides.
+ *  US second for the reach: a title absent from Spain often still resolves
+ *  there, and every rule in the table above is a worldwide simultaneous drop,
+ *  so borrowing the American service's clock does not move the instant. */
+export const PROVIDER_COUNTRIES = ["ES", "US"] as const;
+
+/** Where a title can be watched, as titles.providers holds it. */
+export interface PlatformSource {
+  providers?: Record<string, { name?: string | null }[] | null | undefined> | null;
+  network?: string | null;
+}
+
+/** The platform whose release rule dates this title: the network if it has one,
+ *  else the first provider that does.
+ *
+ *  `network` alone was the whole lookup, and it is where TMDB files the
+ *  ORIGINAL BROADCASTER — for a streaming show either wrong or archaeology.
+ *  Adults is filed under FX and Futurama under FOX; both stream on Disney+ in
+ *  Spain and Hulu in the States, and neither got a clock though a rule for
+ *  their real platform sat in the table above. So providers answer for the
+ *  titles the network cannot.
+ *
+ *  They answer SECOND, and that order was arrived at the hard way. A provider
+ *  list is ordered by TMDB's display_priority — commercial prominence, not who
+ *  releases the thing: in Spain both Ted Lasso and Silo list "Prime Video"
+ *  ahead of "Apple TV+", because Apple sells itself as a channel inside Prime.
+ *  Reading providers first pulled two Apple originals off Apple's own
+ *  convention (midnight ET, day-shifted) and onto midnight Pacific. When the
+ *  network IS a streamer we have a rule for, it stays the best evidence about
+ *  who releases it.
+ *
+ *  And it takes the first name WITH A RULE, not the first name: a Spanish list
+ *  often opens with Movistar Plus+, and stopping there would drop a title the
+ *  next entry could have dated. Between the two, the lookup is purely additive
+ *  — a title that had a clock keeps exactly the one it had. */
+export function rulePlatform(title: PlatformSource): string | null {
+  const names: (string | null | undefined)[] = [title.network];
+  for (const country of PROVIDER_COUNTRIES) {
+    for (const p of title.providers?.[country] ?? []) names.push(p?.name);
+  }
+  return names.find((name) => platformRelease(name)) ?? null;
+}
 
 /** One episode as TVmaze publishes it. `airdate` is the broadcaster's local
  *  day — the field we pair on; `airstamp` is the absolute instant we store;
