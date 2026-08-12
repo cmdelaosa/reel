@@ -651,6 +651,27 @@ async function cacheNetworkLogos(admin: SupabaseClient, networks: Any) {
   if (error) console.error(`network_logos upsert: ${error.message}`);
 }
 
+/** Every row of a windowed PostgREST query, not the first 1000 it hands back by
+ *  default. `page` must impose a total order or rows slip between windows;
+ *  errors are raised rather than read as an empty table.
+ *
+ *  Hand-mirror of episode-refresh/paging.ts, which carries the unit tests and
+ *  the story — in short, One Piece's 1181 episodes meant the air-time pass never
+ *  saw an episode later than its 1000th, which is every one still to air. Keep
+ *  the two in sync. */
+async function pageAll<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  size = 1000,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let from = 0;; from += size) {
+    const { data, error } = await page(from, from + size - 1);
+    if (error) throw new Error(error.message);
+    if (data?.length) all.push(...data);
+    if (!data || data.length < size) return all;
+  }
+}
+
 interface ResolvedTime {
   at: string;
   airDate: string | null;
@@ -674,13 +695,20 @@ async function keepResolvedTimes(
   admin: SupabaseClient,
   titleId: string,
 ): Promise<Map<string, ResolvedTime>> {
-  const { data } = await admin
-    .from("episodes")
-    .select("season_number, episode_number, air_datetime, air_date, air_time_source")
-    .eq("title_id", titleId)
-    .in("air_time_source", ["tvmaze", "platform"]);
+  // Paged and ordered — see pageAll below, and its tested twin in
+  // episode-refresh/paging.ts.
+  const data = await pageAll<Any>((from, to) =>
+    admin
+      .from("episodes")
+      .select("season_number, episode_number, air_datetime, air_date, air_time_source")
+      .eq("title_id", titleId)
+      .in("air_time_source", ["tvmaze", "platform"])
+      .order("season_number")
+      .order("episode_number")
+      .range(from, to)
+  );
   const keep = new Map<string, ResolvedTime>();
-  for (const e of (data ?? []) as Any[]) {
+  for (const e of data) {
     if (e.air_datetime) {
       keep.set(`${e.season_number}x${e.episode_number}`, {
         at: e.air_datetime,
@@ -740,12 +768,16 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
   // Neither source has anything to say about this title.
   if (!idx.size && !platformRelease(title.network)) return;
 
-  const { data: ours } = await admin
-    .from("episodes")
-    .select("title_id, season_number, episode_number, air_date, air_datetime, air_time_source")
-    .eq("title_id", titleId)
-    .gt("season_number", 0);
-  const eps = (ours ?? []) as Any[];
+  const eps = await pageAll<Any>((from, to) =>
+    admin
+      .from("episodes")
+      .select("title_id, season_number, episode_number, air_date, air_datetime, air_time_source")
+      .eq("title_id", titleId)
+      .gt("season_number", 0)
+      .order("season_number")
+      .order("episode_number")
+      .range(from, to)
+  );
   const ctx = { platform: title.network as string | null, realign: alignedSeasons(eps, idx) };
 
   const rows: Any[] = [];
