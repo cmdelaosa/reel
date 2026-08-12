@@ -13,9 +13,12 @@
 //
 // Every response is served from the metadata cache (rows written with the
 // service-role key) — the client never sees raw TMDB payloads. /title and
-// /season are cache-first: fresh rows (last_refreshed_at < 24h) skip TMDB
-// entirely, stale rows are served immediately and revalidated in the
-// background, and only never-cached data blocks on a TMDB fetch. A valid
+// /season are cache-first: fresh rows skip TMDB entirely, stale rows are served
+// immediately and revalidated in the background, and only never-cached data
+// blocks on a TMDB fetch. "Fresh" means < 24h, off two separate marks —
+// last_refreshed_at for /title's detail, episodes_refreshed_at for /season's
+// episodes — because the discovery warm-up writes the first without the second
+// (migration 0066). A valid
 // *user* JWT is required (the anon key alone is rejected). The response shape is
 // mirrored (minimally, no cross-runtime import) by app/src/lib/schemas.ts.
 //
@@ -544,6 +547,12 @@ function titleRow(d: Any) {
     aired_count: airedCount(d.seasons, d.last_episode_to_air),
     upcoming_season_number: up?.number ?? null,
     upcoming_season_air_date: up?.air_date ?? null,
+    // The DETAIL stamp, and only that: this row came from a full /tv/:id fetch,
+    // so it is true wherever titleRow is used — including the popular-now
+    // warm-up, which holds full details too. `episodes_refreshed_at` is
+    // conspicuously absent and must stay that way: not one episode is written
+    // anywhere near here, and a payload that claimed otherwise would put the
+    // nightly cron back to skipping every followed title in the pool.
     last_refreshed_at: new Date().toISOString(),
   };
 }
@@ -552,8 +561,8 @@ function titleRow(d: Any) {
 // runtime — so we omit those columns to avoid clobbering richer detail rows on
 // conflict (PostgREST upsert only updates the columns present in the payload).
 // last_refreshed_at is also omitted: it marks a *full detail* refresh (the
-// cache-first /title path and the episode-refresh cron key off it), and a
-// search hit must not make a title look fresher than its detail data is.
+// cache-first /title path keys off it), and a search hit must not make a title
+// look fresher than its detail data is.
 function searchRow(r: Any) {
   return {
     tmdb_id: r.id,
@@ -775,9 +784,19 @@ async function enrichAirTimes(admin: SupabaseClient, titleId: string) {
 // shows are effectively always a cache hit.
 const FRESH_MS = 24 * 3600 * 1000;
 
-const isFresh = (title: Any) =>
-  Boolean(title?.last_refreshed_at) &&
-  Date.now() - new Date(title.last_refreshed_at).getTime() < FRESH_MS;
+const freshWithin = (at: string | null | undefined) =>
+  Boolean(at) && Date.now() - new Date(at as string).getTime() < FRESH_MS;
+
+/** The title row's own detail (name, status, providers, scores). Written by
+ *  every full-detail fetch, the discovery warm-up's included. */
+const isFresh = (title: Any) => freshWithin(title?.last_refreshed_at);
+
+/** The title's EPISODES. A different fact, and only the passes that actually
+ *  refetch episodes write it — the episode-refresh cron and fillWholeShow below.
+ *  Using isFresh() here instead was a real bug: the popular-now warm-up writes
+ *  full title rows without a single season, so it made cached episodes look
+ *  revalidated when nothing had looked at them. See migration 0066. */
+const hasFreshEpisodes = (title: Any) => freshWithin(title?.episodes_refreshed_at);
 
 // Run best-effort work after the response is sent (EdgeRuntime.waitUntil on
 // hosted; a detached promise on the local serve runtime, which stays alive).
@@ -891,6 +910,26 @@ async function fillWholeShow(
   // for yet (an announced one) MISSes on every single open, and re-dating a show
   // that gained no rows is pure upstream traffic.
   if (wrote) await enrichAirTimes(admin, titleId);
+
+  // This pass and the episode-refresh cron are the only two writers of the
+  // episode freshness mark, because they are the only two that refresh a show's
+  // whole maintained episode set. A single-season refreshSeason deliberately
+  // does NOT stamp it: marking the title on the strength of one season would let
+  // someone opening season 1 convince the nightly cron that the season now
+  // airing is fresh — the very starvation migration 0066 undoes, just by a
+  // rarer route. The cost is that a stale season revalidates in the background
+  // on each open until the cron comes round; one request, off the hot path.
+  //
+  // Gated on `wrote` for the same reason the TVmaze pass above is: a fill that
+  // brought in nothing (every season already held, or an announced season TMDB
+  // has no episodes for) has not earned the mark, and stamping it anyway would
+  // silence a whole show's revalidation for a day on the strength of a no-op.
+  if (!wrote) return;
+  const { error } = await admin
+    .from("titles")
+    .update({ episodes_refreshed_at: new Date().toISOString() })
+    .eq("id", titleId);
+  if (error) console.error(`episodes_refreshed_at: ${error.message}`);
 }
 
 const fetchTmdb = async (apiKey: string, p: string) => {
@@ -1049,7 +1088,7 @@ async function resolvePopularNow(admin: SupabaseClient, apiKey: string, force = 
       // already carries its providers and Spanish title the first time it
       // is rendered. external_ids is not a nicety here: titleRow stamps
       // last_refreshed_at, so a payload without it writes a row that looks
-      // fully refreshed to /title while imdb_id stays null — and imdb_id is
+      // fully detailed to /title while imdb_id stays null — and imdb_id is
       // the ONLY key the ratings importer matches a show by, so those
       // titles were invisible to it for good (no episode graph, no IMDb
       // score on the sheet). Keep this append in step with refreshTitle's.
@@ -1516,17 +1555,19 @@ Deno.serve(async (req) => {
     }
 
     // GET /title/:id/season/:n — cache-first like /title. Cached episodes are
-    // considered stale when the title row is stale or the row count disagrees
-    // with the season's announced episode_count (an episode was added since);
-    // both still serve the cache and revalidate behind the response. Only a
-    // season with no cached episodes blocks on TMDB.
+    // considered stale when the title's EPISODES are stale (episodes_refreshed_at
+    // — not the detail stamp /title uses, which the discovery warm-up writes for
+    // titles it never fetched an episode of) or the row count disagrees with the
+    // season's announced episode_count (an episode was added since); both still
+    // serve the cache and revalidate behind the response. Only a season with no
+    // cached episodes blocks on TMDB.
     const mSeason = path.match(/^\/title\/(\d+)\/season\/(\d+)$/);
     if (mSeason) {
       const tmdbId = Number(mSeason[1]);
       const n = Number(mSeason[2]);
       const dbStarted = performance.now();
       const { data: existing } = await admin
-        .from("titles").select("id, last_refreshed_at, imdb_id").eq("tmdb_id", tmdbId).maybeSingle();
+        .from("titles").select("id, episodes_refreshed_at, imdb_id").eq("tmdb_id", tmdbId).maybeSingle();
       const title = existing ?? (await refreshTitle(admin, apiKey, tmdbId)).title;
       const { data: season } = await admin
         .from("seasons").select("*, episodes(*)").eq("title_id", title.id).eq("number", n).maybeSingle();
@@ -1536,7 +1577,7 @@ Deno.serve(async (req) => {
         const episodes = [...(nestedEpisodes ?? [])].sort((a: Any, b: Any) => a.episode_number - b.episode_number);
         if ((episodes ?? []).length) {
           const complete = seasonRow.episode_count == null || episodes.length >= seasonRow.episode_count;
-          const stale = !isFresh(title) || !complete;
+          const stale = !hasFreshEpisodes(title) || !complete;
           if (stale) inBackground(refreshSeason(admin, apiKey, tmdbId, title.id, n));
           return json({ season: seasonRow, episodes }, 200, detailHeaders(stale ? "STALE" : "HIT", dbMs));
         }

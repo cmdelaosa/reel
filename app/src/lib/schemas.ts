@@ -32,7 +32,15 @@ export const titleRowSchema = z.object({
   imdb_votes: z.number().int().nullable().optional(),
   // Present on full DB/proxy rows. Search fixtures and older persisted cache
   // entries may omit it, so keep it optional for backwards compatibility.
+  //
+  // Two marks, two meanings (0066): last_refreshed_at says the title's detail
+  // was refetched — the nightly discovery warm-up writes it for the whole
+  // popular-now pool without touching an episode — while episodes_refreshed_at
+  // says the episodes were. Anything deciding whether to revalidate a SEASON
+  // must read the second; reading the first is what let those titles serve
+  // months-old episodes as fresh.
   last_refreshed_at: z.string().nullable().optional(),
+  episodes_refreshed_at: z.string().nullable().optional(),
 });
 export type TitleRow = z.infer<typeof titleRowSchema>;
 

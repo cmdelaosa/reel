@@ -40,7 +40,8 @@ export function seasonQueryOptions(tmdbId: number, season: number, titleResponse
       tmdbId,
       season,
       titleResponse?.title.id,
-      titleResponse?.title.last_refreshed_at,
+      // The EPISODE mark, not the detail one — see schemas.ts / migration 0066.
+      titleResponse?.title.episodes_refreshed_at,
     ),
   };
 }

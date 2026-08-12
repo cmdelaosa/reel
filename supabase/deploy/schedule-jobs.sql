@@ -55,7 +55,13 @@ select cron.schedule(
 --     first visitor after the 24h TTL lapsed wore a cold popular-now rebuild:
 --     ~80 sequential TMDB detail fetches, seconds of blank grid.
 --     Scheduled 20 min ahead of episode-refresh so the two heaviest TMDB
---     consumers don't share a rate-limit window.
+--     consumers don't share a rate-limit window. The gap used to matter for a
+--     worse reason: this job writes `titles.last_refreshed_at` for the whole
+--     popular-now pool (it holds full TMDB details, so it upserts rich rows),
+--     and episode-refresh used to gate on that same column — so any followed
+--     title in the pool looked fresh 20 minutes later and was skipped, every
+--     day. Migration 0066 split the two marks; the ordering here is now only
+--     about rate limits, and moving either job is safe.
 --     Check it like any other job:
 --       select ok, summary, started_at from public.job_runs
 --        where job = 'discover-warm' order by started_at desc limit 5;

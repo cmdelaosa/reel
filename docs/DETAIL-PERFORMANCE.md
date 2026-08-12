@@ -37,7 +37,9 @@ Metadata queries use a 24-hour `staleTime`, a 30-day `gcTime`, and a 30-day
 IndexedDB snapshot lifetime. A stale database row is rendered immediately and
 revalidated in the background. `last_refreshed_at` is included in the title
 schema for this decision while remaining optional for old persisted snapshots
-and partial search rows.
+and partial search rows. A season's revalidation reads `episodes_refreshed_at`
+instead — the mark only the episode passes write, distinct from the detail one
+the discovery warm-up also writes (migration 0066).
 
 ## Durable client cache
 
