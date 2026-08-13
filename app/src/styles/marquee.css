@@ -1262,8 +1262,8 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    horizontal padding rather than from the labels: it is invisible, the buttons
    keep their full height, and 37px of width is still a thumb's target. */
 @media (max-width: 359px) {
-  .mq-dockbtn { padding: 11px 9px; }
-  .mq-dockbtn.on { padding: 11px 13px; }
+  .mq-dockbtn { padding: 11px 8px; }
+  .mq-dockbtn.on { padding: 11px 12px; }
 }
 
 /* ---- Notification panel ---- */

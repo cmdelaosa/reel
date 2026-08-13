@@ -35,10 +35,10 @@ const ES: Record<string, string> = {
   "Tonight": "Esta noche",
   "Explore": "Explorar",
   "Calendar": "Calendario",
-  // The nav tab into My Shows' "Sin empezar" bucket. "Pendientes" is what a
-  // watchlist is called in Spanish; "Lista de seguimiento" is a translation of
-  // the English words, not a name anyone uses.
-  "Watchlist": "Pendientes",
+  // The nav tab into My Shows' "Sin empezar" bucket — named after the bucket it
+  // opens rather than after the English word, so the tab and the chip it lands
+  // on say the same thing.
+  "Watchlist": "Sin empezar",
   "Friends": "Amigos",
   "My Shows": "Mis series",
   "History": "Historial",
