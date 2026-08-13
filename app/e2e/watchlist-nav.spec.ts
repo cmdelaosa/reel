@@ -111,20 +111,44 @@ function activeBucket(page: Page) {
   return page.locator(".shows-buckets .chip.chip-active");
 }
 
-test("the Watchlist tab opens My Shows on Not started", async ({ page }) => {
+/** The sort the page is ordered by. */
+function activeSort(page: Page) {
+  return page.locator(".segmented .seg.seg-active");
+}
+
+test("the Watchlist tab opens My Shows on Not started, newest first", async ({ page }) => {
   await authenticate(page);
   await page.goto("/tonight");
 
   await page.locator(".mq-tabs").getByRole("link", { name: "Watchlist" }).click();
   await expect(page).toHaveURL(/\/shows\?filter=watchlist/);
   await expect(activeBucket(page)).toHaveText(/Not started/);
+  // Nothing in this bucket has ever been watched, so "Last watched" would be
+  // ordering by a column that is null for every row.
+  await expect(activeSort(page)).toHaveText(/Last released/);
 
   // And it still gets you there from inside My Shows, where the route doesn't
   // change — the regression that made the bucket URL-driven in the first place.
   await page.locator(".shows-buckets .chip", { hasText: "All" }).click();
   await expect(activeBucket(page)).toHaveText(/All/);
+  await expect(activeSort(page)).toHaveText(/Last watched/);
   await page.locator(".mq-tabs").getByRole("link", { name: "Watchlist" }).click();
   await expect(activeBucket(page)).toHaveText(/Not started/);
+  await expect(activeSort(page)).toHaveText(/Last released/);
+});
+
+test("a sort you picked yourself outlives the bucket you picked it in", async ({ page }) => {
+  await authenticate(page);
+  await page.goto("/shows?filter=watchlist");
+  await expect(activeSort(page)).toHaveText(/Last released/);
+
+  await page.locator(".segmented .seg", { hasText: "A–Z" }).click();
+  await expect(activeSort(page)).toHaveText(/A–Z/);
+  // The per-bucket default only fills in for someone who hasn't chosen.
+  await page.locator(".shows-buckets .chip", { hasText: "Watching" }).click();
+  await expect(activeSort(page)).toHaveText(/A–Z/);
+  await page.locator(".shows-buckets .chip", { hasText: "Not started" }).click();
+  await expect(activeSort(page)).toHaveText(/A–Z/);
 });
 
 test.describe("on a phone", () => {
