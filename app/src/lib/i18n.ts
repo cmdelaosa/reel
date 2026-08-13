@@ -35,6 +35,10 @@ const ES: Record<string, string> = {
   "Tonight": "Esta noche",
   "Explore": "Explorar",
   "Calendar": "Calendario",
+  // The nav tab into My Shows' "Sin empezar" bucket. "Pendientes" is what a
+  // watchlist is called in Spanish; "Lista de seguimiento" is a translation of
+  // the English words, not a name anyone uses.
+  "Watchlist": "Pendientes",
   "Friends": "Amigos",
   "My Shows": "Mis series",
   "History": "Historial",
@@ -318,7 +322,6 @@ const ES: Record<string, string> = {
   "{a} and {n} more": "{a} y {n} más",
   "Someone": "Alguien",
   "Clear": "Vaciar",
-  "Sure?": "¿Seguro?",
   /* What each emoji means, spoken. Screen readers get no name from an emoji,
      so every chip and palette button carries one of these. */
   "Love it": "Me encanta",

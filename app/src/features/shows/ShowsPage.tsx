@@ -38,9 +38,27 @@ const COMPARATORS: Record<SortKey, (a: LibraryShow, b: LibraryShow) => number> =
 
 export default function ShowsPage() {
   const { data: library = [], isPending } = useLibrary();
-  const [f, setF] = useState<Bucket>("watching");
   const [sort, setSort] = useState<SortKey>("lastwatched");
-  const [, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  /* The bucket lives in the URL, not in state: the Watchlist tab links straight
+     to ?filter=watchlist, and from /shows itself that's a same-route navigation
+     — local state would simply ignore it. Unknown or absent falls back to
+     Watching, the bucket this page has always opened on.
+     Picking a chip replaces the entry rather than pushing one: filtering isn't
+     navigation, and Back should leave the page, not walk back through six
+     buckets. */
+  const param = searchParams.get("filter");
+  const f: Bucket = FILTERS.some((x) => x.key === param) ? (param as Bucket) : "watching";
+  const setF = (key: Bucket) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("filter", key);
+        return next;
+      },
+      { replace: true },
+    );
 
   // All includes every follow (stopped too); the status buckets show active
   // follows only, and Stopped collects the stopped ones.

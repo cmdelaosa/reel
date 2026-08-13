@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import {
-  Bell, CalendarClock, Clapperboard, Compass, Play, Search, Sliders, Users,
+  Bell, Bookmark, CalendarClock, Clapperboard, Compass, Play, Search, Sliders, Users,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
@@ -16,10 +16,17 @@ import { t } from "@/lib/i18n";
 /* Marquee shell — top tab navigation, floating dock on mobile, ⌘K palette.
    Markup/classes ported verbatim from prototype/src/marquee.tsx. */
 
+/* Watchlist is the library's front door, so it points at My Shows with the
+   bucket already picked — ShowsPage reads it from ?filter=, which is also what
+   makes the tab land on "Not started" when you're already on /shows. Its active
+   state is the plain pathname one: switching buckets from there is filtering,
+   not leaving, and a tab that went dark the moment you touched a chip would say
+   otherwise. */
 const TABS = [
   { path: "/tonight", label: "Tonight", icon: Clapperboard },
-  { path: "/explore", label: "Explore", icon: Compass },
   { path: "/calendar", label: "Calendar", icon: CalendarClock },
+  { path: "/shows?filter=watchlist", label: "Watchlist", icon: Bookmark },
+  { path: "/explore", label: "Explore", icon: Compass },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
