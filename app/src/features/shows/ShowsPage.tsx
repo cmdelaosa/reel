@@ -28,6 +28,12 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "az", label: "A–Z" },
   { key: "rating", label: "Top rated" },
 ];
+/* "Last watched" is the page's default everywhere except Not started, where by
+   definition nothing has been watched: every row's key is null, so the order was
+   whatever the rollup happened to return. What you want from a pile of shows you
+   haven't begun is the newest one, so that bucket opens on Last released. Only a
+   default — pick a sort and it holds while you move between buckets. */
+const DEFAULT_SORT: Partial<Record<Bucket, SortKey>> = { watchlist: "lastreleased" };
 const ms = (s: string | null) => (s ? new Date(s).getTime() : 0);
 const COMPARATORS: Record<SortKey, (a: LibraryShow, b: LibraryShow) => number> = {
   lastwatched: (a, b) => ms(b.last_watched_at) - ms(a.last_watched_at),
@@ -38,7 +44,8 @@ const COMPARATORS: Record<SortKey, (a: LibraryShow, b: LibraryShow) => number> =
 
 export default function ShowsPage() {
   const { data: library = [], isPending } = useLibrary();
-  const [sort, setSort] = useState<SortKey>("lastwatched");
+  // Null until you touch the sort strip; until then the bucket chooses.
+  const [sortPick, setSortPick] = useState<SortKey | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   /* The bucket lives in the URL, not in state: the Watchlist tab links straight
@@ -59,6 +66,7 @@ export default function ShowsPage() {
       },
       { replace: true },
     );
+  const sort: SortKey = sortPick ?? DEFAULT_SORT[f] ?? "lastwatched";
 
   // All includes every follow (stopped too); the status buckets show active
   // follows only, and Stopped collects the stopped ones.
@@ -107,7 +115,7 @@ export default function ShowsPage() {
         />
         <div className="segmented scroll no-scrollbar">
           {SORTS.map((s) => (
-            <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => setSort(s.key)}>
+            <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => setSortPick(s.key)}>
               {tr(s.label)}
             </div>
           ))}
@@ -117,7 +125,7 @@ export default function ShowsPage() {
         <TabMenu
           value={sort}
           options={SORTS.map((s) => ({ key: s.key, label: tr(s.label) }))}
-          onPick={setSort}
+          onPick={setSortPick}
           menuLabel={tr("Sort")}
           align="end"
         />
