@@ -70,21 +70,39 @@ function body(n: Notification): string {
   }
 }
 
+/* How the rows leave when the inbox is emptied. Each one starts SWEEP_STEP after
+   the one above it — capped, so fifty notifications don't take two seconds to
+   go — and the whole thing has to outlast the last row's start. */
+const SWEEP_MS = 240;
+const SWEEP_STEP = 35;
+const SWEEP_CAP = 175;
+const sweepDelay = (i: number) => Math.min(i * SWEEP_STEP, SWEEP_CAP);
+
 export function NotifPanel({ onClose }: { onClose: () => void }) {
   const { data: items = [] } = useNotifications();
   const markRead = useMarkNotificationsRead();
   const clear = useClearNotifications();
   const navigate = useNavigate();
   const [, setSearchParams] = useSearchParams();
-  const [armed, setArmed] = useState(false);
+  /* Clearing deletes optimistically, so the rows are gone from the cache the
+     instant you click and there is nothing left to animate. The panel keeps
+     rendering this snapshot of them for the length of the sweep, then drops it
+     and falls back to live data — which by then is the empty state. Holding a
+     copy rather than delaying the mutation also means closing the panel
+     mid-animation still clears the inbox. */
+  const [sweeping, setSweeping] = useState<Notification[] | null>(null);
+  const rows = sweeping ?? items;
 
-  // A half-pressed "Clear" that stays armed is a trap for the next click, so it
-  // disarms itself.
   useEffect(() => {
-    if (!armed) return;
-    const timer = setTimeout(() => setArmed(false), 4000);
+    if (!sweeping) return;
+    const timer = setTimeout(() => setSweeping(null), SWEEP_MS + sweepDelay(sweeping.length - 1));
     return () => clearTimeout(timer);
-  }, [armed]);
+  }, [sweeping]);
+
+  const clearAll = () => {
+    if (items.length && !matchMedia("(prefers-reduced-motion: reduce)").matches) setSweeping(items);
+    clear.mutate();
+  };
 
   const route = (n: Notification) => {
     if (!n.read_at) markRead.mutate([n.id]);
@@ -119,37 +137,34 @@ export function NotifPanel({ onClose }: { onClose: () => void }) {
               </button>
             )}
             {items.length > 0 && (
-              // Two taps, not a modal: emptying an inbox is not worth a dialog,
-              // but it is worth not doing by accident. The ask forgets itself
-              // after a few seconds.
-              <button
-                className={`chip${armed ? " chip-active" : ""}`}
-                onClick={() => (armed ? clear.mutate() : setArmed(true))}
-              >
-                <Trash2 size={13} />{armed ? tr("Sure?") : tr("Clear")}
+              // One tap, no dialog and no second press: an inbox is cheap to
+              // empty and the rows sweeping out is the confirmation.
+              <button className="chip" onClick={clearAll}>
+                <Trash2 size={13} />{tr("Clear")}
               </button>
             )}
           </div>
         </div>
 
         <div className="flex flex-col" style={{ maxHeight: "min(60vh, 480px)", overflowY: "auto" }}>
-          {items.length === 0 && (
+          {rows.length === 0 && (
             <div className="dim" style={{ padding: "28px 16px", textAlign: "center", fontSize: 13.5 }}>
               {tr("You're all caught up.")}
             </div>
           )}
-          {items.map((n, i) => {
+          {rows.map((n, i) => {
             const Icon = ICONS[n.type] ?? Bell;
             const unread = !n.read_at;
             return (
               <div
                 key={n.id}
-                className="flex items-start gap-3 px-4 py-3.5 cursor-pointer"
+                className={`flex items-start gap-3 px-4 py-3.5 cursor-pointer${sweeping ? " notif-sweep" : ""}`}
                 style={{
-                  borderBottom: i < items.length - 1 ? "1px solid var(--border)" : "none",
+                  borderBottom: i < rows.length - 1 ? "1px solid var(--border)" : "none",
                   background: unread ? "color-mix(in srgb, var(--accent) 6%, transparent)" : undefined,
+                  animationDelay: sweeping ? `${sweepDelay(i)}ms` : undefined,
                 }}
-                onClick={() => route(n)}
+                onClick={() => !sweeping && route(n)}
               >
                 <div
                   className="grid place-items-center shrink-0"

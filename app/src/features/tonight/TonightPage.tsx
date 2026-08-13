@@ -134,13 +134,13 @@ export default function TonightPage() {
 
       {isLoading ? (
         <section className="flex flex-col gap-4">
-          <Rail title={tr("Continue watching")}>
+          <Rail title={tr("Continue watching")} action={<SeeAllWatching />}>
             <RailCardsSkeleton caption />
           </Rail>
         </section>
       ) : rest.length > 0 && (
         <section className="flex flex-col gap-4">
-          <Rail title={tr("Continue watching")} scrollToStartKey={followKey}>
+          <Rail title={tr("Continue watching")} action={<SeeAllWatching />} scrollToStartKey={followKey}>
             {rest.map((r) => (
               <ContinueCard key={r.title_id} r={r} onOpen={() => open(r.tmdb_id)} onMarked={() => setFollowKey((k) => k + 1)} />
             ))}
@@ -179,6 +179,17 @@ export default function TonightPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+/** The rail's counterpart to the "See all" beside Fresh episodes — same shape,
+ *  but the whole of continue-watching is My Shows' Watching bucket, so that is
+ *  where it goes. */
+function SeeAllWatching() {
+  return (
+    <Link to="/shows?filter=watching" className="btn btn-ghost btn-sm">
+      {tr("See all")} <ChevronRight size={14} />
+    </Link>
   );
 }
 

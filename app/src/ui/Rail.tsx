@@ -10,7 +10,7 @@ import { t as tr } from "@/lib/i18n";
 
    title/subtitle: the section heading, rendered inside the rail so the arrows
    can sit beside it. action: extra header content (e.g. a "See all" link) placed
-   just left of the arrows.
+   just left of the arrows, and unlike them it survives on touch.
    scrollToStartKey: bump this (any changing number) to smooth-scroll back to the
    start — Tonight uses it to follow a just-marked show to the front. */
 export function Rail({
@@ -131,14 +131,16 @@ export function Rail({
             {title != null && <h2 className="section-title">{title}</h2>}
             {subtitle != null && <p className="mute" style={{ fontSize: 13 }}>{subtitle}</p>}
           </div>
-          <div className="rail-nav">
+          <div className="rail-head-end">
             {action}
-            <button className="rail-arrow" onClick={() => nudge(-1)} disabled={!canL} aria-label={tr("Scroll left")}>
-              <ChevronLeft size={18} />
-            </button>
-            <button className="rail-arrow" onClick={() => nudge(1)} disabled={!canR} aria-label={tr("Scroll right")}>
-              <ChevronRight size={18} />
-            </button>
+            <div className="rail-nav">
+              <button className="rail-arrow" onClick={() => nudge(-1)} disabled={!canL} aria-label={tr("Scroll left")}>
+                <ChevronLeft size={18} />
+              </button>
+              <button className="rail-arrow" onClick={() => nudge(1)} disabled={!canR} aria-label={tr("Scroll right")}>
+                <ChevronRight size={18} />
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -337,6 +337,10 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 /* Rail with a header row: title left, scroll arrows grouped at the top-right */
 .rail-wrap { position: relative; display: flex; flex-direction: column; gap: 16px; }
 .rail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* Everything opposite the title. The action (a "See all" link) lives out here
+   rather than inside .rail-nav, which touch devices hide along with the arrows
+   — a link that vanished on a phone is exactly where it is most needed. */
+.rail-head-end { display: flex; align-items: center; gap: 8px; }
 .rail-nav { display: flex; align-items: center; gap: 8px; }
 .rail-arrow {
   display: grid; place-items: center;
@@ -1251,6 +1255,16 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 }
 .mq-docklabel { display: none; }
 .mq-dockbtn.on .mq-docklabel { display: inline; }
+/* Five tabs is one more than this pill was drawn for. At 320px the Spanish
+   labels ("Esta noche", "Calendario", "Pendientes") ask for ~8px more than the
+   dock's max-width allows, and with nothing here to scroll or wrap, the fifth
+   tab simply spilled past the rounded edge. Buying the space back from
+   horizontal padding rather than from the labels: it is invisible, the buttons
+   keep their full height, and 37px of width is still a thumb's target. */
+@media (max-width: 359px) {
+  .mq-dockbtn { padding: 11px 8px; }
+  .mq-dockbtn.on { padding: 11px 12px; }
+}
 
 /* ---- Notification panel ---- */
 /* Hangs off the bell with nothing but the page behind it — unlike the sheets and
@@ -1283,6 +1297,16 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   box-shadow: var(--shadow-lg);
 }
 [data-theme="light"] .mq-notif { background: rgba(255, 255, 255, 0.94); }
+/* Emptying the inbox: the rows slide out to the right in sequence instead of
+   blinking away, so "Clear" — now a single tap, with no "Sure?" behind it —
+   shows what it did. `both` holds each row still through its own delay and
+   keeps it gone afterwards; the panel drops the rows a frame later. */
+.notif-sweep {
+  animation: notif-sweep .24s cubic-bezier(.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+@keyframes notif-sweep { to { opacity: 0; transform: translateX(36px); } }
+@media (prefers-reduced-motion: reduce) { .notif-sweep { animation: none; } }
 /* On a phone there is no centred column to drift away from, and the bell is not
    the last control in the bar — hanging the panel off it would run its left
    edge off the screen. Back to the bar's own width, which is the shape a phone
