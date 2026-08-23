@@ -41,6 +41,11 @@ export const titleRowSchema = z.object({
   // months-old episodes as fresh.
   last_refreshed_at: z.string().nullable().optional(),
   episodes_refreshed_at: z.string().nullable().optional(),
+  // La saga de una película (0067) — lo que en una serie son las temporadas.
+  // Opcionales por lo de siempre (una base o una caché anteriores a la
+  // migración) y nulas en series y en las películas sueltas.
+  collection_id: z.number().int().nullable().optional(),
+  collection_name: z.string().nullable().optional(),
 });
 export type TitleRow = z.infer<typeof titleRowSchema>;
 
@@ -98,6 +103,10 @@ export const isPlaceholderHandle = (handle: string) => /^user_[0-9a-f]{16}$/.tes
 export const libraryRowSchema = z.object({
   title_id: z.string().uuid(),
   tmdb_id: z.number().int(),
+  // El medio (0067). Una sola biblioteca para los dos modos; quien la lee
+  // decide qué mitad enseña. Opcional para que una base anterior a la
+  // migración siga validando — se lee como 'tv', que es lo que había.
+  kind: z.enum(["tv", "movie"]).optional().default("tv"),
   name: z.string(),
   poster_path: z.string().nullable(),
   first_air_date: z.string().nullable(),
@@ -134,6 +143,39 @@ export const castMemberSchema = z.object({
 export type CastMember = z.infer<typeof castMemberSchema>;
 
 export const creditsResponseSchema = z.object({ cast: z.array(castMemberSchema) });
+
+/* Dirección y guion de una película. No existe en series: allí el reparto es
+   agregado de toda la serie y quien dirige cambia cada episodio, así que no hay
+   una persona a la que atribuirla. En cine sí, y es un enlace a su ficha. */
+export const crewMemberSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  profile_path: z.string().nullable(),
+  job: z.string(),
+});
+export type CrewMember = z.infer<typeof crewMemberSchema>;
+
+export const movieCreditsResponseSchema = z.object({
+  cast: z.array(castMemberSchema),
+  crew: z.array(crewMemberSchema),
+});
+export type MovieCreditsResponse = z.infer<typeof movieCreditsResponseSchema>;
+
+/* `episode_id` es el episodio sintético de la película (0067): la fila que
+   marcar "vista" escribe en watch_events, que sigue siendo una tabla de
+   episodios. Nulo solo si el título se guardó esquivando el trigger — la ficha
+   se dibuja entonces sin botón de marcar, en vez de con uno que fallaría. */
+export const movieResponseSchema = z.object({
+  title: titleRowSchema,
+  episode_id: z.string().uuid().nullable(),
+});
+export type MovieResponse = z.infer<typeof movieResponseSchema>;
+
+export const sagaResponseSchema = z.object({
+  collection: z.object({ id: z.number().int(), name: z.string().nullable() }).nullable(),
+  parts: z.array(titleRowSchema),
+});
+export type SagaResponse = z.infer<typeof sagaResponseSchema>;
 
 export const personShowSchema = z.object({
   tmdb_id: z.number().int(),

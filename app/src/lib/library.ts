@@ -1,10 +1,12 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { qk } from "@/lib/queryKeys";
-import { getTitle, tmdbImg } from "@/lib/tmdb";
+import { getMovie, getTitle, tmdbImg } from "@/lib/tmdb";
 import { libraryRowSchema, type LibraryRow, type TitleRow } from "@/lib/schemas";
 import { deriveStatus, watchProgress, type ShowStatus } from "@/domain/status";
+import { deriveMovieStatus, type MovieStatus } from "@/domain/movieStatus";
 import { useAuth } from "@/features/auth/AuthProvider";
 import type { TitleCard } from "@/domain/types";
 
@@ -15,6 +17,11 @@ import type { TitleCard } from "@/domain/types";
 export interface LibraryShow extends LibraryRow {
   status: ShowStatus;
   progress: number;
+}
+
+/** Una película de tu biblioteca. Sin `progress`: no hay tal cosa. */
+export interface LibraryMovie extends LibraryRow {
+  status: MovieStatus;
 }
 
 const rollupSchema = z.array(libraryRowSchema);
@@ -41,15 +48,49 @@ function decorate(row: LibraryRow): LibraryShow {
   };
 }
 
-export function useLibrary() {
+/* La biblioteca es UNA, con los dos medios dentro (rpc_library_rollup no
+   filtra), y se pide una sola vez. Lo que hay son dos lecturas de ella.
+
+   useLibrary() devuelve SOLO SERIES, y no por comodidad: media docena de
+   pantallas preguntan "¿sigo este tmdb_id?" comparando el número a secas, y un
+   id de TMDB solo es único dentro de su medio (0067). Sin el filtro, la
+   película 1399 aparecería como seguida porque lo está la serie 1399. El
+   filtro vive aquí, en el único sitio por el que pasan todas. */
+function useLibraryRows() {
   return useQuery({
     queryKey: qk.library,
-    queryFn: async (): Promise<LibraryShow[]> => {
+    queryFn: async (): Promise<LibraryRow[]> => {
       const { data, error } = await supabase.rpc("rpc_library_rollup");
       if (error) throw error;
-      return rollupSchema.parse(data).map(decorate);
+      return rollupSchema.parse(data);
     },
   });
+}
+
+export function useLibrary() {
+  const q = useLibraryRows();
+  const data = useMemo(
+    () => (q.data ?? []).filter((r) => r.kind === "tv").map(decorate),
+    [q.data],
+  );
+  return { ...q, data };
+}
+
+/** Tu cine. Mismo origen, otro estado: una película no tiene progreso, así que
+ *  no pasa por deriveStatus sino por deriveMovieStatus. */
+export function useMovieLibrary() {
+  const q = useLibraryRows();
+  const data = useMemo(
+    () =>
+      (q.data ?? [])
+        .filter((r) => r.kind === "movie")
+        .map((row): LibraryMovie => ({
+          ...row,
+          status: deriveMovieStatus({ airedCount: row.aired_count, watchedCount: row.watched_count }),
+        })),
+    [q.data],
+  );
+  return { ...q, data };
 }
 
 /** Poster-grid view-model for a library show. */
@@ -67,10 +108,11 @@ export function toTitleCard(s: LibraryShow): TitleCard {
 }
 
 /** Optimistic placeholder rollup row for a title being followed from search. */
-function optimisticRow(t: TitleRow): LibraryShow {
-  return decorate({
+function optimisticRow(t: TitleRow): LibraryRow {
+  return {
     title_id: t.id,
     tmdb_id: t.tmdb_id,
+    kind: t.kind,
     name: t.name,
     poster_path: t.poster_path,
     first_air_date: t.first_air_date,
@@ -89,7 +131,7 @@ function optimisticRow(t: TitleRow): LibraryShow {
     next_air_datetime: null,
     upcoming_season_number: null,
     upcoming_season_air_date: null,
-  });
+  };
 }
 
 export function useFollow() {
@@ -106,14 +148,20 @@ export function useFollow() {
       if (error) throw error;
       // fire-and-forget: pull full seasons/episodes into the cache, then
       // refresh the rollup so aired counts become real.
-      getTitle(title.tmdb_id)
+      //
+      // Una película va por su propia ruta: /title/:id es /tv/:id en el proxy,
+      // y pedirlo con el id de una peli trae otra cosa o un 404. Lo que rellena
+      // ahí el recuento no son episodios sino el estreno — el detalle escribe
+      // first_air_date y el trigger de 0067 mueve con él el episodio sintético.
+      const fill = title.kind === "movie" ? getMovie(title.tmdb_id) : getTitle(title.tmdb_id);
+      fill
         .then(() => queryClient.invalidateQueries({ queryKey: qk.library }))
         .catch(() => {});
     },
     onMutate: async (title) => {
       await queryClient.cancelQueries({ queryKey: qk.library });
-      const prev = queryClient.getQueryData<LibraryShow[]>(qk.library);
-      queryClient.setQueryData<LibraryShow[]>(qk.library, (old = []) =>
+      const prev = queryClient.getQueryData<LibraryRow[]>(qk.library);
+      queryClient.setQueryData<LibraryRow[]>(qk.library, (old = []) =>
         old.some((r) => r.title_id === title.id)
           ? old.map((r) => (r.title_id === title.id ? { ...r, followed: true, stopped: false } : r))
           : [...old, optimisticRow(title)],
@@ -147,8 +195,8 @@ export function useSetStopped() {
     },
     onMutate: async ({ titleId, stopped }) => {
       await queryClient.cancelQueries({ queryKey: qk.library });
-      const prev = queryClient.getQueryData<LibraryShow[]>(qk.library);
-      queryClient.setQueryData<LibraryShow[]>(qk.library, (old = []) =>
+      const prev = queryClient.getQueryData<LibraryRow[]>(qk.library);
+      queryClient.setQueryData<LibraryRow[]>(qk.library, (old = []) =>
         old.map((r) => (r.title_id === titleId ? { ...r, stopped, notify: stopped ? false : r.notify } : r)),
       );
       return { prev };
@@ -172,8 +220,8 @@ export function useUnfollow() {
     },
     onMutate: async (titleId) => {
       await queryClient.cancelQueries({ queryKey: qk.library });
-      const prev = queryClient.getQueryData<LibraryShow[]>(qk.library);
-      queryClient.setQueryData<LibraryShow[]>(qk.library, (old = []) =>
+      const prev = queryClient.getQueryData<LibraryRow[]>(qk.library);
+      queryClient.setQueryData<LibraryRow[]>(qk.library, (old = []) =>
         old.filter((r) => r.title_id !== titleId),
       );
       return { prev };

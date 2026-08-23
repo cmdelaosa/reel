@@ -16,8 +16,10 @@ import { useProviders } from "@/lib/providers";
 import { ProviderLogo } from "@/ui/NetworkLogo";
 import { tv } from "@/lib/i18n";
 
-export function WatchOn({ tmdbId, size = 11, max = 3 }: {
+export function WatchOn({ tmdbId, kind = "tv", size = 11, max = 3 }: {
   tmdbId: number | null | undefined;
+  /** El medio del id — un tmdb_id solo es único dentro del suyo (0067). */
+  kind?: "tv" | "movie";
   size?: number;
   /* Three fits the poster's badge row at 11px without crowding the rating on
      the other side. Wordmark tiles are variable-width, so they sit in a tight
@@ -25,7 +27,7 @@ export function WatchOn({ tmdbId, size = 11, max = 3 }: {
      wordmarks that identify them. */
   max?: number;
 }) {
-  const { data } = useProviders(tmdbId);
+  const { data } = useProviders(tmdbId, kind);
   if (!data?.length) return null;
 
   const shown = data.slice(0, max);

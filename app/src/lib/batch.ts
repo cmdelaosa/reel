@@ -20,20 +20,20 @@
  *  empty — the consumer (TanStack Query) has to see the failure to retry it and
  *  to surface the app's global error toast, instead of caching a confident
  *  wrong answer. The next call opens a fresh batch. */
-export function createBatcher<T>(
-  fetchMany: (ids: number[]) => Promise<Map<number, T[]>>,
-): (id: number) => Promise<T[]> {
-  let queued: number[] = [];
-  let batch: Promise<Map<number, T[]>> | null = null;
+export function createBatcher<T, K extends string | number = number>(
+  fetchMany: (ids: K[]) => Promise<Map<K, T[]>>,
+): (id: K) => Promise<T[]> {
+  let queued: K[] = [];
+  let batch: Promise<Map<K, T[]>> | null = null;
 
-  return (id: number): Promise<T[]> => {
+  return (id: K): Promise<T[]> => {
     queued.push(id);
     // setTimeout, not queueMicrotask: the ids arrive as React commits a
     // screen's worth of components, which spans more than one microtask
     // checkpoint. Nothing may await between the push above and the assignment
     // below, or an id could land in a queue whose promise the caller doesn't
     // hold.
-    batch ??= new Promise<Map<number, T[]>>((resolve, reject) => {
+    batch ??= new Promise<Map<K, T[]>>((resolve, reject) => {
       setTimeout(() => {
         const ids = [...new Set(queued)];
         queued = [];

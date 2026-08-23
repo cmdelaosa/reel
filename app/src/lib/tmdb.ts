@@ -6,9 +6,15 @@ import {
   titleResponseSchema,
   seasonResponseSchema,
   creditsResponseSchema,
+  movieCreditsResponseSchema,
+  movieResponseSchema,
   personResponseSchema,
+  sagaResponseSchema,
   type CastMember,
+  type MovieCreditsResponse,
+  type MovieResponse,
   type PersonResponse,
+  type SagaResponse,
   type TitleRow,
   type TitleResponse,
   type SeasonResponse,
@@ -61,6 +67,46 @@ export async function searchShows(q: string): Promise<TitleRow[]> {
   const lang = isEs() ? "&lang=es" : "";
   const json = await call(`/search?q=${encodeURIComponent(q)}${lang}`);
   return searchResponseSchema.parse(json).results;
+}
+
+/* ── películas ───────────────────────────────────────────────────────────── */
+
+/** Búsqueda de cine. Gemela de searchShows contra /search/movie. */
+export async function searchMovies(q: string): Promise<TitleRow[]> {
+  const lang = isEs() ? "&lang=es" : "";
+  const json = await call(`/movie/search?q=${encodeURIComponent(q)}${lang}`);
+  return searchResponseSchema.parse(json).results;
+}
+
+/** Una película. Sin camino rápido por PostgREST, al revés que getTitle: allí
+ *  la fila caliente trae temporadas y se puede saber que está completa; aquí la
+ *  única prueba de que la fila salió de un detalle y no de una búsqueda la tiene
+ *  el proxy (que además la refresca si está rancia), y una ficha a medio
+ *  rellenar es peor que un viaje de más. */
+export async function getMovie(tmdbId: number): Promise<MovieResponse> {
+  const json = await call(`/movie/${tmdbId}`);
+  return movieResponseSchema.parse(json);
+}
+
+/** Reparto y dirección de una película. Silent-fail como getCredits. */
+export async function getMovieCredits(tmdbId: number): Promise<MovieCreditsResponse> {
+  try {
+    const json = await call(`/movie/${tmdbId}/credits`);
+    return movieCreditsResponseSchema.parse(json);
+  } catch {
+    return { cast: [], crew: [] };
+  }
+}
+
+/** Las entregas de la saga, en orden de estreno. Silent-fail: sin saga (o con
+ *  un proxy anterior a la ruta) la ficha se dibuja sin esa sección. */
+export async function getMovieSaga(tmdbId: number): Promise<SagaResponse> {
+  try {
+    const json = await call(`/movie/${tmdbId}/saga`);
+    return sagaResponseSchema.parse(json);
+  } catch {
+    return { collection: null, parts: [] };
+  }
 }
 
 /** Aggregate TV cast for a show (top-billed, from the proxy). Silent-fail:

@@ -20,6 +20,7 @@ import ExportPage from "@/features/export/ExportPage";
 import HistoryPage from "@/features/history/HistoryPage";
 import ImportPage from "@/features/import/ImportPage";
 import KitPage from "@/features/kit/KitPage";
+import MoviesPage from "@/features/movies/MoviesPage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
@@ -98,6 +99,11 @@ const router = createBrowserRouter([
       { index: true, element: <Navigate to="/tonight" replace /> },
       { path: "tonight", element: <TonightPage /> },
       { path: "shows", element: <ShowsPage /> },
+      // El cine cuelga de /movies — el prefijo que lib/medium reconoce para que
+      // un enlace compartido aterrice ya en su modo y con su acento. De momento
+      // solo la biblioteca: Tonight, Releases y Explore de películas llegan en
+      // su propia rama, y una ruta vacía no se publica.
+      { path: "movies", element: <MoviesPage /> },
       { path: "explore", element: <ExplorePage /> },
       { path: "collection/:slug", element: <CollectionPage /> },
       { path: "calendar", element: <CalendarPage /> },

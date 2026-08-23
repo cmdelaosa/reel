@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, User, X } from "lucide-react";
+import { Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Minus, Pause, Play, Plus, Star, X } from "lucide-react";
 import { getCredits, tmdbImg } from "@/lib/tmdb";
 import { fmtAirDate, fmtPlainDate } from "@/lib/region";
 import { dateLocale, isEs, t as tr, tGenre, tv } from "@/lib/i18n";
@@ -12,10 +12,12 @@ import { useFriendships } from "@/lib/friends";
 import { useFriendsRatings } from "@/lib/taste";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { useMarkWatched, useUnmarkWatched, useMarkUpTo, useMarkSeries, useUndoMarks } from "@/lib/watch";
-import type { SeasonRow, EpisodeRow, CastMember } from "@/lib/schemas";
+import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
 import { WatchOn } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useFocusTrap } from "@/ui/useFocusTrap";
+import { CastRail } from "@/ui/CastRail";
+import { RatingStars } from "@/ui/RatingStars";
 import {
   seasonQueryOptions,
   useTitle,
@@ -56,37 +58,6 @@ function EpisodeSkeleton() {
   );
 }
 
-/* Interactive 5-star rating on a 1-10 scale (each half-star = 1 point). Hovering
-   previews the score you'd set — the stars fill dimmed and the number shows the
-   pending value; clicking commits it. */
-function RatingStars({ value, onRate }: { value: number; onRate: (v: number) => void }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const shown = hover ?? value; // 0-10
-  const previewing = hover != null;
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className={`rating-stars${previewing ? " previewing" : ""}`} onMouseLeave={() => setHover(null)}>
-        {[1, 2, 3, 4, 5].map((i) => {
-          const pct = shown >= i * 2 ? 100 : shown >= i * 2 - 1 ? 50 : 0;
-          return (
-            <span key={i} className="rating-star">
-              <Star size={24} strokeWidth={1.6} className="rating-star-bg" />
-              <span className="rating-star-fg" style={{ width: `${pct}%` }}>
-                <Star size={24} strokeWidth={0} fill="currentColor" />
-              </span>
-              <span className="rating-half left" onMouseEnter={() => setHover(i * 2 - 1)} onClick={() => onRate(i * 2 - 1)} />
-              <span className="rating-half right" onMouseEnter={() => setHover(i * 2)} onClick={() => onRate(i * 2)} />
-            </span>
-          );
-        })}
-      </div>
-      <span className={`rating-num${previewing ? " dim" : ""}`}>
-        {shown ? `${shown}/10` : "—"}
-      </span>
-    </div>
-  );
-}
-
 /* Season picker: one pill per season on a single scrollable row, with arrows
    (opposite the label) that also nudge it — matches the rail arrows. */
 function SeasonTabs({ seasons, active, onPick }: { seasons: SeasonRow[]; active: number | null; onPick: (n: number) => void }) {
@@ -121,75 +92,6 @@ function SeasonTabs({ seasons, active, onPick }: { seasons: SeasonRow[]; active:
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-/* Top-billed cast on one scrollable row. Arrows float over the row's edges
-   (hidden on touch, where you swipe) and only render when there's more to
-   scroll on that side. */
-function CastRail({ cast, onPick }: { cast: CastMember[]; onPick: (id: number) => void }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [canL, setCanL] = useState(false);
-  const [canR, setCanR] = useState(false);
-  const update = () => {
-    const el = ref.current;
-    if (!el) return;
-    setCanL(el.scrollLeft > 4);
-    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-  };
-  useEffect(update); // re-measure on every render (cast load / width change)
-  const nudge = (dir: number) => ref.current?.scrollBy({ left: dir * ref.current.clientWidth * 0.8, behavior: "smooth" });
-  return (
-    <div className="cast-rail">
-      <div className="flex gap-3 overflow-x-auto no-scrollbar" ref={ref} onScroll={update} style={{ paddingBottom: 4 }}>
-        {cast.map((c) => (
-          <div
-            key={c.id}
-            role="button"
-            tabIndex={0}
-            className="flex flex-col items-center gap-1.5"
-            style={{ width: 96, flex: "0 0 auto", cursor: "pointer", textAlign: "center" }}
-            title={c.name}
-            onClick={() => onPick(c.id)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(c.id); }
-            }}
-          >
-            <span
-              className="grid place-items-center overflow-hidden"
-              style={{
-                width: 88, height: 88, borderRadius: "50%", background: "var(--surface-3)",
-                border: "1px solid var(--border)", flex: "0 0 auto", color: "var(--text-dim)",
-              }}
-            >
-              {tmdbImg(c.profile_path, "w180_and_h180_face") ? (
-                <img
-                  src={tmdbImg(c.profile_path, "w180_and_h180_face")}
-                  alt=""
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                />
-              ) : (
-                <User size={32} />
-              )}
-            </span>
-            <span className="truncate" style={{ fontSize: 12, fontWeight: 650, width: "100%" }}>{c.name}</span>
-            {c.character && (
-              <span className="mute truncate" style={{ fontSize: 11, width: "100%", marginTop: -4 }}>{c.character}</span>
-            )}
-          </div>
-        ))}
-      </div>
-      {canL && (
-        <button className="rail-arrow cast-edge left" onClick={() => nudge(-1)} aria-label={tr("Earlier cast")}>
-          <ChevronLeft size={18} />
-        </button>
-      )}
-      {canR && (
-        <button className="rail-arrow cast-edge right" onClick={() => nudge(1)} aria-label={tr("More cast")}>
-          <ChevronRight size={18} />
-        </button>
-      )}
     </div>
   );
 }
@@ -354,7 +256,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   );
   const friendRaters = useMemo(() => {
     const scores = new Map(
-      allFriendRatings.filter((r) => r.tmdb_id === tmdbId).map((r) => [r.user_id, r.score]),
+      allFriendRatings.filter((r) => r.kind === "tv" && r.tmdb_id === tmdbId).map((r) => [r.user_id, r.score]),
     );
     return acceptedFriends
       .filter((f) => scores.has(f.other_id))
