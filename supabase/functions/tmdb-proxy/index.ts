@@ -1014,7 +1014,12 @@ async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: numbe
 async function refreshMovie(admin: SupabaseClient, apiKey: string, tmdbId: number) {
   const d = await fetchTmdb(apiKey, `/movie/${tmdbId}?append_to_response=translations,watch/providers`);
   const [title] = await upsertReturning(admin, "titles", movieRow(d), "kind,tmdb_id");
-  return title;
+  // El upsert no puede devolver el episodio que su propio trigger acaba de
+  // escribir, así que en el camino frío sí hay un viaje más — uno, y solo la
+  // primera vez que alguien abre esta película.
+  const { data: ep } = await admin
+    .from("episodes").select("id").eq("title_id", title.id).limit(1).maybeSingle();
+  return { title, episodeId: (ep?.id as string | undefined) ?? null };
 }
 
 /** El id del episodio sintético de una película — lo que marcar "vista" escribe
@@ -1024,12 +1029,12 @@ async function refreshMovie(admin: SupabaseClient, apiKey: string, tmdbId: numbe
  *  que la ficha necesita antes del primer clic, y pedirlo aparte es una espera
  *  más en el camino de algo que ya está resuelto aquí. Nulo solo si alguien
  *  escribió la fila esquivando el trigger, y entonces la ficha se dibuja sin
- *  botón de marcar en lugar de fingir uno que fallaría. */
-async function movieEpisodeId(admin: SupabaseClient, titleId: string): Promise<string | null> {
-  const { data } = await admin
-    .from("episodes").select("id").eq("title_id", titleId).limit(1).maybeSingle();
-  return data?.id ?? null;
-}
+ *  botón de marcar en lugar de fingir uno que fallaría.
+ *
+ *  Se lee INCRUSTADO en el propio select del título, como /title hace con sus
+ *  temporadas: en una fila caliente el viaje aparte era el único que quedaba, y
+ *  lo pagaba cada apertura de ficha. */
+const episodeIdOf = (row: Any): string | null => row?.episodes?.[0]?.id ?? null;
 
 /** TMDB → cache refresh of one season's episodes; returns the
  *  GET /title/:id/season/:n response shape. `enrich` is turned off by the
@@ -1754,7 +1759,7 @@ Deno.serve(async (req) => {
         .eq("kind", "movie").eq("tmdb_id", tmdbId).maybeSingle();
       // Sin detalle todavía (solo búsqueda) no hay columna que leer: se resuelve
       // ahora, que es una petición y evita devolver "no tiene saga" a una que sí.
-      const meta = row?.status ? row : await refreshMovie(admin, apiKey, tmdbId);
+      const meta = row?.status ? row : (await refreshMovie(admin, apiKey, tmdbId)).title;
       if (!meta?.collection_id) return json({ collection: null, parts: [] });
       const d = await fetchTmdb(apiKey, `/collection/${meta.collection_id}`);
       const parts: Any[] = (d.parts ?? []).filter((p: Any) => p?.id != null);
@@ -1778,7 +1783,7 @@ Deno.serve(async (req) => {
       const tmdbId = Number(mMovie[1]);
       const dbStarted = performance.now();
       const { data: cached } = await admin
-        .from("titles").select("*").eq("kind", "movie").eq("tmdb_id", tmdbId).maybeSingle();
+        .from("titles").select("*, episodes(id)").eq("kind", "movie").eq("tmdb_id", tmdbId).maybeSingle();
       const dbMs = performance.now() - dbStarted;
       // `status` es la prueba de que esta fila salió de un detalle completo y no
       // de una búsqueda: movieSearchRow no lo escribe. Sin esa comprobación, la
@@ -1787,16 +1792,20 @@ Deno.serve(async (req) => {
       if (cached?.status) {
         const stale = !isFresh(cached);
         if (stale) inBackground(refreshMovie(admin, apiKey, tmdbId));
+        // `episodes` es la incrustación, no una columna de titles: fuera del
+        // título antes de devolverlo, o el cliente recibiría una forma que su
+        // esquema no conoce.
+        const { episodes, ...title } = cached;
         return json(
-          { title: cached, episode_id: await movieEpisodeId(admin, cached.id) },
+          { title, episode_id: episodeIdOf({ episodes }) },
           200,
           detailHeaders(stale ? "STALE" : "HIT", dbMs),
         );
       }
       const fillStarted = performance.now();
-      const title = await refreshMovie(admin, apiKey, tmdbId);
+      const filled = await refreshMovie(admin, apiKey, tmdbId);
       return json(
-        { title, episode_id: await movieEpisodeId(admin, title.id) },
+        { title: filled.title, episode_id: filled.episodeId },
         200,
         detailHeaders("MISS", dbMs, performance.now() - fillStarted),
       );

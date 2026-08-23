@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router";
 import { Check, Eye, EyeOff, Minus, Plus, Star, X } from "lucide-react";
@@ -113,6 +113,14 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
   });
 
   const openPerson = (id: number) => { onClose(); navigate(`/person/${id}`); };
+
+  // Escape cierra, igual que en la ficha de una serie (DetailSheet). Un diálogo
+  // modal que no responde a Escape deja sin salida a quien navega con teclado.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
 
   const poster = tmdbImg(title?.poster_path ?? null, "w342");
   const backdrop = tmdbImg(title?.backdrop_path ?? null, "w780");

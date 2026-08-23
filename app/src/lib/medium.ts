@@ -41,6 +41,16 @@ function apply(m: Medium) {
 
 let medium = load();
 apply(medium);
+// Un enlace directo a /movies deja el modo puesto para la próxima visita, igual
+// que si lo hubieras cambiado con el conmutador. Sin esto, entrar por el enlace
+// y recargar desde cualquier otra página te devolvía a series.
+if (medium === "movie") {
+  try {
+    localStorage.setItem(KEY, medium);
+  } catch {
+    /* sin almacenamiento → solo esta sesión */
+  }
+}
 
 const listeners = new Set<() => void>();
 

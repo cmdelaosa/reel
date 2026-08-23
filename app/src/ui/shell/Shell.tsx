@@ -42,31 +42,44 @@ const MOVIE_TABS = [
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
+/* Las rutas que son de UN medio: cambiar de modo desde ellas te lleva a la
+   portada del otro, porque quedarte sería quedarte en una pantalla del modo que
+   acabas de dejar. Todo lo demás —Amigos, tu perfil, una persona, el historial—
+   es de los dos: ahí el conmutador solo tiñe, y sacarte de donde estabas por
+   cambiar de color sería un secuestro.
+
+   /friends está en las dos listas de pestañas y por eso se comprueba aparte: es
+   la página compartida que además tiene pestaña, y mirar solo TABS la contaba
+   como de series. */
+const SHARED_PATHS = MOVIE_TABS.filter((m) => TABS.some((t) => t.path === m.path)).map((t) => t.path);
+
+const ownedByAMedium = (pathname: string): boolean => {
+  if (SHARED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return false;
+  if (isMoviePath(pathname)) return true;
+  return TABS.some((t) => pathname.startsWith(t.path.split("?")[0]));
+};
+
 /* El conmutador de la barra: TV | Movies, con el modo activo relleno de acento.
-   Cambiar de modo es cambiar de sitio, no solo de color — así que además de
-   fijar el medio te lleva a la portada de ese modo. Desde una página compartida
-   (Amigos, tu perfil, una persona) no te mueve: son de los dos, y sacarte de
-   donde estabas por teñir la pantalla sería un secuestro. */
+   Cambiar de modo es cambiar de sitio, no solo de color. */
 function MediumSwitch() {
   const medium = useMedium();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const shared = !isMoviePath(pathname) && !TABS.some((t) => pathname.startsWith(t.path.split("?")[0]));
 
   const pick = (next: Medium) => {
     if (next === medium) return;
     setMedium(next);
-    if (shared) return;
+    if (!ownedByAMedium(pathname)) return;
     navigate(next === "movie" ? MOVIE_PREFIX : "/tonight");
   };
 
   return (
-    <div className="mq-medium" role="tablist" aria-label={t("Medium")}>
+    <div className="mq-medium" role="radiogroup" aria-label={t("Medium")}>
       {([["tv", Tv, "TV"], ["movie", Film, "Movies"]] as const).map(([key, Icon, label]) => (
         <button
           key={key}
-          role="tab"
-          aria-selected={medium === key}
+          role="radio"
+          aria-checked={medium === key}
           className={`mq-medium-seg ${medium === key ? "on" : ""}`}
           onClick={() => pick(key)}
         >
@@ -92,6 +105,17 @@ export function Shell() {
   const movieTmdbId = movieParam && /^\d+$/.test(movieParam) ? Number(movieParam) : null;
   const medium = useMedium();
   const tabs = medium === "movie" ? MOVIE_TABS : TABS;
+
+  /* El conmutador fija el medio, pero no es el único que mueve la ruta: Atrás y
+     Adelante también. Sin esto, volver desde /tonight a /movies dejaba la
+     biblioteca de cine pintada en coral y bajo las pestañas de series — la ruta
+     decía una cosa y el modo otra. Solo las rutas de UN medio hablan; desde una
+     compartida (Amigos, tu perfil) el modo se queda como estaba, que es lo que
+     hace que teñirlas signifique algo. */
+  useEffect(() => {
+    if (isMoviePath(pathname)) setMedium("movie");
+    else if (ownedByAMedium(pathname)) setMedium("tv");
+  }, [pathname]);
 
   const closeSheet = (param: "title" | "movie") => () =>
     setSearchParams((prev) => {

@@ -312,3 +312,285 @@ as $$
     and le.followed
 $$;
 grant execute on function public.rpc_library_rollup() to authenticated;
+
+-- ============================================================
+-- 5. Las superficies que hablan de episodios, solo de episodios
+-- ============================================================
+-- El episodio sintético es un episodio para cualquier consulta que no pregunte
+-- por el medio, y hay cinco que no preguntaban porque hasta ahora no hacía
+-- falta. Ninguna se rompe: las cinco dicen algo FALSO, que es peor.
+--
+--   * pending_new_episode_alerts — la que sale del navegador. Una película
+--     seguida entra por la rama "nada de este título había emitido aún" el día
+--     de su estreno, y el cron manda inbox y correo diciendo que ya está
+--     disponible «S1 · E1». Un aviso equivocado por email no se puede retirar.
+--   * rpc_watch_history — el historial pinta cada fila como «S01 · E01»
+--     (HistoryEpRow), así que una película vista sale disfrazada de episodio.
+--   * rpc_friend_activity — el muro publicaría «Vio Dune: Part Two S1 · E1».
+--     Solo la rama de VISTOS: las de puntuar y añadir no imprimen temporada ni
+--     episodio, y una película puntuada en el muro está bien como está.
+--   * rpc_user_stats — «Episodes watched» y «Shows followed» dejarían de ser
+--     ciertas, y «coming soon» contaría como estreno pendiente cada película
+--     futura de tu lista.
+--
+-- Se filtran a series en vez de enseñarlas con las palabras del cine porque esas
+-- palabras no existen todavía: el muro con glifo de medio, el historial de cine
+-- y las estadísticas de películas se diseñan en la rama del feed integrado. Un
+-- filtro no miente; una etiqueta prestada, sí.
+--
+-- Los cuatro cuerpos son copias literales de su última definición (0059, 0024,
+-- 0058 y 0022) con esa única línea añadida, y `create or replace` basta porque
+-- ninguno cambia de tipo de retorno.
+
+create or replace function public.pending_new_episode_alerts()
+returns table (
+  user_id uuid,
+  episode_id uuid,
+  title_id uuid,
+  tmdb_id int,
+  show_name text,
+  season_number int,
+  episode_number int,
+  episode_name text
+)
+language sql
+security invoker
+stable
+as $$
+  select le.user_id, e.id, t.id, t.tmdb_id, t.name, e.season_number, e.episode_number, e.name
+  from public.episodes e
+  join public.titles t on t.id = e.title_id
+  join public.library_entries le on le.title_id = t.id and le.followed
+  where e.season_number > 0
+    and t.kind = 'tv'
+    and e.air_datetime > now() - interval '24 hours'
+    and e.air_datetime <= now()
+    and not le.stopped
+    and (
+      -- watching / caught up: the user has started this show
+      exists (
+        select 1
+        from public.watch_events we
+        join public.episodes we_e on we_e.id = we.episode_id
+        where we.user_id = le.user_id
+          and we_e.title_id = t.id
+          and we_e.season_number > 0
+      )
+      -- upcoming: nothing of this show had aired yet, so this is the premiere
+      or not exists (
+        select 1
+        from public.episodes e2
+        where e2.title_id = t.id
+          and e2.season_number > 0
+          and e2.air_datetime < e.air_datetime
+          and e2.air_datetime <= now()
+      )
+    )
+    and not exists (
+      select 1 from public.notifications_sent ns
+      where ns.user_id = le.user_id and ns.episode_id = e.id
+    )
+$$;
+
+create or replace function public.rpc_user_stats()
+returns table (
+  episodes_watched bigint,
+  minutes_watched bigint,
+  shows_followed bigint,
+  coming_soon bigint,
+  avg_rating numeric,
+  friends bigint
+)
+language sql
+security invoker
+stable
+as $$
+  select
+    (select count(*)
+       from public.watch_events w
+       join public.episodes e on e.id = w.episode_id
+       join public.titles t on t.id = e.title_id
+      where w.user_id = (select auth.uid()) and e.season_number > 0 and t.kind = 'tv'),
+    (select coalesce(sum(coalesce(e.runtime, t.episode_run_time, 40)), 0)::bigint
+       from public.watch_events w
+       join public.episodes e on e.id = w.episode_id
+       join public.titles t on t.id = e.title_id
+      where w.user_id = (select auth.uid()) and e.season_number > 0 and t.kind = 'tv'),
+    (select count(*)
+       from public.library_entries le
+       join public.titles t on t.id = le.title_id
+      where le.user_id = (select auth.uid()) and le.followed and not le.stopped and t.kind = 'tv'),
+    (select count(*)
+       from public.library_entries le
+       join public.titles t on t.id = le.title_id
+      where le.user_id = (select auth.uid()) and le.followed and not le.stopped and t.kind = 'tv'
+        and not exists (
+          select 1 from public.episodes e
+          where e.title_id = le.title_id
+            and e.season_number > 0
+            and e.air_datetime <= now())),
+    (select round(avg(r.score)::numeric, 1)
+       from public.ratings r
+      where r.user_id = (select auth.uid())),
+    (select count(*)
+       from public.friendships f
+      where f.status = 'accepted'
+        and (select auth.uid()) in (f.a, f.b))
+$$;
+
+create or replace function public.rpc_watch_history(
+  p_limit int default 60,
+  p_before timestamptz default null,
+  p_before_id uuid default null
+)
+returns table (
+  watch_event_id uuid,
+  episode_id uuid,
+  title_id uuid,
+  tmdb_id int,
+  show_name text,
+  poster_path text,
+  network text,
+  season_number int,
+  episode_number int,
+  episode_name text,
+  watched_at timestamptz,
+  source text
+)
+language sql
+security invoker
+stable
+as $$
+  select
+    wv.id,
+    e.id,
+    t.id,
+    t.tmdb_id,
+    t.name,
+    t.poster_path,
+    t.network,
+    e.season_number,
+    e.episode_number,
+    e.name,
+    wv.watched_at,
+    wv.source
+  from public.watch_events wv
+  join public.episodes e on e.id = wv.episode_id
+  join public.titles t on t.id = e.title_id
+  where wv.user_id = (select auth.uid())
+    and t.kind = 'tv'
+    and (
+      p_before is null
+      or wv.watched_at < p_before
+      or (wv.watched_at = p_before and wv.id < p_before_id)
+    )
+  order by wv.watched_at desc, wv.id desc
+  limit greatest(1, least(p_limit, 200))
+$$;
+
+create or replace function public.rpc_friend_activity(p_limit int default 30)
+returns jsonb
+language sql
+security invoker
+stable
+as $$
+  with circle as (
+    select case when f.a = (select auth.uid()) then f.b else f.a end as fid
+    from public.friendships f
+    where f.status = 'accepted' and (select auth.uid()) in (f.a, f.b)
+    union
+    select (select auth.uid())
+  ),
+  -- Every source takes its rows per circle member, not from one global window:
+  -- one person marking a 500-episode show watched must not evict everyone else
+  -- from the feed.
+  rated as (
+    select x.fid as fid, 'rated' as verb, x.title_id as title_id, t.tmdb_id as tmdb_id,
+           t.name as name, t.poster_path as poster_path, x.score as score,
+           null::int as season_number, null::int as episode_number,
+           null::int as to_season, null::int as to_episode, 1 as ep_count,
+           x.at as at, ('r:' || x.fid || ':' || x.title_id) as event_key
+    from circle c
+    cross join lateral (
+      select c.fid as fid, rr.title_id as title_id, rr.score::int as score, rr.created_at as at
+      from public.ratings rr
+      where rr.user_id = c.fid and rr.title_id is not null
+      order by rr.created_at desc
+      limit p_limit
+    ) x
+    join public.titles t on t.id = x.title_id
+  ),
+  added as (
+    select x.fid, 'added', x.title_id, t.tmdb_id,
+           t.name, t.poster_path, null::int,
+           null::int, null::int, null::int, null::int, 1,
+           x.at, ('a:' || x.fid || ':' || x.title_id)
+    from circle c
+    cross join lateral (
+      select c.fid as fid, le.title_id as title_id, le.added_at as at
+      from public.library_entries le
+      where le.user_id = c.fid and le.followed
+      order by le.added_at desc
+      limit p_limit
+    ) x
+    join public.titles t on t.id = x.title_id
+  ),
+  -- Two stages for the bursts: a bounded window to DISCOVER which (person,
+  -- show, day) rows are recent…
+  watched_window as (
+    select w.fid, w.title_id, w.day, max(w.watched_at) as at
+    from circle c
+    cross join lateral (
+      select c.fid as fid, e.title_id as title_id, wv.watched_at as watched_at,
+             (wv.watched_at at time zone 'Europe/Madrid')::date as day
+      from public.watch_events wv
+      join public.episodes e on e.id = wv.episode_id and e.season_number > 0
+      where wv.user_id = c.fid
+      order by wv.watched_at desc
+      limit p_limit * 8
+    ) w
+    group by w.fid, w.title_id, w.day
+    order by max(w.watched_at) desc
+    limit p_limit
+  ),
+  -- …then an exact count over the WHOLE day for the few rows that survive.
+  -- Counting inside the discovery window instead would report "E7–E12 · 6" for
+  -- a twelve-episode day whenever the window happened to cut it in half.
+  watched as (
+    select g.fid, 'watched', g.title_id, t.tmdb_id,
+           t.name, t.poster_path, null::int,
+           f.from_season, f.from_episode, f.to_season, f.to_episode, f.ep_count,
+           g.at, ('w:' || g.fid || ':' || g.title_id || ':' || to_char(g.day, 'YYYY-MM-DD'))
+    from watched_window g
+    join public.titles t on t.id = g.title_id and t.kind = 'tv'
+    cross join lateral (
+      select (array_agg(e.season_number  order by e.season_number, e.episode_number))[1] as from_season,
+             (array_agg(e.episode_number order by e.season_number, e.episode_number))[1] as from_episode,
+             (array_agg(e.season_number  order by e.season_number desc, e.episode_number desc))[1] as to_season,
+             (array_agg(e.episode_number order by e.season_number desc, e.episode_number desc))[1] as to_episode,
+             count(*)::int as ep_count
+      from public.watch_events wv
+      join public.episodes e on e.id = wv.episode_id and e.season_number > 0
+      where wv.user_id = g.fid
+        and e.title_id = g.title_id
+        and wv.watched_at >= (g.day::timestamp at time zone 'Europe/Madrid')
+        and wv.watched_at <  ((g.day + 1)::timestamp at time zone 'Europe/Madrid')
+    ) f
+  ),
+  unioned as (
+    select * from rated
+    union all select * from added
+    union all select * from watched
+  )
+  select coalesce(jsonb_agg(to_jsonb(x) order by x.at desc), '[]'::jsonb)
+  from (
+    select p.id as friend_id, p.display_name as friend_name, p.avatar_url as friend_avatar,
+           u.verb, u.tmdb_id, u.title_id, u.name as title_name, u.poster_path, u.score,
+           u.season_number, u.episode_number, u.to_season, u.to_episode, u.ep_count,
+           u.at, u.event_key
+    from unioned u
+    join public.profiles p on p.id = u.fid
+    order by u.at desc
+    limit p_limit
+  ) x;
+$$;
