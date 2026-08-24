@@ -15,11 +15,24 @@ create extension if not exists pg_net;
 
 -- 2. Store the service-role key in Vault so the cron body can send it as the
 --    bearer token every one of these functions requires (they 401 otherwise —
---    tmdb-proxy/warm rejects anything that is not this exact key). Get it from
---    Dashboard → Project Settings → API → service_role key. Idempotent-ish:
---    if you re-run, delete the old secret first
+--    tmdb-proxy/warm rejects anything that is not this exact key).
+--
+--    IT IS THE `sb_secret_…` KEY, NOT THE service_role JWT. What the functions
+--    compare against is their injected SUPABASE_SERVICE_ROLE_KEY, and since the
+--    project moved to the new API key system that is the secret key, not the
+--    legacy JWT the dashboard still lists under Project Settings → API. Seeding
+--    this with the JWT breaks all three crons at once, and the failure is
+--    invisible: tmdb-proxy answers {"error":"not invited"} — a 403 that reads
+--    like an invite-gate bug — and pg_net buries it in net._http_response.
+--    Get the right one with:
+--      supabase projects api-keys --project-ref <ref> --reveal -o env \
+--        | grep '^SUPABASE_DEFAULT_KEY=' | cut -d= -f2- | tr -d '"'
+--    See docs/DEPLOY.md → "Which service key" for the measured comparison.
+--
+--    Idempotent-ish: if you re-run, delete the old secret first
 --    (`select vault.delete_secret('episode_refresh_service_key');`) to avoid
---    duplicates.
+--    duplicates. The live project's Vault already holds a working value — check
+--    public.job_runs before touching it.
 --
 --    THE NAME IS LOAD-BEARING and it is not the obvious one. The live project
 --    stores this as `episode_refresh_service_key` — named after the first cron
