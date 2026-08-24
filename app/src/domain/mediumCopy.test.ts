@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addedList, historyLines, showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
+import { addedList, historyLines, mediumLabel, showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
 
 /* La regla que estas pruebas sostienen es una sola, y es la que los episodios
    sintéticos de 0067 y 0071 ponen en peligro cada vez que alguien toca estas
@@ -34,6 +34,14 @@ describe("addedList", () => {
 
   it("un juego se añade a los pendientes, que es como se llama su cubo", () => {
     expect(addedList("game")).toBe("backlog");
+  });
+});
+
+describe("mediumLabel", () => {
+  it("da la clave del diccionario de cada medio", () => {
+    expect(mediumLabel("tv")).toBe("TV series");
+    expect(mediumLabel("movie")).toBe("Movie");
+    expect(mediumLabel("game")).toBe("Game");
   });
 });
 

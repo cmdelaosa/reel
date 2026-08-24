@@ -15,7 +15,21 @@
    con el filtro positivo, el medio que llegue el año que viene hereda el
    comportamiento prudente sin que nadie se acuerde de esta línea. */
 
+/* Declarado aquí y no importado de lib/medium, que tiene el mismo tipo: este
+   módulo es puro y sus tests corren sin tocar el DOM, mientras que lib/medium
+   escribe `data-medium` en <html> al importarse. Es la misma separación que ya
+   hay entre domain/gameStatus (declara PlayState) y lib/igdb (lo importa). */
 export type Medium = "tv" | "movie" | "game";
+
+/** Cómo se llama el medio de una fila, para las listas que lo dicen con
+ *  palabras además de con el glifo. Devuelve la CLAVE del diccionario, no el
+ *  texto: traducir es de la capa que pinta, y así esto sigue siendo puro.
+ *
+ *  Vive aquí y no repetido en cada componente porque ya se pinta en dos sitios
+ *  —el glifo del muro y la píldora del historial— y son los mismos tres
+ *  nombres. */
+export const mediumLabel = (kind: Medium): string =>
+  kind === "movie" ? "Movie" : kind === "game" ? "Game" : "TV series";
 
 /** Cómo se cuenta un "hecho" en el muro. */
 export type WatchedPhrase =

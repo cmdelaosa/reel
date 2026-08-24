@@ -4,7 +4,7 @@ import type { HistoryRow } from "@/lib/history";
 import { thumbArt } from "@/lib/artwork";
 import { useOpenTitle } from "@/lib/useOpenTitle";
 import { dateLocale, locName, t as tr, useEsNames } from "@/lib/i18n";
-import { historyLines } from "@/domain/mediumCopy";
+import { historyLines, mediumLabel } from "@/domain/mediumCopy";
 import { MediumGlyph } from "@/ui/MediumGlyph";
 import { posterBg } from "@/ui/posterBg";
 
@@ -59,7 +59,7 @@ export function HistoryEpRow({ ep }: { ep: HistoryRow }) {
         <span className="cal-showpill">
           <MediumGlyph kind={ep.kind} size={11} />
           <span className="truncate">
-            {isEpisodic ? showName : tr(ep.kind === "movie" ? "Movie" : "Game")}
+            {isEpisodic ? showName : tr(mediumLabel(ep.kind))}
           </span>
           <ChevronRight size={12} style={{ flex: "0 0 auto" }} />
         </span>

@@ -181,6 +181,11 @@ export default function YouPage() {
               ? [{ icon: Trophy, label: tr("Games finished"), value: stats.games_finished.toLocaleString() }]
               : []),
             { icon: Clock, label: tr("Time spent"), value: timeSpentLabel(stats.minutes_watched) },
+            /* timeSpentLabel y no formatPlaytime, que es el formateador propio
+               de los juegos: aquí la cifra vive al lado de "Tiempo visto" y las
+               dos tienen que leerse de un vistazo con la misma unidad. El "18 h
+               30 min" fino es de la ficha, donde se compara con lo que tarda en
+               terminarse. */
             ...(stats.minutes_played > 0
               ? [{ icon: Timer, label: tr("Time played"), value: timeSpentLabel(stats.minutes_played) }]
               : []),
