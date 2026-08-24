@@ -52,10 +52,18 @@ until the function lands, which pg_net swallows silently).
 ## 3. Set edge-function secrets
 
 ```bash
-supabase secrets set TMDB_API_KEY=...        # TMDB v3 API key
+supabase secrets set TMDB_API_KEY=...        # TMDB v4 read access token (or v3 key)
 supabase secrets set RESEND_API_KEY=...       # Resend API key
 supabase secrets set RESEND_FROM="Reel <alerts@yourdomain.com>"   # verified domain
 ```
+
+`TMDB_API_KEY` takes either credential TMDB issues, and the code picks the
+transport from the shape: a **v4 read access token** (a JWT, `eyJ…`, on the same
+API settings page as the key) goes in an `Authorization` header, a **v3 key**
+(32 hex) has to go in the query string because TMDB accepts it no other way.
+Prefer the token — a credential in a URL is one failed connection away from
+being quoted back in an error message, which is how this one reached both the
+browser and `job_runs`. Swapping the secret is enough; nothing else changes.
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected
 automatically. Without `RESEND_FROM` the alerts function **skips email** (it will

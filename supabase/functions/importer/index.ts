@@ -13,6 +13,7 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { unzipCsvs, parseShows, parseWatches, parseArchived, parseFollowedAt, runImport, NotATvTimeExport, type ImportReport } from "../../../scripts/tvtime-import/lib.ts";
+import { redactCredential } from "../_shared/tmdb.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -178,8 +179,12 @@ Deno.serve(async (req) => {
       await admin.storage.from("imports").remove([path]);
     } catch (e) {
       // ANY failure now reaches a terminal state (was: job stuck 'running' forever).
+      // Redacted: this text is stored on the job row and rendered on the import
+      // screen, so it is the last place a TMDB key should be able to surface.
+      // The import's own TMDB calls no longer put it in an error (lib.ts →
+      // _shared/tmdb.ts); this is the belt to that pair of braces.
       await admin.from("import_jobs")
-        .update({ status: "error", report: { error: (e as Error)?.message ?? String(e) }, finished_at: new Date().toISOString() })
+        .update({ status: "error", report: { error: redactCredential((e as Error)?.message ?? String(e)) }, finished_at: new Date().toISOString() })
         .eq("id", job_id).neq("status", "done");
     }
   })();

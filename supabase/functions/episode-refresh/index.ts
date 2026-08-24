@@ -40,8 +40,8 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { needsEpisodeRefresh } from "./stale.ts";
 import { pageAll } from "./paging.ts";
+import { redactCredential, tmdbFetch } from "../_shared/tmdb.ts";
 
-const TMDB = "https://api.themoviedb.org/3";
 const TVMAZE = "https://api.tvmaze.com";
 const LIMIT = 40;
 const WINDOW_MS = 10_000;
@@ -439,9 +439,11 @@ async function throttle() {
 
 async function tmdb(key: string, path: string): Promise<Any> {
   await throttle();
-  const res = await fetch(`${TMDB}${path}${path.includes("?") ? "&" : "?"}api_key=${key}`, {
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-  });
+  // tmdbFetch owns the credential — header for a v4 read token, query string
+  // for a v3 key — and keeps it out of the error a failed connection raises.
+  // That matters more here than in tmdb-proxy: what this function throws is
+  // written into job_runs, where it stays. See _shared/tmdb.ts.
+  const res = await tmdbFetch(key, path, { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) }, console.error);
   if (!res.ok) throw new Error(`TMDB ${path}: ${res.status}`);
   return res.json();
 }
@@ -896,7 +898,7 @@ async function backfillImdbIds(admin: SupabaseClient, key: string, maxMs: number
         if (error) throw new Error(error.message);
         return "resolved";
       } catch (err) {
-        errors.push(`${t.tmdb_id}: ${String(err)}`);
+        errors.push(`${t.tmdb_id}: ${redactCredential(String(err))}`);
         return "error";
       }
     }));
@@ -965,7 +967,7 @@ Deno.serve(async (req) => {
         console.log(`imdb-id-backfill done: ${summary.resolved} resolved, ${summary.remaining} left`);
         return logRun(summary.errors === 0, summary, "imdb-id-backfill");
       },
-      (err) => logRun(false, { error: String(err) }, "imdb-id-backfill"),
+      (err) => logRun(false, { error: redactCredential(String(err)) }, "imdb-id-backfill"),
     );
     // deno-lint-ignore no-explicit-any
     const rt = (globalThis as Any).EdgeRuntime;
@@ -1033,7 +1035,7 @@ Deno.serve(async (req) => {
         await refreshTitle(admin, tmdbKey, t, allSeasons);
         refreshed++;
       } catch (err) {
-        errors.push(`${t.tmdb_id}: ${String(err)}`);
+        errors.push(`${t.tmdb_id}: ${redactCredential(String(err))}`);
       }
     }
     console.log(
