@@ -39,6 +39,9 @@ Deno.test("redaction blanks the key wherever the URL was quoted", () => {
   assert(!redacted.includes(V3));
   assertStringIncludes(redacted, "api_key=REDACTED");
   assertStringIncludes(redacted, "/tv/1399"); // the useful half survives
+  // The value ends at the bracket, not at the next space: eating the `):` would
+  // read the failure reason back as part of the URL.
+  assertStringIncludes(redacted, "api_key=REDACTED): client error");
 });
 
 /** Replace `fetch` for the duration of one test. */

@@ -1027,7 +1027,7 @@ const hasFreshEpisodes = (title: Any) => freshWithin(title?.episodes_refreshed_a
 // hosted; a detached promise on the local serve runtime, which stays alive).
 // Failures are logged, never surfaced to the caller.
 function inBackground(work: Promise<unknown>) {
-  const guarded = work.catch((err) => console.error(`background refresh: ${String(err)}`));
+  const guarded = work.catch((err) => console.error(`background refresh: ${redactCredential(String(err))}`));
   (globalThis as Any).EdgeRuntime?.waitUntil?.(guarded);
 }
 

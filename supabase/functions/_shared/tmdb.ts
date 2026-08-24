@@ -61,8 +61,13 @@ export function tmdbRequest(credential: string, path: string): { url: string; he
  *
  *  The redacted text is still worth logging: whoever is debugging needs to see
  *  that it was a connection reset on `/tv/1399` and not a 404. What they do
- *  not need is the key, and a log line outlives the incident. */
-export const redactCredential = (text: string) => text.replace(/api_key=[^&\s"'\]]*/g, "api_key=REDACTED");
+ *  not need is the key, and a log line outlives the incident.
+ *
+ *  The closing bracket characters are excluded because that is where the value
+ *  actually ends in the text this meets — `…?api_key=abc): dns error` is the
+ *  runtime's own shape, and swallowing the `):` glues the reason onto the URL
+ *  and costs the line the readability that is the point of logging it. */
+export const redactCredential = (text: string) => text.replace(/api_key=[^&\s"'\])]*/g, "api_key=REDACTED");
 
 /** Why a `fetch` rejected, in a form safe to pass on.
  *
