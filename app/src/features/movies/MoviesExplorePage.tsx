@@ -148,8 +148,11 @@ export default function MoviesExplorePage() {
               <div
                 key={tb.key}
                 role="tab"
-                aria-selected={tab === tb.key}
-                className={`seg ${tab === tb.key ? "seg-active" : ""}`}
+                // La marcada es la que manda de verdad: al filtrar desde "En
+                // cines" los resultados salen de Populares, y decir lo contrario
+                // engaña dos veces — al ojo y al lector de pantalla.
+                aria-selected={effectiveTab === tb.key}
+                className={`seg ${effectiveTab === tb.key ? "seg-active" : ""}`}
                 onClick={() => setTab(tb.key)}
               >
                 {tr(tb.label)}

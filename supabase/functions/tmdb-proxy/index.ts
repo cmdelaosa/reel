@@ -11,7 +11,7 @@
 //   GET /title/:tmdbId/season/:n   → { season: SeasonRow, episodes: EpisodeRow[] }
 //   GET /movie/search?q=           → { results: TitleRow[] }
 //   GET /movie/trending            → { results: TitleRow[] }
-//   GET /movie/now-playing         → { results: TitleRow[] }
+//   GET /movie/now-playing?region= → { results: TitleRow[] }
 //   GET /movie/popular?from=&to=   → { results: TitleRow[] }
 //   GET /movie/top-rated?from=&to=&genres= → { results: TitleRow[] }
 //   GET /movie/:tmdbId             → { title: TitleRow, episode_id: uuid|null }
@@ -1499,9 +1499,18 @@ async function resolveMovieTrending(admin: SupabaseClient, apiKey: string, force
 
 /** En cartelera: lo que TMDB dice que está en salas ahora mismo, por
  *  popularidad. El equivalente de "popular ahora" en series, y mucho más barato
- *  que aquel — la pregunta "¿qué se puede ver hoy?" la responde TMDB entera. */
-async function resolveMovieNowPlaying(admin: SupabaseClient, apiKey: string, force = false): Promise<number[]> {
-  const key = "movie-now-playing:";
+ *  que aquel — la pregunta "¿qué se puede ver hoy?" la responde TMDB entera.
+ *
+ *  POR PAÍS, y es la única de las cuatro que lo necesita: una cartelera es de
+ *  un sitio. Sin `region` TMDB responde la de Estados Unidos, así que la
+ *  pestaña que existe para decirte qué puedes ir a ver te enseñaba lo que están
+ *  poniendo a ocho mil kilómetros. La caché lleva el país en la clave por lo
+ *  mismo. Las otras tres (tendencias, populares, mejor valoradas) son preguntas
+ *  sobre el catálogo, no sobre las salas, y no cambian con el país. */
+async function resolveMovieNowPlaying(
+  admin: SupabaseClient, apiKey: string, region: string, force = false,
+): Promise<number[]> {
+  const key = `movie-now-playing:${region}`;
   if (!force) {
     const hit = await readDiscoverCache(admin, key);
     if (hit) return hit;
@@ -1509,9 +1518,13 @@ async function resolveMovieNowPlaying(admin: SupabaseClient, apiKey: string, for
   const PAGES = 3;
   const KEEP = 40;
   const pages = await Promise.all(
-    Array.from({ length: PAGES }, (_, i) => fetchTmdb(apiKey, `/movie/now_playing?page=${i + 1}`)),
+    Array.from({ length: PAGES }, (_, i) =>
+      fetchTmdb(apiKey, `/movie/now_playing?region=${encodeURIComponent(region)}&page=${i + 1}`)),
   );
   const visible = dedupeVisible(pages);
+  // Un solo orden, y el último que se aplica manda: popularidad primero para
+  // que la cartelera salga por lo que la gente va a ver, y el suelo español
+  // después, que es la misma corrección deliberada de las otras rejillas.
   visible.sort((a: Any, b: Any) => (b.popularity ?? 0) - (a.popularity ?? 0));
   const uniq = capNonWestern(boostSpanish(visible));
   uniq.length = Math.min(uniq.length, KEEP);
@@ -1730,7 +1743,10 @@ Deno.serve(async (req) => {
         // cachés caducan igual, y sin esto el primero que abriera Explorar de
         // películas después de las 24 h pagaría la reconstrucción entera.
         ["movie-trending", () => resolveMovieTrending(admin, apiKey, true)],
-        ["movie-now-playing", () => resolveMovieNowPlaying(admin, apiKey, true)],
+        // Solo ES: es el país de casi todo el mundo aquí, y calentar tres
+        // carteleras por si acaso es gastar por adelantado en dos que puede
+        // que nadie pida. Las otras se construyen a la primera visita.
+        ["movie-now-playing", () => resolveMovieNowPlaying(admin, apiKey, "ES", true)],
         ["movie-popular", () => resolveMoviePopular(admin, apiKey, null, null, true)],
         ["movie-top-rated", () => resolveMovieTopRated(admin, apiKey, null, null, [], true)],
       ];
@@ -1908,7 +1924,14 @@ Deno.serve(async (req) => {
       return json({ results: await titlesInOrder(admin, await resolveMovieTrending(admin, apiKey), "movie") });
     }
     if (path === "/movie/now-playing") {
-      return json({ results: await titlesInOrder(admin, await resolveMovieNowPlaying(admin, apiKey), "movie") });
+      // El país lo manda el cliente (el de Ajustes), y se valida aquí: es un
+      // parámetro de URL que acaba en una petición a TMDB, así que solo pasan
+      // dos letras. ES por defecto — el mercado desde el que se mira esta app,
+      // el mismo criterio que PROVIDER_COUNTRIES.
+      const raw = (url.searchParams.get("region") ?? "ES").toUpperCase();
+      const region = /^[A-Z]{2}$/.test(raw) ? raw : "ES";
+      const ids = await resolveMovieNowPlaying(admin, apiKey, region);
+      return json({ results: await titlesInOrder(admin, ids, "movie") });
     }
     if (path === "/movie/popular") {
       const ids = await resolveMoviePopular(admin, apiKey, url.searchParams.get("from"), url.searchParams.get("to"));

@@ -106,11 +106,16 @@ export async function getMovieTrending(): Promise<TitleRow[]> {
   return searchResponseSchema.parse(await call(`/movie/trending`)).results;
 }
 
-/** En cartelera ahora mismo. El "popular ahora" del cine, y el equivalente
- *  honesto: en series hay que deducir qué está pasando mirando estrenos de
- *  temporada; en cine, lo que está pasando es lo que hay en salas. */
-export async function getMovieNowPlaying(): Promise<TitleRow[]> {
-  return searchResponseSchema.parse(await call(`/movie/now-playing`)).results;
+/** En cartelera ahora mismo, EN TU PAÍS. El "popular ahora" del cine, y el
+ *  equivalente honesto: en series hay que deducir qué está pasando mirando
+ *  estrenos de temporada; en cine, lo que está pasando es lo que hay en salas.
+ *
+ *  Y una cartelera es de un sitio, así que el país viaja en la petición: sin él
+ *  TMDB responde la de Estados Unidos. */
+export async function getMovieNowPlaying(region: string): Promise<TitleRow[]> {
+  return searchResponseSchema.parse(
+    await call(`/movie/now-playing?region=${encodeURIComponent(region)}`),
+  ).results;
 }
 
 export async function getMoviePopular(from?: number | null, to?: number | null): Promise<TitleRow[]> {

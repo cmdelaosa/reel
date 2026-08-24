@@ -111,7 +111,11 @@ as $$
     on wv.episode_id = ep.id and wv.user_id = (select auth.uid())
   where (e.day::timestamp at time zone 'UTC') >= p_from
     and (e.day::timestamp at time zone 'UTC') <= p_to
-  order by 9, e.name
+  -- Por el día y luego por título. Ordenado por el propio cálculo y no por el
+  -- ordinal de la columna: con `order by 9` bastaba con insertar una columna
+  -- antes de release_at para que el feed saliera desordenado dentro de cada día
+  -- sin que nada fallara ni avisara.
+  order by (e.day::timestamp at time zone 'UTC'), e.name
 $$;
 
 grant execute on function public.rpc_movie_releases(text, timestamptz, timestamptz) to authenticated;

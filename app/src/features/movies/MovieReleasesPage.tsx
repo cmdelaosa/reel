@@ -174,9 +174,15 @@ function ReleaseFeed() {
 
 /** "En cines" y "Anunciadas": dos preguntas sobre TU lista que el feed no
  *  responde de un vistazo porque las respuestas están repartidas por él. */
+/* Un año hacia atrás, no cinco. Lo que estas dos listas necesitan del pasado es
+   la fecha de sala de lo que SIGUE en cartelera, y una película que lleva más de
+   un año estrenada ya no lo está — para eso está el feed, que sí crece hacia
+   atrás cuando lo pides. Cinco años eran cuatro de filas que nadie mira. */
+const PENDING_WEEKS_BACK = 52;
+
 function PendingList({ kind }: { kind: "theatres" | "announced" }) {
   const { data: movies = [], isPending } = useMovieLibrary();
-  const { data: releases = [] } = useMovieReleases(260);
+  const { data: releases = [] } = useMovieReleases(PENDING_WEEKS_BACK);
   const esNames = useEsNames();
   const now = useMemo(() => new Date(), []);
   const nowMs = now.getTime();

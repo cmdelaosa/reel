@@ -64,7 +64,11 @@ export function useMovieTrending() {
 }
 
 export function useMovieNowPlaying(enabled: boolean) {
-  return useQuery(grid(["movieNowPlaying"], enabled, getMovieNowPlaying));
+  // El país entra en la clave: cambiarlo en Ajustes recarga la app, pero la
+  // caché persistida sobrevive a la recarga, y sin el país serviría la
+  // cartelera del país anterior.
+  const region = regionCode();
+  return useQuery(grid(["movieNowPlaying", region], enabled, () => getMovieNowPlaying(region)));
 }
 
 export function useMoviePopular(from: number | null, to: number | null, enabled: boolean) {

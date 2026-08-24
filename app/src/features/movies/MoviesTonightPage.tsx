@@ -99,8 +99,12 @@ export default function MoviesTonightPage() {
     .filter((r) => r.release_kind === "digital" && new Date(r.release_at).getTime() <= nowMs)
     .sort((a, b) => b.release_at.localeCompare(a.release_at))
     .slice(0, 4);
+  // Solo lo que TMDB fecha COMO estreno de sala. El respaldo 'release' —el que
+  // se emite cuando no hay datos de tu país— podría ser una producción de
+  // plataforma, y anunciarla bajo "Pronto en cines" es mandar a alguien a un
+  // cine que no la pone. Esas salen en Estrenos, bajo su propia píldora.
   const theatres = releases
-    .filter((r) => r.release_kind !== "digital" && new Date(r.release_at).getTime() > nowMs)
+    .filter((r) => r.release_kind === "theatrical" && new Date(r.release_at).getTime() > nowMs)
     .sort((a, b) => a.release_at.localeCompare(b.release_at))
     .slice(0, 4);
 
