@@ -44,7 +44,7 @@ function ShowRow({ s, status, myScore, onOpen }: {
   onOpen: () => void;
 }) {
   const esNames = useEsNames();
-  const name = locName(esNames, s.tmdb_id, s.name, s.kind);
+  const name = locName(esNames, s.tmdb_id, s.name, s.kind === "game" ? "tv" : s.kind);
   const art = tmdbImg(s.poster_path, "w92");
   // Solo en series: lo que precarga son temporadas y episodios.
   const intent = useTitleIntent(s.kind === "tv" ? s.tmdb_id : undefined);

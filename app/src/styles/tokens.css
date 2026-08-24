@@ -135,6 +135,17 @@
    este bloque hacia arriba devolvería el acento personal en silencio. */
 :root[data-medium="movie"] { --accent: #35c5d9; --accent-2: #4fd8c9; --on-accent: #04262b; }
 
+/* ---- Videojuegos ----
+   El violeta que el bloque de arriba reservaba. Es el mismo `violet` que llegó
+   a ser uno de los cuatro acentos de Ajustes (#8b7cff), y no hay colisión que
+   evitar: ese selector ya no existe — `settings.ts` aplica "coral" fijo desde
+   que se quitó. Así que el violeta es del modo y de nadie más.
+
+   Cierra el triángulo de temperatura: coral cálido para series, cian frío para
+   cine, violeta para juegos. Los tres a la misma distancia entre sí y ninguno
+   cerca del oro de IMDb (--imdb). */
+:root[data-medium="game"] { --accent: #8b7cff; --accent-2: #b07cff; --on-accent: #150e33; }
+
 /* ============================================================
    BASE
    ============================================================ */

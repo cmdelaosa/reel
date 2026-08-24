@@ -5,6 +5,7 @@ import { qk } from "@/lib/queryKeys";
 import { useMedium } from "@/lib/medium";
 import { usePrefetchTitle } from "@/lib/useOpenTitle";
 import { searchMovies, searchShows, tmdbImg } from "@/lib/tmdb";
+import { igdbImg, searchGames } from "@/lib/igdb";
 import { isEs, t as tr, tGenre } from "@/lib/i18n";
 import { posterBg } from "@/ui/posterBg";
 import { WatchOn } from "@/ui/WatchOn";
@@ -58,12 +59,21 @@ export function Palette({ onClose, onOpen }: {
   const prefetchTitle = usePrefetchTitle();
   const medium = useMedium();
   const movies = medium === "movie";
+  const gamesMode = medium === "game";
 
+  /* Tres medios, tres claves y tres buscadores. La clave no puede compartirse:
+     un id solo es único dentro de su medio, y en juegos ni siquiera es de TMDB
+     (0071). */
   const { data: results, isFetching } = useQuery({
-    queryKey: movies ? qk.movieSearch(debounced) : qk.search(debounced),
+    queryKey: gamesMode
+      ? qk.gameSearch(debounced)
+      : movies
+        ? qk.movieSearch(debounced)
+        : qk.search(debounced),
     enabled: debounced.length >= 2,
     staleTime: 60_000,
-    queryFn: () => (movies ? searchMovies(debounced) : searchShows(debounced)),
+    queryFn: () =>
+      gamesMode ? searchGames(debounced) : movies ? searchMovies(debounced) : searchShows(debounced),
   });
 
   useEffect(() => inputRef.current?.focus(), []);
@@ -81,10 +91,10 @@ export function Palette({ onClose, onOpen }: {
   // Solo series: lo que precarga es el detalle CON temporadas y episodios, que
   // en una película no existen — la ficha de cine se abre con una sola llamada.
   useEffect(() => {
-    if (selectedTmdbId == null || movies) return;
+    if (selectedTmdbId == null || movies || gamesMode) return;
     const timer = setTimeout(() => void prefetchTitle(selectedTmdbId), 150);
     return () => clearTimeout(timer);
-  }, [selectedTmdbId, prefetchTitle, movies]);
+  }, [selectedTmdbId, prefetchTitle, movies, gamesMode]);
 
   const open = (tmdbId: number) => {
     pushRecent(debounced);
@@ -140,8 +150,16 @@ export function Palette({ onClose, onOpen }: {
                 onMouseEnter={() => setSel(i)}
                 onClick={() => open(r.tmdb_id)}
               >
-                {tmdbImg(r.poster_path, "w92") ? (
-                  <img className="mq-pal-art" src={tmdbImg(r.poster_path, "w92")} alt="" style={{ objectFit: "cover" }} />
+                {/* En juegos, `poster_path` es un hash de IGDB y no una ruta de
+                    TMDB (0071): pasárselo a tmdbImg da una URL que responde 404
+                    sin decir nada, y la fila sale sin carátula. */}
+                {(gamesMode ? igdbImg(r.poster_path, "cover_small") : tmdbImg(r.poster_path, "w92")) ? (
+                  <img
+                    className="mq-pal-art"
+                    src={gamesMode ? igdbImg(r.poster_path, "cover_small") : tmdbImg(r.poster_path, "w92")}
+                    alt=""
+                    style={{ objectFit: "cover" }}
+                  />
                 ) : (
                   <div className="mq-pal-art" style={{ background: posterBg(display) }} />
                 )}
@@ -170,7 +188,10 @@ export function Palette({ onClose, onOpen }: {
         <div className="mq-pal-foot">
           <span><kbd className="mq-kbd">↑↓</kbd> {tr("navigate")}</span>
           <span><kbd className="mq-kbd">↵</kbd> {tr("open")}</span>
-          <span className="mute">{tr("TMDB via Reel proxy")}</span>
+          {/* La atribución es del sitio de donde salen ESTOS resultados: los juegos
+              no vienen de TMDB, y dejarlo puesto era acreditar a quien no ha
+              puesto el dato. */}
+          <span className="mute">{tr(gamesMode ? "IGDB via Reel proxy" : "TMDB via Reel proxy")}</span>
         </div>
       </div>
     </>

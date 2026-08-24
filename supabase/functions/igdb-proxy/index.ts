@@ -438,7 +438,15 @@ Deno.serve(async (req) => {
           "X-Cache": "HIT",
         });
       }
-      if (cached) {
+      // Rancia se sirve YA y se revalida por detrás — pero solo si de verdad
+      // hubo un detalle alguna vez. `last_refreshed_at` es lo que lo distingue:
+      // lo escribe gameRow y NO gameSearchRow, así que una fila que solo ha
+      // pasado por el buscador lo tiene a null. Servirla como rancia era
+      // enseñar la ficha sin fecha de salida, sin plataformas por fecha y sin
+      // tiempos — un Silksong salido en 2025 con un "TBA" enorme — y solo se
+      // arreglaba al volver a abrirla. Sin detalle previo se espera a la red,
+      // que es lo que tmdb-proxy hace con lo nunca cacheado.
+      if (cached?.last_refreshed_at) {
         inBackground(refreshGame(admin, igdbId));
         return json({ title: cached, episode_id: cached.episodes?.[0]?.id ?? null }, 200, {
           "X-Cache": "STALE",
