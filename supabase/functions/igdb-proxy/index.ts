@@ -49,7 +49,7 @@
 // decide nada sobre los datos, solo se piden y se guardan.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { type Any, gameRow, gameSearchRow } from "./normalize.ts";
+import { type Any, apicalypseTerm, gameRow, gameSearchRow } from "./normalize.ts";
 
 const IGDB = "https://api.igdb.com/v4";
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
@@ -81,21 +81,55 @@ const json = (body: unknown, status = 200, extraHeaders: Record<string, string> 
 /* ─────────────────────────── El token de Twitch ─────────────────────────── */
 
 let token: { value: string; expiresAt: number } | null = null;
+let inFlight: Promise<string> | null = null;
 
 /** El app access token, pedido una vez por isolate y reutilizado.
  *
  *  Se le resta un minuto a la caducidad que anuncia Twitch: la alternativa es
- *  descubrir que ha expirado a mitad de una petición de alguien. */
-async function accessToken(force = false): Promise<string> {
-  if (!force && token && token.expiresAt > Date.now()) return token.value;
+ *  descubrir que ha expirado a mitad de una petición de alguien.
+ *
+ *  Las peticiones concurrentes comparten la misma promesa. Sin eso, un isolate
+ *  frío al que llegan diez peticiones a la vez pide diez tokens: ninguno
+ *  invalida a los otros, así que no rompe nada, pero son diez viajes a Twitch
+ *  —que tiene su propio límite en ese endpoint— para acabar guardando uno. */
+function accessToken(force = false): Promise<string> {
+  if (!force && token && token.expiresAt > Date.now()) return Promise.resolve(token.value);
+  if (!force && inFlight) return inFlight;
 
+  inFlight = fetchToken().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function fetchToken(): Promise<string> {
   const clientId = Deno.env.get("IGDB_CLIENT_ID");
   const clientSecret = Deno.env.get("IGDB_CLIENT_SECRET");
   if (!clientId || !clientSecret) throw new Error("IGDB credentials not configured");
 
-  const url = `${TWITCH_TOKEN_URL}?client_id=${encodeURIComponent(clientId)}` +
-    `&client_secret=${encodeURIComponent(clientSecret)}&grant_type=client_credentials`;
-  const res = await fetch(url, { method: "POST", signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+  // Las credenciales van en el CUERPO, no en la query string, y esto no es
+  // cosmético. La documentación de Twitch pone el ejemplo con
+  // ?client_id=…&client_secret=…, y así escrito el secreto acaba en sitios
+  // donde nadie lo buscaría: cuando `fetch` falla por red, Deno mete la URL
+  // ENTERA en el mensaje del TypeError — y ese mensaje se registra en los logs
+  // de la función. Un corte de red momentáneo bastaría para dejar el secreto
+  // escrito en claro y sin fecha de caducidad. En el cuerpo no aparece en
+  // ningún mensaje de error.
+  const form = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: "client_credentials",
+  });
+  const res = await fetch(TWITCH_TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: form,
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  });
+  // El cuerpo de Twitch sí entra en el mensaje: es su respuesta ("invalid
+  // client" frente a "invalid client secret"), no nuestra petición, y es lo
+  // que distingue un secreto mal copiado de una app mal configurada el día que
+  // alguien pone esto en marcha.
   if (!res.ok) throw new Error(`twitch token ${res.status}: ${await res.text()}`);
 
   const body = await res.json();
@@ -325,9 +359,12 @@ Deno.serve(async (req) => {
       const q = (url.searchParams.get("q") ?? "").trim();
       if (!q) return json({ results: [] });
 
+      const term = apicalypseTerm(q);
+      if (!term) return json({ results: [] });
+
       const found = await igdb(
         "games",
-        `search "${q.replace(/"/g, '\\"')}"; fields ${SEARCH_FIELDS}; ` +
+        `search "${term}"; fields ${SEARCH_FIELDS}; ` +
           `where version_parent = null; limit 20;`,
       );
       if (!found.length) return json({ results: [] });
@@ -352,6 +389,12 @@ Deno.serve(async (req) => {
     const detail = path.match(/^\/game\/(\d+)$/);
     if (detail) {
       const igdbId = Number(detail[1]);
+      // `\d+` acepta cuarenta dígitos, y `titles.tmdb_id` es un int4: sin este
+      // tope, /game/99999999999999999999 llegaba hasta el upsert y salía como
+      // un 502 (error del servidor) en vez de un 404, que es lo que es.
+      if (!Number.isSafeInteger(igdbId) || igdbId < 1 || igdbId > 2_147_483_647) {
+        return json({ error: "not found" }, 404);
+      }
 
       const { data: cached } = await admin
         .from("titles")
@@ -391,7 +434,13 @@ Deno.serve(async (req) => {
 
     return json({ error: "not found" }, 404);
   } catch (e) {
+    // El detalle va al log y NO al navegador. tmdb-proxy devuelve el mensaje
+    // entero al cliente, y aquí no se copia esa costumbre a propósito: los
+    // mensajes de error de esta función pueden arrastrar la respuesta de
+    // Twitch al pedir el token, que es la conversación en la que viven las
+    // credenciales del proyecto. Quien depura tiene el log; quien mira la
+    // pestaña de red, no.
     console.error("igdb-proxy", path, e);
-    return json({ error: String((e as Error)?.message ?? e) }, 502);
+    return json({ error: "upstream error" }, 502);
   }
 });

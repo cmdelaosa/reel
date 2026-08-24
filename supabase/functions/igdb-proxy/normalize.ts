@@ -180,6 +180,27 @@ export function canonicalRelease(
   return best ? { date: best.date, precision: best.precision } : { date: null, precision: "tbd" };
 }
 
+/** El término de búsqueda, listo para meter entre comillas en una consulta
+ *  apicalypse.
+ *
+ *  La barra invertida PRIMERO y la comilla después, en ese orden: al revés, la
+ *  barra que acabamos de escribir delante de la comilla se volvería a escapar
+ *  y el resultado sería `\\"`, que cierra la cadena. Buscar `\` (o cualquier
+ *  cosa que lo lleve, como una ruta pegada) dejaba la consulta sin terminar y
+ *  IGDB devolvía un 400 que el proxy traducía a un 502 — un error de servidor
+ *  por un carácter que alguien tecleó en un buscador.
+ *
+ *  Los saltos de línea se van con ellos: apicalypse termina las sentencias con
+ *  `;` y una cadena multilínea no rompe nada hoy, pero no hay ninguna búsqueda
+ *  real que los necesite. */
+export function apicalypseTerm(q: string): string {
+  return q
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/[\r\n]+/g, " ")
+    .trim();
+}
+
 /* ─────────────────────────── Mapeos ─────────────────────────────────────── */
 
 /** IGDB puntúa sobre 100 y `titles.vote_average` es sobre 10 en los otros dos

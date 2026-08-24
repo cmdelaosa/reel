@@ -8,6 +8,7 @@
 // de esa trampa.
 import { assertEquals } from "jsr:@std/assert@1";
 import {
+  apicalypseTerm,
   beatSeconds,
   canonicalRelease,
   gameRow,
@@ -165,6 +166,25 @@ Deno.test("un juego sin fechas se queda sin fecha", () => {
   // Y no en el día 1 de nada: `first_air_date` null deja el episodio sintético
   // sin air_datetime, o sea el juego en "próximamente" hasta que IGDB fecha.
   assertEquals(canonicalRelease({}), { date: null, precision: "tbd" });
+});
+
+/* ── El término de búsqueda ─────────────────────────────────────────────── */
+
+Deno.test("una comilla en la búsqueda no cierra la cadena", () => {
+  assertEquals(apicalypseTerm('Marvel\'s "Spider-Man"'), 'Marvel\'s \\"Spider-Man\\"');
+});
+
+Deno.test("una barra invertida se escapa ANTES que la comilla", () => {
+  // El orden importa: escapando la comilla primero, la barra que se le pone
+  // delante se volvería a escapar y saldría \\" — que cierra la cadena. Buscar
+  // una barra suelta dejaba la consulta sin terminar, IGDB devolvía 400 y el
+  // proxy lo traducía a un 502: un error de servidor por una tecla.
+  assertEquals(apicalypseTerm("a\\b"), "a\\\\b");
+  assertEquals(apicalypseTerm('a\\"'), 'a\\\\\\"');
+});
+
+Deno.test("los saltos de línea no entran en la consulta", () => {
+  assertEquals(apicalypseTerm("zelda\n\nocarina"), "zelda ocarina");
 });
 
 /* ── Mapeos ─────────────────────────────────────────────────────────────── */
