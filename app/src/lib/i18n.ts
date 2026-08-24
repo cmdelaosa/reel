@@ -504,6 +504,7 @@ const ES: Record<string, string> = {
   "games": "juegos",
   "movies": "películas",
   "See which ones": "Ver cuáles",
+  "+{n} more — the rest are in their library": "+{n} más — el resto, en su biblioteca",
   // Reactions on those rows (0058)
   "React": "Reaccionar",
   "Reaction": "Reacción",

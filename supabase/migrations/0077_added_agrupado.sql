@@ -111,11 +111,12 @@ as $$
   -- p_limit * 8, la misma que `watched`, y por el mismo motivo: tiene que
   -- caber una ráfaga entera para que el grupo se descubra completo.
   added_window as (
-    select a.fid, a.day, a.list, max(a.at) as at
+    select a.fid, a.day, a.kind, a.list, max(a.at) as at
     from circle c
     cross join lateral (
       select c.fid as fid, le.added_at as at,
              (le.added_at at time zone 'Europe/Madrid')::date as day,
+             t.kind as kind,
              public.added_list_of(t.kind, le.owned) as list
       from public.library_entries le
       join public.titles t on t.id = le.title_id
@@ -123,7 +124,12 @@ as $$
       order by le.added_at desc
       limit p_limit * 8
     ) a
-    group by a.fid, a.day, a.list
+    -- El MEDIO entra en la clave del grupo además de la lista, y no es
+    -- redundante: los juegos ya se separan solos (van a backlog o a library),
+    -- pero series y películas comparten watchlist. Sin esto, tres series y dos
+    -- pelis el mismo día salen como "añadió 5 series" — y con el glifo de una
+    -- sola de las dos, que la fila usa el medio del representante.
+    group by a.fid, a.day, a.kind, a.list
     order by max(a.at) desc
     limit p_limit
   ),
@@ -133,18 +139,36 @@ as $$
   -- idéntica a la de antes de esta migración.
   added as (
     select g.fid, 'added', f.title_id, f.tmdb_id,
-           f.kind,
+           g.kind,
            f.name, f.poster_path, null::int,
            null::int, null::int, null::int, null::int, 1,
            f.n, g.list,
            g.at,
-           ('a:' || g.fid || ':' || g.list || ':' || to_char(g.day, 'YYYY-MM-DD'))
+           /* ── La clave, y por qué NO lleva la lista dentro ────────────────
+              `activity_reactions` (0058) no se traga cualquier texto: su CHECK
+              exige '<verbo>:<uuid>:<uuid>[:fecha]', un trigger saca de ahí el
+              actor y el TÍTULO —los dos not null, los dos con clave ajena— y la
+              RLS pregunta por la fila que la clave nombra. Una clave como
+              'a:<uuid>:library:<fecha>' revienta ese CHECK, así que reaccionar
+              a una fila plegada habría sido un error de la base en la cara de
+              quien pulsa el emoji.
+
+              Así que el hueco de en medio lo ocupa el TÍTULO REPRESENTANTE, que
+              es lo que la clave siempre ha llevado ahí, y la lista se deduce de
+              él cuando hace falta (rpc_added_batch). Sigue siendo única: dos
+              grupos del mismo día tienen representantes distintos.
+
+              Y el sufijo de fecha SOLO cuando hay grupo. Con n = 1 la clave
+              queda byte a byte la de antes de esta migración, así que las
+              reacciones que ya existen sobre filas de "añadió" siguen
+              apuntando a su fila en vez de quedarse huérfanas. */
+           ('a:' || g.fid || ':' || f.title_id ||
+            case when f.n > 1 then ':' || to_char(g.day, 'YYYY-MM-DD') else '' end)
     from added_window g
     cross join lateral (
       select count(*)::int as n,
              (array_agg(le2.title_id  order by le2.added_at desc))[1] as title_id,
              (array_agg(t2.tmdb_id    order by le2.added_at desc))[1] as tmdb_id,
-             (array_agg(t2.kind       order by le2.added_at desc))[1] as kind,
              (array_agg(t2.name       order by le2.added_at desc))[1] as name,
              (array_agg(t2.poster_path order by le2.added_at desc))[1] as poster_path
       from public.library_entries le2
@@ -152,6 +176,7 @@ as $$
       where le2.user_id = g.fid and le2.followed
         and le2.added_at >= (g.day::timestamp at time zone 'Europe/Madrid')
         and le2.added_at <  ((g.day + 1)::timestamp at time zone 'Europe/Madrid')
+        and t2.kind = g.kind
         and public.added_list_of(t2.kind, le2.owned) = g.list
     ) f
   ),
@@ -232,6 +257,11 @@ grant execute on function public.rpc_friend_activity(int) to authenticated;
 -- usa como destino de las reacciones — y partirla en tres parámetros sería
 -- inventar una segunda forma de nombrar lo mismo.
 --
+-- La clave es 'a:<persona>:<título representante>:<día>'. La LISTA no viaja en
+-- ella (el CHECK de activity_reactions solo admite uuids en ese hueco, ver
+-- arriba), así que se deduce de la fila del representante: está dentro del
+-- grupo, luego su lista ES la del grupo.
+--
 -- `security invoker`: la RLS de `library_entries` ya decide quién puede leer
 -- las filas de quién (0015, "library_entries: friends read"). Con `definer`
 -- habría que reimplementar aquí el círculo de amistades, que es exactamente la
@@ -243,29 +273,40 @@ security invoker
 stable
 as $$
   with parts as (
-    -- 'a:<uuid>:<lista>:<YYYY-MM-DD>'. split_part y no una regex: el uuid y la
-    -- fecha no llevan ':' y la lista tampoco, así que las cuatro piezas son
-    -- exactas. Un formato que no case da null y la función devuelve [].
-    select split_part(p_event_key, ':', 1) as tag,
-           split_part(p_event_key, ':', 2) as fid,
-           split_part(p_event_key, ':', 3) as list,
+    -- Comparación de texto y casts solo cuando la forma casa, por lo mismo que
+    -- activity_event_exists lo hace así: una clave malformada tiene que
+    -- devolver vacío, no reventar con un error de cast.
+    select split_part(p_event_key, ':', 2) as fid,
+           split_part(p_event_key, ':', 3) as rep,
            split_part(p_event_key, ':', 4) as day
+    where p_event_key ~ '^a:[0-9a-f-]{36}:[0-9a-f-]{36}:\d{4}-\d{2}-\d{2}$'
+  ),
+  -- El grupo que nombra esa clave, deducido del representante. Si quien pregunta
+  -- no puede ver esa fila —la RLS de library_entries—, aquí no sale nada y el
+  -- detalle entero queda vacío, que es lo correcto.
+  grp as (
+    select pa.fid::uuid as fid, pa.day::date as day, t.kind as kind,
+           public.added_list_of(t.kind, le.owned) as list
+    from parts pa
+    join public.library_entries le
+      on le.user_id = pa.fid::uuid and le.title_id = pa.rep::uuid and le.followed
+    join public.titles t on t.id = le.title_id
   )
   select coalesce(jsonb_agg(to_jsonb(r) order by r.added_at desc), '[]'::jsonb)
-  from parts pa,
+  from grp,
   lateral (
     select t.tmdb_id, t.kind, t.name, t.poster_path, le.added_at
     from public.library_entries le
     join public.titles t on t.id = le.title_id
-    where pa.tag = 'a'
-      and le.user_id = pa.fid::uuid
+    where le.user_id = grp.fid
       and le.followed
-      and le.added_at >= (pa.day::date::timestamp at time zone 'Europe/Madrid')
-      and le.added_at <  ((pa.day::date + 1)::timestamp at time zone 'Europe/Madrid')
-      and public.added_list_of(t.kind, le.owned) = pa.list
+      and le.added_at >= (grp.day::timestamp at time zone 'Europe/Madrid')
+      and le.added_at <  ((grp.day + 1)::timestamp at time zone 'Europe/Madrid')
+      and t.kind = grp.kind
+      and public.added_list_of(t.kind, le.owned) = grp.list
     -- Tope de cortesía: una importación de mil juegos no puede convertir un
     -- clic en un payload de un mega. Con este número la lista desplegada ya no
-    -- se lee, así que quien tenga más de 200 los ve en su biblioteca.
+    -- se lee, y el cliente dice cuántos se quedaron fuera.
     limit 200
   ) r;
 $$;

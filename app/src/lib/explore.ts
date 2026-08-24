@@ -164,13 +164,18 @@ export type AddedBatchItem = z.infer<typeof addedBatchSchema>[number];
  *  decide la RLS de `library_entries`, no esta consulta.
  *
  *  `enabled` es lo que la hace perezosa: no se pide hasta que alguien despliega
- *  la fila, y `staleTime` en infinito porque lo añadido un día pasado ya no
- *  cambia. */
+ *  la fila.
+ *
+ *  `staleTime` finito y no infinito: el grupo de HOY sigue creciendo. Si añades
+ *  otro juego después de haber desplegado la fila, el muro se refresca y dice
+ *  40 mientras la lista cacheada sigue enseñando 39 — la fila se
+ *  contradiría a sí misma en la misma pantalla. Cinco minutos es más que
+ *  suficiente para que abrir y cerrar no cueste una consulta cada vez. */
 export function useAddedBatch(eventKey: string | null) {
   return useQuery({
     queryKey: qk.addedBatch(eventKey ?? ""),
     enabled: Boolean(eventKey),
-    staleTime: Infinity,
+    staleTime: 5 * 60_000,
     queryFn: async (): Promise<AddedBatchItem[]> => {
       const { data, error } = await supabase.rpc("rpc_added_batch", { p_event_key: eventKey });
       if (error) throw error;

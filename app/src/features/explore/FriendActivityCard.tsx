@@ -31,9 +31,14 @@ const EMPTY: ReactionRow[] = [];
  *  su ficha, que es lo que la fila plegada dejó de poder hacer. */
 function AddedBatch({
   eventKey,
+  total,
   onPick,
 }: {
   eventKey: string;
+  /** Lo que dice la frase de arriba. Si la lista trae menos, es el tope del
+   *  servidor y hay que decirlo: "añadió 300 juegos" con 200 carátulas debajo
+   *  y sin explicación se lee como que faltan cien por una avería. */
+  total: number;
   onPick: (t: { kind: string; tmdb_id: number }) => void;
 }) {
   const { data, isPending } = useAddedBatch(eventKey);
@@ -84,6 +89,11 @@ function AddedBatch({
           </button>
         );
       })}
+      {data.length < total && (
+        <div className="mute" style={{ gridColumn: "1 / -1", fontSize: 11.5 }}>
+          {tv("+{n} more — the rest are in their library", { n: total - data.length })}
+        </div>
+      )}
     </div>
   );
 }
@@ -377,21 +387,25 @@ export function FriendActivityCard() {
                   que en su sitio va el gesto: el chevrón dice que hay algo
                   debajo, que es lo que la fila promete. */}
               {grouped ? (
-                <span
+                <button
+                  type="button"
                   className="btn btn-icon btn-ghost"
                   aria-label={tr("See which ones")}
                   aria-expanded={isOpen}
                   style={{ flex: "0 0 auto" }}
+                  onClick={(e) => { e.stopPropagation(); setOpenKey(isOpen ? null : a.event_key!); }}
                 >
                   {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </span>
+                </button>
               ) : (
                 <div className="mq-row-art" style={{ width: 34, height: 50, ...(art ? {} : { background: posterBg(titleName) }) }}>
                   {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
                 </div>
               )}
             </div>
-            {isOpen && <AddedBatch eventKey={a.event_key!} onPick={openEvent} />}
+            {isOpen && (
+              <AddedBatch eventKey={a.event_key!} total={a.added_count ?? 0} onPick={openEvent} />
+            )}
             </div>
           );
         })}
