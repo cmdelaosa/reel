@@ -297,7 +297,7 @@ const DETAIL = {
   external_games: [{ category: 1, uid: "1030300" }],
 };
 
-Deno.test("gameRow arma la fila que espera 0069", () => {
+Deno.test("gameRow arma la fila que espera 0071", () => {
   const row = gameRow(DETAIL, { hastily: 43200, normally: 86400, completely: 216000 });
 
   assertEquals(row.kind, "game");

@@ -39,8 +39,8 @@
 // para que una ficha, que hace dos peticiones, no las dispare a la vez.
 //
 // ── Lo que se escribe ─────────────────────────────────────────────────────
-// Filas de `titles` con kind='game' (migración 0069). El id de IGDB va en
-// `tmdb_id`, que es la columna mal nombrada que 0069 documenta: la identidad
+// Filas de `titles` con kind='game' (migración 0071). El id de IGDB va en
+// `tmdb_id`, que es la columna mal nombrada que 0071 documenta: la identidad
 // es (kind, tmdb_id), así que no choca con TMDB. El trigger de episodio
 // sintético le pone su S1E1 solo, y con eso el juego entra en la biblioteca,
 // el historial y el muro sin que ninguno sepa que existe.

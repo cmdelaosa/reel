@@ -90,7 +90,7 @@ invites (
 ```sql
 titles (
   id uuid pk, tmdb_id int not null,        -- id en la fuente de SU medio: TMDB para tv/movie,
-                                           -- IGDB para game. Unico solo junto a kind (0067/0069):
+                                           -- IGDB para game. Unico solo junto a kind (0067/0071):
                                            -- /tv/1399 y /movie/1399 son cosas distintas.
   kind text not null check (kind in ('tv','movie','game')),
   name text not null, overview text,
@@ -363,7 +363,7 @@ documented in [DETAIL-PERFORMANCE.md](DETAIL-PERFORMANCE.md).
   no es una optimizacion aqui: es la unica forma de servir a mas de cuatro
   personas a la vez.
 - Un juego, como una pelicula, mantiene un episodio sintetico S1E1 (trigger
-  `synthetic_episode_sync`, migracion 0069) para no ramificar las ~27 funciones
+  `synthetic_episode_sync`, migracion 0071) para no ramificar las ~27 funciones
   que leen `watch_events`. Las cinco superficies de series que ese episodio
   podria contaminar —calendario, avisos por correo, historial, muro y
   estadisticas— ya filtran `t.kind = 'tv'` desde que el cine paso por ahi, asi

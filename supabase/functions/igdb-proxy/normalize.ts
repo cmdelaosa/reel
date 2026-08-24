@@ -24,7 +24,7 @@ export type Any = any;
  * ── Qué día, cuando no hay día ─────────────────────────────────────────────
  * Para un formato ancho hay que elegir un día del periodo, y la elección tiene
  * consecuencias: `first_air_date` es lo que el episodio sintético convierte en
- * "ya ha salido" (0069). Guardar el PRIMER día del periodo haría que un juego
+ * "ya ha salido" (0071). Guardar el PRIMER día del periodo haría que un juego
  * de "Q4 2027" contara como salido el 1 de octubre, aunque llegue en
  * diciembre. Guardar el ÚLTIMO lo cuenta como pendiente hasta el 31.
  *
@@ -154,7 +154,7 @@ export interface PlatformRelease {
 }
 
 /** Las fechas de salida agrupadas por plataforma, listas para la columna
- *  `platform_releases` (0069).
+ *  `platform_releases` (0071).
  *
  *  Un juego trae una fila por (plataforma × región): la misma PS5 puede
  *  aparecer para Europa, Norteamérica y Japón con días distintos. De cada
@@ -239,7 +239,7 @@ export function rating10(d: Any): number | null {
   return Math.round((raw / 10) * 10) / 10;
 }
 
-/** El appid de Steam, para la sincronización que llega más tarde (0069).
+/** El appid de Steam, para la sincronización que llega más tarde (0071).
  *
  *  IGDB está migrando también este enum: `category === 1` es el campo viejo y
  *  `external_game_source` la referencia nueva, cuyo nombre es "Steam". Se
@@ -321,7 +321,7 @@ export function gameRow(d: Any, ttb: Any = null) {
     original_name: d.name ?? null,
     overview: d.summary ?? null,
     // El hash de la imagen, no una ruta: images.igdb.com quiere
-    // /t_{size}/{hash}.jpg, y el tamaño lo elige quien pinta (ver 0069).
+    // /t_{size}/{hash}.jpg, y el tamaño lo elige quien pinta (ver 0071).
     poster_path: d.cover?.image_id ?? null,
     backdrop_path: d.artworks?.[0]?.image_id ?? d.screenshots?.[0]?.image_id ?? null,
     first_air_date: canonical.date,
