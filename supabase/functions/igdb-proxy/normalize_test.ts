@@ -116,6 +116,15 @@ Deno.test("sin y/m/d se recurre al timestamp", () => {
   assertEquals(windowEnd({ date: 1_804_809_600 }, "day"), "2027-03-12");
 });
 
+Deno.test("el día del timestamp no se mezcla con el año de la fila", () => {
+  // Una fila que dice 2026 con un timestamp del 31-dic-2025 —lo que deja un
+  // lanzamiento de fin de año con husos por medio— no puede producir
+  // 2026-12-31, que es un año entero de más y no está en ninguna de las dos
+  // fuentes. Si el día sale del timestamp, la fecha entera sale del timestamp.
+  const row = { y: 2026, date: 1_767_139_200, date_format: DAY }; // 2025-12-31
+  assertEquals(windowEnd(row, "day"), "2025-12-31");
+});
+
 Deno.test("un 'día exacto' sin día NI timestamp se degrada al final del mes", () => {
   // Contradicción de la fuente: el formato promete un día que no viene por
   // ningún lado. Se guarda lo único que sí se sabe en vez de inventar el 1.

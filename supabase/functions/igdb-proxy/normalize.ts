@@ -115,15 +115,25 @@ export function windowEnd(row: Any, precision: Precision): string | null {
 
   const y = typeof row?.y === "number" ? row.y : stamp?.getUTCFullYear() ?? null;
   const m = typeof row?.m === "number" ? row.m : stamp ? stamp.getUTCMonth() + 1 : null;
-  const d = typeof row?.d === "number" ? row.d : stamp?.getUTCDate() ?? null;
 
   if (y === null) return null;
 
   switch (precision) {
-    case "day":
+    case "day": {
+      // El día solo puede venir del timestamp, y cuando viene de ahí se coge
+      // el día ENTERO de ahí. Mezclar el año de la fila con el día del
+      // timestamp puede fabricar una fecha que no está en ninguno de los dos:
+      // una fila con y=2026 y un timestamp del 31-dic-2025 —que es lo que deja
+      // un lanzamiento de fin de año con husos por medio— daría 2026-12-31, un
+      // año entero de más.
+      if (typeof row?.d === "number" && m !== null) return iso(y, m, row.d);
+      if (stamp) {
+        return iso(stamp.getUTCFullYear(), stamp.getUTCMonth() + 1, stamp.getUTCDate());
+      }
       // Sin día NI timestamp, la fuente se contradice: promete un día exacto
       // y no lo trae. Se degrada al final del mes, que es lo único que queda.
-      return m === null ? iso(y, 12, 31) : iso(y, m, d ?? lastDayOfMonth(y, m));
+      return m === null ? iso(y, 12, 31) : iso(y, m, lastDayOfMonth(y, m));
+    }
     case "month":
       return m === null ? iso(y, 12, 31) : iso(y, m, lastDayOfMonth(y, m));
     case "q1":

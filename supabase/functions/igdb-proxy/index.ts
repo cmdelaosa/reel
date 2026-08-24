@@ -178,6 +178,18 @@ async function igdb(endpoint: string, query: string, retry = true): Promise<Any[
     await accessToken(true);
     return igdb(endpoint, query, false);
   }
+
+  // 429 — el límite de 4 req/s. Con MIN_GAP_MS un isolate solo no puede
+  // pasarse, pero el límite es del Client ID y los isolates son varios: dos a
+  // la vez bastan. Sin este reintento, lo que ve la persona es una búsqueda
+  // rota (502) porque otra persona estaba buscando al mismo tiempo, y eso será
+  // más frecuente cuanta más gente use la app — justo al revés de lo que
+  // debería. Un respiro y otra pasada lo convierten en medio segundo de más.
+  if (res.status === 429 && retry) {
+    await new Promise((r) => setTimeout(r, MIN_GAP_MS * 2));
+    return igdb(endpoint, query, false);
+  }
+
   if (!res.ok) throw new Error(`igdb ${endpoint} ${res.status}: ${await res.text()}`);
   return await res.json();
 }
