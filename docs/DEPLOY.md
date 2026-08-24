@@ -118,9 +118,45 @@ automatic scheduling** — nothing in the migrations sets them up. Provision the
 once:
 
 1. Open `supabase/deploy/schedule-jobs.sql`.
-2. Replace `<PROJECT_REF>` (every job) and `<SERVICE_ROLE_KEY>` (Vault step, from
-   Dashboard → Project Settings → API).
+2. Replace `<PROJECT_REF>` (every job) and `<SERVICE_ROLE_KEY>` (Vault step) —
+   for the second one read [Which service key](#which-service-key) first, it is
+   not the one the name suggests.
 3. Run it in the hosted **SQL Editor**.
+
+### Which service key
+
+Every one of these functions authenticates a caller as the cron by comparing the
+bearer token against its own injected `SUPABASE_SERVICE_ROLE_KEY`, byte for byte
+(`isCron` in tmdb-proxy, the 401 guard in episode-refresh). So the only value
+that works is whatever Supabase injects — and since the project moved to the new
+API key system, that is the **`sb_secret_…` secret key**, not the legacy
+`service_role` JWT the dashboard still shows under Project Settings → API.
+
+Measured against `tmdb-proxy/warm` on 2026-08-24:
+
+| what you send | what comes back |
+|---|---|
+| `sb_secret_…` | `{"ok":true,"summary":{…}}` |
+| legacy `service_role` JWT (CLI) | `{"error":"not invited"}` — reaches the function, fails the comparison |
+| legacy `service_role` JWT (dashboard) | `{"code":"UNAUTHORIZED_LEGACY_JWT"}` — never reaches it |
+
+The middle row is the cruel one: a 403 that reads like an invite-gate problem
+when it is actually the wrong key. Get the right one without it touching your
+history:
+
+```bash
+SR=$(supabase projects api-keys --project-ref <ref> --reveal -o env | grep '^SUPABASE_DEFAULT_KEY=' | cut -d= -f2- | tr -d '"')
+```
+
+`SUPABASE_DEFAULT_KEY` is the `sb_secret_…` one. The `tr -d '"'` is not optional:
+`-o env` quotes its values, and the quotes travel inside the header and come back
+as `UNAUTHORIZED_INVALID_JWT_FORMAT`.
+
+⚠️ The live project's Vault already holds a working value — the crons run green
+daily, check `job_runs`. Only re-run the Vault step if you are provisioning a new
+project or the crons have actually stopped; seeding it with the legacy JWT would
+break all three at once, and the 401 dies inside `net._http_response` where
+nobody is looking.
 
 Then confirm:
 
@@ -147,11 +183,12 @@ Supabase function secrets.
 ### One-off backfills (run in rounds, driven by the data)
 
 Fire these **from the SQL editor**, the way the cron does — `net.http_post` with
-the key read out of the Vault. A `curl` needs the service key in your shell, and
-the header has to match `SUPABASE_SERVICE_ROLE_KEY` exactly, which the dashboard's
-newer `sb_secret_…` key is not. The secret's name is `episode_refresh_service_key`
-— what `schedule-jobs.sql` creates and what every caller now reads — and not the
-obvious `service_role_key`, which no project here has ever held.
+the key read out of the Vault. A `curl` works too, but it needs the *right* key
+in your shell: see [Which service key](#which-service-key) — this paragraph used
+to say the `sb_secret_…` one was not it, and that is now backwards. The Vault
+secret's name is `episode_refresh_service_key` — what `schedule-jobs.sql` creates
+and what every caller now reads — and not the obvious `service_role_key`, which
+no project here has ever held.
 
 ```sql
 select name from vault.secrets;   -- expect episode_refresh_service_key
@@ -214,16 +251,21 @@ steps: [MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md).
 - [ ] Magic-link login works **to a non-team email address** (proves custom SMTP).
 - [ ] A fresh signup is walled at `/invite` until it redeems a code, and can't
       write data before then (invite gate).
-- [ ] Manually invoke each cron once and check the JSON report:
+- [ ] Manually invoke each cron once and check the JSON report. `$SR` is the
+      `sb_secret_…` key — see [Which service key](#which-service-key); a
+      `{"error":"not invited"}` here means you used the legacy JWT, not that
+      anything is wrong with the deploy.
       ```bash
       curl -X POST https://<ref>.supabase.co/functions/v1/episode-refresh \
-        -H "Authorization: Bearer <SERVICE_ROLE_KEY>"
+        -H "Authorization: Bearer $SR"
       curl -X POST https://<ref>.supabase.co/functions/v1/alerts \
-        -H "Authorization: Bearer <SERVICE_ROLE_KEY>"
+        -H "Authorization: Bearer $SR"
       # expect {"ok":true,"summary":{"trending":24,"popular-now":48,…}} — a zero
       # or an "error: …" string in any slot means that cache stayed cold.
+      # It is also the TMDB credential check: every slot at zero is TMDB
+      # rejecting TMDB_API_KEY.
       curl -X POST https://<ref>.supabase.co/functions/v1/tmdb-proxy/warm \
-        -H "Authorization: Bearer <SERVICE_ROLE_KEY>"
+        -H "Authorization: Bearer $SR"
       ```
 - [ ] After ~a day (or a manual run), `select jobname, status, return_message
       from cron.job_run_details order by start_time desc limit 5;` shows
