@@ -137,6 +137,8 @@ const ES: Record<string, string> = {
     "Steam no ha podido confirmar esa identificación. Vuelve a probar.",
   "Couldn't save the Steam account. Try again.":
     "No se ha podido guardar la cuenta de Steam. Vuelve a probar.",
+  "That sign-in link was started from another account, so nothing was linked.":
+    "Ese enlace lo empezó otra cuenta, así que no se ha enlazado nada.",
   "Asking Steam for your games…": "Pidiéndole a Steam tus juegos…",
   "Steam sent back an empty list": "Steam ha devuelto una lista vacía",
   "That's what a private profile looks like — Steam answers with no games and no error. In Steam: Profile → Edit profile → Privacy Settings, and set \"Game details\" to Public. Then sync again.":

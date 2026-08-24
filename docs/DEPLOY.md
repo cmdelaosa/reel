@@ -78,6 +78,7 @@ supabase secrets set TMDB_API_KEY=...        # TMDB v4 read access token (or v3 
 supabase secrets set IGDB_CLIENT_ID=...       # Twitch app Client ID  (videojuegos)
 supabase secrets set IGDB_CLIENT_SECRET=...   # Twitch app Client Secret
 supabase secrets set STEAM_API_KEY=...        # Steam Web API key   (videojuegos)
+supabase secrets set APP_URL=https://...      # origen público de la app (vuelta de Steam)
 supabase secrets set RESEND_API_KEY=...       # Resend API key
 supabase secrets set RESEND_FROM="Reel <alerts@yourdomain.com>"   # verified domain
 ```
@@ -118,6 +119,24 @@ y confundirlas es el error que cuesta una tarde:
   con una cuenta de Steam que tenga algo comprado (Valve no la da a cuentas sin
   compras); el dominio que pide el formulario es informativo. Sin este secreto,
   `/scan` responde 502 y la pantalla dice que Steam no ha contestado.
+
+`APP_URL` es el origen al que Steam devuelve a la persona cuando termina
+(`https://reel-app.com`, sin barra final; en local, `http://localhost:5173` en
+`supabase/.env`). Es un **secreto y no la cabecera `Origin` de quien pidió el
+enlace**, y esa es la diferencia entre una redirección y una redirección
+abierta: `/login` la puede llamar cualquiera con sesión y con `curl`, así que si
+el destino saliera de la petición, lo elegiría quien la fabricó — y encima con
+una pantalla de Steam de por medio dándole apariencia de legítimo. Sin este
+secreto, `/return` responde 500 y el enlace no se completa.
+
+**El enlace de la cuenta son dos pasos, y hay que saberlo si se depura.**
+`/return` NO escribe en `profiles`: solo deja en el pagaré el SteamID64 que
+Valve ha confirmado y devuelve a `/games/steam?steam=confirm&n=…`; quien escribe
+es `/confirm`, que exige el JWT de la sesión y que el pagaré sea suyo. El motivo
+es que quien crea el pagaré elige su `user_id`: con un solo paso bastaría con
+pasarle a alguien el enlace de Steam para que su cuenta acabara enlazada a otro
+perfil. Un enlace que acaba en `steam=mismatch` es exactamente ese caso, y no un
+fallo.
 
 La clave viaja **en la query string**, y no hay alternativa: la Web API no
 acepta cabecera. Es exactamente la situación que con TMDB acabó con el secreto

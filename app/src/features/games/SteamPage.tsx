@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { AlertTriangle, CheckCircle2, Link2, Link2Off, Loader2, RefreshCw } from "lucide-react";
 import {
   startSteamLogin,
   useApplySteamImport,
+  useConfirmSteamLink,
   useScanSteam,
   useSteamImport,
   useSteamLink,
@@ -45,6 +46,10 @@ const RETURN_MESSAGE: Record<string, { text: string; bad: boolean }> = {
   taken: { text: "That Steam account is already connected to another Reel account.", bad: true },
   invalid: { text: "Steam couldn't confirm that sign-in. Try again.", bad: true },
   error: { text: "Couldn't save the Steam account. Try again.", bad: true },
+  /* El pagaré era de otra sesión: alguien te pasó un enlace de Steam que
+     enlazaba TU cuenta a SU perfil. No se ha escrito nada, y merece decirse
+     por su nombre en vez de con un "ha fallado". */
+  mismatch: { text: "That sign-in link was started from another account, so nothing was linked.", bad: true },
 };
 
 const hours = (minutes: number) => (minutes > 0 ? formatPlaytime(minutes) : "—");
@@ -60,8 +65,33 @@ export default function SteamPage() {
   const run = draft?.run ?? null;
   const items = useMemo(() => draft?.items ?? [], [draft]);
 
+  /* La vuelta de Steam aterriza con ?steam=confirm&n=… y NO con la cuenta ya
+     enlazada: escribirla es el segundo paso, y lo dispara esta sesión para que
+     sea su JWT —y no el pagaré— quien decida en qué perfil se escribe. El ref
+     es contra el doble montaje de StrictMode y contra los renders que traiga
+     la propia mutación. */
   const returned = params.get("steam");
-  const message = returned ? RETURN_MESSAGE[returned] : undefined;
+  const nonce = params.get("n");
+  const confirm = useConfirmSteamLink();
+  const claimed = useRef<string | null>(null);
+  useEffect(() => {
+    if (returned !== "confirm" || !nonce || claimed.current === nonce) return;
+    claimed.current = nonce;
+    confirm.mutate(nonce, {
+      onSettled: (status) =>
+        setParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("steam", status ?? "error");
+            next.delete("n");
+            return next;
+          },
+          { replace: true },
+        ),
+    });
+  }, [returned, nonce, confirm, setParams]);
+
+  const message = returned && returned !== "confirm" ? RETURN_MESSAGE[returned] : undefined;
   const dismiss = () =>
     setParams(
       (prev) => {

@@ -66,6 +66,29 @@ export async function startSteamLogin(): Promise<void> {
   window.location.assign(url);
 }
 
+/** El segundo paso del enlace: la sesión reclama el SteamID64 que Steam acaba
+ *  de confirmar.
+ *
+ *  Existe porque la vuelta de Steam no puede escribir sola: el pagaré lo crea
+ *  quien quiera, así que dejar que decidiera el perfil de destino convertiría
+ *  un enlace compartido en "tu cuenta de Steam acaba en MI perfil". Aquí lo
+ *  decide el JWT. Ver supabase/functions/steam-sync y la migración 0074. */
+export function useConfirmSteamLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nonce: string) => {
+      const data = await call("/confirm", {
+        method: "POST",
+        body: JSON.stringify({ nonce }),
+      });
+      return z
+        .object({ status: z.enum(["linked", "taken", "expired", "mismatch", "error"]) })
+        .parse(data).status;
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.steamLink }),
+  });
+}
+
 export function useUnlinkSteam() {
   const qc = useQueryClient();
   return useMutation({

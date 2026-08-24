@@ -78,16 +78,26 @@ comment on column public.library_entries.owned is
 -- este pagaré de un solo uso, que no vale para nada más y caduca en diez
 -- minutos.
 --
--- `return_to_origin` es de dónde salió la petición (la cabecera Origin, que
--- pone el navegador y una página no puede falsear), y no un parámetro que
--- mande el cliente: si lo mandara, cualquiera con sesión podría convertir la
--- vuelta de Steam en una redirección abierta a donde quisiera.
+-- ── Y por qué el pagaré NO basta para escribir `profiles.steam_id` ────────
+-- Quien crea el pagaré elige el `user_id`, así que si la vuelta de Steam
+-- escribiera directamente sobre él, esto sería un *login CSRF* de manual:
+-- alguien con cuenta en Reel pide un pagaré, le pasa a otra persona el enlace
+-- de Steam, esa persona se identifica de buena fe y su SteamID64 acaba escrito
+-- en el perfil del PRIMERO — que a partir de ahí se importa la biblioteca de
+-- Steam de alguien que no es él.
+--
+-- Por eso hay dos pasos y esta columna: la vuelta de Steam solo deja aquí el
+-- SteamID64 que Valve ha confirmado, y quien lo reclama es la SESIÓN, en una
+-- llamada aparte que exige que el dueño del pagaré sea quien la hace. Si el
+-- pagaré es de otro, no se escribe nada.
 create table if not exists public.steam_link_nonces (
-  nonce             text primary key,
-  user_id           uuid not null references public.profiles on delete cascade,
-  return_to_origin  text not null,
-  created_at        timestamptz not null default now(),
-  expires_at        timestamptz not null default now() + interval '10 minutes'
+  nonce       text primary key,
+  user_id     uuid not null references public.profiles on delete cascade,
+  -- Null hasta que Steam confirma. Con valor = verificado y esperando a que su
+  -- dueño lo reclame.
+  steam_id    text,
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz not null default now() + interval '10 minutes'
 );
 create index if not exists steam_link_nonces_expiry_idx on public.steam_link_nonces (expires_at);
 

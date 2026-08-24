@@ -96,6 +96,11 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
     airedCount: released ? 1 : 0,
     watchedCount: finished ? 1 : 0,
     playState,
+    // Los mismos cuatro datos que usa la biblioteca (lib/library.ts). Sin
+    // `owned` y `minutesPlayed`, la ficha derivaría 'backlog' donde la rejilla
+    // dice 'owned', y las dos pantallas dirían cosas distintas del mismo juego.
+    owned,
+    minutesPlayed: minutes,
   });
   const progress = hoursProgress(minutes, title?.beat_seconds, status);
 
