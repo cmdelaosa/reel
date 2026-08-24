@@ -114,6 +114,16 @@ const ES: Record<string, string> = {
   "Finished — tap to clear": "Terminado — toca para quitarlo",
   "Platforms": "Plataformas",
   "Library": "Biblioteca",
+  /* Esta noche, en juegos. El héroe no dice "elige juego": un juego empezado se
+     retoma, y elegir es lo que se hace en la pestaña Pendientes. De ahí que
+     reutilice "Pick up where you left off", que ya existe en el Esta noche de
+     series y dice exactamente eso. */
+  "Start something": "Empieza algo",
+  "Just out": "Recién salidos",
+  "Nothing out recently.": "Nada recién salido.",
+  "Nothing announced in the games you follow.": "Nada anunciado en los juegos que sigues.",
+  "Nothing on the go — hit {key} and add a game.":
+    "No tienes nada entre manos — pulsa {key} y añade un juego.",
   "Most played": "Más jugados",
   "No games yet — hit {key} and add one.": "Aún no hay juegos — pulsa {key} y añade uno.",
   "Movie details": "Ficha de la película",

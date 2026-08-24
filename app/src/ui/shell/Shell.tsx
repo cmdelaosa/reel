@@ -46,12 +46,20 @@ const MOVIE_TABS = [
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
-/* Dos, no cinco. "Esta noche", "Lanzamientos" y "Explorar" de juegos llegan en
-   su propia rodaja, igual que le pasó al cine, y hasta entonces sus pestañas NO
-   se pintan: una pestaña que lleva a una ruta sin página es peor que una
-   pestaña que falta. Amigos sigue siendo la misma en los tres modos. */
+/* Tres de las cinco. "Lanzamientos" y "Explorar" de juegos llegan en los dos
+   commits siguientes de esta misma rama, y hasta entonces sus pestañas NO se
+   pintan: una pestaña que lleva a una ruta sin página es peor que una pestaña
+   que falta. Amigos sigue siendo la misma en los tres modos.
+
+   "Pendientes" ocupa el sitio que en los otros dos modos ocupa "Watchlist", y
+   se llama distinto a propósito: es LA palabra que usa quien juega para lo que
+   tiene por jugar, y además es el nombre del cubo al que la pestaña lleva, así
+   que la pestaña y el chip dicen lo mismo. "Playlist" habría rimado con las
+   otras dos y significado otra cosa — en una app de tres medios se lee como
+   música. */
 const GAME_TABS = [
-  { path: "/games/library", label: "Library", icon: Bookmark },
+  { path: "/games/tonight", label: "Tonight", icon: Clapperboard },
+  { path: "/games/backlog", label: "Backlog", icon: Bookmark },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
@@ -75,12 +83,12 @@ const ownedByAMedium = (pathname: string): boolean => {
 };
 
 /** La portada de cada modo, adonde te lleva el conmutador desde una ruta que
- *  es del medio que dejas. En juegos es la biblioteca porque es lo único que
- *  hay: no existe todavía una pantalla de "esta noche" que hiciera de portada. */
+ *  es del medio que dejas. Los tres son ya su "esta noche": es la pantalla que
+ *  responde la pregunta con la que se abre la app. */
 const HOME: Record<Medium, string> = {
   tv: "/tonight",
   movie: "/movies/tonight",
-  game: "/games/library",
+  game: "/games/tonight",
 };
 
 /* El conmutador de la barra: TV | Movies | Games, con el modo activo relleno de
