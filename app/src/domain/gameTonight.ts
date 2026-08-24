@@ -55,11 +55,23 @@ export function orderByTouched<T extends Playable>(games: readonly T[]): T[] {
  *  'ongoing' NO entra en la caída, y sí en la lista de arriba si lo marcaste
  *  como que lo estás jugando: un CS que no has abierto en un año está en "Sin
  *  final", no en "Jugando", y proponerlo de héroe sería proponer lo que
- *  precisamente dejaste aparcado. */
+ *  precisamente dejaste aparcado.
+ *
+ *  ── 'owned' entra en la caída, detrás de los pendientes (0076) ───────────
+ *  Un juego traído de Steam que no has tocado no es 'backlog' —se queda fuera
+ *  de ese cubo a propósito, para que la importación no se coma la lista que TÚ
+ *  eliges— pero sí es candidato a esta noche: lo tienes y no lo has empezado,
+ *  que es exactamente lo que esta caída busca. Sin él, quien llegue a Reel
+ *  importando su cuenta de Steam se encuentra la portada de juegos VACÍA, que
+ *  es justo el caso que la caída existe para evitar.
+ *
+ *  Detrás y no mezclado: un pendiente lo pusiste tú ahí, y eso es una señal más
+ *  fuerte que "está en tu cuenta de Steam". Dentro de cada grupo, lo más
+ *  reciente. */
 export function pickResume<T extends Playable>(games: readonly T[]): T | undefined {
   const playing = orderByTouched(games);
   if (playing.length > 0) return playing[0];
-  return games
-    .filter((g) => g.status === "backlog")
-    .sort((a, b) => touchedMs(b) - touchedMs(a))[0];
+  const recent = (status: string) =>
+    games.filter((g) => g.status === status).sort((a, b) => touchedMs(b) - touchedMs(a))[0];
+  return recent("backlog") ?? recent("owned");
 }
