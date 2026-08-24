@@ -485,6 +485,26 @@ const ES: Record<string, string> = {
   "self: finished {name}": "terminaste {name}",
   "added {name} to their backlog": "añadió {name} a sus pendientes",
   "self: added {name} to their backlog": "añadiste {name} a tus pendientes",
+  /* La biblioteca, que es la tercera lista (0077). No la decide el medio sino
+     la fila: un juego marcado "Lo tengo" NO está en pendientes, así que decir
+     que se añadió ahí sería mentir sobre dónde cayó. Es lo que pasa con todo
+     lo que entra por la importación de Steam. */
+  "added {name} to their library": "añadió {name} a su biblioteca",
+  "self: added {name} to their library": "añadiste {name} a tu biblioteca",
+  /* Y las plegadas: "añadió 39 juegos a su biblioteca". El sustantivo va
+     aparte ({things}) porque en español lleva género y el orden de la frase no
+     es el inglés — que es justo para lo que estas claves son la frase entera y
+     no trozos encadenados. */
+  "added {count} {things} to their library": "añadió {count} {things} a su biblioteca",
+  "self: added {count} {things} to their library": "añadiste {count} {things} a tu biblioteca",
+  "added {count} {things} to their backlog": "añadió {count} {things} a sus pendientes",
+  "self: added {count} {things} to their backlog": "añadiste {count} {things} a tus pendientes",
+  "added {count} {things} to their watchlist": "añadió {count} {things} a su lista",
+  "self: added {count} {things} to their watchlist": "añadiste {count} {things} a tu lista",
+  "games": "juegos",
+  "movies": "películas",
+  "See which ones": "Ver cuáles",
+  "+{n} more — the rest are in their library": "+{n} más — el resto, en su biblioteca",
   // Reactions on those rows (0058)
   "React": "Reaccionar",
   "Reaction": "Reacción",
@@ -804,6 +824,10 @@ const EN: Record<string, string> = {
   "self: watched {eps} of {name}": "watched {eps} of {name}",
   "self: finished {name}": "finished {name}",
   "self: added {name} to their backlog": "added {name} to your backlog",
+  "self: added {name} to their library": "added {name} to your library",
+  "self: added {count} {things} to their library": "added {count} {things} to your library",
+  "self: added {count} {things} to their backlog": "added {count} {things} to your backlog",
+  "self: added {count} {things} to their watchlist": "added {count} {things} to your watchlist",
 };
 
 /** Dictionaries by language. */

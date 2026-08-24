@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { addedList, historyLines, mediumLabel, showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
+import {
+  addedList,
+  addedListOf,
+  historyLines,
+  mediumLabel,
+  showsEpisodeCount,
+  watchedPhrase,
+} from "@/domain/mediumCopy";
 
 /* La regla que estas pruebas sostienen es una sola, y es la que los episodios
    sintéticos de 0067 y 0071 ponen en peligro cada vez que alguien toca estas
@@ -34,6 +41,33 @@ describe("addedList", () => {
 
   it("un juego se añade a los pendientes, que es como se llama su cubo", () => {
     expect(addedList("game")).toBe("backlog");
+  });
+});
+
+/* La tercera lista (0077), que no la decide el medio sino la fila: un juego
+   marcado "Lo tengo" (0076) no está en Pendientes — ese estado existe para
+   sacarlo de ese cubo—, así que del muro no puede salir "lo añadió a sus
+   pendientes". */
+describe("addedListOf", () => {
+  it("manda lo que diga el servidor", () => {
+    expect(addedListOf("game", "library")).toBe("library");
+    expect(addedListOf("game", "backlog")).toBe("backlog");
+    expect(addedListOf("tv", "watchlist")).toBe("watchlist");
+  });
+
+  it("sin columna, el respaldo es lo que se sabe del medio", () => {
+    // El hueco entre desplegar el frontend y aplicar la migración: la fila
+    // llega sin `added_list` y tiene que pintarse igual que ayer, no romperse.
+    expect(addedListOf("game")).toBe("backlog");
+    expect(addedListOf("game", null)).toBe("backlog");
+    expect(addedListOf("movie", undefined)).toBe("watchlist");
+  });
+
+  it("un valor que no reconoce no se cuela hasta la frase", () => {
+    // Si mañana el servidor inventa una lista, la fila dice lo de siempre en
+    // vez de quedarse sin frase: no hay clave de diccionario para "inventada".
+    expect(addedListOf("game", "inventada")).toBe("backlog");
+    expect(addedListOf("tv", "")).toBe("watchlist");
   });
 });
 
