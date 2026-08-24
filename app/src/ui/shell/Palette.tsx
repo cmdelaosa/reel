@@ -2,15 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Clock, Search } from "lucide-react";
 import { qk } from "@/lib/queryKeys";
+import { useMedium } from "@/lib/medium";
 import { usePrefetchTitle } from "@/lib/useOpenTitle";
-import { searchShows, tmdbImg } from "@/lib/tmdb";
+import { searchMovies, searchShows, tmdbImg } from "@/lib/tmdb";
 import { isEs, t as tr, tGenre } from "@/lib/i18n";
 import { posterBg } from "@/ui/posterBg";
 import { WatchOn } from "@/ui/WatchOn";
 
 /* ⌘K command palette — TMDB search via the edge proxy. Markup/classes ported
    from prototype/src/marquee.tsx Palette; data is live (debounced 300ms,
-   min 2 chars). Recent searches (last 5) show while the query is empty. */
+   min 2 chars). Recent searches (last 5) show while the query is empty.
+
+   Busca en el medio en el que estés: series en TV, cine en Movies. No en los
+   dos a la vez — una lista mezclada obligaría a mirar un glifo en cada fila
+   para saber qué estás abriendo, y el conmutador ya dice en qué modo estás.
+   Los recientes son comunes: "dune" es la misma palabra en los dos sitios. */
 
 const RECENT_KEY = "reel.recentSearches";
 
@@ -50,12 +56,14 @@ export function Palette({ onClose, onOpen }: {
   const debounced = useDebounced(q.trim(), 300);
   const [recent] = useState<string[]>(loadRecent);
   const prefetchTitle = usePrefetchTitle();
+  const medium = useMedium();
+  const movies = medium === "movie";
 
   const { data: results, isFetching } = useQuery({
-    queryKey: qk.search(debounced),
+    queryKey: movies ? qk.movieSearch(debounced) : qk.search(debounced),
     enabled: debounced.length >= 2,
     staleTime: 60_000,
-    queryFn: () => searchShows(debounced),
+    queryFn: () => (movies ? searchMovies(debounced) : searchShows(debounced)),
   });
 
   useEffect(() => inputRef.current?.focus(), []);
@@ -70,11 +78,13 @@ export function Palette({ onClose, onOpen }: {
   const rows = debounced.length >= 2 ? (results ?? []) : [];
   const selectedTmdbId = rows[sel]?.tmdb_id;
 
+  // Solo series: lo que precarga es el detalle CON temporadas y episodios, que
+  // en una película no existen — la ficha de cine se abre con una sola llamada.
   useEffect(() => {
-    if (selectedTmdbId == null) return;
+    if (selectedTmdbId == null || movies) return;
     const timer = setTimeout(() => void prefetchTitle(selectedTmdbId), 150);
     return () => clearTimeout(timer);
-  }, [selectedTmdbId, prefetchTitle]);
+  }, [selectedTmdbId, prefetchTitle, movies]);
 
   const open = (tmdbId: number) => {
     pushRecent(debounced);
@@ -91,14 +101,14 @@ export function Palette({ onClose, onOpen }: {
   return (
     <>
       <div className="backdrop" onClick={onClose} />
-      <div className="mq-pal sheet" onKeyDown={onKey} role="dialog" aria-modal="true" aria-label={tr("Search shows")}>
+      <div className="mq-pal sheet" onKeyDown={onKey} role="dialog" aria-modal="true" aria-label={tr(movies ? "Search movies" : "Search shows")}>
         <div className="mq-pal-head">
           <Search size={17} className="mute" />
           <input
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={tr("Search TV shows…")}
+            placeholder={tr(movies ? "Search movies…" : "Search TV shows…")}
           />
           <kbd className="mq-kbd">esc</kbd>
         </div>

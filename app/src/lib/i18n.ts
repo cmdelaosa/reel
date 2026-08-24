@@ -82,6 +82,22 @@ const ES: Record<string, string> = {
   "Scroll right": "Desplazar a la derecha",
   "Search shows": "Buscar series",
 
+  // ---- Cine ----
+  // El conmutador de la barra y lo que solo existe en el modo Movies. "TV" y
+  // "Movies" son etiquetas de dos palabras que se leen igual en español, pero
+  // pasan por t() como todo lo demás: si mañana alguien quiere "Cine", el
+  // cambio es una línea aquí y no una cacería por los componentes.
+  "Medium": "Medio",
+  "TV": "Series",
+  "Movies": "Cine",
+  "My Movies": "Mi cine",
+  "Movie details": "Ficha de la película",
+  "Director": "Dirección",
+  "Directors": "Dirección",
+  "Writers": "Guion",
+  "This film": "Esta película",
+  "No movies yet — hit {key} and add one.": "Aún no hay películas — pulsa {key} y añade una.",
+
   // ---- Settings sheet ----
   "Theme": "Tema",
   "System": "Sistema",
@@ -478,6 +494,8 @@ const ES: Record<string, string> = {
 
   // ---- Search palette ----
   "Search TV shows…": "Busca series…",
+  "Search movies…": "Busca películas…",
+  "Search movies": "Buscar películas",
   "No results.": "Sin resultados.",
   "Searching…": "Buscando…",
   "Type to search TMDB.": "Escribe para buscar en TMDB.",
@@ -672,33 +690,44 @@ export function tGenre(g: string): string {
 
 /* ---- Localized show names ---------------------------------------------- */
 
-/** tmdb_id → Spanish title, for every cached title that has one. Loaded once
- *  per session (and only in Spanish); RLS: titles are authenticated-readable.
- *  Errors degrade to an empty map — canonical names render instead. */
-export function useEsNames(): Map<number, string> {
+/** "medio:tmdb_id" → Spanish title, for every cached title that has one.
+ *  Loaded once per session (and only in Spanish); RLS: titles are
+ *  authenticated-readable. Errors degrade to an empty map — canonical names
+ *  render instead.
+ *
+ *  La clave lleva el medio porque un id de TMDB solo es único dentro del suyo
+ *  (0067): con el número a secas, el título español de una película pisaba el
+ *  de la serie del mismo id — y al revés, según cuál llegara última. */
+export function useEsNames(): Map<string, string> {
   const { session } = useAuth();
   const { data } = useQuery({
     queryKey: ["esNames"],
     enabled: isEs() && Boolean(session?.user.id),
     staleTime: 60 * 60 * 1000,
-    queryFn: async (): Promise<[number, string][]> => {
+    queryFn: async (): Promise<[string, string][]> => {
       // Silent-fail: against a DB that predates migration 0046 the column is
       // missing — canonical names are a fine fallback, never toast about it.
       const { data, error } = await supabase
         .from("titles")
-        .select("tmdb_id, name_es")
+        .select("tmdb_id, kind, name_es")
         .not("name_es", "is", null);
       if (error) return [];
       return (data ?? [])
-        .filter((r): r is { tmdb_id: number; name_es: string } => Boolean(r.name_es))
-        .map((r) => [r.tmdb_id, r.name_es]);
+        .filter((r): r is { tmdb_id: number; kind: string; name_es: string } => Boolean(r.name_es))
+        .map((r) => [`${r.kind}:${r.tmdb_id}`, r.name_es]);
     },
   });
   return useMemo(() => new Map(data ?? []), [data]);
 }
 
-/** Display name for a title given the loaded map (canonical fallback). */
-export function locName(esNames: Map<number, string>, tmdbId: number | string | null | undefined, fallback: string): string {
+/** Display name for a title given the loaded map (canonical fallback).
+ *  `kind` por defecto "tv": lo son las dos docenas de llamadas que ya había. */
+export function locName(
+  esNames: Map<string, string>,
+  tmdbId: number | string | null | undefined,
+  fallback: string,
+  kind: "tv" | "movie" = "tv",
+): string {
   if (!isEs() || tmdbId == null) return fallback;
-  return esNames.get(Number(tmdbId)) ?? fallback;
+  return esNames.get(`${kind}:${Number(tmdbId)}`) ?? fallback;
 }

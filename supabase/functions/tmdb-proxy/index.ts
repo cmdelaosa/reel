@@ -9,7 +9,17 @@
 //   GET /collection/:slug          → { results: TitleRow[] }
 //   GET /title/:tmdbId             → { title: TitleRow, seasons: SeasonRow[] }
 //   GET /title/:tmdbId/season/:n   → { season: SeasonRow, episodes: EpisodeRow[] }
+//   GET /movie/search?q=           → { results: TitleRow[] }
+//   GET /movie/:tmdbId             → { title: TitleRow, episode_id: uuid|null }
+//   GET /movie/:tmdbId/credits     → { cast: […], crew: […] }
+//   GET /movie/:tmdbId/saga        → { collection, parts: TitleRow[] }
 //   POST /warm                     → { ok, summary }  (service-role cron only)
+//
+// Series y películas comparten la tabla `titles` y se distinguen por `kind`.
+// Un id de TMDB solo es único DENTRO de su medio (/tv/1399 y /movie/1399 son
+// cosas distintas), así que desde 0067 la identidad de un título es la pareja
+// (kind, tmdb_id) — de ahí el onConflict y los .eq("kind", …) de todo el
+// fichero. Quitar cualquiera de los dos hace que una película pise una serie.
 //
 // Every response is served from the metadata cache (rows written with the
 // service-role key) — the client never sees raw TMDB payloads. /title and
@@ -379,6 +389,19 @@ const TV_GENRES: Record<number, string> = {
   10766: "Soap", 10767: "Talk", 10768: "War & Politics", 37: "Western",
 };
 
+// TMDB MOVIE genre ids → names. A separate space from the TV one above, and
+// only partly overlapping: 18 is Drama in both, but 10759 (TV's Action &
+// Adventure) doesn't exist for film, which splits it into 28 and 12. Reading a
+// movie's ids through TV_GENRES silently drops the ones that don't collide and
+// mislabels nothing — which is worse, because it looks like it worked.
+const MOVIE_GENRES: Record<number, string> = {
+  28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+  99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
+  27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance",
+  878: "Science Fiction", 10770: "TV Movie", 53: "Thriller", 10752: "War",
+  37: "Western",
+};
+
 // Content hidden from the *discovery* surfaces (trending + popular) only;
 // search still finds any of it by name. TMDB's /discover can't express these
 // exclusions (no without_language param; with_original_language is single-
@@ -477,12 +500,16 @@ function upcomingSeason(seasons: Any[], last: Any, next: Any): { number: number;
 
 // Spain-Spanish translation from a detail payload fetched with
 // append_to_response=translations (es-ES preferred, plain es as fallback).
+//
+// `name` for a series, `title` for a film: TMDB carries the localized name
+// under a different key per medium, and reading only the first one left every
+// Spanish film title null while looking like it had simply not been translated.
 function esTranslation(d: Any): { name: string | null; overview: string | null } {
   const all: Any[] = d?.translations?.translations ?? [];
   const t =
     all.find((x) => x.iso_639_1 === "es" && x.iso_3166_1 === "ES") ??
     all.find((x) => x.iso_639_1 === "es");
-  return { name: t?.data?.name || null, overview: t?.data?.overview || null };
+  return { name: t?.data?.name || t?.data?.title || null, overview: t?.data?.overview || null };
 }
 
 /* Hand-mirrors app/src/domain/watchProviders.ts — the canonical spec, with the
@@ -623,6 +650,74 @@ function searchRow(r: Any) {
     backdrop_path: r.backdrop_path ?? null,
     first_air_date: r.first_air_date || null,
     genres: (r.genre_ids ?? []).map((id: number) => TV_GENRES[id]).filter(Boolean),
+    vote_average: r.vote_average ?? null,
+    popularity: r.popularity ?? null,
+  };
+}
+
+/* ── películas ───────────────────────────────────────────────────────────────
+   Las dos filas de arriba tienen su gemela para cine. Las columnas son las
+   mismas — `titles` es una tabla para los dos medios desde 0002 — y solo cambia
+   de dónde sale cada una:
+
+     first_air_date  ← release_date   (el estreno; para una serie, el del piloto)
+     episode_run_time ← runtime       (la duración de la película, en minutos)
+     network         ← el estudio     (production_companies[0], que es lo más
+                                       parecido a "de quién es esto")
+     status          ← "Released" | "Post Production" | "Planned" | …
+
+   `aired_count` se queda deliberadamente SIN escribir: en una serie lo calcula
+   TMDB desde sus temporadas, y en una película el recuento sale del episodio
+   sintético que mantiene el trigger de 0067 — que ya sabe si la fecha de
+   estreno pasó. Escribir un 1 aquí diría que una película de 2027 ya se
+   estrenó. */
+
+function movieRow(d: Any) {
+  const providers = providerMap(d);
+  const es = d.translations ? esTranslation(d) : null;
+  return {
+    tmdb_id: d.id,
+    kind: "movie",
+    name: d.title ?? d.original_title ?? "Untitled",
+    original_name: d.original_title ?? null,
+    ...(es ? { name_es: es.name, overview_es: es.overview } : {}),
+    overview: d.overview ?? null,
+    poster_path: d.poster_path ?? null,
+    backdrop_path: d.backdrop_path ?? null,
+    first_air_date: d.release_date || null,
+    status: d.status ?? null,
+    // Una película trae su tconst en el propio payload, sin external_ids: es lo
+    // que empareja el importador de notas de IMDb (scripts/imdb-ratings).
+    ...(d.imdb_id !== undefined ? { imdb_id: d.imdb_id || null } : {}),
+    genres: (d.genres ?? []).map((g: Any) => g.name),
+    network: d.production_companies?.[0]?.name ?? null,
+    ...(providers ? { providers } : {}),
+    episode_run_time: d.runtime ?? null,
+    vote_average: d.vote_average ?? null,
+    popularity: d.popularity ?? null,
+    // La saga (0067). Se escribe siempre que el payload sea un detalle —
+    // incluido el null — porque una película puede SALIR de una colección
+    // cuando TMDB la reorganiza, y dejar el id viejo puesto la colgaría de una
+    // saga que ya no es la suya.
+    collection_id: d.belongs_to_collection?.id ?? null,
+    collection_name: d.belongs_to_collection?.name ?? null,
+    last_refreshed_at: new Date().toISOString(),
+  };
+}
+
+// Parcial, como searchRow: /search/movie trae genre_ids y ni duración ni
+// estudio ni estado, así que esas columnas se omiten en vez de nulificarse para
+// no vaciar una fila que un detalle completo ya había rellenado.
+function movieSearchRow(r: Any) {
+  return {
+    tmdb_id: r.id,
+    kind: "movie",
+    name: r.title ?? r.original_title ?? "Untitled",
+    overview: r.overview ?? null,
+    poster_path: r.poster_path ?? null,
+    backdrop_path: r.backdrop_path ?? null,
+    first_air_date: r.release_date || null,
+    genres: (r.genre_ids ?? []).map((id: number) => MOVIE_GENRES[id]).filter(Boolean),
     vote_average: r.vote_average ?? null,
     popularity: r.popularity ?? null,
   };
@@ -897,13 +992,49 @@ async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: numbe
   // watch/providers rides the append: no extra request, and TMDB hands back
   // every country at once, so switching country never refetches anything.
   const d = await fetchTmdb(apiKey, `/tv/${tmdbId}?append_to_response=translations,external_ids,watch/providers`);
-  const [title] = await upsertReturning(admin, "titles", titleRow(d), "tmdb_id");
+  const [title] = await upsertReturning(admin, "titles", titleRow(d), "kind,tmdb_id");
   inBackground(cacheNetworkLogos(admin, d.networks));
   const seasons = (d.seasons ?? []).length
     ? await upsertReturning(admin, "seasons", d.seasons.map((s: Any) => seasonRow(title.id, s)), "title_id,number")
     : [];
   return { title, seasons };
 }
+
+/** TMDB → caché de una película; devuelve la forma de GET /movie/:id.
+ *
+ *  Sin temporadas y sin episodios: el episodio sintético que hace que "vista"
+ *  se pueda escribir lo pone el trigger de 0067 al guardar el título, así que
+ *  aquí no hay nada más que hacer. La saga se queda en dos columnas de la
+ *  propia fila; las hermanas las trae /movie/:id/saga.
+ *
+ *  Sin cacheNetworkLogos: esa caché guarda logos de CADENAS, y lo que una
+ *  película trae en `network` es su estudio — que no tiene logo en TMDB por esa
+ *  vía. Los logos que la ficha sí enseña son los de las plataformas, y esos
+ *  vienen en `providers`, no de aquí. */
+async function refreshMovie(admin: SupabaseClient, apiKey: string, tmdbId: number) {
+  const d = await fetchTmdb(apiKey, `/movie/${tmdbId}?append_to_response=translations,watch/providers`);
+  const [title] = await upsertReturning(admin, "titles", movieRow(d), "kind,tmdb_id");
+  // El upsert no puede devolver el episodio que su propio trigger acaba de
+  // escribir, así que en el camino frío sí hay un viaje más — uno, y solo la
+  // primera vez que alguien abre esta película.
+  const { data: ep } = await admin
+    .from("episodes").select("id").eq("title_id", title.id).limit(1).maybeSingle();
+  return { title, episodeId: (ep?.id as string | undefined) ?? null };
+}
+
+/** El id del episodio sintético de una película — lo que marcar "vista" escribe
+ *  en watch_events, que sigue siendo una tabla de episodios (0067).
+ *
+ *  Viaja en la respuesta en vez de dejar que el cliente lo busque: es un dato
+ *  que la ficha necesita antes del primer clic, y pedirlo aparte es una espera
+ *  más en el camino de algo que ya está resuelto aquí. Nulo solo si alguien
+ *  escribió la fila esquivando el trigger, y entonces la ficha se dibuja sin
+ *  botón de marcar en lugar de fingir uno que fallaría.
+ *
+ *  Se lee INCRUSTADO en el propio select del título, como /title hace con sus
+ *  temporadas: en una fila caliente el viaje aparte era el único que quedaba, y
+ *  lo pagaba cada apertura de ficha. */
+const episodeIdOf = (row: Any): string | null => row?.episodes?.[0]?.id ?? null;
 
 /** TMDB → cache refresh of one season's episodes; returns the
  *  GET /title/:id/season/:n response shape. `enrich` is turned off by the
@@ -1045,7 +1176,10 @@ const DISCOVER_TTL_MS = 24 * 3600 * 1000;
 /** Title rows for an ordered tmdb_id list, in that order. */
 async function titlesInOrder(admin: SupabaseClient, tmdbIds: number[]): Promise<Any[]> {
   if (tmdbIds.length === 0) return [];
-  const { data } = await admin.from("titles").select("*").in("tmdb_id", tmdbIds);
+  // kind='tv': los cuatro descubrimientos que llaman aquí son de series, y un
+  // id de TMDB solo es único dentro de su medio (0067) — sin el filtro, una
+  // película con el mismo id entraría en la rejilla de series.
+  const { data } = await admin.from("titles").select("*").eq("kind", "tv").in("tmdb_id", tmdbIds);
   const byTmdb = new Map((data ?? []).map((r: Any) => [r.tmdb_id, r]));
   return tmdbIds.map((id) => byTmdb.get(id)).filter(Boolean);
 }
@@ -1107,7 +1241,7 @@ async function resolveTrending(admin: SupabaseClient, apiKey: string, force = fa
   const results = capNonWestern(dedupeVisible(pages));
   results.length = Math.min(results.length, TREND_KEEP);
   if (results.length === 0) return [];
-  await upsertReturning(admin, "titles", results.map(searchRow), "tmdb_id");
+  await upsertReturning(admin, "titles", results.map(searchRow), "kind,tmdb_id");
   const ranked = results.map((r, i) => ({ tmdb_id: r.id as number, rank: i + 1 }));
   // Upsert (not delete+insert) so two concurrent cold-cache refreshes can't
   // collide on the PK. Stale rows keep their old cached_at and are filtered out
@@ -1192,7 +1326,7 @@ async function resolvePopularNow(admin: SupabaseClient, apiKey: string, force = 
   keep.length = Math.min(keep.length, KEEP);
   if (keep.length === 0) return [];
   // We hold full details here, so upsert the rich row (network, status…).
-  await upsertReturning(admin, "titles", keep.map(titleRow), "tmdb_id");
+  await upsertReturning(admin, "titles", keep.map(titleRow), "kind,tmdb_id");
   await cacheNetworkLogos(admin, keep.flatMap((d: Any) => d.networks ?? []));
   const ranked = keep.map((d, i) => ({ tmdb_id: d.id as number, rank: i + 1 }));
   const now = new Date().toISOString();
@@ -1224,7 +1358,7 @@ async function resolvePopular(
   ]);
   const uniq = capNonWestern(boostSpanish(dedupeVisible(pages)));
   if (uniq.length === 0) return [];
-  await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
+  await upsertReturning(admin, "titles", uniq.map(searchRow), "kind,tmdb_id");
   const ids = uniq.map((r) => r.id as number);
   await writeDiscoverCache(admin, key, ids);
   return ids;
@@ -1272,7 +1406,7 @@ async function resolveTopRated(
   );
   const uniq = capNonWestern(dedupeVisible(pages));
   if (uniq.length === 0) return [];
-  await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
+  await upsertReturning(admin, "titles", uniq.map(searchRow), "kind,tmdb_id");
   const ids = uniq.map((r) => r.id as number);
   await writeDiscoverCache(admin, key, ids);
   return ids;
@@ -1454,7 +1588,7 @@ Deno.serve(async (req) => {
       ]);
       const results: Any[] = data.results ?? [];
       if (results.length === 0) return json({ results: [] });
-      let saved = await upsertReturning(admin, "titles", results.map(searchRow), "tmdb_id");
+      let saved = await upsertReturning(admin, "titles", results.map(searchRow), "kind,tmdb_id");
       const esById = new Map(((esData?.results ?? []) as Any[]).map((r) => [r.id, r]));
       if (wantEs && esById.size > 0) {
         const patches = results
@@ -1472,7 +1606,7 @@ Deno.serve(async (req) => {
             };
           })
           .filter(Boolean);
-        if (patches.length) saved = await upsertReturning(admin, "titles", patches, "tmdb_id");
+        if (patches.length) saved = await upsertReturning(admin, "titles", patches, "kind,tmdb_id");
       }
       // preserve TMDB relevance order
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
@@ -1529,9 +1663,152 @@ Deno.serve(async (req) => {
       }
       const uniq = capNonWestern(deduped);
       if (uniq.length === 0) return json({ results: [] });
-      const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "tmdb_id");
+      const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "kind,tmdb_id");
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
       return json({ results: uniq.map((r) => byTmdb.get(r.id)).filter(Boolean) });
+    }
+
+    /* ── películas ───────────────────────────────────────────────────────────
+       Tres rutas, hermanas de /search, /title/:id y /title/:id/credits. Van
+       antes que ellas por una razón de forma, no de gusto: /movie/:id ha de
+       leerse antes que cualquier patrón más suelto, y tenerlas juntas evita que
+       la próxima ruta que alguien añada se cuele en medio. */
+
+    // GET /movie/search?q=&lang=es — mismo trato que /search: TMDB ya encuentra
+    // por título traducido, y lang=es solo añade la pasada que rellena
+    // name_es / original_name para que la paleta pueda enseñarlo en español.
+    if (path === "/movie/search") {
+      const q = url.searchParams.get("q")?.trim();
+      if (!q) return json({ results: [] });
+      const wantEs = url.searchParams.get("lang") === "es";
+      const [data, esData] = await Promise.all([
+        fetchTmdb(apiKey, `/search/movie?query=${encodeURIComponent(q)}&include_adult=false`),
+        wantEs
+          ? fetchTmdb(apiKey, `/search/movie?query=${encodeURIComponent(q)}&include_adult=false&language=es-ES`).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      const results: Any[] = data.results ?? [];
+      if (results.length === 0) return json({ results: [] });
+      let saved = await upsertReturning(admin, "titles", results.map(movieSearchRow), "kind,tmdb_id");
+      const esById = new Map(((esData?.results ?? []) as Any[]).map((r) => [r.id, r]));
+      if (wantEs && esById.size > 0) {
+        const patches = results
+          .map((r) => {
+            const es = esById.get(r.id);
+            if (!es) return null;
+            return {
+              tmdb_id: r.id,
+              kind: "movie",
+              name: r.title ?? r.original_title ?? "Untitled",
+              original_name: es.original_title ?? r.original_title ?? null,
+              // La búsqueda en es-ES devuelve el título original cuando no hay
+              // traducción: solo se guarda un título español de verdad.
+              name_es: es.title && es.title !== es.original_title ? es.title : null,
+            };
+          })
+          .filter(Boolean);
+        if (patches.length) saved = await upsertReturning(admin, "titles", patches, "kind,tmdb_id");
+      }
+      const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
+      return json({ results: results.map((r) => byTmdb.get(r.id)).filter(Boolean) });
+    }
+
+    // GET /movie/:id/credits — reparto y dirección. La dirección es la mitad
+    // que no existe en series: en la ficha de una película el director es un
+    // enlace a /person/:id, así que sale de aquí y no del reparto.
+    const mMovieCredits = path.match(/^\/movie\/(\d+)\/credits$/);
+    if (mMovieCredits) {
+      const d = await fetchTmdb(apiKey, `/movie/${mMovieCredits[1]}/credits`);
+      const cast = ((d.cast ?? []) as Any[])
+        .slice(0, 24)
+        .map((c) => ({
+          id: c.id,
+          name: c.name ?? "",
+          profile_path: c.profile_path ?? null,
+          character: c.character ?? null,
+          episode_count: null,
+        }));
+      // Solo dirección y guion, que es lo que la ficha imprime. `job` es la
+      // única forma de distinguirlos: el departamento "Writing" incluye media
+      // docena de oficios (story, characters, novel…) y listarlos todos llena
+      // la línea de nombres que nadie buscaba.
+      const crew = ((d.crew ?? []) as Any[])
+        .filter((c) => c.job === "Director" || c.job === "Screenplay" || c.job === "Writer")
+        .map((c) => ({
+          id: c.id,
+          name: c.name ?? "",
+          profile_path: c.profile_path ?? null,
+          job: c.job as string,
+        }));
+      return json({ cast, crew }, 200, { "Cache-Control": "private, max-age=86400" });
+    }
+
+    // GET /movie/:id/saga — las entregas de la saga a la que pertenece esta
+    // película, en orden de estreno.
+    //
+    // Guarda cada hermana como título propio antes de devolverla, igual que
+    // hacen /search y las rejillas de descubrimiento. Eso es lo que permite
+    // abrir cualquiera de ellas desde la ficha sin una segunda espera, y lo que
+    // deja al cliente resolver por su cuenta si la tienes vista o puntuada:
+    // aquí no se cruza nada con la biblioteca, que es de quien la mira.
+    const mSaga = path.match(/^\/movie\/(\d+)\/saga$/);
+    if (mSaga) {
+      const tmdbId = Number(mSaga[1]);
+      const { data: row } = await admin
+        .from("titles").select("collection_id, collection_name, status")
+        .eq("kind", "movie").eq("tmdb_id", tmdbId).maybeSingle();
+      // Sin detalle todavía (solo búsqueda) no hay columna que leer: se resuelve
+      // ahora, que es una petición y evita devolver "no tiene saga" a una que sí.
+      const meta = row?.status ? row : (await refreshMovie(admin, apiKey, tmdbId)).title;
+      if (!meta?.collection_id) return json({ collection: null, parts: [] });
+      const d = await fetchTmdb(apiKey, `/collection/${meta.collection_id}`);
+      const parts: Any[] = (d.parts ?? []).filter((p: Any) => p?.id != null);
+      if (parts.length === 0) return json({ collection: null, parts: [] });
+      // Por fecha de estreno; las anunciadas sin fecha van al final, que es
+      // donde la siguiente entrega de una saga pertenece.
+      parts.sort((a, b) => (a.release_date || "9999").localeCompare(b.release_date || "9999"));
+      const saved = await upsertReturning(admin, "titles", parts.map(movieSearchRow), "kind,tmdb_id");
+      const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
+      return json({
+        collection: { id: d.id, name: meta.collection_name ?? d.name ?? null },
+        parts: parts.map((p) => byTmdb.get(p.id)).filter(Boolean),
+      }, 200, { "Cache-Control": "private, max-age=86400" });
+    }
+
+    // GET /movie/:id — cache-first, como /title/:id, pero más simple: una
+    // película es una fila y ya está, así que basta con que la fila exista, sea
+    // un detalle completo y esté fresca.
+    const mMovie = path.match(/^\/movie\/(\d+)$/);
+    if (mMovie) {
+      const tmdbId = Number(mMovie[1]);
+      const dbStarted = performance.now();
+      const { data: cached } = await admin
+        .from("titles").select("*, episodes(id)").eq("kind", "movie").eq("tmdb_id", tmdbId).maybeSingle();
+      const dbMs = performance.now() - dbStarted;
+      // `status` es la prueba de que esta fila salió de un detalle completo y no
+      // de una búsqueda: movieSearchRow no lo escribe. Sin esa comprobación, la
+      // primera peli que abrieras después de buscarla se serviría sin duración,
+      // sin plataformas y sin género en español.
+      if (cached?.status) {
+        const stale = !isFresh(cached);
+        if (stale) inBackground(refreshMovie(admin, apiKey, tmdbId));
+        // `episodes` es la incrustación, no una columna de titles: fuera del
+        // título antes de devolverlo, o el cliente recibiría una forma que su
+        // esquema no conoce.
+        const { episodes, ...title } = cached;
+        return json(
+          { title, episode_id: episodeIdOf({ episodes }) },
+          200,
+          detailHeaders(stale ? "STALE" : "HIT", dbMs),
+        );
+      }
+      const fillStarted = performance.now();
+      const filled = await refreshMovie(admin, apiKey, tmdbId);
+      return json(
+        { title: filled.title, episode_id: filled.episodeId },
+        200,
+        detailHeaders("MISS", dbMs, performance.now() - fillStarted),
+      );
     }
 
     // GET /title/:id/credits — aggregate TV cast straight from TMDB (no DB
@@ -1624,6 +1901,7 @@ Deno.serve(async (req) => {
       const { data: cached } = await admin
         .from("titles")
         .select("*, seasons(*)")
+        .eq("kind", "tv")
         .eq("tmdb_id", tmdbId)
         .maybeSingle();
       const dbMs = performance.now() - dbStarted;
@@ -1652,7 +1930,8 @@ Deno.serve(async (req) => {
       const n = Number(mSeason[2]);
       const dbStarted = performance.now();
       const { data: existing } = await admin
-        .from("titles").select("id, episodes_refreshed_at, imdb_id").eq("tmdb_id", tmdbId).maybeSingle();
+        .from("titles").select("id, episodes_refreshed_at, imdb_id")
+        .eq("kind", "tv").eq("tmdb_id", tmdbId).maybeSingle();
       const title = existing ?? (await refreshTitle(admin, apiKey, tmdbId)).title;
       const { data: season } = await admin
         .from("seasons").select("*, episodes(*)").eq("title_id", title.id).eq("number", n).maybeSingle();

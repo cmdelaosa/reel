@@ -15,6 +15,7 @@ const friendRatingSchema = z.object({
   score: z.number().int(),
   titles: z.object({
     tmdb_id: z.number().int(),
+    kind: z.enum(["tv", "movie"]),
     name: z.string(),
     poster_path: z.string().nullable(),
   }),
@@ -24,6 +25,9 @@ export interface FriendRatingRow {
   user_id: string;
   score: number;
   tmdb_id: number;
+  /** El medio del título puntuado — un tmdb_id solo es único dentro del suyo
+   *  (0067), así que cruzar por el número a secas confunde los dos. */
+  kind: "tv" | "movie";
   name: string;
   poster_path: string | null;
 }
@@ -36,7 +40,7 @@ export function useFriendsRatings(friendIds: string[]) {
     queryFn: async (): Promise<FriendRatingRow[]> => {
       const { data, error } = await supabase
         .from("ratings")
-        .select("user_id, score, titles(tmdb_id, name, poster_path)")
+        .select("user_id, score, titles(tmdb_id, kind, name, poster_path)")
         .in("user_id", friendIds)
         .not("title_id", "is", null);
       if (error) throw error;

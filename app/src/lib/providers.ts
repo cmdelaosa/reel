@@ -29,6 +29,7 @@ export interface Provider {
 
 const rowSchema = z.object({
   tmdb_id: z.number(),
+  kind: z.enum(["tv", "movie"]),
   // `here` is the aliased providers->XX projection: absent country → null.
   here: z
     .array(z.object({ name: z.string(), logo_path: z.string().nullable() }))
@@ -54,25 +55,48 @@ function isMissingColumn(error: { code?: string; message?: string }): boolean {
   return /column .*providers.* does not exist/i.test(error.message ?? "");
 }
 
-async function fetchProviders(ids: number[]): Promise<Map<number, Provider[]>> {
+/* La clave del lote es "medio:id", no el id a secas. Un id de TMDB solo es
+   único dentro de su medio (0067): pedir el 1399 sin decir cuál trae las dos
+   filas, y el Map se quedaba con la que llegase última — la película de 1978
+   con los logos de Juego de Tronos, o al revés. Un lote puede llevar los dos
+   medios mezclados (una rejilla de cine con la barra de amigos al lado), así
+   que se agrupan y sale una consulta por medio presente. */
+export type ProviderKey = `${"tv" | "movie"}:${number}`;
+
+const parseKey = (k: ProviderKey): { kind: string; tmdbId: number } => {
+  const [kind, id] = k.split(":");
+  return { kind, tmdbId: Number(id) };
+};
+
+async function fetchProviders(keys: ProviderKey[]): Promise<Map<ProviderKey, Provider[]>> {
   const region = regionCode();
-  const chunks: number[][] = [];
-  for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK));
+  const byKind = new Map<string, number[]>();
+  for (const key of keys) {
+    const { kind, tmdbId } = parseKey(key);
+    const held = byKind.get(kind);
+    if (held) held.push(tmdbId);
+    else byKind.set(kind, [tmdbId]);
+  }
+  const chunks: { kind: string; ids: number[] }[] = [];
+  for (const [kind, ids] of byKind) {
+    for (let i = 0; i < ids.length; i += CHUNK) chunks.push({ kind, ids: ids.slice(i, i + CHUNK) });
+  }
 
   // In parallel: the chunks are independent, and awaiting them in sequence
   // just makes a large grid wait a second round trip for its badges.
   const responses = await Promise.all(
-    chunks.map((chunk) =>
+    chunks.map(({ kind, ids }) =>
       supabase
         .from("titles")
         // Project one country out of the jsonb instead of shipping every
         // region TMDB knows about for every poster on screen.
-        .select(`tmdb_id, here:providers->${region}`)
-        .in("tmdb_id", chunk),
+        .select(`tmdb_id, kind, here:providers->${region}`)
+        .eq("kind", kind)
+        .in("tmdb_id", ids),
     ),
   );
 
-  const out = new Map<number, Provider[]>();
+  const out = new Map<ProviderKey, Provider[]>();
   for (const { data, error } of responses) {
     if (error) {
       if (!isMissingColumn(error)) throw error;
@@ -83,7 +107,7 @@ async function fetchProviders(ids: number[]): Promise<Map<number, Provider[]>> {
     }
     for (const row of z.array(rowSchema).parse(data ?? [])) {
       out.set(
-        row.tmdb_id,
+        `${row.kind}:${row.tmdb_id}`,
         (row.here ?? []).map((p) => ({ name: p.name, logoPath: p.logo_path })),
       );
     }
@@ -97,12 +121,12 @@ const loadBatched = createBatcher(fetchProviders);
 
 /** Subscription providers for one title in the viewer's country, best first.
  *  Empty when it isn't available here — which is a real answer, not a gap. */
-export function useProviders(tmdbId: number | null | undefined) {
+export function useProviders(tmdbId: number | null | undefined, kind: "tv" | "movie" = "tv") {
   return useQuery({
-    queryKey: qk.providers(regionCode(), tmdbId ?? 0),
+    queryKey: qk.providers(regionCode(), kind, tmdbId ?? 0),
     enabled: tmdbId != null,
     // Licences move, but never within a session; the crons re-read TMDB daily.
     staleTime: 6 * 60 * 60 * 1000,
-    queryFn: () => loadBatched(tmdbId as number),
+    queryFn: () => loadBatched(`${kind}:${tmdbId as number}`),
   });
 }

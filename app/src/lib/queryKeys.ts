@@ -5,6 +5,13 @@ export const qk = {
   profile: (userId: string) => ["profile", userId] as const,
   invited: (userId: string) => ["invited", userId] as const,
   search: (q: string) => ["search", q] as const,
+  /* Claves propias del cine, no variantes de las de series: un id de TMDB solo
+     es único dentro de su medio (0067), así que ["title", 1399] y
+     ["movie", 1399] son cosas distintas y compartir prefijo las mezclaría. */
+  movieSearch: (q: string) => ["movieSearch", q] as const,
+  movie: (tmdbId: number) => ["movie", tmdbId] as const,
+  movieCredits: (tmdbId: number) => ["movieCredits", tmdbId] as const,
+  movieSaga: (tmdbId: number) => ["movieSaga", tmdbId] as const,
   title: (tmdbId: number) => ["title", tmdbId] as const,
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,
@@ -28,5 +35,6 @@ export const qk = {
   eventReactions: (keys: string[]) => ["eventReactions", [...keys].sort()] as const,
   ignored: ["ignored"] as const,
   networkLogos: ["networkLogos"] as const,
-  providers: (region: string, tmdbId: number) => ["providers", region, tmdbId] as const,
+  providers: (region: string, kind: "tv" | "movie", tmdbId: number) =>
+    ["providers", region, kind, tmdbId] as const,
 };

@@ -864,6 +864,7 @@ async function backfillImdbIds(admin: SupabaseClient, key: string, maxMs: number
     const { data, error } = await admin
       .from("titles")
       .select("id, tmdb_id")
+      .eq("kind", "tv") // resuelve por /tv/:id — una película iría a 404
       .is("imdb_id", null)
       .order("id")
       .range(from, from + PAGE - 1);
@@ -995,6 +996,10 @@ Deno.serve(async (req) => {
     const { data, error: te } = await admin
       .from("titles")
       .select("id, tmdb_id, status, episodes_refreshed_at, library_entries!inner(followed)")
+      // Solo series: este cron refresca por /tv/:id y mantiene temporadas y
+      // episodios. Una película no tiene ninguna de las dos cosas, y su fila de
+      // episodio la mantiene el trigger de 0067 desde el propio título.
+      .eq("kind", "tv")
       .eq("library_entries.followed", true)
       .order("episodes_refreshed_at", { ascending: true, nullsFirst: true })
       .order("id")

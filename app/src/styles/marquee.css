@@ -394,6 +394,49 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
   to   { opacity: 1; transform: translate(-50%, -50%); }
 }
 
+/* ---- La saga, en la ficha de una película ----
+   Lo que en una serie es la lista de episodios. Una rejilla en vez de una fila
+   con scroll: las sagas son de tres o cuatro entregas, no de doce temporadas, y
+   con tan pocas un carrusel esconde la mitad sin necesidad. */
+.saga-row {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+}
+.saga-card {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 0; border: none; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer; min-width: 0;
+}
+.saga-card[aria-current="true"] { cursor: default; }
+.saga-art {
+  position: relative; display: block; aspect-ratio: 2 / 3;
+  border-radius: var(--r-sm); overflow: hidden;
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+  transition: border-color .15s ease, transform .15s ease;
+}
+.saga-art > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.saga-card:hover .saga-art { transform: translateY(-2px); border-color: var(--border-strong); }
+/* La entrega que estás mirando lleva el acento en el marco, no un check: ya
+   estás en ella, y un tick diría que la has visto. */
+.saga-card.on .saga-art { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.saga-card.on:hover .saga-art { transform: none; }
+.saga-tick {
+  position: absolute; top: 6px; right: 6px;
+  display: grid; place-items: center; width: 20px; height: 20px;
+  border-radius: 999px; background: var(--accent); color: var(--on-accent);
+}
+.saga-name { font-size: 12.5px; font-weight: 650; }
+.saga-meta { font-size: 11px; }
+
+/* ---- Enlace a una persona dentro de un párrafo ----
+   Un botón que se lee como un enlace: la dirección de una película abre su
+   ficha, y navegar de verdad (un <a>) recargaría la SPA entera. */
+.person-link {
+  padding: 0; border: none; background: none;
+  font: inherit; color: var(--accent); font-weight: 650; cursor: pointer;
+}
+.person-link:hover { text-decoration: underline; }
+
 /* Detail sheet — actions on one balanced line, ratings on their own line */
 /* Equal-width buttons while they fit — flex-basis 0 with equal grow, floored at
    each button's own label by the shared .btn min-width. Wrap gives the row that
@@ -711,6 +754,47 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .mq-tab.on {
   background: var(--surface-3);
   color: var(--text);
+}
+
+/* ---- Conmutador TV | Movies ----
+   El único control de la barra que SÍ conserva su carril, y por lo mismo que lo
+   conserva el de la barra flotante del calendario: no es una pestaña más, es de
+   qué va todo lo demás. Sin el carril, dos píldoras sueltas junto a otras cinco
+   se leen como siete pestañas.
+   Y es el único segmentado de la app relleno de acento, contra la regla que
+   dejó neutro a .seg-active. La regla dice que el acento se reserva para lo que
+   TÚ enciendes, y aquí siempre hay uno de los dos puesto — pero es que el
+   acento ES el mensaje: el modo se anuncia con color en toda la pantalla, y la
+   pastilla que lo cambia tiene que llevar el color que anuncia. */
+.mq-medium {
+  display: inline-flex; align-items: center; gap: 3px;
+  flex: 0 0 auto; margin-left: 12px; padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.mq-medium-seg {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 12px;
+  border-radius: 999px; border: none; background: transparent;
+  font-family: inherit; font-size: 12.5px; font-weight: 700;
+  color: var(--text-dim); cursor: pointer; white-space: nowrap;
+  transition: background .18s ease, color .18s ease;
+}
+.mq-medium-seg:hover { color: var(--text); }
+.mq-medium-seg.on {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--on-accent);
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+/* Debajo de la anchura en la que el nav se esconde en el dock, las etiquetas se
+   caen y quedan los dos glifos: el conmutador tiene que sobrevivir al móvil
+   entero, porque es lo único que dice en qué mitad de la app estás. */
+@media (max-width: 900px) {
+  .mq-medium { margin-left: 8px; }
+  .mq-medium-seg { padding: 0 10px; }
+  .mq-medium-seg span { display: none; }
+  .mq-medium-seg.on span { display: inline; }
 }
 
 .mq-top-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }

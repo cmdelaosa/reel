@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import {
-  Bell, Bookmark, CalendarClock, Clapperboard, Compass, Play, Search, Sliders, Users,
+  Bell, Bookmark, CalendarClock, Clapperboard, Compass, Film, Play, Search, Sliders, Tv, Users,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
 import { useNotifications, useNotificationsRealtime } from "@/lib/notifications";
+import { MOVIE_PREFIX, isMoviePath, setMedium, useMedium, type Medium } from "@/lib/medium";
+import { MovieSheet } from "@/features/movies/MovieSheet";
 import { NotifPanel } from "@/ui/shell/NotifPanel";
 import { Palette } from "@/ui/shell/Palette";
 import { SettingsSheet } from "@/ui/shell/SettingsSheet";
@@ -30,6 +32,65 @@ const TABS = [
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
+/* El cine estrena por partes: aquí solo están las pestañas que existen. Tonight,
+   Releases y Explore de películas llegan en su propia rama, y hasta entonces no
+   se pintan — una pestaña que lleva a una pantalla vacía es peor que no tenerla.
+   Amigos es LA MISMA página en los dos modos (solo cambia el acento), así que
+   apunta a la misma ruta. */
+const MOVIE_TABS = [
+  { path: MOVIE_PREFIX, label: "Watchlist", icon: Bookmark },
+  { path: "/friends", label: "Friends", icon: Users },
+] as const;
+
+/* Las rutas que son de UN medio: cambiar de modo desde ellas te lleva a la
+   portada del otro, porque quedarte sería quedarte en una pantalla del modo que
+   acabas de dejar. Todo lo demás —Amigos, tu perfil, una persona, el historial—
+   es de los dos: ahí el conmutador solo tiñe, y sacarte de donde estabas por
+   cambiar de color sería un secuestro.
+
+   /friends está en las dos listas de pestañas y por eso se comprueba aparte: es
+   la página compartida que además tiene pestaña, y mirar solo TABS la contaba
+   como de series. */
+const SHARED_PATHS = MOVIE_TABS.filter((m) => TABS.some((t) => t.path === m.path)).map((t) => t.path);
+
+const ownedByAMedium = (pathname: string): boolean => {
+  if (SHARED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return false;
+  if (isMoviePath(pathname)) return true;
+  return TABS.some((t) => pathname.startsWith(t.path.split("?")[0]));
+};
+
+/* El conmutador de la barra: TV | Movies, con el modo activo relleno de acento.
+   Cambiar de modo es cambiar de sitio, no solo de color. */
+function MediumSwitch() {
+  const medium = useMedium();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  const pick = (next: Medium) => {
+    if (next === medium) return;
+    setMedium(next);
+    if (!ownedByAMedium(pathname)) return;
+    navigate(next === "movie" ? MOVIE_PREFIX : "/tonight");
+  };
+
+  return (
+    <div className="mq-medium" role="radiogroup" aria-label={t("Medium")}>
+      {([["tv", Tv, "TV"], ["movie", Film, "Movies"]] as const).map(([key, Icon, label]) => (
+        <button
+          key={key}
+          role="radio"
+          aria-checked={medium === key}
+          className={`mq-medium-seg ${medium === key ? "on" : ""}`}
+          onClick={() => pick(key)}
+        >
+          <Icon size={15} />
+          <span>{t(label)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Shell() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -37,11 +98,29 @@ export function Shell() {
   const [searchParams, setSearchParams] = useSearchParams();
   const titleParam = searchParams.get("title");
   const detailTmdbId = titleParam && /^\d+$/.test(titleParam) ? Number(titleParam) : null;
+  // Ficha de película: parámetro propio, no ?title=. Un id de TMDB solo es
+  // único dentro de su medio (0067), así que un único ?title= no podría decir
+  // cuál de las dos abrir — y un enlace compartido acabaría en la otra.
+  const movieParam = searchParams.get("movie");
+  const movieTmdbId = movieParam && /^\d+$/.test(movieParam) ? Number(movieParam) : null;
+  const medium = useMedium();
+  const tabs = medium === "movie" ? MOVIE_TABS : TABS;
 
-  const closeTitle = () =>
+  /* El conmutador fija el medio, pero no es el único que mueve la ruta: Atrás y
+     Adelante también. Sin esto, volver desde /tonight a /movies dejaba la
+     biblioteca de cine pintada en coral y bajo las pestañas de series — la ruta
+     decía una cosa y el modo otra. Solo las rutas de UN medio hablan; desde una
+     compartida (Amigos, tu perfil) el modo se queda como estaba, que es lo que
+     hace que teñirlas signifique algo. */
+  useEffect(() => {
+    if (isMoviePath(pathname)) setMedium("movie");
+    else if (ownedByAMedium(pathname)) setMedium("tv");
+  }, [pathname]);
+
+  const closeSheet = (param: "title" | "movie") => () =>
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.delete("title");
+      next.delete(param);
       return next;
     });
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -51,12 +130,13 @@ export function Shell() {
   const { data: notifications = [] } = useNotifications();
   const unread = notifications.filter((n) => !n.read_at).length;
 
-  /** Open the detail sheet for a TMDB id via the global ?title= param (P2-C3). */
+  /** Open the detail sheet for a TMDB id via the global ?title= param (P2-C3),
+   *  or ?movie= when the palette was searching cinema. */
   const openTitle = (tmdbId: number) => {
     setPaletteOpen(false);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set("title", String(tmdbId));
+      next.set(medium === "movie" ? "movie" : "title", String(tmdbId));
       return next;
     });
   };
@@ -110,8 +190,10 @@ export function Shell() {
             <span className="mq-brand-name">Reel</span>
           </div>
 
+          <MediumSwitch />
+
           <nav className="mq-tabs">
-            {TABS.map((tab) => (
+            {tabs.map((tab) => (
               <NavLink key={tab.path} to={tab.path} className={({ isActive }) => `mq-tab ${isActive ? "on" : ""}`}>
                 <tab.icon size={16} />
                 <span>{t(tab.label)}</span>
@@ -158,7 +240,7 @@ export function Shell() {
 
       {/* ---- Floating dock (mobile) ---- */}
       <nav className="mq-dock">
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <NavLink key={tab.path} to={tab.path} className={({ isActive }) => `mq-dockbtn ${isActive ? "on" : ""}`} title={t(tab.label)}>
             <tab.icon size={19} />
             <span className="mq-docklabel">{t(tab.label)}</span>
@@ -176,7 +258,10 @@ export function Shell() {
           sheet is open remounts it — otherwise stale season/pending/toast state
           carries over from the previous show. */}
       {detailTmdbId != null && (
-        <DetailSheet key={detailTmdbId} tmdbId={detailTmdbId} onClose={closeTitle} />
+        <DetailSheet key={detailTmdbId} tmdbId={detailTmdbId} onClose={closeSheet("title")} />
+      )}
+      {movieTmdbId != null && (
+        <MovieSheet key={movieTmdbId} tmdbId={movieTmdbId} onClose={closeSheet("movie")} />
       )}
 
       <OfflineToast />

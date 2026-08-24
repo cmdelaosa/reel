@@ -6,11 +6,13 @@ import { useTitleIntent } from "@/lib/useOpenTitle";
 import { locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 
 /* ---- Poster tile (overlaid title, TV-Time-like) ---- */
-export function Poster({ t, subtitle, showProviders = true, onClick, prefetchTmdbId }: {
+export function Poster({ t, subtitle, showProviders = true, kind = "tv", onClick, prefetchTmdbId }: {
   t: TitleCard;
   subtitle?: string;
   /** Where-to-watch logos in the top-left slot. */
   showProviders?: boolean;
+  /** El medio de `t.id` — decide de qué fila salen los logos (0067). */
+  kind?: "tv" | "movie";
   onClick?: () => void;
   prefetchTmdbId?: number;
 }) {
@@ -45,7 +47,7 @@ export function Poster({ t, subtitle, showProviders = true, onClick, prefetchTmd
         {/* TitleCard.id is the tmdb id as a string — the key providers are
             cached by. The wrapper always renders so the badges stay pinned
             right whether or not this title is available in your country. */}
-        <span>{showProviders && <WatchOn tmdbId={Number(t.id) || null} />}</span>
+        <span>{showProviders && <WatchOn tmdbId={Number(t.id) || null} kind={kind} />}</span>
         <span className="flex items-center gap-1">
           {t.stopped && (
             <span className="badge badge-glass" title={tr("Stopped watching")}>
