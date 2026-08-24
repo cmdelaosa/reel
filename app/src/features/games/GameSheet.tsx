@@ -79,7 +79,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
   const minutes = entry?.minutes_played ?? 0;
   const playState = entry?.play_state ?? null;
   const owned = Boolean(entry?.owned);
-  /* De dónde salen las horas (0074). Se dice cuando las trajo Steam, y no
+  /* De dónde salen las horas (0076). Se dice cuando las trajo Steam, y no
      cuando las escribiste tú: lo tuyo no necesita explicación, y ver "de Steam"
      es lo que explica por qué esa cifra cambió sola. */
   const fromSteam = entry?.minutes_source === "steam";

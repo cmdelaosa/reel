@@ -3,10 +3,15 @@
 // Rutas (bajo /functions/v1/igdb-proxy):
 //   GET  /search?q=        → { results: TitleRow[] }  (dos consultas, ver la ruta)
 //   GET  /game/:igdbId     → { title: TitleRow, episode_id: uuid|null }
-//   POST /by-steam         → { matches: { [appid]: TitleRow } }  (0074)
+//   GET  /discover/:pool   → { results: TitleRow[] }  (anticipated|new|popular|top-rated)
+//   POST /warm             → { ok, summary }          (solo el cron)
+//   POST /by-steam         → { matches: { [appid]: TitleRow } }  (0076)
 //
-// Las de descubrimiento (novedades, próximos, mejor valorados) llegan con las
-// páginas que las piden; abrirlas ahora sería cachear cosas que nadie lee.
+// Las de descubrimiento son las gemelas de las cuatro de tmdb-proxy y comparten
+// con ellas la tabla discover_cache; sus consultas viven en discover.ts, con
+// pruebas. Aquí el TTL de 24 h y el /warm nocturno no son una optimización: son
+// lo que impide que abrir Explorar consuma el presupuesto de peticiones del que
+// también salen las búsquedas y las fichas de todos los demás.
 //
 // ── Por qué una función aparte y no una ruta más en tmdb-proxy ────────────
 // Otra API, otra autenticación, otro límite de peticiones y otro despliegue.
@@ -52,6 +57,13 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { type Any, apicalypseTerm, gameRow, gameSearchRow, steamAppid } from "./normalize.ts";
 import { GAME_TYPE_FILTER, mergeResults, rankSearch } from "./rank.ts";
+import {
+  anticipatedQuery,
+  DISCOVER_TTL_MS,
+  newReleasesQuery,
+  popularQuery,
+  topRatedQuery,
+} from "./discover.ts";
 
 const IGDB = "https://api.igdb.com/v4";
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
@@ -71,6 +83,8 @@ const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Expose-Headers": "x-cache, server-timing",
+  // POST por /warm, que es lo que manda net.http_post desde el cron, y por
+  // /by-steam, que es lo que llama steam-sync.
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
@@ -285,7 +299,7 @@ async function refreshGame(admin: SupabaseClient, igdbId: number) {
   return row ?? null;
 }
 
-/* ──────────────── Del appid de Steam al juego de IGDB (0074) ────────────── */
+/* ──────────────── Del appid de Steam al juego de IGDB (0076) ────────────── */
 
 /** Cuántos appids se preguntan de una vez. Cada tanda cuesta DOS peticiones
  *  —una a external_games y otra a games— así que el tamaño es lo que separa
@@ -379,6 +393,99 @@ function inBackground(work: Promise<unknown>) {
   else work.catch(() => {});
 }
 
+/* ─────────────────────── Descubrimiento (Explorar) ──────────────────────── */
+
+/* Las cuatro rejillas de Explorar. Lo caro de cada una no son los datos —las
+   filas viven en `titles` en cuanto se han visto una vez— sino AVERIGUAR EL
+   ORDEN, que es una petición a IGDB de las cuatro por segundo que tiene el
+   proyecto entero. Así que lo que se cachea es la lista ordenada de ids, que es
+   exactamente lo que tmdb-proxy cachea de las suyas, y en la misma tabla.
+   `discover_cache.tmdb_ids` guarda aquí ids de IGDB: la misma columna mal
+   nombrada que `titles.tmdb_id`, documentada por 0071 y por la misma razón —
+   renombrarla sería reescribir las cuatro rutas de series y las cuatro de cine
+   para que la fila diga en voz alta lo que este comentario ya dice.
+
+   La clave lleva el prefijo `game-` porque la tabla es compartida y un id de
+   IGDB no significa nada contra una lista de TMDB. */
+
+/* Un Map y no un objeto literal, y no es cosmético: con un objeto,
+   `POOLS[pool]` encuentra lo que hay en Object.prototype, y "constructor" pasa
+   el `[a-z-]+` de la ruta. /discover/constructor se colaba por el 404, llegaba
+   a construir una consulta que no era una cadena y acababa en una petición a
+   IGDB destinada a fallar — gastando, sin caché que lo pare, una de las cuatro
+   peticiones por segundo que tiene el proyecto entero. Un Map no tiene
+   prototipo que consultar. */
+const POOLS = new Map<string, (nowMs: number) => string>([
+  ["anticipated", (n) => anticipatedQuery(SEARCH_FIELDS, n)],
+  ["new", (n) => newReleasesQuery(SEARCH_FIELDS, n)],
+  ["popular", () => popularQuery(SEARCH_FIELDS)],
+  ["top-rated", () => topRatedQuery(SEARCH_FIELDS)],
+]);
+
+async function readDiscoverCache(admin: SupabaseClient, key: string): Promise<number[] | null> {
+  const { data } = await admin
+    .from("discover_cache")
+    .select("tmdb_ids, cached_at")
+    .eq("cache_key", key)
+    .maybeSingle();
+  if (!data) return null;
+  if (Date.now() - new Date(data.cached_at).getTime() >= DISCOVER_TTL_MS) return null;
+  const ids = (data.tmdb_ids ?? []).map(Number);
+  return ids.length > 0 ? ids : null;
+}
+
+async function writeDiscoverCache(admin: SupabaseClient, key: string, ids: number[]) {
+  // Una lista vacía no se cachea nunca: solo pasa cuando IGDB está fallando, y
+  // recordar el fallo 24 h convierte un tropiezo en una pestaña muerta.
+  if (ids.length === 0) return;
+  await admin.from("discover_cache").upsert(
+    { cache_key: key, tmdb_ids: ids, cached_at: new Date().toISOString() },
+    { onConflict: "cache_key" },
+  );
+}
+
+/** Las filas de `titles` de una lista de ids de IGDB, en ESE orden.
+ *
+ *  El `in()` devuelve lo que la base tenga a mano, no lo que se pidió, así que
+ *  el orden hay que reimponerlo — el mismo cuidado que /search se toma con el
+ *  suyo. Lo que falte (una fila borrada a mano) desaparece de la rejilla en vez
+ *  de aparecer vacía. */
+async function gamesInOrder(admin: SupabaseClient, ids: number[]): Promise<Any[]> {
+  if (ids.length === 0) return [];
+  const { data } = await admin.from("titles").select("*").eq("kind", "game").in("tmdb_id", ids);
+  const byId = new Map((data ?? []).map((r: Any) => [r.tmdb_id, r]));
+  return ids.map((id) => byId.get(id)).filter(Boolean);
+}
+
+/** El orden de una rejilla: de la caché si está fresca, y si no, de IGDB.
+ *
+ *  `force` es la bandera del cron: reconstruye sin mirar la frescura, porque
+ *  corre con el mismo periodo que el TTL del que existe para ir por delante y
+ *  una comprobación lo haría saltarse justo la caché que va a caducar. */
+async function resolvePool(
+  admin: SupabaseClient,
+  pool: string,
+  force = false,
+): Promise<number[]> {
+  const build = POOLS.get(pool);
+  if (!build) return [];
+  const key = `game-${pool}:`;
+  if (!force) {
+    const hit = await readDiscoverCache(admin, key);
+    if (hit) return hit;
+  }
+
+  // mergeResults por si acaso: dos filas con el mismo id en un solo upsert dan
+  // "cannot affect row a second time", que se leería como una rejilla rota.
+  const found = mergeResults(await igdb("games", build(Date.now())));
+  if (!found.length) return [];
+
+  await upsertReturning(admin, found.map(gameSearchRow), "kind,tmdb_id");
+  const ids = found.map((r: Any) => r.id as number);
+  await writeDiscoverCache(admin, key, ids);
+  return ids;
+}
+
 /* ─────────────────────────── La reja de invitados ───────────────────────── */
 
 /* Copiada de tmdb-proxy, memo incluido: un JWT válido cuyo dueño no ha
@@ -426,8 +533,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  // El cron se identifica con la clave de servicio y se salta la reja: no hay
+  // nadie detrás a quien invitar, y lo único que hace es reconstruir cachés.
+  // Misma comprobación que tmdb-proxy, y con la misma clave.
+  const isCron = bearer.length > 0 && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-  if (!gateHit(bearer)) {
+  if (!isCron && !gateHit(bearer)) {
     const userClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -452,7 +563,7 @@ Deno.serve(async (req) => {
   const path = url.pathname.replace(/^\/igdb-proxy/, "").replace(/\/+$/, "");
 
   try {
-    // POST /by-steam — de appids de Steam a juegos del catálogo (0074).
+    // POST /by-steam — de appids de Steam a juegos del catálogo (0076).
     //
     // La usa `steam-sync` al confirmar una importación, y solo para lo que la
     // persona ha marcado y NO está ya en `titles`: el puente normal es
@@ -502,6 +613,59 @@ Deno.serve(async (req) => {
       // retirados. Quien llama lo marca como no resuelto y lo dice; callarlo
       // sería enseñar "importados 40" habiendo entrado 38.
       return json({ matches });
+    }
+
+    // POST /warm — solo el cron. Reconstruye las cuatro rejillas antes de que
+    // nadie mire, que aquí importa más que en tmdb-proxy: allí el primero que
+    // abría Explorar después de las 24 h pagaba unos segundos, y aquí paga
+    // CUATRO peticiones del presupuesto de cuatro por segundo del proyecto
+    // entero — que es el mismo del que sale cada búsqueda y cada ficha que
+    // cualquier otra persona esté abriendo en ese momento.
+    //
+    // En serie y no en paralelo, por lo mismo que las de tmdb-proxy: son el
+    // consumidor más pesado de la cuota y lanzarlas juntas es cómo un límite de
+    // peticiones convierte cuatro cachés calientes en cuatro frías. Nadie está
+    // esperando esta respuesta.
+    if (path === "/warm") {
+      if (!isCron) return json({ error: "unauthorized" }, 401);
+      const startedAt = new Date().toISOString();
+      const summary: Record<string, number | string> = {};
+      let ok = true;
+      for (const pool of POOLS.keys()) {
+        try {
+          summary[pool] = (await resolvePool(admin, pool, true)).length;
+        } catch (e) {
+          ok = false;
+          // El mensaje NO se copia tal cual, por lo mismo que el catch de abajo:
+          // un error de esta función puede arrastrar la respuesta de Twitch al
+          // pedir el token, que es la conversación donde viven las credenciales
+          // del proyecto — y esta fila de job_runs se queda guardada.
+          console.error("igdb-proxy warm", pool, e);
+          summary[pool] = "error";
+        }
+      }
+      await admin.from("job_runs").insert({
+        job: "igdb-warm",
+        started_at: startedAt,
+        finished_at: new Date().toISOString(),
+        ok,
+        summary,
+      }).then(() => {}, () => {});
+      return json({ ok, summary }, ok ? 200 : 500);
+    }
+
+    // GET /discover/:pool — anticipated | new | popular | top-rated.
+    //
+    // Una sola ruta para las cuatro y no cuatro rutas casi iguales: lo único
+    // que las distingue es la consulta, y esa ya vive en discover.ts con sus
+    // pruebas. Un nombre que no esté en POOLS es un 404 y no una rejilla vacía:
+    // "no existe esa pestaña" y "esa pestaña no tiene nada" son cosas distintas.
+    const mPool = path.match(/^\/discover\/([a-z-]+)$/);
+    if (mPool) {
+      const pool = mPool[1];
+      if (!POOLS.has(pool)) return json({ error: "not found" }, 404);
+      const ids = await resolvePool(admin, pool);
+      return json({ results: await gamesInOrder(admin, ids) });
     }
 
     // GET /search?q= — búsqueda por nombre.

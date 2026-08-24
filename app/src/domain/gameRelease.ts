@@ -84,3 +84,99 @@ export function isReleased(
   if (!date || precision === "tbd" || !precision) return false;
   return date <= today;
 }
+
+/* ── Agrupar lanzamientos cuando la fecha no siempre es un día ─────────────
+ *
+ * El calendario de series y el de cine agrupan por DÍA porque en esos dos
+ * medios la fecha siempre es un día. En juegos no: IGDB fecha buena parte del
+ * catálogo por trimestre o por año, y un separador de día no puede colocar un
+ * "Q4 2027" — el 31 de diciembre que 0071 guarda es relleno para poder ordenar,
+ * no una promesa.
+ *
+ * La regla es la misma que la de formatRelease, aplicada al eje vertical: cada
+ * fila se agrupa por el periodo MÁS ESTRECHO que su fuente permite afirmar. Un
+ * feed con separadores de granularidad mezclada —"MAÑANA", "marzo 2027",
+ * "Q4 2027", "2028"— no es un defecto: es lo que un catálogo de juegos sabe, y
+ * es como lo escribe la propia industria.
+ */
+
+export type ReleaseGroupKind = "day" | "month" | "quarter" | "year" | "tbd";
+
+export interface Releasable {
+  first_air_date: string | null;
+  release_precision?: ReleasePrecision | string | null;
+}
+
+export interface ReleaseGroup<T> {
+  /** Identidad del grupo, estable entre render y render ('2027-11-15',
+   *  '2027-11', '2027-Q4', '2028', 'tbd'). */
+  key: string;
+  kind: ReleaseGroupKind;
+  /** La fecha guardada que representa al grupo, para escribir su rótulo con
+   *  formatRelease. Null solo en el grupo sin fecha. */
+  date: string | null;
+  precision: ReleasePrecision | null;
+  items: T[];
+}
+
+/** Orden entre precisiones que caen en el mismo día guardado.
+ *
+ *  Hace falta porque el día guardado NO desempata: un "Q4 2027" y un "2027" se
+ *  guardan los dos como 2027-12-31 (el final de su periodo). De lo estrecho a
+ *  lo ancho, que es también de lo más cierto a lo menos. */
+const RANK: Record<ReleaseGroupKind, number> = { day: 0, month: 1, quarter: 2, year: 3, tbd: 4 };
+
+const KIND: Record<ReleasePrecision, ReleaseGroupKind> = {
+  day: "day", month: "month",
+  q1: "quarter", q2: "quarter", q3: "quarter", q4: "quarter",
+  year: "year", tbd: "tbd",
+};
+
+const asPrecision = (p: unknown): ReleasePrecision | null =>
+  typeof p === "string" && p in KIND ? (p as ReleasePrecision) : null;
+
+/** El grupo al que pertenece una fila: su clave y de qué tipo es. */
+export function releaseGroupOf(row: Releasable): { key: string; kind: ReleaseGroupKind } {
+  const precision = asPrecision(row.release_precision);
+  const date = row.first_air_date;
+  if (!date || !precision || precision === "tbd") return { key: "tbd", kind: "tbd" };
+
+  const [y, m] = date.split("-");
+  switch (KIND[precision]) {
+    case "day": return { key: date, kind: "day" };
+    case "month": return { key: `${y}-${m}`, kind: "month" };
+    case "quarter": return { key: `${y}-${precision.toUpperCase()}`, kind: "quarter" };
+    default: return { key: y, kind: "year" };
+  }
+}
+
+/** Los lanzamientos agrupados y en orden cronológico, del más antiguo al más
+ *  lejano, con lo indatable al final.
+ *
+ *  "Sin fecha" va SIEMPRE el último y no donde caiga su fecha, porque no tiene:
+ *  colarlo entre dos años sería colocarlo, que es lo que este módulo entero
+ *  existe para no hacer. */
+export function groupReleases<T extends Releasable>(rows: readonly T[]): ReleaseGroup<T>[] {
+  const groups = new Map<string, ReleaseGroup<T>>();
+  for (const row of rows) {
+    const { key, kind } = releaseGroupOf(row);
+    const held = groups.get(key);
+    if (held) {
+      held.items.push(row);
+      continue;
+    }
+    groups.set(key, {
+      key,
+      kind,
+      date: kind === "tbd" ? null : row.first_air_date,
+      precision: kind === "tbd" ? null : asPrecision(row.release_precision),
+      items: [row],
+    });
+  }
+
+  return [...groups.values()].sort((a, b) => {
+    if (a.kind === "tbd" || b.kind === "tbd") return RANK[a.kind] - RANK[b.kind];
+    const byDate = (a.date ?? "").localeCompare(b.date ?? "");
+    return byDate !== 0 ? byDate : RANK[a.kind] - RANK[b.kind];
+  });
+}

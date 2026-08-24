@@ -71,13 +71,44 @@ export function useGame(igdbId: number | null | undefined) {
   });
 }
 
+/* ---- Las rejillas de Explorar ---- */
+
+/** Las cuatro rejillas que sirve el proxy. Los nombres son los de la ruta, así
+ *  que esta lista y la de `POOLS` en igdb-proxy/index.ts dicen lo mismo — un
+ *  nombre que no exista allí devuelve 404, no una rejilla vacía. */
+export type GamePool = "anticipated" | "new" | "popular" | "top-rated";
+
+/** Una rejilla de descubrimiento.
+ *
+ *  `enabled` es la puerta de la pestaña: abrir Explorar cuesta una petición y
+ *  no cuatro, igual que en los otros dos modos. Aquí importa el doble — cada
+ *  una que se pide de más sale del presupuesto de cuatro peticiones por segundo
+ *  que IGDB da al proyecto ENTERO, del que también salen las búsquedas y las
+ *  fichas de todo el mundo. El servidor la sirve de su caché de 24 h, pero un
+ *  fallo de caché con cuatro consultas a la vez es exactamente lo que el
+ *  estrangulador del proxy tiene que ponerse a espaciar.
+ *
+ *  Una hora de staleTime en el cliente sobre 24 h de caché en el servidor: lo
+ *  mismo que hacen las rejillas de series y cine. */
+export function useGamePool(pool: GamePool, enabled = true) {
+  return useQuery({
+    queryKey: qk.gamePool(pool),
+    enabled,
+    staleTime: 60 * 60 * 1000,
+    queryFn: async (): Promise<TitleRow[]> => {
+      const data = await call(`/discover/${pool}`);
+      return gameSearchResponseSchema.parse(data).results;
+    },
+  });
+}
+
 /* ---- Lo que la persona escribe: estado y horas ---- */
 
 export interface GameProgress {
   titleId: string;
   playState?: PlayState | null;
   minutesPlayed?: number;
-  /** Lo tienes comprado (0074). Ortogonal al estado y a las horas: lo marca la
+  /** Lo tienes comprado (0076). Ortogonal al estado y a las horas: lo marca la
    *  importación de Steam en todo lo que trae, y a mano se marca lo que tengas
    *  en consola, en GOG o en físico. */
   owned?: boolean;

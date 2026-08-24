@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import {
-  Bell, Bookmark, CalendarClock, Clapperboard, Compass, Film, Gamepad2, Play, Search, Sliders,
-  Tv, Users,
+  Bell, Bookmark, CalendarClock, Clapperboard, Compass, Film, Gamepad2, Link2, Play, Search,
+  Sliders, Tv, Users,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
@@ -46,19 +46,35 @@ const MOVIE_TABS = [
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
-/* Tres, no cinco. "Esta noche" y "Explorar" de juegos llegan en su propia
-   rodaja, igual que le pasó al cine, y hasta entonces sus pestañas NO se
-   pintan: una pestaña que lleva a una ruta sin página es peor que una pestaña
-   que falta. Amigos sigue siendo la misma en los tres modos.
+/* Las cinco, como los otros dos modos. Amigos es LA MISMA página en los tres
+   (solo cambia el acento), así que apunta a la misma ruta — y por eso aparece
+   en las tres listas, que es lo que SHARED_PATHS detecta abajo.
 
-   "Steam" es pestaña y no un rincón de los ajustes porque no es una
-   preferencia: es una pantalla con tres pasos —conectar, ver qué va a entrar,
-   confirmar— a la que se vuelve cada vez que quieres traer horas nuevas. Y es
-   del modo Juegos y de ningún otro, que es justo lo que una pestaña de aquí
-   dice. */
+   "Lanzamientos" y no "Estrenos": un juego no se estrena, sale.
+
+   "Pendientes" ocupa el sitio que en los otros dos modos ocupa "Watchlist", y
+   se llama distinto a propósito: es LA palabra que usa quien juega para lo que
+   tiene por jugar, y además es el nombre del cubo al que la pestaña lleva, así
+   que la pestaña y el chip dicen lo mismo. "Playlist" habría rimado con las
+   otras dos y significado otra cosa — en una app de tres medios se lee como
+   música.
+
+   Y una SEXTA, que rompe la simetría de los tres modos a sabiendas: "Steam".
+   No es una preferencia que quepa en los ajustes — es una pantalla con tres
+   pasos (conectar, ver qué va a entrar, confirmar) a la que se vuelve cada vez
+   que quieres traer horas nuevas, y es del modo Juegos y de ningún otro, que es
+   exactamente lo que una pestaña de aquí significa. Va la última de las de
+   juegos, antes de Amigos: es la que menos se abre de las cinco. En móvil la
+   fila ya scrollea en horizontal, y el TabMenu recoge lo que no quepa. */
 const GAME_TABS = [
-  { path: "/games/library", label: "Library", icon: Bookmark },
-  { path: "/games/steam", label: "Steam", icon: Gamepad2 },
+  { path: "/games/tonight", label: "Tonight", icon: Clapperboard },
+  { path: "/games/releases", label: "games: Releases", icon: CalendarClock },
+  { path: "/games/backlog", label: "Backlog", icon: Bookmark },
+  { path: "/games/explore", label: "Explore", icon: Compass },
+  // Link2 y no Gamepad2: el mando ya nombra al MODO en el conmutador de la
+  // barra, y repetirlo en una pestaña de dentro sería decir "juegos" dos veces
+  // y "cuenta enlazada" ninguna.
+  { path: "/games/steam", label: "Steam", icon: Link2 },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
@@ -82,12 +98,12 @@ const ownedByAMedium = (pathname: string): boolean => {
 };
 
 /** La portada de cada modo, adonde te lleva el conmutador desde una ruta que
- *  es del medio que dejas. En juegos es la biblioteca porque es lo único que
- *  hay: no existe todavía una pantalla de "esta noche" que hiciera de portada. */
+ *  es del medio que dejas. Los tres son ya su "esta noche": es la pantalla que
+ *  responde la pregunta con la que se abre la app. */
 const HOME: Record<Medium, string> = {
   tv: "/tonight",
   movie: "/movies/tonight",
-  game: "/games/library",
+  game: "/games/tonight",
 };
 
 /* El conmutador de la barra: TV | Movies | Games, con el modo activo relleno de

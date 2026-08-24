@@ -18,9 +18,12 @@ import { PosterGridSkeleton } from "@/ui/Skeleton";
    que en 'Jugando' se quedarían para siempre ensuciando la lista de lo que de
    verdad estás jugando ahora.
 
-   Por defecto se abre en 'Jugando', que es la respuesta a la pregunta con la
-   que uno abre esta pantalla. Cine abre en 'Sin empezar' porque allí la
-   pregunta es qué ver esta noche; aquí es en qué estabas. */
+   Abre en 'Pendientes', y hasta hoy abría en 'Jugando'. El cambio es porque la
+   pantalla cambió de papel: mientras fue lo único que había, era la portada del
+   modo y tenía que responder "¿en qué estaba?". Eso lo responde ahora el héroe
+   de Esta noche, y aquí se viene a lo otro — a elegir de lo que tienes por
+   jugar. Es también lo que hace que la pestaña y el cubo digan la misma
+   palabra, que es la razón por la que la pestaña se llama Pendientes. */
 
 type Bucket = GameStatus | "all";
 
@@ -72,7 +75,7 @@ export default function GamesPage() {
      de la barra enlaza a un cubo concreto, y desde la propia página eso es una
      navegación a la misma ruta que un estado local ignoraría. */
   const param = searchParams.get("filter");
-  const f: Bucket = FILTERS.some((x) => x.key === param) ? (param as Bucket) : "playing";
+  const f: Bucket = FILTERS.some((x) => x.key === param) ? (param as Bucket) : "backlog";
   const setF = (key: Bucket) =>
     setSearchParams(
       (prev) => {

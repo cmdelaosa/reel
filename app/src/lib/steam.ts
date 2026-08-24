@@ -5,7 +5,7 @@ import { useAuth } from "@/features/auth/AuthProvider";
 import { trackedFetch } from "@/lib/connection";
 import { qk } from "@/lib/queryKeys";
 
-/* Cliente de la edge function steam-sync (0074). Hermano de lib/igdb.ts, con
+/* Cliente de la edge function steam-sync (0076). Hermano de lib/igdb.ts, con
    dos diferencias que vienen de que el login de Steam es POR USUARIO:
 
      · el enlace de la cuenta no es una llamada, es una NAVEGACIÓN: se sale de
@@ -72,7 +72,7 @@ export async function startSteamLogin(): Promise<void> {
  *  Existe porque la vuelta de Steam no puede escribir sola: el pagaré lo crea
  *  quien quiera, así que dejar que decidiera el perfil de destino convertiría
  *  un enlace compartido en "tu cuenta de Steam acaba en MI perfil". Aquí lo
- *  decide el JWT. Ver supabase/functions/steam-sync y la migración 0074. */
+ *  decide el JWT. Ver supabase/functions/steam-sync y la migración 0076. */
 export function useConfirmSteamLink() {
   const qc = useQueryClient();
   return useMutation({

@@ -4,8 +4,9 @@ import { ArrowRight, Clock, Search } from "lucide-react";
 import { qk } from "@/lib/queryKeys";
 import { useMedium } from "@/lib/medium";
 import { usePrefetchTitle } from "@/lib/useOpenTitle";
-import { searchMovies, searchShows, tmdbImg } from "@/lib/tmdb";
-import { igdbImg, searchGames } from "@/lib/igdb";
+import { searchMovies, searchShows } from "@/lib/tmdb";
+import { searchGames } from "@/lib/igdb";
+import { thumbArt } from "@/lib/artwork";
 import { isEs, t as tr, tGenre } from "@/lib/i18n";
 import { posterBg } from "@/ui/posterBg";
 import { WatchOn } from "@/ui/WatchOn";
@@ -152,11 +153,12 @@ export function Palette({ onClose, onOpen }: {
               >
                 {/* En juegos, `poster_path` es un hash de IGDB y no una ruta de
                     TMDB (0071): pasárselo a tmdbImg da una URL que responde 404
-                    sin decir nada, y la fila sale sin carátula. */}
-                {(gamesMode ? igdbImg(r.poster_path, "cover_small") : tmdbImg(r.poster_path, "w92")) ? (
+                    sin decir nada, y la fila sale sin carátula. thumbArt es la
+                    misma elección que hacen el muro y el historial. */}
+                {thumbArt(r.kind, r.poster_path) ? (
                   <img
                     className="mq-pal-art"
-                    src={gamesMode ? igdbImg(r.poster_path, "cover_small") : tmdbImg(r.poster_path, "w92")}
+                    src={thumbArt(r.kind, r.poster_path)}
                     alt=""
                     style={{ objectFit: "cover" }}
                   />

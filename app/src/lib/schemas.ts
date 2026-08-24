@@ -158,7 +158,12 @@ export const libraryRowSchema = z.object({
      otros dos medios. Ver domain/gameStatus.ts. */
   play_state: z.enum(["playing", "ongoing", "dropped"]).nullable().optional(),
   minutes_played: z.number().int().nullable().optional(),
-  /* Steam (0074). `owned` es ortogonal al estado —"es mío", no "voy por
+  /* Cuándo tocaste el juego por última vez (0075) — lo escribe un disparador
+     cuando cambian las horas o el estado. NO es "cuándo lo terminaste", que es
+     last_watched_at. Null en las filas anteriores a la migración, que no se
+     rellenaron a propósito: ordenar cae a added_at (domain/gameTonight). */
+  played_at: z.string().nullable().optional(),
+  /* Steam (0076). `owned` es ortogonal al estado —"es mío", no "voy por
      aquí"— y saca de "Pendientes" lo que tienes y no has empezado; ver
      domain/gameStatus.ts. `minutes_source` es lo que deja a la ficha decir de
      dónde salen las horas sin una consulta más. */

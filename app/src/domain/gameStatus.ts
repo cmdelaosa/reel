@@ -35,7 +35,7 @@
    (ver hoursProgress).
 
    ── El sexto: 'owned', que no tiene chip ─────────────────────────────────
-   Lo trajo la importación de Steam (0074). Un juego que TIENES y no has
+   Lo trajo la importación de Steam (0076). Un juego que TIENES y no has
    empezado —ni horas, ni estado, ni terminado— no es un pendiente: es
    inventario. La diferencia no era importante mientras cada juego lo añadías
    tú a mano, porque añadirlo YA era decidir jugarlo; con una cuenta de Steam
@@ -76,7 +76,7 @@ export interface GameStatusInput {
   watchedCount: number;
   /** Lo que la persona dijo, si dijo algo. */
   playState: PlayState | null | undefined;
-  /** Lo tienes comprado (0074). Opcional: sin él la derivación es la de antes
+  /** Lo tienes comprado (0076). Opcional: sin él la derivación es la de antes
    *  de Steam, que es lo que deben seguir viendo las series y el cine. */
   owned?: boolean | null;
   /** Minutos jugados. Solo se consulta para separar "lo tengo y no lo he

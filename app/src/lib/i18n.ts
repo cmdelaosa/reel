@@ -106,14 +106,43 @@ const ES: Record<string, string> = {
   "Play state": "En qué punto estás",
   "Time played": "Tiempo jugado",
   "Hours played": "Horas jugadas",
+  "Games finished": "Juegos terminados",
+  "Games in your list": "Juegos en tu lista",
   "hours": "horas",
   "of {total}": "de {total}",
   "Mark finished": "Marcar terminado",
   "Finished — tap to clear": "Terminado — toca para quitarlo",
   "Platforms": "Plataformas",
   "Library": "Biblioteca",
+  /* Esta noche, en juegos. El héroe no dice "elige juego": un juego empezado se
+     retoma, y elegir es lo que se hace en la pestaña Pendientes. De ahí que
+     reutilice "Pick up where you left off", que ya existe en el Esta noche de
+     series y dice exactamente eso. */
+  "Start something": "Empieza algo",
+  "Just out": "Recién salidos",
+  /* Lanzamientos, la pantalla. Claves con prefijo y no las de cine ("Releases"
+     → "Estrenos") porque en juegos la palabra es otra: un juego no se estrena,
+     sale. Como toda clave con prefijo, lleva su entrada inglesa abajo para que
+     el prefijo no llegue nunca a la pantalla. */
+  "games: Releases": "Lanzamientos",
+  "games: My releases": "Mis lanzamientos",
+  "games: Announced": "Anunciados",
+  "No date yet": "Sin fecha",
+  "No releases in the games you follow.": "Ningún lanzamiento en los juegos que sigues.",
+  /* Explorar, en juegos. "Más esperados" y no "Tendencias": IGDB no publica
+     nada parecido a lo que la gente juega esta semana, y sí `hypes`, que es
+     cuánta gente sigue un juego SIN SALIR. Resulta ser además la pregunta que
+     más se hace de los videojuegos. */
+  "Most anticipated": "Más esperados",
+  "New releases": "Novedades",
+  "No games on those platforms here.": "Aquí no hay juegos de esas plataformas.",
+  "Nothing to show right now.": "Nada que enseñar ahora mismo.",
+  "Nothing out recently.": "Nada recién salido.",
+  "Nothing announced in the games you follow.": "Nada anunciado en los juegos que sigues.",
+  "Nothing on the go — hit {key} and add a game.":
+    "No tienes nada entre manos — pulsa {key} y añade un juego.",
   "Most played": "Más jugados",
-  /* Steam (0074). "Lo tengo" y no "En propiedad": lo que responde es la
+  /* Steam (0076). "Lo tengo" y no "En propiedad": lo que responde es la
      pregunta que uno se hace en la tienda con el móvil en la mano, y esa
      pregunta se hace con esas tres palabras. */
   "Owned": "Lo tengo",
@@ -446,6 +475,16 @@ const ES: Record<string, string> = {
   "self: rated {name}": "puntuaste {name}",
   "self: added {name} to their watchlist": "añadiste {name} a tu lista",
   "self: watched {eps} of {name}": "viste {eps} de {name}",
+  /* Los juegos (0074). El evento por debajo es el MISMO watch_event del
+     episodio sintético que en cine, y aun así la frase es otra: lo que ese
+     evento significa en un juego es que te salieron los créditos, no que lo
+     hayas visto. Y la lista a la que se añade se llama "pendientes", que es el
+     nombre del cubo de la biblioteca — decirle "lista" a secas obligaría a
+     recordar cuál. */
+  "finished {name}": "terminó {name}",
+  "self: finished {name}": "terminaste {name}",
+  "added {name} to their backlog": "añadió {name} a sus pendientes",
+  "self: added {name} to their backlog": "añadiste {name} a tus pendientes",
   // Reactions on those rows (0058)
   "React": "Reaccionar",
   "Reaction": "Reacción",
@@ -759,7 +798,12 @@ const EN: Record<string, string> = {
   "activity: Added": "Added",
   "self: rated {name}": "rated {name}",
   "self: added {name} to their watchlist": "added {name} to your watchlist",
+  "games: Releases": "Releases",
+  "games: My releases": "My releases",
+  "games: Announced": "Announced",
   "self: watched {eps} of {name}": "watched {eps} of {name}",
+  "self: finished {name}": "finished {name}",
+  "self: added {name} to their backlog": "added {name} to your backlog",
 };
 
 /** Dictionaries by language. */
@@ -862,8 +906,12 @@ export function locName(
   esNames: Map<string, string>,
   tmdbId: number | string | null | undefined,
   fallback: string,
-  kind: "tv" | "movie" = "tv",
+  kind: "tv" | "movie" | "game" = "tv",
 ): string {
   if (!isEs() || tmdbId == null) return fallback;
+  // 'game' se acepta y nunca acierta: name_es lo llena tmdb-proxy (0046) y IGDB
+  // no tiene traducciones, así que un juego cae siempre al nombre original. Se
+  // admite igualmente para que las listas mezcladas —el muro, el historial—
+  // llamen a locName con el kind de la fila sin ramificar antes.
   return esNames.get(`${kind}:${Number(tmdbId)}`) ?? fallback;
 }

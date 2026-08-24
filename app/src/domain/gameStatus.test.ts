@@ -39,7 +39,7 @@ describe("deriveGameStatus", () => {
     expect(derive(1, 0, "dropped")).toBe("dropped");
   });
 
-  /* 'owned' (0074) — inventario, no pendientes. Es lo que impide que la
+  /* 'owned' (0076) — inventario, no pendientes. Es lo que impide que la
      primera importación de Steam convierta el cubo con el que decides qué
      jugar en el catálogo entero de tu cuenta. */
   describe("owned", () => {

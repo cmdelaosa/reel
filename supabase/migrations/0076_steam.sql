@@ -1,4 +1,4 @@
--- 0074_steam.sql
+-- 0076_steam.sql
 -- Traer de Steam las horas jugadas. La tercera y última rodaja del modo
 -- Videojuegos; el catálogo lo puso 0071 y el progreso a mano 0073.
 --
@@ -184,9 +184,17 @@ create policy "steam_import_items: owner reads own"
 -- ============================================================
 -- 5. La biblioteca sirve las dos columnas nuevas
 -- ============================================================
--- Cuerpo idéntico al de 0073 salvo `owned` y `minutes_source`. Se recrea
--- entera, como hizo 0073 sobre 0067, porque cambiar el `returns table` de una
+-- Cuerpo idéntico al de **0075** salvo `owned` y `minutes_source`. Se recrea
+-- entera, como hizo 0075 sobre 0073, porque cambiar el `returns table` de una
 -- función SQL obliga a soltarla.
+--
+-- Y de ahí el aviso, que costó un susto: la base de la que se copia es la
+-- ÚLTIMA definición, no la que hubiera cuando se escribió la rama. Esta salió
+-- de 0073 y 0075 entró por medio con `played_at`; copiar la vieja habría
+-- borrado esa columna en silencio y dejado sin ordenar el "Esta noche" de
+-- juegos, con todo verde y sin un solo error. Quien vuelva a tocar esta función
+-- que mire antes `grep -n "create function public.rpc_library_rollup"
+-- supabase/migrations/*.sql` y parta del número más alto.
 --
 -- `minutes_source` viaja para que la ficha pueda decir de dónde salen las
 -- horas ("de Steam" frente a las tuyas) sin una consulta más: la biblioteca ya
@@ -217,6 +225,7 @@ returns table (
   upcoming_season_air_date date,
   play_state text,
   minutes_played int,
+  played_at timestamptz,
   release_precision text,
   platforms text[],
   beat_seconds jsonb,
@@ -251,6 +260,7 @@ as $$
     t.upcoming_season_air_date,
     le.play_state,
     le.minutes_played,
+    le.played_at,
     t.release_precision,
     t.platforms,
     t.beat_seconds,

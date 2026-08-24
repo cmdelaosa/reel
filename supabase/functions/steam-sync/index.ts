@@ -1,4 +1,4 @@
-// steam-sync — Deno edge function. Traer de Steam las horas jugadas (0074).
+// steam-sync — Deno edge function. Traer de Steam las horas jugadas (0076).
 //
 // Rutas (bajo /functions/v1/steam-sync):
 //   GET  /login    → { url }   la URL de OpenID a la que mandar a la persona
@@ -12,7 +12,7 @@
 // quien crea el pagaré elige su `user_id`, así que si la vuelta de Steam
 // escribiera directamente en `profiles`, bastaría con pasarle a alguien un
 // enlace de Steam para que su cuenta acabara enlazada a TU perfil. Lo que
-// decide dónde se escribe es el JWT de /confirm. Ver la migración 0074.
+// decide dónde se escribe es el JWT de /confirm. Ver la migración 0076.
 //
 // ── Por qué esta función no se parece a igdb-proxy ────────────────────────
 // IGDB es de Twitch y su API va por *client credentials*: un par de
@@ -377,7 +377,7 @@ Deno.serve(async (req) => {
     //
     // Y por eso NO escribe en `profiles`. Lo único que hace es dejar en el
     // pagaré el SteamID64 que Valve ha confirmado; quien lo reclama es la
-    // sesión, en /confirm. El motivo entero está en la migración 0074: quien
+    // sesión, en /confirm. El motivo entero está en la migración 0076: quien
     // creó el pagaré eligió su `user_id`, así que escribir aquí sería dejar que
     // un tercero decidiera en qué perfil aterriza la cuenta de Steam de otro.
     if (path === "/return") {

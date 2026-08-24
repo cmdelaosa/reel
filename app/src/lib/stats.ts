@@ -11,9 +11,15 @@ const statsSchema = z.object({
      etiqueta. Opcionales, como todo lo que llega con una migración que se
      aplica a mano después de que el frontend ya esté fuera. */
   movies_watched: z.number().int().optional().default(0),
+  /* Y las tres de juegos (0074), por lo mismo. `minutes_played` va aparte de
+     `minutes_watched` y no sumada: un juego no dura cuarenta minutos, que es
+     justo lo que aquella suma le habría inventado a cada uno (0071). */
+  games_finished: z.number().int().optional().default(0),
   minutes_watched: z.number().int(),
+  minutes_played: z.number().int().optional().default(0),
   shows_followed: z.number().int(),
   movies_followed: z.number().int().optional().default(0),
+  games_followed: z.number().int().optional().default(0),
   coming_soon: z.number().int(),
   avg_rating: z.number().nullable(),
   friends: z.number().int(),
