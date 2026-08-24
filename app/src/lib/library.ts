@@ -34,6 +34,10 @@ function invalidateLibraryDerived(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: qk.upNext });
   qc.invalidateQueries({ queryKey: qk.stats });
   qc.invalidateQueries({ queryKey: ["calendarFeed"] });
+  // Seguir una película crea su episodio sintético (0067) y dejar de seguirla
+  // deja el suyo huérfano: el mapa title_id → episode_id que usan las listas de
+  // cine para marcar vista se queda corto si nadie lo tira.
+  qc.invalidateQueries({ queryKey: ["movieEpisodeIds"] });
 }
 
 function decorate(row: LibraryRow): LibraryShow {

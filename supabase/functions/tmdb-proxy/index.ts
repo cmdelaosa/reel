@@ -10,6 +10,10 @@
 //   GET /title/:tmdbId             → { title: TitleRow, seasons: SeasonRow[] }
 //   GET /title/:tmdbId/season/:n   → { season: SeasonRow, episodes: EpisodeRow[] }
 //   GET /movie/search?q=           → { results: TitleRow[] }
+//   GET /movie/trending            → { results: TitleRow[] }
+//   GET /movie/now-playing?region= → { results: TitleRow[] }
+//   GET /movie/popular?from=&to=   → { results: TitleRow[] }
+//   GET /movie/top-rated?from=&to=&genres= → { results: TitleRow[] }
 //   GET /movie/:tmdbId             → { title: TitleRow, episode_id: uuid|null }
 //   GET /movie/:tmdbId/credits     → { cast: […], crew: […] }
 //   GET /movie/:tmdbId/saga        → { collection, parts: TitleRow[] }
@@ -674,6 +678,7 @@ function searchRow(r: Any) {
 
 function movieRow(d: Any) {
   const providers = providerMap(d);
+  const releaseDates = releaseDateMap(d);
   const es = d.translations ? esTranslation(d) : null;
   return {
     tmdb_id: d.id,
@@ -695,6 +700,10 @@ function movieRow(d: Any) {
     episode_run_time: d.runtime ?? null,
     vote_average: d.vote_average ?? null,
     popularity: d.popularity ?? null,
+    // Las dos fechas por país (0068), del mismo append. Como los proveedores:
+    // presente solo cuando el payload lo trajo, para que una llamada sin el
+    // append no vacíe lo que un detalle completo ya escribió.
+    ...(releaseDates ? { release_dates: releaseDates } : {}),
     // La saga (0067). Se escribe siempre que el payload sea un detalle —
     // incluido el null — porque una película puede SALIR de una colección
     // cuando TMDB la reorganiza, y dejar el id viejo puesto la colgaría de una
@@ -703,6 +712,42 @@ function movieRow(d: Any) {
     collection_name: d.belongs_to_collection?.name ?? null,
     last_refreshed_at: new Date().toISOString(),
   };
+}
+
+/** TMDB release_dates → {ES: {theatrical, digital}, …}, listo para la columna.
+ *
+ *  Dos de los seis tipos que publica TMDB, que son los dos que alguien espera:
+ *  3 (estreno en salas) y 4 (digital, o sea "ya la puedo ver en casa"). Se
+ *  ignoran el 1 (premiere de festival), el 2 (estreno limitado — unas pocas
+ *  salas, y anunciarlo como "en cines" manda a la gente a un cine que no la
+ *  pone), el 5 (Blu-ray) y el 6 (televisión en abierto).
+ *
+ *  De cada tipo se guarda la fecha MÁS TEMPRANA del país: TMDB lista varias
+ *  entradas de tipo 4 cuando la película pasa por varias plataformas, y la que
+ *  importa es cuándo se pudo ver en casa por primera vez.
+ *
+ *  Devuelve undefined cuando el payload no traía el bloque — misma regla que
+ *  providerMap: quien no lo pidió no puede borrarlo. Un {} sí sobrescribe, y
+ *  significa lo que dice: TMDB ya no fecha esta película en ningún sitio. */
+function releaseDateMap(d: Any): Record<string, Record<string, string>> | undefined {
+  const results = d?.release_dates?.results;
+  if (!Array.isArray(results)) return undefined;
+
+  const TYPE = { 3: "theatrical", 4: "digital" } as const;
+  const out: Record<string, Record<string, string>> = {};
+  for (const country of results as Any[]) {
+    const code = country?.iso_3166_1;
+    if (!code) continue;
+    const here: Record<string, string> = {};
+    for (const r of (country.release_dates ?? []) as Any[]) {
+      const kind = TYPE[r?.type as 3 | 4];
+      const day = typeof r?.release_date === "string" ? r.release_date.slice(0, 10) : null;
+      if (!kind || !day) continue;
+      if (!here[kind] || day < here[kind]) here[kind] = day;
+    }
+    if (Object.keys(here).length) out[code] = here;
+  }
+  return out;
 }
 
 // Parcial, como searchRow: /search/movie trae genre_ids y ni duración ni
@@ -1012,7 +1057,7 @@ async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: numbe
  *  vía. Los logos que la ficha sí enseña son los de las plataformas, y esos
  *  vienen en `providers`, no de aquí. */
 async function refreshMovie(admin: SupabaseClient, apiKey: string, tmdbId: number) {
-  const d = await fetchTmdb(apiKey, `/movie/${tmdbId}?append_to_response=translations,watch/providers`);
+  const d = await fetchTmdb(apiKey, `/movie/${tmdbId}?append_to_response=translations,watch/providers,release_dates`);
   const [title] = await upsertReturning(admin, "titles", movieRow(d), "kind,tmdb_id");
   // El upsert no puede devolver el episodio que su propio trigger acaba de
   // escribir, así que en el camino frío sí hay un viaje más — uno, y solo la
@@ -1173,13 +1218,14 @@ const fetchTmdb = async (apiKey: string, p: string) => {
    cron does not have to race the very TTL it exists to stay ahead of. */
 const DISCOVER_TTL_MS = 24 * 3600 * 1000;
 
-/** Title rows for an ordered tmdb_id list, in that order. */
-async function titlesInOrder(admin: SupabaseClient, tmdbIds: number[]): Promise<Any[]> {
+/** Title rows for an ordered tmdb_id list, in that order.
+ *
+ *  `kind` no tiene valor por defecto a propósito: un id de TMDB solo es único
+ *  dentro de su medio (0067), así que quien pide una rejilla tiene que decir de
+ *  cuál — sin eso, una película con el mismo id se colaría entre las series. */
+async function titlesInOrder(admin: SupabaseClient, tmdbIds: number[], kind: "tv" | "movie"): Promise<Any[]> {
   if (tmdbIds.length === 0) return [];
-  // kind='tv': los cuatro descubrimientos que llaman aquí son de series, y un
-  // id de TMDB solo es único dentro de su medio (0067) — sin el filtro, una
-  // película con el mismo id entraría en la rejilla de series.
-  const { data } = await admin.from("titles").select("*").eq("kind", "tv").in("tmdb_id", tmdbIds);
+  const { data } = await admin.from("titles").select("*").eq("kind", kind).in("tmdb_id", tmdbIds);
   const byTmdb = new Map((data ?? []).map((r: Any) => [r.tmdb_id, r]));
   return tmdbIds.map((id) => byTmdb.get(id)).filter(Boolean);
 }
@@ -1412,6 +1458,153 @@ async function resolveTopRated(
   return ids;
 }
 
+
+/* ── descubrimiento de cine ──────────────────────────────────────────────────
+   Tres resolvedores gemelos de los de series, contra /discover/movie y
+   /trending/movie. Comparten con ellos la tabla discover_cache (su clave es una
+   cadena libre, así que basta con prefijarla) y las dos reglas de reordenación
+   de ./rank.ts, que hablan de idioma y país de origen y no de episodios.
+
+   No hay gemelo de /popular-now: aquel existe porque una serie "está pasando"
+   cuando estrena temporada, y hace una comprobación de detalle por candidata
+   para averiguarlo. Una película no tiene temporadas — lo que está pasando en
+   cine es literalmente lo que hay en cartelera, y eso TMDB lo da hecho en
+   /movie/now_playing, sin una sola petición extra por título.
+
+   El filtro de contenido oculto (isHidden, dentro de dedupeVisible) mira
+   genre_ids, y los ids de género de cine son OTROS: 16 (animación) coincide,
+   pero 10764/10766 (reality y culebrón) no existen en cine y ningún id de cine
+   los ocupa. Es decir: para películas el filtro degrada a "anime y lenguas
+   ocultas", que es exactamente lo que debe hacer. */
+
+async function resolveMovieTrending(admin: SupabaseClient, apiKey: string, force = false): Promise<number[]> {
+  const key = "movie-trending:";
+  if (!force) {
+    const hit = await readDiscoverCache(admin, key);
+    if (hit) return hit;
+  }
+  const PAGES = 2;
+  const KEEP = 24;
+  const pages = await Promise.all(
+    Array.from({ length: PAGES }, (_, i) => fetchTmdb(apiKey, `/trending/movie/week?page=${i + 1}`)),
+  );
+  const uniq = capNonWestern(dedupeVisible(pages));
+  uniq.length = Math.min(uniq.length, KEEP);
+  if (uniq.length === 0) return [];
+  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  const ids = uniq.map((r) => r.id as number);
+  await writeDiscoverCache(admin, key, ids);
+  return ids;
+}
+
+/** En cartelera: lo que TMDB dice que está en salas ahora mismo, por
+ *  popularidad. El equivalente de "popular ahora" en series, y mucho más barato
+ *  que aquel — la pregunta "¿qué se puede ver hoy?" la responde TMDB entera.
+ *
+ *  POR PAÍS, y es la única de las cuatro que lo necesita: una cartelera es de
+ *  un sitio. Sin `region` TMDB responde la de Estados Unidos, así que la
+ *  pestaña que existe para decirte qué puedes ir a ver te enseñaba lo que están
+ *  poniendo a ocho mil kilómetros. La caché lleva el país en la clave por lo
+ *  mismo. Las otras tres (tendencias, populares, mejor valoradas) son preguntas
+ *  sobre el catálogo, no sobre las salas, y no cambian con el país. */
+async function resolveMovieNowPlaying(
+  admin: SupabaseClient, apiKey: string, region: string, force = false,
+): Promise<number[]> {
+  const key = `movie-now-playing:${region}`;
+  if (!force) {
+    const hit = await readDiscoverCache(admin, key);
+    if (hit) return hit;
+  }
+  const PAGES = 3;
+  const KEEP = 40;
+  const pages = await Promise.all(
+    Array.from({ length: PAGES }, (_, i) =>
+      fetchTmdb(apiKey, `/movie/now_playing?region=${encodeURIComponent(region)}&page=${i + 1}`)),
+  );
+  const visible = dedupeVisible(pages);
+  // Un solo orden, y el último que se aplica manda: popularidad primero para
+  // que la cartelera salga por lo que la gente va a ver, y el suelo español
+  // después, que es la misma corrección deliberada de las otras rejillas.
+  visible.sort((a: Any, b: Any) => (b.popularity ?? 0) - (a.popularity ?? 0));
+  const uniq = capNonWestern(boostSpanish(visible));
+  uniq.length = Math.min(uniq.length, KEEP);
+  if (uniq.length === 0) return [];
+  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  const ids = uniq.map((r) => r.id as number);
+  await writeDiscoverCache(admin, key, ids);
+  return ids;
+}
+
+async function resolveMoviePopular(
+  admin: SupabaseClient, apiKey: string, from: string | null, to: string | null, force = false,
+): Promise<number[]> {
+  const key = `movie-popular:${from ?? ""}:${to ?? ""}`;
+  if (!force) {
+    const hit = await readDiscoverCache(admin, key);
+    if (hit) return hit;
+  }
+  // primary_release_date, no first_air_date: en cine la columna se llama de otra
+  // forma, y pasar la de series devuelve el catálogo entero sin filtrar.
+  const yearParams =
+    (from ? `&primary_release_date.gte=${from}-01-01` : "") +
+    (to ? `&primary_release_date.lte=${to}-12-31` : "");
+  const PAGES = 5;
+  const ES_PAGES = 2;
+  const pages = await Promise.all([
+    ...Array.from({ length: PAGES }, (_, i) =>
+      fetchTmdb(apiKey, `/discover/movie?sort_by=popularity.desc&include_adult=false&page=${i + 1}${yearParams}`)),
+    ...Array.from({ length: ES_PAGES }, (_, i) =>
+      fetchTmdb(apiKey, `/discover/movie?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&page=${i + 1}${yearParams}`)),
+  ]);
+  const uniq = capNonWestern(boostSpanish(dedupeVisible(pages)));
+  if (uniq.length === 0) return [];
+  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  const ids = uniq.map((r) => r.id as number);
+  await writeDiscoverCache(admin, key, ids);
+  return ids;
+}
+
+/** Mejor valoradas. Mismo suelo deslizante de votos que en series y por lo
+ *  mismo (una nota de 9 con 40 votos no es una nota), pero más alto en la base:
+ *  el catálogo de cine de TMDB es mucho más grande y más votado que el de
+ *  series, y 3000 votos ahí no vacían una década. */
+async function resolveMovieTopRated(
+  admin: SupabaseClient, apiKey: string, from: string | null, to: string | null,
+  genres: string[], force = false,
+): Promise<number[]> {
+  const key = `movie-top-rated:${from ?? ""}:${to ?? ""}:${genres.join(",")}`;
+  if (!force) {
+    const hit = await readDiscoverCache(admin, key);
+    if (hit) return hit;
+  }
+  const thisYear = new Date().getUTCFullYear();
+  const era = Number(from ?? to);
+  const eraFloor =
+    !from && !to ? 5000
+    : Number(from) >= thisYear - 1 ? 100
+    : Number(from) >= thisYear - 4 ? 600
+    : era >= 2005 ? 2000
+    : era >= 1990 ? 1000
+    : 400;
+  const minVotes = genres.length ? Math.min(eraFloor, 1000) : eraFloor;
+  const params =
+    `&sort_by=vote_average.desc&vote_count.gte=${minVotes}` +
+    (from ? `&primary_release_date.gte=${from}-01-01` : "") +
+    (to ? `&primary_release_date.lte=${to}-12-31` : "") +
+    (genres.length ? `&with_genres=${genres.join("%7C")}` : "");
+  const PAGES = 8;
+  const pages = await Promise.all(
+    Array.from({ length: PAGES }, (_, i) =>
+      fetchTmdb(apiKey, `/discover/movie?include_adult=false${params}&page=${i + 1}`)),
+  );
+  const uniq = capNonWestern(dedupeVisible(pages));
+  if (uniq.length === 0) return [];
+  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  const ids = uniq.map((r) => r.id as number);
+  await writeDiscoverCache(admin, key, ids);
+  return ids;
+}
+
 /* ── invite gate ─────────────────────────────────────────────────────────────
    The gate is a PostgREST round trip, and it used to run on every single
    request. Explore alone opens with several — same reader, same token, same
@@ -1546,6 +1739,16 @@ Deno.serve(async (req) => {
         ["popular-now", () => resolvePopularNow(admin, apiKey, true)],
         ["popular", () => resolvePopular(admin, apiKey, null, null, true)],
         ["top-rated", () => resolveTopRated(admin, apiKey, null, null, [], true)],
+        // El cine entra en la misma corrida y por el mismo motivo: sus cuatro
+        // cachés caducan igual, y sin esto el primero que abriera Explorar de
+        // películas después de las 24 h pagaría la reconstrucción entera.
+        ["movie-trending", () => resolveMovieTrending(admin, apiKey, true)],
+        // Solo ES: es el país de casi todo el mundo aquí, y calentar tres
+        // carteleras por si acaso es gastar por adelantado en dos que puede
+        // que nadie pida. Las otras se construyen a la primera visita.
+        ["movie-now-playing", () => resolveMovieNowPlaying(admin, apiKey, "ES", true)],
+        ["movie-popular", () => resolveMoviePopular(admin, apiKey, null, null, true)],
+        ["movie-top-rated", () => resolveMovieTopRated(admin, apiKey, null, null, [], true)],
       ];
       // Sequentially: these are the heaviest TMDB consumers in the codebase and
       // running them at once is how a rate limit turns four warm caches into
@@ -1615,18 +1818,18 @@ Deno.serve(async (req) => {
 
     // GET /trending  (TMDB /trending/tv/week, cached 24h in trending_cache)
     if (path === "/trending") {
-      return json({ results: await titlesInOrder(admin, await resolveTrending(admin, apiKey)) });
+      return json({ results: await titlesInOrder(admin, await resolveTrending(admin, apiKey), "tv") });
     }
 
     // GET /popular-now  — see resolvePopularNow.
     if (path === "/popular-now") {
-      return json({ results: await titlesInOrder(admin, await resolvePopularNow(admin, apiKey)) });
+      return json({ results: await titlesInOrder(admin, await resolvePopularNow(admin, apiKey), "tv") });
     }
 
     // GET /popular?from=YYYY&to=YYYY  — see resolvePopular.
     if (path === "/popular") {
       const ids = await resolvePopular(admin, apiKey, url.searchParams.get("from"), url.searchParams.get("to"));
-      return json({ results: await titlesInOrder(admin, ids) });
+      return json({ results: await titlesInOrder(admin, ids, "tv") });
     }
 
     // GET /top-rated?from=YYYY&to=YYYY&genres=18,80  — see resolveTopRated.
@@ -1639,7 +1842,7 @@ Deno.serve(async (req) => {
         url.searchParams.get("to") || null,
         genres,
       );
-      return json({ results: await titlesInOrder(admin, ids) });
+      return json({ results: await titlesInOrder(admin, ids, "tv") });
     }
 
     // GET /collection/:slug  (TMDB /discover/tv per curated-collection criteria;
@@ -1711,6 +1914,39 @@ Deno.serve(async (req) => {
       }
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
       return json({ results: results.map((r) => byTmdb.get(r.id)).filter(Boolean) });
+    }
+
+    // GET /movie/trending | /movie/now-playing | /movie/popular | /movie/top-rated
+    // Gemelas de las cuatro de series, contra el catálogo de cine. Van antes que
+    // /movie/:id porque ninguna es un número y el regex de aquel no las cogería,
+    // pero tenerlas delante deja el orden de lectura igual que el de arriba.
+    if (path === "/movie/trending") {
+      return json({ results: await titlesInOrder(admin, await resolveMovieTrending(admin, apiKey), "movie") });
+    }
+    if (path === "/movie/now-playing") {
+      // El país lo manda el cliente (el de Ajustes), y se valida aquí: es un
+      // parámetro de URL que acaba en una petición a TMDB, así que solo pasan
+      // dos letras. ES por defecto — el mercado desde el que se mira esta app,
+      // el mismo criterio que PROVIDER_COUNTRIES.
+      const raw = (url.searchParams.get("region") ?? "ES").toUpperCase();
+      const region = /^[A-Z]{2}$/.test(raw) ? raw : "ES";
+      const ids = await resolveMovieNowPlaying(admin, apiKey, region);
+      return json({ results: await titlesInOrder(admin, ids, "movie") });
+    }
+    if (path === "/movie/popular") {
+      const ids = await resolveMoviePopular(admin, apiKey, url.searchParams.get("from"), url.searchParams.get("to"));
+      return json({ results: await titlesInOrder(admin, ids, "movie") });
+    }
+    if (path === "/movie/top-rated") {
+      const genres = (url.searchParams.get("genres") ?? "")
+        .split(",").map((g) => g.trim()).filter((g) => /^\d+$/.test(g));
+      const ids = await resolveMovieTopRated(
+        admin, apiKey,
+        url.searchParams.get("from") || null,
+        url.searchParams.get("to") || null,
+        genres,
+      );
+      return json({ results: await titlesInOrder(admin, ids, "movie") });
     }
 
     // GET /movie/:id/credits — reparto y dirección. La dirección es la mitad

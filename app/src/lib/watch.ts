@@ -16,6 +16,10 @@ function invalidateDerived(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: qk.stats });
   qc.invalidateQueries({ queryKey: qk.watchHeatmap });
   qc.invalidateQueries({ queryKey: ["calendarFeed"] });
+  // El feed de estrenos de cine trae su propio watch_event_id, así que sin esto
+  // el check que acabas de pulsar en Estrenos se queda vacío hasta que la
+  // consulta caduque sola.
+  qc.invalidateQueries({ queryKey: ["movieReleases"] });
   qc.invalidateQueries({ queryKey: qk.history });
 }
 

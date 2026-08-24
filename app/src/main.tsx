@@ -21,6 +21,9 @@ import HistoryPage from "@/features/history/HistoryPage";
 import ImportPage from "@/features/import/ImportPage";
 import KitPage from "@/features/kit/KitPage";
 import MoviesPage from "@/features/movies/MoviesPage";
+import MoviesTonightPage from "@/features/movies/MoviesTonightPage";
+import MovieReleasesPage from "@/features/movies/MovieReleasesPage";
+import MoviesExplorePage from "@/features/movies/MoviesExplorePage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
@@ -103,7 +106,19 @@ const router = createBrowserRouter([
       // un enlace compartido aterrice ya en su modo y con su acento. De momento
       // solo la biblioteca: Tonight, Releases y Explore de películas llegan en
       // su propia rama, y una ruta vacía no se publica.
-      { path: "movies", element: <MoviesPage /> },
+      /* El cine, con la misma planta que las series: una portada, un
+         calendario, la biblioteca y explorar.
+
+         `/movies` a secas redirige a la portada en vez de ser la biblioteca,
+         que es lo que era mientras fue la única pantalla. Dos motivos: deja el
+         prefijo del modo (lib/medium) sin pantalla propia, como `/` en series,
+         y evita que la pestaña de la biblioteca se encienda en las otras tres
+         — un NavLink a "/movies" casa también con "/movies/tonight". */
+      { path: "movies", element: <Navigate to="/movies/tonight" replace /> },
+      { path: "movies/tonight", element: <MoviesTonightPage /> },
+      { path: "movies/releases", element: <MovieReleasesPage /> },
+      { path: "movies/watchlist", element: <MoviesPage /> },
+      { path: "movies/explore", element: <MoviesExplorePage /> },
       { path: "explore", element: <ExplorePage /> },
       { path: "collection/:slug", element: <CollectionPage /> },
       { path: "calendar", element: <CalendarPage /> },

@@ -6,7 +6,7 @@ import {
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
 import { useNotifications, useNotificationsRealtime } from "@/lib/notifications";
-import { MOVIE_PREFIX, isMoviePath, setMedium, useMedium, type Medium } from "@/lib/medium";
+import { isMoviePath, setMedium, useMedium, type Medium } from "@/lib/medium";
 import { MovieSheet } from "@/features/movies/MovieSheet";
 import { NotifPanel } from "@/ui/shell/NotifPanel";
 import { Palette } from "@/ui/shell/Palette";
@@ -32,13 +32,15 @@ const TABS = [
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
-/* El cine estrena por partes: aquí solo están las pestañas que existen. Tonight,
-   Releases y Explore de películas llegan en su propia rama, y hasta entonces no
-   se pintan — una pestaña que lleva a una pantalla vacía es peor que no tenerla.
-   Amigos es LA MISMA página en los dos modos (solo cambia el acento), así que
-   apunta a la misma ruta. */
+/* Las cinco de series menos una: no hay "Calendario" y "Estrenos" a la vez,
+   porque en cine son la misma pantalla. Amigos es LA MISMA página en los dos
+   modos (solo cambia el acento), así que apunta a la misma ruta — y por eso
+   aparece en las dos listas, que es lo que SHARED_PATHS detecta abajo. */
 const MOVIE_TABS = [
-  { path: MOVIE_PREFIX, label: "Watchlist", icon: Bookmark },
+  { path: "/movies/tonight", label: "Tonight", icon: Clapperboard },
+  { path: "/movies/releases", label: "Releases", icon: CalendarClock },
+  { path: "/movies/watchlist", label: "Watchlist", icon: Bookmark },
+  { path: "/movies/explore", label: "Explore", icon: Compass },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
@@ -70,7 +72,7 @@ function MediumSwitch() {
     if (next === medium) return;
     setMedium(next);
     if (!ownedByAMedium(pathname)) return;
-    navigate(next === "movie" ? MOVIE_PREFIX : "/tonight");
+    navigate(next === "movie" ? "/movies/tonight" : "/tonight");
   };
 
   return (

@@ -98,6 +98,45 @@ export async function getMovieCredits(tmdbId: number): Promise<MovieCreditsRespo
   }
 }
 
+/* Las cuatro rejillas de descubrimiento de cine — gemelas de getTrending,
+   getPopularNow, getPopular y getTopRated, contra las rutas /movie/* del proxy.
+   El orden lo resuelve y cachea él; aquí solo se pide. */
+
+export async function getMovieTrending(): Promise<TitleRow[]> {
+  return searchResponseSchema.parse(await call(`/movie/trending`)).results;
+}
+
+/** En cartelera ahora mismo, EN TU PAÍS. El "popular ahora" del cine, y el
+ *  equivalente honesto: en series hay que deducir qué está pasando mirando
+ *  estrenos de temporada; en cine, lo que está pasando es lo que hay en salas.
+ *
+ *  Y una cartelera es de un sitio, así que el país viaja en la petición: sin él
+ *  TMDB responde la de Estados Unidos. */
+export async function getMovieNowPlaying(region: string): Promise<TitleRow[]> {
+  return searchResponseSchema.parse(
+    await call(`/movie/now-playing?region=${encodeURIComponent(region)}`),
+  ).results;
+}
+
+export async function getMoviePopular(from?: number | null, to?: number | null): Promise<TitleRow[]> {
+  const qs = new URLSearchParams();
+  if (from) qs.set("from", String(from));
+  if (to) qs.set("to", String(to));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return searchResponseSchema.parse(await call(`/movie/popular${suffix}`)).results;
+}
+
+export async function getMovieTopRated(
+  from?: number | null, to?: number | null, genreIds: number[] = [],
+): Promise<TitleRow[]> {
+  const qs = new URLSearchParams();
+  if (from) qs.set("from", String(from));
+  if (to) qs.set("to", String(to));
+  if (genreIds.length) qs.set("genres", genreIds.join(","));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return searchResponseSchema.parse(await call(`/movie/top-rated${suffix}`)).results;
+}
+
 /** Las entregas de la saga, en orden de estreno. Silent-fail: sin saga (o con
  *  un proxy anterior a la ruta) la ficha se dibuja sin esa sección. */
 export async function getMovieSaga(tmdbId: number): Promise<SagaResponse> {

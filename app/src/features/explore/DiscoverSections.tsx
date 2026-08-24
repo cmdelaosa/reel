@@ -12,8 +12,8 @@ import { Rail, TabMenu } from "@/ui";
 import { PosterGridSkeleton, RailCardsSkeleton, RowsSkeleton } from "@/ui/Skeleton";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
+import { FilterPanel, TitlePoster } from "@/features/explore/DiscoverPieces";
 import { useTitleIntent } from "@/lib/useOpenTitle";
-import { useFocusTrap } from "@/ui/useFocusTrap";
 
 /* Trending rail (ranked) + a single tabbed discover section: Popular now,
    Top rated, and With friends share one toolbar row — pool tabs on the left,
@@ -22,40 +22,6 @@ import { useFocusTrap } from "@/ui/useFocusTrap";
    filters echo as removable chips under the toolbar, and the grid grows in
    PAGE_SIZE steps via a "Show more" button instead of a pager, up to the
    MAX_ITEMS ceiling every tab shares. */
-
-function TitlePoster({ t, rank, score, onOpen, onIgnore }: { t: TitleRow; rank?: number; score?: number | null; onOpen: () => void; onIgnore?: () => void }) {
-  const art = tmdbImg(t.poster_path);
-  const intent = useTitleIntent(t.tmdb_id);
-  const esNames = useEsNames();
-  const name = (isEs() && t.name_es) || locName(esNames, t.tmdb_id, t.name);
-  return (
-    <div className="poster" style={{ background: posterBg(name) }} onClick={onOpen} {...intent}>
-      {art && <img className="poster-img" src={art} alt="" loading="lazy" />}
-      <div className="poster-sheen" />
-      {rank != null && <span className="mq-rank">{rank}</span>}
-      {score != null && score > 0 && (
-        <span className="badge badge-glass absolute" style={{ top: 8, left: 8, zIndex: 3 }}>
-          <Star size={11} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} /> {score.toFixed(1)}
-        </span>
-      )}
-      {onIgnore && (
-        <button
-          className="btn btn-icon badge-glass absolute disc-hide"
-          style={{ top: 8, right: 8, color: "#fff", zIndex: 3 }}
-          title={tr("Ignore — hide from suggestions")}
-          aria-label={tv("Hide {name} from suggestions", { name: t.name })}
-          onClick={(e) => { e.stopPropagation(); onIgnore(); }}
-        >
-          <EyeOff size={15} />
-        </button>
-      )}
-      <div className="poster-body">
-        <div className="poster-title">{name}</div>
-        <div className="poster-sub">{[t.first_air_date?.slice(0, 4), tGenre(t.genres[0] ?? "")].filter(Boolean).join(" · ")}</div>
-      </div>
-    </div>
-  );
-}
 
 function AddButton({ t }: { t: TitleRow }) {
   const { data: library = [] } = useLibrary();
@@ -88,26 +54,7 @@ function FriendRow({ friends, count }: { friends: FriendLike[]; count: number })
   );
 }
 
-const THIS_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: THIS_YEAR - 1970 + 1 }, (_, i) => THIS_YEAR - i);
 
-/* First-air-year bound picker inside the filters panel: label stacked over the
-   select so From/To sit side by side. */
-function YearField({ value, onChange, label }: { value: number | null; onChange: (y: number | null) => void; label: string }) {
-  return (
-    <label className="disc-yearfield">
-      <span className="mute" style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
-      <select
-        className="year-select"
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-      >
-        <option value="">{tr("Any")}</option>
-        {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-      </select>
-    </label>
-  );
-}
 
 /* Cards revealed per "Show more" press, constant across tabs. */
 const PAGE_SIZE = 18;
@@ -178,53 +125,6 @@ function TitleListRow({ t, score, friends, friendCount, onOpen, onIgnore }: { t:
    two shapes via CSS — anchored glass popover ≥768px, bottom sheet below.
    Closes on Escape here; backdrop tap (mobile) and outside click (desktop)
    are handled by the anchor wrapper. */
-function FilterPanel({ selected, onToggleGenre, fromYear, toYear, onFromYear, onToYear, hasFilters, onClear, onClose }: {
-  selected: string[];
-  onToggleGenre: (g: string) => void;
-  fromYear: number | null;
-  toYear: number | null;
-  onFromYear: (y: number | null) => void;
-  onToYear: (y: number | null) => void;
-  hasFilters: boolean;
-  onClear: () => void;
-  onClose: () => void;
-}) {
-  const ref = useFocusTrap<HTMLDivElement>();
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [onClose]);
-  return (
-    <>
-      <div className="backdrop disc-sheet-backdrop" onClick={onClose} />
-      <div ref={ref} className="disc-panel" role="dialog" aria-modal="true" aria-label={tr("Filters")} tabIndex={-1}>
-        <div className="disc-handle" aria-hidden />
-        <div className="disc-sec-label">{tr("Genres")}</div>
-        <div className="disc-genres">
-          {GENRE_NAMES.map((g) => (
-            <label key={g} className="filter-opt">
-              <input type="checkbox" checked={selected.includes(g)} onChange={() => onToggleGenre(g)} />
-              <span>{tGenre(g)}</span>
-            </label>
-          ))}
-        </div>
-        <div className="disc-sec-label">{tr("Years")}</div>
-        <div className="disc-years">
-          <YearField value={fromYear} onChange={onFromYear} label={tr("From")} />
-          <YearField value={toYear} onChange={onToYear} label={tr("To")} />
-        </div>
-        <div className="disc-panel-foot">
-          <button className="chip" disabled={!hasFilters} onClick={onClear}>
-            <X size={13} />
-            {tr("Clear filters")}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
 /* Shared genre taxonomy for the discover filters. Names double as the client-
    side match key (Popular/With-friends) and map to TMDB genre ids for the
    server-side Top-rated query. Subset of the proxy's TV_GENRES: no Soap/Reality
@@ -443,6 +343,7 @@ export function DiscoverSections() {
               </button>
               {filtersOpen && (
                 <FilterPanel
+                  genres={GENRE_NAMES}
                   selected={selectedGenres}
                   onToggleGenre={toggleGenre}
                   fromYear={fromYear}
