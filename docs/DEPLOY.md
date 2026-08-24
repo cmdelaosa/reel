@@ -64,9 +64,29 @@ does `friend-request-email` — both record the skip in `job_runs` rather than
 sending from an address nobody receives.
 
 `friend-request-email` is called by a database trigger through pg_net, which
-reads the service-role key from Vault under the name `service_role_key` — the
-same secret `supabase/deploy/schedule-jobs.sql` sets up for the crons. Without
-it the trigger silently sends nothing (the in-app notification is unaffected).
+reads the service-role key from Vault — and **it does not read the same secret
+the crons do**. Migration `0061_friend_request_email.sql` looks the key up under
+the name `service_role_key`, while `supabase/deploy/schedule-jobs.sql` stores it
+as `episode_refresh_service_key` (named after the first cron that needed it; see
+the comment at its step 2). The one-off backfill in `0052_backfill_air_times.sql`
+reads `service_role_key` too.
+
+So a project provisioned only from `schedule-jobs.sql` has no secret by the name
+the trigger wants, and the mail is dropped without a trace: the lookup returns
+NULL, the function's `if v_key is null then return` guard fires, and nothing is
+logged anywhere — no `job_runs` row, not even a pg_net request. The in-app
+notification is unaffected, which is what makes it look like an email problem
+rather than a missing secret.
+
+Until the two names are reconciled, store the service-role key under **both**:
+
+```sql
+select name from vault.secrets;   -- see what this project actually holds
+select vault.create_secret('<SERVICE_ROLE_KEY>', 'service_role_key');
+```
+
+(The crons' 401-when-the-name-is-wrong failure mode is louder only because it at
+least reaches `net._http_response`; this one produces no request at all.)
 
 ## 4. Configure Auth (hosted dashboard → Authentication)
 
@@ -125,9 +145,10 @@ Supabase function secrets.
 Fire these **from the SQL editor**, the way the cron does — `net.http_post` with
 the key read out of the Vault. A `curl` needs the service key in your shell, and
 the header has to match `SUPABASE_SERVICE_ROLE_KEY` exactly, which the dashboard's
-newer `sb_secret_…` key is not. Check the secret's name first: this project's is
-`episode_refresh_service_key`, not the `service_role_key` that
-`schedule-jobs.sql` creates.
+newer `sb_secret_…` key is not. Check the secret's name first: the crons —
+and the snippet below — use `episode_refresh_service_key`, which is what
+`schedule-jobs.sql` creates. (`service_role_key` is a different name that only
+the friend-request trigger and 0052 read; see step 3.)
 
 ```sql
 select name from vault.secrets;   -- whatever it is called here
