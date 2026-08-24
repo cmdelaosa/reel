@@ -274,8 +274,13 @@ comment on column public.titles.release_precision is
 -- la condición que se señala en cada uno.
 
 -- ── el muro ────────────────────────────────────────────────────────────────
--- Una línea: `where u.kind in ('tv','movie')` en el select final. Filtrar ahí y
--- no en los tres joins de `titles` es lo mismo y se lee de una vez.
+-- El filtro va DENTRO de las tres subconsultas laterales, antes de su LIMIT, y
+-- no en el select final. No es lo mismo y la diferencia se ve sola: cada fuente
+-- coge las p_limit filas más recientes POR PERSONA y luego el muro se queda con
+-- las p_limit mejores del total. Filtrando al final, un amigo que acabe de
+-- puntuar treinta juegos aporta cero filas —sus treinta se descartan después de
+-- haber ocupado su cupo— y su actividad de series desaparece del muro sin que
+-- nada lo diga. Filtrando dentro, el cupo se llena con lo que sí se pinta.
 
 create or replace function public.rpc_friend_activity(p_limit int default 30)
 returns jsonb
@@ -304,6 +309,7 @@ as $$
     cross join lateral (
       select c.fid as fid, rr.title_id as title_id, rr.score::int as score, rr.created_at as at
       from public.ratings rr
+      join public.titles tt on tt.id = rr.title_id and tt.kind in ('tv', 'movie')
       where rr.user_id = c.fid and rr.title_id is not null
       order by rr.created_at desc
       limit p_limit
@@ -320,6 +326,7 @@ as $$
     cross join lateral (
       select c.fid as fid, le.title_id as title_id, le.added_at as at
       from public.library_entries le
+      join public.titles tt on tt.id = le.title_id and tt.kind in ('tv', 'movie')
       where le.user_id = c.fid and le.followed
       order by le.added_at desc
       limit p_limit
@@ -336,6 +343,7 @@ as $$
              (wv.watched_at at time zone 'Europe/Madrid')::date as day
       from public.watch_events wv
       join public.episodes e on e.id = wv.episode_id and e.season_number > 0
+      join public.titles tt on tt.id = e.title_id and tt.kind in ('tv', 'movie')
       where wv.user_id = c.fid
       order by wv.watched_at desc
       limit p_limit * 8
@@ -382,7 +390,6 @@ as $$
            u.at, u.event_key
     from unioned u
     join public.profiles p on p.id = u.fid
-    where u.kind in ('tv', 'movie')
     order by u.at desc
     limit p_limit
   ) x;
