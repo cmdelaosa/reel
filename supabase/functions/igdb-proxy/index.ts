@@ -1,7 +1,7 @@
 // igdb-proxy — Deno edge function. El tercer medio: videojuegos.
 //
 // Rutas (bajo /functions/v1/igdb-proxy):
-//   GET /search?q=        → { results: TitleRow[] }
+//   GET /search?q=        → { results: TitleRow[] }  (dos consultas, ver la ruta)
 //   GET /game/:igdbId     → { title: TitleRow, episode_id: uuid|null }
 //
 // Las de descubrimiento (novedades, próximos, mejor valorados) llegan con las
@@ -50,7 +50,7 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { type Any, apicalypseTerm, gameRow, gameSearchRow } from "./normalize.ts";
-import { GAME_TYPE_FILTER, rankSearch } from "./rank.ts";
+import { GAME_TYPE_FILTER, mergeResults, rankSearch } from "./rank.ts";
 
 const IGDB = "https://api.igdb.com/v4";
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
@@ -386,14 +386,52 @@ Deno.serve(async (req) => {
       const term = apicalypseTerm(q);
       if (!term) return json({ results: [] });
 
-      const found = await igdb(
-        "games",
-        `search "${term}"; fields ${SEARCH_FIELDS}; ` +
-          `where version_parent = null & ${GAME_TYPE_FILTER}; limit 20;`,
+      /* DOS consultas, y hacen falta las dos. Ninguna sola sirve:
+         `search` casa palabras COMPLETAS. "mario kar" y "zeld" devuelven
+         cero resultados, y en un buscador que responde mientras tecleas eso
+         significa que la mitad de las teclas dicen "no existe" — que se lee
+         como "este juego no está en el catálogo", no como "sigue escribiendo".
+         `name ~ *"…"*` es una coincidencia de subcadena y sí acierta con lo
+         escrito a medias, pero es SENSIBLE A LOS ACENTOS: con "pokemon" se
+         pierde todos los Pokémon oficiales, que IGDB escribe "Pokémon", y
+         devuelve una lista de fan games. `search` sí los encuentra.
+         Medido el 24-ago-2026 sobre ocho términos.
+         La de nombre va ordenada por votos para que su ventana de 15 sea la
+         de los quince más conocidos que casan, y no quince cualesquiera. */
+      /* A la vez, y con las DOS a prueba de fallos. El estrangulador las separa
+         igual (reserva su hueco antes de dormir), así que lanzarlas juntas no
+         se salta el límite y ahorra un viaje de red entero.
+
+         Cada una cae por su cuenta: si `~` deja de funcionar el día que IGDB
+         toque el operador, la búsqueda sigue existiendo con la mitad de
+         relevancia, y al revés. Lo que NO se hace es tragarse las dos y
+         devolver una lista vacía — "no hay resultados" y "no he podido
+         preguntar" son cosas distintas, y confundirlas es exactamente lo que
+         hacía que este bug se viera como un catálogo incompleto en vez de como
+         una avería. */
+      const [byName, byRelevance] = await Promise.all([
+        igdb(
+          "games",
+          `fields ${SEARCH_FIELDS}; where name ~ *"${term}"* & version_parent = null & ` +
+            `${GAME_TYPE_FILTER}; sort total_rating_count desc; limit 15;`,
+        ).catch((e: unknown) => e as Error),
+        igdb(
+          "games",
+          `search "${term}"; fields ${SEARCH_FIELDS}; ` +
+            `where version_parent = null & ${GAME_TYPE_FILTER}; limit 15;`,
+        ).catch((e: unknown) => e as Error),
+      ]);
+      if (byName instanceof Error && byRelevance instanceof Error) throw byName;
+
+      const found = mergeResults(
+        Array.isArray(byName) ? byName : [],
+        Array.isArray(byRelevance) ? byRelevance : [],
       );
       if (!found.length) return json({ results: [] });
 
-      const ranked = rankSearch(found, q);
+      // Se corta DESPUÉS de ordenar: recortar antes dejaría fuera al que la
+      // popularidad iba a poner primero.
+      const ranked = rankSearch(found, q).slice(0, 20);
       const results = await upsertReturning(admin, ranked.map(gameSearchRow), "kind,tmdb_id");
       // El upsert devuelve las filas en el orden de la base, no en el que
       // acaba de decidir rankSearch, así que hay que reimponerlo. El `??
@@ -438,7 +476,15 @@ Deno.serve(async (req) => {
           "X-Cache": "HIT",
         });
       }
-      if (cached) {
+      // Rancia se sirve YA y se revalida por detrás — pero solo si de verdad
+      // hubo un detalle alguna vez. `last_refreshed_at` es lo que lo distingue:
+      // lo escribe gameRow y NO gameSearchRow, así que una fila que solo ha
+      // pasado por el buscador lo tiene a null. Servirla como rancia era
+      // enseñar la ficha sin fecha de salida, sin plataformas por fecha y sin
+      // tiempos — un Silksong salido en 2025 con un "TBA" enorme — y solo se
+      // arreglaba al volver a abrirla. Sin detalle previo se espera a la red,
+      // que es lo que tmdb-proxy hace con lo nunca cacheado.
+      if (cached?.last_refreshed_at) {
         inBackground(refreshGame(admin, igdbId));
         return json({ title: cached, episode_id: cached.episodes?.[0]?.id ?? null }, 200, {
           "X-Cache": "STALE",

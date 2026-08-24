@@ -5,7 +5,7 @@
 // avería que se vio en vivo, no una hipótesis: si mañana alguien "simplifica"
 // el orden a lo que devuelve IGDB, estos tres vuelven a fallar y dicen por qué.
 import { assertEquals } from "jsr:@std/assert@1";
-import { GAME_TYPE_FILTER, normalizeName, popularityOf, rankSearch } from "./rank.ts";
+import { GAME_TYPE_FILTER, mergeResults, normalizeName, popularityOf, rankSearch } from "./rank.ts";
 
 const g = (name: string, hypes = 0, votes = 0) => ({
   name,
@@ -31,6 +31,31 @@ Deno.test("una búsqueda vacía no convierte todo en coincidencia exacta", () =>
   // —o todas, si el término lo está— caería en el grupo de exactas.
   const rows = [g("Gris", 0, 576), g("", 0, 1)];
   assertEquals(names(rankSearch(rows, "")), ["Gris", ""]);
+});
+
+/* ── mergeResults ───────────────────────────────────────────────────────── */
+
+Deno.test("unir las dos consultas no duplica ni pierde", () => {
+  // El buscador hace dos consultas —una por nombre y otra por relevancia— y
+  // se solapan mucho: "mario kart" devolvió 15 + 15 y solo 21 juegos
+  // distintos. Sin deduplicar, la mitad de la lista salía dos veces.
+  const a = [{ id: 1, name: "A" }, { id: 2, name: "B" }];
+  const b = [{ id: 2, name: "B" }, { id: 3, name: "C" }];
+  assertEquals(mergeResults(a, b).map((r) => r.id), [1, 2, 3]);
+});
+
+Deno.test("manda la primera aparición y su orden", () => {
+  // La consulta por nombre va ordenada por votos, así que llega primero y su
+  // orden es el que se conserva antes de reordenar.
+  const a = [{ id: 9, name: "de nombre" }];
+  const b = [{ id: 9, name: "de relevancia" }];
+  assertEquals(mergeResults(a, b), [{ id: 9, name: "de nombre" }]);
+});
+
+Deno.test("una fila sin id no cuela", () => {
+  // Si IGDB devolviera algo sin id no se puede deduplicar, y colarlo
+  // significaría poder repetirlo indefinidamente.
+  assertEquals(mergeResults([{ name: "sin id" } as { id?: number }], []).length, 0);
 });
 
 /* ── Casos reales ───────────────────────────────────────────────────────── */

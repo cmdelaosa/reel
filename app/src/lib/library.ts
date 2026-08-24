@@ -7,6 +7,7 @@ import { getMovie, getTitle, tmdbImg } from "@/lib/tmdb";
 import { libraryRowSchema, type LibraryRow, type TitleRow } from "@/lib/schemas";
 import { deriveStatus, watchProgress, type ShowStatus } from "@/domain/status";
 import { deriveMovieStatus, type MovieStatus } from "@/domain/movieStatus";
+import { deriveGameStatus, hoursProgress, type GameStatus } from "@/domain/gameStatus";
 import { useAuth } from "@/features/auth/AuthProvider";
 import type { TitleCard } from "@/domain/types";
 
@@ -22,6 +23,16 @@ export interface LibraryShow extends LibraryRow {
 /** Una película de tu biblioteca. Sin `progress`: no hay tal cosa. */
 export interface LibraryMovie extends LibraryRow {
   status: MovieStatus;
+}
+
+/** Un juego de tu biblioteca.
+ *
+ *  `progress` es null y no 0 cuando no se puede medir —un juego sin final, o uno
+ *  sin tiempos en IGDB—, y esa diferencia la pinta la tarjeta: barra vacía
+ *  frente a sin barra. Ver domain/gameStatus.ts. */
+export interface LibraryGame extends LibraryRow {
+  status: GameStatus;
+  progress: number | null;
 }
 
 const rollupSchema = z.array(libraryRowSchema);
@@ -92,6 +103,34 @@ export function useMovieLibrary() {
           ...row,
           status: deriveMovieStatus({ airedCount: row.aired_count, watchedCount: row.watched_count }),
         })),
+    [q.data],
+  );
+  return { ...q, data };
+}
+
+/** Tus juegos. Tercera lectura de la misma biblioteca.
+ *
+ *  A diferencia de los otros dos medios, el estado no sale solo de la
+ *  aritmética: `play_state` es lo que la persona dijo a mano y manda sobre la
+ *  fecha de salida (pero no sobre "terminado", que es el watch_event). */
+export function useGameLibrary() {
+  const q = useLibraryRows();
+  const data = useMemo(
+    () =>
+      (q.data ?? [])
+        .filter((r) => r.kind === "game")
+        .map((row): LibraryGame => {
+          const status = deriveGameStatus({
+            airedCount: row.aired_count,
+            watchedCount: row.watched_count,
+            playState: row.play_state,
+          });
+          return {
+            ...row,
+            status,
+            progress: hoursProgress(row.minutes_played ?? 0, row.beat_seconds, status),
+          };
+        }),
     [q.data],
   );
   return { ...q, data };

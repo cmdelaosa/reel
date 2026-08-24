@@ -12,6 +12,10 @@ export const qk = {
   movie: (tmdbId: number) => ["movie", tmdbId] as const,
   movieCredits: (tmdbId: number) => ["movieCredits", tmdbId] as const,
   movieSaga: (tmdbId: number) => ["movieSaga", tmdbId] as const,
+  /* Y las de juegos, por el mismo motivo elevado a tres: el id de un juego es
+     de IGDB, otro espacio de numeración entero (0071). */
+  gameSearch: (q: string) => ["gameSearch", q] as const,
+  game: (igdbId: number) => ["game", igdbId] as const,
   title: (tmdbId: number) => ["title", tmdbId] as const,
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,

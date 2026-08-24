@@ -344,24 +344,38 @@ export function gameRow(d: Any, ttb: Any = null) {
 
 /** Fila parcial para los resultados de búsqueda.
  *
- *  Igual que `movieSearchRow` en tmdb-proxy: la búsqueda trae una fracción de
- *  los campos, así que se omiten en vez de nulificarlos. Escribir aquí un
- *  `platforms: []` porque la búsqueda no los pidió vaciaría el catálogo de un
- *  juego que ya se había abierto entero. */
+ *  ── Por qué TODAS las claves van siempre, incluso en null ─────────────────
+ *  La tentación es omitir el campo que no viene, para no pisar lo que un
+ *  detalle completo ya escribió. Con un upsert de UNA fila funcionaría; con el
+ *  de un LOTE, no: PostgREST construye una sola lista de columnas con la unión
+ *  de las claves de todas las filas, y la fila que omitió una recibe un NULL
+ *  explícito, no el default de la columna.
+ *
+ *  Eso reventaba la búsqueda entera en cuanto un resultado no traía
+ *  plataformas: `titles.platforms` es NOT NULL DEFAULT '{}' (0071), el lote
+ *  metía NULL, y el 502 resultante se leía en la interfaz como "no hay
+ *  resultados". Buscar "mario kart" funcionaba y "mari" no, según lo que
+ *  tuviera el peor resultado del lote.
+ *
+ *  Escribir el null tampoco pierde nada, y esto es lo que hace que la solución
+ *  sea correcta y no un parche: la búsqueda PIDE estos mismos campos, así que
+ *  que falten significa que el juego no los tiene. Lo que un detalle escribe y
+ *  la búsqueda no —fechas, beat_seconds, plataformas por fecha, estudio,
+ *  géneros, steam_appid— no está en esta fila NI EN NINGUNA del lote, así que
+ *  PostgREST no incluye esas columnas y quedan intactas. */
 export function gameSearchRow(r: Any) {
   const platformNames = platformIndex(r?.platforms);
-  const popularity = (r?.hypes ?? 0) + (r?.total_rating_count ?? 0);
   return {
     tmdb_id: r.id,
     kind: "game",
     name: r.name ?? "Untitled",
-    ...(r.summary !== undefined ? { overview: r.summary ?? null } : {}),
-    ...(r.cover?.image_id ? { poster_path: r.cover.image_id } : {}),
-    ...(platformNames.size ? { platforms: [...platformNames.values()].sort() } : {}),
-    ...(rating10(r) !== null ? { vote_average: rating10(r) } : {}),
+    overview: r.summary ?? null,
+    poster_path: r.cover?.image_id ?? null,
+    platforms: [...platformNames.values()].sort(),
+    vote_average: rating10(r),
     // La búsqueda ya trae las dos señales porque rankSearch las necesita, así
     // que se guardan de paso: un juego que solo se ha visto en un buscador
     // llega a la biblioteca con su popularidad puesta, sin abrir la ficha.
-    ...(popularity > 0 ? { popularity } : {}),
+    popularity: (r?.hypes ?? 0) + (r?.total_rating_count ?? 0),
   };
 }

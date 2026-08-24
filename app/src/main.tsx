@@ -24,6 +24,7 @@ import MoviesPage from "@/features/movies/MoviesPage";
 import MoviesTonightPage from "@/features/movies/MoviesTonightPage";
 import MovieReleasesPage from "@/features/movies/MovieReleasesPage";
 import MoviesExplorePage from "@/features/movies/MoviesExplorePage";
+import GamesPage from "@/features/games/GamesPage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
@@ -119,6 +120,13 @@ const router = createBrowserRouter([
       { path: "movies/releases", element: <MovieReleasesPage /> },
       { path: "movies/watchlist", element: <MoviesPage /> },
       { path: "movies/explore", element: <MoviesExplorePage /> },
+
+      /* Los juegos cuelgan de /games, el otro prefijo que lib/medium reconoce.
+         Dos rutas y no cinco: "Esta noche" y "Explorar" llegan en su rodaja,
+         igual que le pasó al cine. `/games` a secas redirige a la biblioteca,
+         que aquí hace de portada por ser lo único que hay. */
+      { path: "games", element: <Navigate to="/games/library" replace /> },
+      { path: "games/library", element: <GamesPage /> },
       { path: "explore", element: <ExplorePage /> },
       { path: "collection/:slug", element: <CollectionPage /> },
       { path: "calendar", element: <CalendarPage /> },
