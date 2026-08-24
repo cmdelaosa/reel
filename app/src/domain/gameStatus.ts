@@ -32,9 +32,37 @@
 
    Lo que arrastra: un juego 'ongoing' no ofrece Terminado y no pinta
    denominador. Sus horas se enseñan a secas, porque no hay contra qué medirlas
-   (ver hoursProgress). */
+   (ver hoursProgress).
 
-export type GameStatus = "upcoming" | "backlog" | "playing" | "ongoing" | "finished" | "dropped";
+   ── El sexto: 'owned', que no tiene chip ─────────────────────────────────
+   Lo trajo la importación de Steam (0076). Un juego que TIENES y no has
+   empezado —ni horas, ni estado, ni terminado— no es un pendiente: es
+   inventario. La diferencia no era importante mientras cada juego lo añadías
+   tú a mano, porque añadirlo YA era decidir jugarlo; con una cuenta de Steam
+   detrás, "lo tengo" pasa a ser un dato que llega de fuera y en volumen.
+
+   Si estos cayeran en 'backlog', la primera importación convertiría el cubo
+   con el que decides qué jugar —doce entradas elegidas— en el catálogo de
+   Steam entero. Es la misma avería por la que las horas importadas no ponen
+   nada en 'Jugando': `playtime_forever` es de por vida y no dice nada sobre
+   ahora.
+
+   Por eso 'owned' no tiene chip propio en la biblioteca: solo aparece en
+   "Todos". Es un estado y no un filtro secundario porque la derivación tiene
+   que devolver ALGO por cada juego, y cualquier otra forma de sacarlos de
+   'backlog' sería una excepción esparcida por cada pantalla que cuenta cubos.
+
+   Ojo al orden: 'upcoming' gana a 'owned'. Un juego reservado que aún no ha
+   salido lo interesante es que no ha salido, no que ya sea tuyo. */
+
+export type GameStatus =
+  | "upcoming"
+  | "backlog"
+  | "playing"
+  | "ongoing"
+  | "finished"
+  | "dropped"
+  | "owned";
 
 /** Lo que la persona puede fijar a mano. "Terminado" no está: es el
  *  watch_event, no una etiqueta. "Pendiente" y "Próximo" tampoco: se derivan de
@@ -48,12 +76,21 @@ export interface GameStatusInput {
   watchedCount: number;
   /** Lo que la persona dijo, si dijo algo. */
   playState: PlayState | null | undefined;
+  /** Lo tienes comprado (0076). Opcional: sin él la derivación es la de antes
+   *  de Steam, que es lo que deben seguir viendo las series y el cine. */
+  owned?: boolean | null;
+  /** Minutos jugados. Solo se consulta para separar "lo tengo y no lo he
+   *  tocado" de "lo tengo y llevo veinte horas": lo segundo sí es un pendiente
+   *  de verdad, porque ya lo empezaste. */
+  minutesPlayed?: number | null;
 }
 
 export function deriveGameStatus({
   airedCount,
   watchedCount,
   playState,
+  owned,
+  minutesPlayed,
 }: GameStatusInput): GameStatus {
   // Terminado manda sobre todo lo demás, como "visto" en el cine: se puede
   // terminar un juego en acceso anticipado, en una beta o en una copia que
@@ -65,7 +102,15 @@ export function deriveGameStatus({
   // a algo que IGDB da por no lanzado, estás jugando.
   if (playState) return playState;
 
-  return airedCount === 0 ? "upcoming" : "backlog";
+  // Antes que 'owned': lo que aún no ha salido se cuenta por su fecha, la
+  // tengas comprada o no.
+  if (airedCount === 0) return "upcoming";
+
+  // Inventario: es tuyo y no lo has tocado. Fuera de 'Pendientes', que es la
+  // lista que TÚ eliges — ver la cabecera.
+  if (owned && (minutesPlayed ?? 0) === 0) return "owned";
+
+  return "backlog";
 }
 
 /** Cuánto llevas de lo que dura, en 0-100, contra la media de IGDB.

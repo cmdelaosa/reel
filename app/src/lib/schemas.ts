@@ -163,6 +163,12 @@ export const libraryRowSchema = z.object({
      last_watched_at. Null en las filas anteriores a la migración, que no se
      rellenaron a propósito: ordenar cae a added_at (domain/gameTonight). */
   played_at: z.string().nullable().optional(),
+  /* Steam (0076). `owned` es ortogonal al estado —"es mío", no "voy por
+     aquí"— y saca de "Pendientes" lo que tienes y no has empezado; ver
+     domain/gameStatus.ts. `minutes_source` es lo que deja a la ficha decir de
+     dónde salen las horas sin una consulta más. */
+  owned: z.boolean().nullable().optional(),
+  minutes_source: z.enum(["manual", "steam"]).nullable().optional(),
   release_precision: z
     .enum(["day", "month", "q1", "q2", "q3", "q4", "year", "tbd"])
     .nullable()

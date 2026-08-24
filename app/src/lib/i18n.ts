@@ -142,6 +142,56 @@ const ES: Record<string, string> = {
   "Nothing on the go — hit {key} and add a game.":
     "No tienes nada entre manos — pulsa {key} y añade un juego.",
   "Most played": "Más jugados",
+  /* Steam (0076). "Lo tengo" y no "En propiedad": lo que responde es la
+     pregunta que uno se hace en la tienda con el móvil en la mano, y esa
+     pregunta se hace con esas tres palabras. */
+  "Owned": "Lo tengo",
+  "from Steam": "de Steam",
+  "Steam account": "Cuenta de Steam",
+  "Connect Steam": "Conectar Steam",
+  "Connected": "Conectada",
+  "Disconnect": "Desconectar",
+  "Sync again": "Volver a sincronizar",
+  "Look at my Steam library": "Mirar mi biblioteca de Steam",
+  "Connect your Steam account to bring in the hours you've already played. Reel only reads your games list — it never posts anything.":
+    "Conecta tu cuenta de Steam para traerte las horas que ya has jugado. Reel solo lee tu lista de juegos — no publica nada.",
+  "Your Steam profile's game details have to be public, or Steam sends back an empty list.":
+    "Los detalles de juego de tu perfil de Steam tienen que ser públicos, o Steam devuelve una lista vacía.",
+  "Steam account connected.": "Cuenta de Steam conectada.",
+  "You cancelled the Steam sign-in.": "Cancelaste la identificación en Steam.",
+  "That sign-in attempt expired. Try again.": "Ese intento caducó. Vuelve a probar.",
+  "That Steam account is already connected to another Reel account.":
+    "Esa cuenta de Steam ya está conectada a otra cuenta de Reel.",
+  "Steam couldn't confirm that sign-in. Try again.":
+    "Steam no ha podido confirmar esa identificación. Vuelve a probar.",
+  "Couldn't save the Steam account. Try again.":
+    "No se ha podido guardar la cuenta de Steam. Vuelve a probar.",
+  "That sign-in link was started from another account, so nothing was linked.":
+    "Ese enlace lo empezó otra cuenta, así que no se ha enlazado nada.",
+  "Asking Steam for your games…": "Pidiéndole a Steam tus juegos…",
+  "Steam sent back an empty list": "Steam ha devuelto una lista vacía",
+  "That's what a private profile looks like — Steam answers with no games and no error. In Steam: Profile → Edit profile → Privacy Settings, and set \"Game details\" to Public. Then sync again.":
+    "Así es como se ve un perfil privado: Steam contesta sin juegos y sin error. En Steam: Perfil → Editar perfil → Configuración de privacidad, y pon «Detalles del juego» en Público. Luego vuelve a sincronizar.",
+  "Couldn't read your Steam library": "No se ha podido leer tu biblioteca de Steam",
+  "Steam didn't answer. Try again in a moment.": "Steam no ha contestado. Prueba dentro de un rato.",
+  "What's coming in": "Qué va a entrar",
+  "{n} of {total} selected": "{n} de {total} marcados",
+  "Only what I follow": "Solo lo que sigo",
+  "None": "Nada",
+  // "In your library" ya está traducida más abajo (la ficha la usa para el
+  // botón de añadir): una clave, una traducción.
+  "use Steam's": "usar la de Steam",
+  "you: {yours} · Steam: {theirs}": "tú: {yours} · Steam: {theirs}",
+  "{n} games have hours you typed yourself. They're kept as they are unless you tick \"use Steam's\".":
+    "{n} juegos tienen horas escritas por ti. Se quedan como están salvo que marques «usar la de Steam».",
+  "Import {n} games": "Importar {n} juegos",
+  "Looking up {n} games IGDB didn't have yet…": "Buscando {n} juegos que IGDB aún no tenía…",
+  "Added or updated": "Añadidos o actualizados",
+  "Conflicts kept as yours": "Conflictos que se quedan como tuyos",
+  "Imported games arrive marked as owned, with no play state: Steam's hours are lifetime totals and say nothing about what you're playing now.":
+    "Lo importado entra marcado como «lo tengo» y sin estado: las horas de Steam son de por vida y no dicen nada sobre lo que estás jugando ahora.",
+  "Your Steam library came back empty, and the profile is public — so there's nothing to import.":
+    "Tu biblioteca de Steam ha vuelto vacía, y el perfil es público — así que no hay nada que importar.",
   "No games yet — hit {key} and add one.": "Aún no hay juegos — pulsa {key} y añade uno.",
   "Movie details": "Ficha de la película",
   "Director": "Dirección",

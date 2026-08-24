@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import {
-  Bell, Bookmark, CalendarClock, Clapperboard, Compass, Film, Gamepad2, Play, Search, Sliders,
-  Tv, Users,
+  Bell, Bookmark, CalendarClock, Clapperboard, Compass, Film, Gamepad2, Link2, Play, Search,
+  Sliders, Tv, Users,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
@@ -57,12 +57,24 @@ const MOVIE_TABS = [
    tiene por jugar, y además es el nombre del cubo al que la pestaña lleva, así
    que la pestaña y el chip dicen lo mismo. "Playlist" habría rimado con las
    otras dos y significado otra cosa — en una app de tres medios se lee como
-   música. */
+   música.
+
+   Y una SEXTA, que rompe la simetría de los tres modos a sabiendas: "Steam".
+   No es una preferencia que quepa en los ajustes — es una pantalla con tres
+   pasos (conectar, ver qué va a entrar, confirmar) a la que se vuelve cada vez
+   que quieres traer horas nuevas, y es del modo Juegos y de ningún otro, que es
+   exactamente lo que una pestaña de aquí significa. Va la última de las de
+   juegos, antes de Amigos: es la que menos se abre de las cinco. En móvil la
+   fila ya scrollea en horizontal, y el TabMenu recoge lo que no quepa. */
 const GAME_TABS = [
   { path: "/games/tonight", label: "Tonight", icon: Clapperboard },
   { path: "/games/releases", label: "games: Releases", icon: CalendarClock },
   { path: "/games/backlog", label: "Backlog", icon: Bookmark },
   { path: "/games/explore", label: "Explore", icon: Compass },
+  // Link2 y no Gamepad2: el mando ya nombra al MODO en el conmutador de la
+  // barra, y repetirlo en una pestaña de dentro sería decir "juegos" dos veces
+  // y "cuenta enlazada" ninguna.
+  { path: "/games/steam", label: "Steam", icon: Link2 },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 

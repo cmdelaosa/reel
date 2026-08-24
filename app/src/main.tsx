@@ -28,6 +28,7 @@ import GamesPage from "@/features/games/GamesPage";
 import GamesTonightPage from "@/features/games/GamesTonightPage";
 import GameReleasesPage from "@/features/games/GameReleasesPage";
 import GamesExplorePage from "@/features/games/GamesExplorePage";
+import SteamPage from "@/features/games/SteamPage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
@@ -142,6 +143,10 @@ const router = createBrowserRouter([
       // /friends/kpis).
       { path: "games/library", element: <Navigate to="/games/backlog" replace /> },
       { path: "games/explore", element: <GamesExplorePage /> },
+      /* La vuelta del login de Steam aterriza aquí con ?steam=… — es una URL
+         que escribe la edge function a partir del secreto APP_URL, así que la
+         ruta no puede moverse sin mover también lo que se escribe allí (0076). */
+      { path: "games/steam", element: <SteamPage /> },
       { path: "explore", element: <ExplorePage /> },
       { path: "collection/:slug", element: <CollectionPage /> },
       { path: "calendar", element: <CalendarPage /> },

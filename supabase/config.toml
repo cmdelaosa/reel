@@ -391,6 +391,26 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# steam-sync (0076) — la ÚNICA función sin la reja de JWT de la plataforma, y
+# hay que decir por qué antes de que a alguien le parezca un descuido.
+#
+# El login de Steam es OpenID 2.0: Steam devuelve a la persona a `/return` con
+# una NAVEGACIÓN del navegador, y una navegación no lleva cabecera
+# Authorization. Con verify_jwt puesto, esa vuelta se contesta con un 401 antes
+# de que corra una sola línea nuestra, y lo que ve quien enlaza su cuenta es una
+# página en blanco sin nada que depurar.
+#
+# Lo que NO significa: la función sigue exigiendo sesión en todas sus otras
+# rutas, comprobándola ella misma (auth.getUser). `/return` no necesita sesión
+# porque no se fía de nada de lo que llega: quién vuelve lo dice el pagaré de un
+# solo uso de `steam_link_nonces`, y que Steam lo firmara se le pregunta a Steam
+# (openid.ts).
+#
+# Va aquí y no como `--no-verify-jwt` en el comando de despliegue porque un
+# comando se copia mal una vez y el fallo es silencioso. La CLI lee esto.
+[functions.steam-sync]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

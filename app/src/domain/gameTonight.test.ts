@@ -72,6 +72,29 @@ describe("pickResume", () => {
     expect(picked?.added_at).toBe("2026-08-20T00:00:00Z");
   });
 
+  /* 'owned' (0076) — lo traído de Steam y sin tocar. No es 'backlog' a
+     propósito, pero sí es candidato a esta noche. */
+  it("sin pendientes, cae a lo que tienes y no has empezado", () => {
+    // Quien llega a Reel importando su cuenta de Steam no tiene un solo
+    // 'backlog': sin esto, su portada de juegos sale vacía — que es justo lo
+    // que la caída existe para evitar.
+    const picked = pickResume([
+      g({ status: "owned", added_at: "2026-08-01T00:00:00Z" }),
+      g({ status: "owned", added_at: "2026-08-20T00:00:00Z" }),
+    ]);
+    expect(picked?.added_at).toBe("2026-08-20T00:00:00Z");
+  });
+
+  it("un pendiente gana a algo que solo tienes, aunque sea más viejo", () => {
+    // Ponerlo en Pendientes fue una decisión tuya; estar en tu cuenta de Steam
+    // no lo es.
+    const picked = pickResume([
+      g({ status: "owned", added_at: "2026-08-24T00:00:00Z" }),
+      g({ status: "backlog", added_at: "2026-01-01T00:00:00Z" }),
+    ]);
+    expect(picked?.status).toBe("backlog");
+  });
+
   it("nunca cae a un juego que no ha salido", () => {
     // Proponerte esta noche algo que todavía no existe es la única respuesta
     // claramente inútil que esta pantalla puede dar.
