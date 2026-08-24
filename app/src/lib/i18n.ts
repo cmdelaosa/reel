@@ -132,6 +132,15 @@ const ES: Record<string, string> = {
   "TV series": "Serie",
   "Movies watched": "Películas vistas",
   "Movies in your list": "Películas en tu lista",
+  // Avisos de estreno de cine (0071)
+  "In theatres today": "Hoy en cines",
+  "Streaming today": "Hoy en streaming",
+  "A movie": "Una película",
+  "{movie} is in theatres": "{movie} ya está en cines",
+  "{movie} is out to stream": "{movie} ya se puede ver en casa",
+  "Movie releases": "Estrenos de cine",
+  "When a movie on your list reaches cinemas or streaming":
+    "Cuando una película de tu lista llega al cine o a streaming",
   "watched {name}": "vio {name}",
   "self: watched {name}": "viste {name}",
 

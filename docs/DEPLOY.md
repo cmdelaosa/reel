@@ -44,6 +44,17 @@ Deploy migrations before the functions. `tmdb-proxy` uses the
 `is_current_user_invited()` function introduced in migration 0033 to combine
 JWT/invite validation into one database round trip. Deploying the function
 first would make metadata requests return 401 until the migration lands.
+
+⚠️ **Migration 0071 and `alerts` must go out back to back**, in the same
+sitting. It is the one pair where neither order is safe on its own: 0071
+rewrites the primary key of `notifications_sent`, so the *old* `alerts` upserts
+against a unique constraint that no longer exists and the whole run errors —
+while the *new* `alerts` against the old schema asks for an `event` column that
+isn't there yet. The daily cron only gets one shot at each alert: a run that
+fails leaves nothing sealed, and by the next day the 24-hour window has closed
+and those alerts are gone. Push the migration and deploy the function in the
+same window, then check `select * from job_runs where job = 'alerts'` after the
+next scheduled run.
 The same order matters for 0060 (both ingest paths write `episodes.air_date`,
 which that migration adds) and for 0061 (the friend-request trigger calls
 `friend-request-email` through pg_net — the reverse order just means no mail

@@ -1,8 +1,9 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { profileRowSchema, type ProfileRow } from "@/lib/schemas";
+import { getSettings } from "@/lib/settings";
 
 /* Session + profile context. Session tracks supabase-js auth state; the profile
    row is a TanStack query keyed by user id (created by the DB signup trigger,
@@ -65,6 +66,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return profileRowSchema.parse(data);
     },
   });
+
+  /* El país, del navegador a la fila del perfil.
+   *
+   * Vive en localStorage (lib/settings) porque quien lo lee en cada pantalla es
+   * el cliente: decide los proveedores y la zona horaria de las horas de
+   * emisión. Pero desde 0071 hay un lector que NO es el navegador — el cron de
+   * avisos, que necesita saber en qué país mirar la fecha de estreno de una
+   * película para no avisar a un alemán de que algo llega hoy a los cines
+   * españoles. Y `profiles.country` no lo escribía nadie: existía desde 0001 y
+   * llevaba vacío desde entonces.
+   *
+   * Se sincroniza aquí, y no en las dos pantallas donde se elige el país, por
+   * dos razones: es un solo sitio en vez de dos que puedan separarse, y además
+   * rellena la columna de quien lo eligió antes de que esto existiera — la
+   * próxima vez que abra la app.
+   *
+   * Silencioso para quien mira la pantalla: si la escritura falla, el cron cae
+   * a ES (el mercado desde el que se mira esta app) y todo lo demás sigue
+   * funcionando, así que no hay nada que enseñarle a nadie. Pero solo se
+   * intenta UNA VEZ por sesión y país: sin ese cerrojo, un fallo permanente
+   * —una política RLS mal puesta, la columna renombrada— reintentaría en cada
+   * refetch del perfil, invisible en la consola y en la UI. Y el fallo sí se
+   * registra, que es lo que convierte "no funciona" en algo averiguable. */
+  const profileCountry = profile?.country;
+  const countrySynced = useRef<string | null>(null);
+  useEffect(() => {
+    if (!userId || profile === undefined) return;
+    const local = getSettings().country;
+    if (!local || local === profileCountry || countrySynced.current === local) return;
+    countrySynced.current = local;
+    void supabase.from("profiles").update({ country: local }).eq("id", userId).then(
+      ({ error }) => {
+        if (error) console.warn(`country sync: ${error.message}`);
+        else queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+      },
+      (e) => console.warn(`country sync: ${String(e)}`),
+    );
+  }, [userId, profile, profileCountry, queryClient]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
