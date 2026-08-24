@@ -398,20 +398,35 @@ Deno.serve(async (req) => {
          Medido el 24-ago-2026 sobre ocho términos.
          La de nombre va ordenada por votos para que su ventana de 15 sea la
          de los quince más conocidos que casan, y no quince cualesquiera. */
-      const byName = await igdb(
-        "games",
-        `fields ${SEARCH_FIELDS}; where name ~ *"${term}"* & version_parent = null & ` +
-          `${GAME_TYPE_FILTER}; sort total_rating_count desc; limit 15;`,
-      );
-      // Un fallo en la de relevancia no puede dejar sin buscador a quien ya
-      // tiene resultados por nombre, que es el caso común.
-      const byRelevance = await igdb(
-        "games",
-        `search "${term}"; fields ${SEARCH_FIELDS}; ` +
-          `where version_parent = null & ${GAME_TYPE_FILTER}; limit 15;`,
-      ).catch(() => [] as Any[]);
+      /* A la vez, y con las DOS a prueba de fallos. El estrangulador las separa
+         igual (reserva su hueco antes de dormir), así que lanzarlas juntas no
+         se salta el límite y ahorra un viaje de red entero.
 
-      const found = mergeResults(byName, byRelevance);
+         Cada una cae por su cuenta: si `~` deja de funcionar el día que IGDB
+         toque el operador, la búsqueda sigue existiendo con la mitad de
+         relevancia, y al revés. Lo que NO se hace es tragarse las dos y
+         devolver una lista vacía — "no hay resultados" y "no he podido
+         preguntar" son cosas distintas, y confundirlas es exactamente lo que
+         hacía que este bug se viera como un catálogo incompleto en vez de como
+         una avería. */
+      const [byName, byRelevance] = await Promise.all([
+        igdb(
+          "games",
+          `fields ${SEARCH_FIELDS}; where name ~ *"${term}"* & version_parent = null & ` +
+            `${GAME_TYPE_FILTER}; sort total_rating_count desc; limit 15;`,
+        ).catch((e: unknown) => e as Error),
+        igdb(
+          "games",
+          `search "${term}"; fields ${SEARCH_FIELDS}; ` +
+            `where version_parent = null & ${GAME_TYPE_FILTER}; limit 15;`,
+        ).catch((e: unknown) => e as Error),
+      ]);
+      if (byName instanceof Error && byRelevance instanceof Error) throw byName;
+
+      const found = mergeResults(
+        Array.isArray(byName) ? byName : [],
+        Array.isArray(byRelevance) ? byRelevance : [],
+      );
       if (!found.length) return json({ results: [] });
 
       // Se corta DESPUÉS de ordenar: recortar antes dejaría fuera al que la
