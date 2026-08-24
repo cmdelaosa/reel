@@ -158,6 +158,11 @@ export const libraryRowSchema = z.object({
      otros dos medios. Ver domain/gameStatus.ts. */
   play_state: z.enum(["playing", "ongoing", "dropped"]).nullable().optional(),
   minutes_played: z.number().int().nullable().optional(),
+  /* Cuándo tocaste el juego por última vez (0075) — lo escribe un disparador
+     cuando cambian las horas o el estado. NO es "cuándo lo terminaste", que es
+     last_watched_at. Null en las filas anteriores a la migración, que no se
+     rellenaron a propósito: ordenar cae a added_at (domain/gameTonight). */
+  played_at: z.string().nullable().optional(),
   release_precision: z
     .enum(["day", "month", "q1", "q2", "q3", "q4", "year", "tbd"])
     .nullable()

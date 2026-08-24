@@ -114,6 +114,33 @@ const ES: Record<string, string> = {
   "Finished — tap to clear": "Terminado — toca para quitarlo",
   "Platforms": "Plataformas",
   "Library": "Biblioteca",
+  /* Esta noche, en juegos. El héroe no dice "elige juego": un juego empezado se
+     retoma, y elegir es lo que se hace en la pestaña Pendientes. De ahí que
+     reutilice "Pick up where you left off", que ya existe en el Esta noche de
+     series y dice exactamente eso. */
+  "Start something": "Empieza algo",
+  "Just out": "Recién salidos",
+  /* Lanzamientos, la pantalla. Claves con prefijo y no las de cine ("Releases"
+     → "Estrenos") porque en juegos la palabra es otra: un juego no se estrena,
+     sale. Como toda clave con prefijo, lleva su entrada inglesa abajo para que
+     el prefijo no llegue nunca a la pantalla. */
+  "games: Releases": "Lanzamientos",
+  "games: My releases": "Mis lanzamientos",
+  "games: Announced": "Anunciados",
+  "No date yet": "Sin fecha",
+  "No releases in the games you follow.": "Ningún lanzamiento en los juegos que sigues.",
+  /* Explorar, en juegos. "Más esperados" y no "Tendencias": IGDB no publica
+     nada parecido a lo que la gente juega esta semana, y sí `hypes`, que es
+     cuánta gente sigue un juego SIN SALIR. Resulta ser además la pregunta que
+     más se hace de los videojuegos. */
+  "Most anticipated": "Más esperados",
+  "New releases": "Novedades",
+  "No games on those platforms here.": "Aquí no hay juegos de esas plataformas.",
+  "Nothing to show right now.": "Nada que enseñar ahora mismo.",
+  "Nothing out recently.": "Nada recién salido.",
+  "Nothing announced in the games you follow.": "Nada anunciado en los juegos que sigues.",
+  "Nothing on the go — hit {key} and add a game.":
+    "No tienes nada entre manos — pulsa {key} y añade un juego.",
   "Most played": "Más jugados",
   "No games yet — hit {key} and add one.": "Aún no hay juegos — pulsa {key} y añade uno.",
   "Movie details": "Ficha de la película",
@@ -721,6 +748,9 @@ const EN: Record<string, string> = {
   "activity: Added": "Added",
   "self: rated {name}": "rated {name}",
   "self: added {name} to their watchlist": "added {name} to your watchlist",
+  "games: Releases": "Releases",
+  "games: My releases": "My releases",
+  "games: Announced": "Announced",
   "self: watched {eps} of {name}": "watched {eps} of {name}",
   "self: finished {name}": "finished {name}",
   "self: added {name} to their backlog": "added {name} to your backlog",
