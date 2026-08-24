@@ -25,6 +25,7 @@ import MoviesTonightPage from "@/features/movies/MoviesTonightPage";
 import MovieReleasesPage from "@/features/movies/MovieReleasesPage";
 import MoviesExplorePage from "@/features/movies/MoviesExplorePage";
 import GamesPage from "@/features/games/GamesPage";
+import SteamPage from "@/features/games/SteamPage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
@@ -122,11 +123,15 @@ const router = createBrowserRouter([
       { path: "movies/explore", element: <MoviesExplorePage /> },
 
       /* Los juegos cuelgan de /games, el otro prefijo que lib/medium reconoce.
-         Dos rutas y no cinco: "Esta noche" y "Explorar" llegan en su rodaja,
+         Tres rutas y no cinco: "Esta noche" y "Explorar" llegan en su rodaja,
          igual que le pasó al cine. `/games` a secas redirige a la biblioteca,
-         que aquí hace de portada por ser lo único que hay. */
+         que aquí hace de portada por ser lo primero que hubo. */
       { path: "games", element: <Navigate to="/games/library" replace /> },
       { path: "games/library", element: <GamesPage /> },
+      /* La vuelta del login de Steam aterriza aquí con ?steam=… — es una URL
+         que escribe la edge function, así que la ruta no puede moverse sin
+         mover también `return_to_origin` allí (0074). */
+      { path: "games/steam", element: <SteamPage /> },
       { path: "explore", element: <ExplorePage /> },
       { path: "collection/:slug", element: <CollectionPage /> },
       { path: "calendar", element: <CalendarPage /> },

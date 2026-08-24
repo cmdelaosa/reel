@@ -46,12 +46,19 @@ const MOVIE_TABS = [
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
-/* Dos, no cinco. "Esta noche", "Lanzamientos" y "Explorar" de juegos llegan en
-   su propia rodaja, igual que le pasó al cine, y hasta entonces sus pestañas NO
-   se pintan: una pestaña que lleva a una ruta sin página es peor que una
-   pestaña que falta. Amigos sigue siendo la misma en los tres modos. */
+/* Tres, no cinco. "Esta noche" y "Explorar" de juegos llegan en su propia
+   rodaja, igual que le pasó al cine, y hasta entonces sus pestañas NO se
+   pintan: una pestaña que lleva a una ruta sin página es peor que una pestaña
+   que falta. Amigos sigue siendo la misma en los tres modos.
+
+   "Steam" es pestaña y no un rincón de los ajustes porque no es una
+   preferencia: es una pantalla con tres pasos —conectar, ver qué va a entrar,
+   confirmar— a la que se vuelve cada vez que quieres traer horas nuevas. Y es
+   del modo Juegos y de ningún otro, que es justo lo que una pestaña de aquí
+   dice. */
 const GAME_TABS = [
   { path: "/games/library", label: "Library", icon: Bookmark },
+  { path: "/games/steam", label: "Steam", icon: Gamepad2 },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 

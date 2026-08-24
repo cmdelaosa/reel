@@ -77,6 +77,10 @@ export interface GameProgress {
   titleId: string;
   playState?: PlayState | null;
   minutesPlayed?: number;
+  /** Lo tienes comprado (0074). Ortogonal al estado y a las horas: lo marca la
+   *  importación de Steam en todo lo que trae, y a mano se marca lo que tengas
+   *  en consola, en GOG o en físico. */
+  owned?: boolean;
 }
 
 /** Escribe estado y/o minutos de un juego de tu biblioteca.
@@ -94,9 +98,10 @@ export function useSetGameProgress() {
   const qc = useQueryClient();
   const { session } = useAuth();
   return useMutation({
-    mutationFn: async ({ titleId, playState, minutesPlayed }: GameProgress) => {
+    mutationFn: async ({ titleId, playState, minutesPlayed, owned }: GameProgress) => {
       const patch: Record<string, unknown> = {};
       if (playState !== undefined) patch.play_state = playState;
+      if (owned !== undefined) patch.owned = owned;
       if (minutesPlayed !== undefined) {
         patch.minutes_played = Math.max(0, Math.round(minutesPlayed));
         patch.minutes_source = "manual";

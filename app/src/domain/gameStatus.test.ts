@@ -38,6 +38,41 @@ describe("deriveGameStatus", () => {
   it("un juego dejado sigue dejado aunque ya hubiera salido", () => {
     expect(derive(1, 0, "dropped")).toBe("dropped");
   });
+
+  /* 'owned' (0074) — inventario, no pendientes. Es lo que impide que la
+     primera importación de Steam convierta el cubo con el que decides qué
+     jugar en el catálogo entero de tu cuenta. */
+  describe("owned", () => {
+    const d = (o: Partial<Parameters<typeof deriveGameStatus>[0]>) =>
+      deriveGameStatus({ airedCount: 1, watchedCount: 0, playState: null, ...o });
+
+    it("lo tienes y no lo has tocado: fuera de pendientes", () => {
+      expect(d({ owned: true, minutesPlayed: 0 })).toBe("owned");
+    });
+
+    it("lo tienes y ya lo empezaste: eso sí es un pendiente", () => {
+      // Una hora jugada es una decisión tuya, no inventario heredado.
+      expect(d({ owned: true, minutesPlayed: 60 })).toBe("backlog");
+    });
+
+    it("sin owned, la derivación es la de antes de Steam", () => {
+      // La regla no puede tocar a las series ni al cine, que nunca pasan estos
+      // dos campos.
+      expect(d({ minutesPlayed: 0 })).toBe("backlog");
+      expect(d({ owned: false, minutesPlayed: 0 })).toBe("backlog");
+    });
+
+    it("lo dicho a mano y lo terminado siguen mandando", () => {
+      expect(d({ owned: true, minutesPlayed: 0, playState: "playing" })).toBe("playing");
+      expect(d({ owned: true, minutesPlayed: 0, watchedCount: 1 })).toBe("finished");
+    });
+
+    it("lo que aún no ha salido se cuenta por su fecha, no por ser tuyo", () => {
+      // Una reserva es interesante porque no ha salido; que ya la hayas pagado
+      // es lo de menos.
+      expect(d({ airedCount: 0, owned: true, minutesPlayed: 0 })).toBe("upcoming");
+    });
+  });
 });
 
 describe("hoursProgress", () => {

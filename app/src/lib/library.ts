@@ -124,6 +124,8 @@ export function useGameLibrary() {
             airedCount: row.aired_count,
             watchedCount: row.watched_count,
             playState: row.play_state,
+            owned: row.owned,
+            minutesPlayed: row.minutes_played,
           });
           return {
             ...row,

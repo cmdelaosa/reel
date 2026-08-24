@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Eye, EyeOff, Gamepad2, Minus, Plus, X } from "lucide-react";
+import { Check, Eye, EyeOff, Gamepad2, Library, Minus, Plus, X } from "lucide-react";
 import { igdbImg, useGame, useSetGameProgress } from "@/lib/igdb";
 import { isEs, t as tr, tGenre, tv } from "@/lib/i18n";
 import { useFollow, useGameLibrary, useUnfollow } from "@/lib/library";
@@ -78,6 +78,11 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
 
   const minutes = entry?.minutes_played ?? 0;
   const playState = entry?.play_state ?? null;
+  const owned = Boolean(entry?.owned);
+  /* De dónde salen las horas (0074). Se dice cuando las trajo Steam, y no
+     cuando las escribiste tú: lo tuyo no necesita explicación, y ver "de Steam"
+     es lo que explica por qué esa cifra cambió sola. */
+  const fromSteam = entry?.minutes_source === "steam";
   /* "¿Ha salido?" se pregunta al TÍTULO y no a la fila de biblioteca. El
      `aired_count` del rollup solo existe si sigues el juego, así que leerlo de
      ahí ponía en "próximo" —con su insignia de fecha futura— cualquier juego
@@ -210,23 +215,43 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                   sería ofrecer algo que no guardaría nada. */}
               {added && entry && (
                 <div className="flex flex-col gap-3">
-                  <div className="segmented" role="group" aria-label={tr("Play state")}>
-                    {PLAY_STATES.map((s) => (
-                      <div
-                        key={s.key}
-                        className={`seg ${playState === s.key ? "seg-active" : ""}`}
-                        onClick={() => pickState(s.key)}
-                      >
-                        {tr(s.label)}
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="segmented" role="group" aria-label={tr("Play state")}>
+                      {PLAY_STATES.map((s) => (
+                        <div
+                          key={s.key}
+                          className={`seg ${playState === s.key ? "seg-active" : ""}`}
+                          onClick={() => pickState(s.key)}
+                        >
+                          {tr(s.label)}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* "Lo tengo" va aparte de los tres estados y no como un
+                        cuarto segmento, porque no es lo mismo que responden:
+                        los estados dicen en qué punto estás y este dice si es
+                        tuyo. Lo marca sola la importación de Steam; a mano es
+                        para lo que tengas en consola, en GOG o en físico. */}
+                    <button
+                      type="button"
+                      className={`chip ${owned ? "chip-active" : ""}`}
+                      aria-pressed={owned}
+                      onClick={() => setProgress.mutate({ titleId: entry.title_id, owned: !owned })}
+                    >
+                      <Library size={13} />
+                      {tr("Owned")}
+                    </button>
                   </div>
 
                   {/* Las horas. Un juego sin final las enseña a secas: no hay
                       contra qué medirlas, y una barra al 400% no dice nada. */}
                   <div className="card" style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                     <div className="flex items-center justify-between gap-3">
-                      <div className="eyebrow">{tr("Time played")}</div>
+                      <div className="eyebrow">
+                        {tr("Time played")}
+                        {fromSteam && <span className="mute"> · {tr("from Steam")}</span>}
+                      </div>
                       <div style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
                         {formatPlaytime(minutes)}
                         {progress != null && title.beat_seconds?.normally && (

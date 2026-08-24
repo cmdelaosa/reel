@@ -1,8 +1,9 @@
 // igdb-proxy — Deno edge function. El tercer medio: videojuegos.
 //
 // Rutas (bajo /functions/v1/igdb-proxy):
-//   GET /search?q=        → { results: TitleRow[] }  (dos consultas, ver la ruta)
-//   GET /game/:igdbId     → { title: TitleRow, episode_id: uuid|null }
+//   GET  /search?q=        → { results: TitleRow[] }  (dos consultas, ver la ruta)
+//   GET  /game/:igdbId     → { title: TitleRow, episode_id: uuid|null }
+//   POST /by-steam         → { matches: { [appid]: TitleRow } }  (0074)
 //
 // Las de descubrimiento (novedades, próximos, mejor valorados) llegan con las
 // páginas que las piden; abrirlas ahora sería cachear cosas que nadie lee.
@@ -49,7 +50,7 @@
 // decide nada sobre los datos, solo se piden y se guardan.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { type Any, apicalypseTerm, gameRow, gameSearchRow } from "./normalize.ts";
+import { type Any, apicalypseTerm, gameRow, gameSearchRow, steamAppid } from "./normalize.ts";
 import { GAME_TYPE_FILTER, mergeResults, rankSearch } from "./rank.ts";
 
 const IGDB = "https://api.igdb.com/v4";
@@ -70,7 +71,7 @@ const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Expose-Headers": "x-cache, server-timing",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 const json = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
@@ -284,6 +285,91 @@ async function refreshGame(admin: SupabaseClient, igdbId: number) {
   return row ?? null;
 }
 
+/* ──────────────── Del appid de Steam al juego de IGDB (0074) ────────────── */
+
+/** Cuántos appids se preguntan de una vez. Cada tanda cuesta DOS peticiones
+ *  —una a external_games y otra a games— así que el tamaño es lo que separa
+ *  "trescientos juegos en cuatro segundos" de "trescientos juegos en dos
+ *  minutos", que es lo que costaría preguntar de uno en uno a 4 req/s. */
+const STEAM_CHUNK = 40;
+
+/** Tope por petición. Quien tenga más appids que resolver hace varias
+ *  llamadas: una sola invocación con mil appids son cincuenta peticiones a
+ *  IGDB dentro de un solo `await`, y el límite es del proyecto entero. */
+const STEAM_MAX = 200;
+
+function chunk<T>(xs: T[], n: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
+  return out;
+}
+
+/** appid de Steam → id de IGDB, preguntando por `external_games`.
+ *
+ *  Se filtra por `uid` y NO por la fuente en el `where`: el enum de fuentes es
+ *  justo el que IGDB está migrando (`category` viejo, `external_game_source`
+ *  nuevo), y atarse en la consulta al que hoy funciona es firmar la avería del
+ *  día que retiren uno. Se piden los dos campos y decide `steamAppid`, que ya
+ *  acepta las dos formas y es lo que llena `titles.steam_appid` en cada ficha.
+ *
+ *  El precio de no filtrar es que vuelven también los uid iguales de GOG o de
+ *  Epic; son cuatro filas por tanda y se descartan aquí. */
+async function igdbIdsForAppids(appids: number[]): Promise<Map<number, number>> {
+  const found = new Map<number, number>();
+  for (const part of chunk(appids, STEAM_CHUNK)) {
+    // `uid = "570" | uid = "730" | …`: la forma con OR es la que la gramática
+    // de apicalypse garantiza para un campo de texto. Una lista entre
+    // paréntesis funciona con ids numéricos y no está documentada para uid.
+    const where = part.map((a) => `uid = "${a}"`).join(" | ");
+    let rows: Any[];
+    try {
+      rows = await igdb(
+        "external_games",
+        `fields game,uid,category,external_game_source.name; where (${where}); limit 500;`,
+      );
+    } catch (e) {
+      // Una tanda que falla no puede tumbar a las demás: lo que no se resuelva
+      // se queda como pendiente y el siguiente intento lo recoge.
+      console.error("igdb-proxy by-steam externals", e);
+      continue;
+    }
+    for (const r of rows) {
+      const appid = steamAppid([r]);
+      const gameId = Number(r?.game?.id ?? r?.game);
+      if (appid && Number.isInteger(gameId) && gameId > 0 && !found.has(appid)) {
+        found.set(appid, gameId);
+      }
+    }
+  }
+  return found;
+}
+
+/** Las fichas de esos juegos, guardadas en `titles`.
+ *
+ *  Sin `game_time_to_beats`, que es una petición POR JUEGO: trescientos juegos
+ *  serían trescientas peticiones para llenar una barra de progreso que aún no
+ *  se ve. `gameRow` omite la columna cuando no llega nada (no la vacía), así
+ *  que el primer día que alguien abra la ficha la rellena por su cuenta. */
+async function fetchGamesInto(admin: SupabaseClient, igdbIds: number[]): Promise<Map<number, Any>> {
+  const byIgdbId = new Map<number, Any>();
+  for (const part of chunk(igdbIds, STEAM_CHUNK)) {
+    let details: Any[];
+    try {
+      details = await igdb(
+        "games",
+        `fields ${DETAIL_FIELDS}; where id = (${part.join(",")}); limit ${STEAM_CHUNK};`,
+      );
+    } catch (e) {
+      console.error("igdb-proxy by-steam details", e);
+      continue;
+    }
+    if (!details.length) continue;
+    const saved = await upsertReturning(admin, details.map((d: Any) => gameRow(d, null)), "kind,tmdb_id");
+    for (const row of saved) byIgdbId.set(row.tmdb_id, row);
+  }
+  return byIgdbId;
+}
+
 /** Lanza trabajo sin que la respuesta lo espere. EdgeRuntime.waitUntil lo
  *  mantiene vivo después del return; sin él la plataforma mata la invocación
  *  con la promesa a medias. Idéntico al de tmdb-proxy. */
@@ -366,6 +452,58 @@ Deno.serve(async (req) => {
   const path = url.pathname.replace(/^\/igdb-proxy/, "").replace(/\/+$/, "");
 
   try {
+    // POST /by-steam — de appids de Steam a juegos del catálogo (0074).
+    //
+    // La usa `steam-sync` al confirmar una importación, y solo para lo que la
+    // persona ha marcado y NO está ya en `titles`: el puente normal es
+    // `titles.steam_appid`, que se llena solo cada vez que alguien abre una
+    // ficha, y esta ruta es lo que queda cuando ese puente no existe todavía.
+    //
+    // Vive aquí y no en steam-sync porque aquí está IGDB: el token de Twitch,
+    // el estrangulador de 4 req/s y la traducción del payload. Meter una
+    // segunda conversación con IGDB en otra función sería tener dos
+    // estranguladores que no se conocen contra un límite que es del proyecto.
+    if (path === "/by-steam") {
+      if (req.method !== "POST") return json({ error: "not found" }, 404);
+      const body = await req.json().catch(() => null);
+      const appids = [
+        ...new Set(
+          (Array.isArray(body?.appids) ? body.appids : [])
+            .map((a: Any) => Number(a))
+            .filter((a: number) => Number.isInteger(a) && a > 0 && a <= 2_147_483_647),
+        ),
+      ] as number[];
+      if (!appids.length) return json({ matches: {} });
+      if (appids.length > STEAM_MAX) return json({ error: `max ${STEAM_MAX} appids` }, 400);
+
+      // Lo que ya está en el catálogo no se le pregunta a IGDB. En una segunda
+      // sincronización esto es casi todo.
+      const { data: known } = await admin
+        .from("titles")
+        .select("*")
+        .eq("kind", "game")
+        .in("steam_appid", appids);
+
+      const matches: Record<string, Any> = {};
+      for (const row of known ?? []) matches[String(row.steam_appid)] = row;
+
+      const missing = appids.filter((a) => !(String(a) in matches));
+      if (missing.length) {
+        const igdbIds = await igdbIdsForAppids(missing);
+        const rows = await fetchGamesInto(admin, [...new Set(igdbIds.values())]);
+        for (const [appid, igdbId] of igdbIds) {
+          const row = rows.get(igdbId);
+          if (row) matches[String(appid)] = row;
+        }
+      }
+
+      // Lo que no aparezca en `matches` es un appid que IGDB no conoce por su
+      // `external_games`: pasa con demos, con herramientas y con juegos
+      // retirados. Quien llama lo marca como no resuelto y lo dice; callarlo
+      // sería enseñar "importados 40" habiendo entrado 38.
+      return json({ matches });
+    }
+
     // GET /search?q= — búsqueda por nombre.
     //
     // Dos filtros en el WHERE, y los dos quitan cosas que no son juegos:

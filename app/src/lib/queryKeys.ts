@@ -16,6 +16,12 @@ export const qk = {
      de IGDB, otro espacio de numeración entero (0071). */
   gameSearch: (q: string) => ["gameSearch", q] as const,
   game: (igdbId: number) => ["game", igdbId] as const,
+  /* Steam (0074). Dos claves y no una: la cuenta enlazada cambia una vez cada
+     mucho y el borrador de la importación se sondea cada dos segundos mientras
+     hay trabajo — compartir clave sería refrescar el perfil cuarenta veces por
+     importación. */
+  steamLink: ["steamLink"] as const,
+  steamImport: ["steamImport"] as const,
   title: (tmdbId: number) => ["title", tmdbId] as const,
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,
