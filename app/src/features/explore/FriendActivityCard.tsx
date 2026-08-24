@@ -11,6 +11,7 @@ import { useAuth } from "@/features/auth/AuthProvider";
 import { useOpenTitle } from "@/lib/useOpenTitle";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { useShowMore } from "@/ui/ShowMore";
+import { MediumGlyph } from "@/ui/MediumGlyph";
 import { posterBg } from "@/ui/posterBg";
 import { ReactionBar } from "@/features/explore/ReactionBar";
 
@@ -69,6 +70,13 @@ function phrase(a: ActivityItem, titleName: string, isMe: boolean): React.ReactN
         { name },
       );
     case "watched":
+      /* Una película se ve entera y de una vez: no hay un "S1·E1 de" que
+         anteponerle, y el episodio sintético que la sostiene por debajo (0067)
+         no es algo que nadie quiera leer. Así que el cine coge la frase corta
+         —"vio X"— y las series conservan la suya con el rango de episodios. */
+      if (a.kind === "movie") {
+        return fill(tr(isMe ? "self: watched {name}" : "watched {name}"), { name });
+      }
       return fill(tr(isMe ? "self: watched {eps} of {name}" : "watched {eps} of {name}"), { eps, name });
     case "started":
       return fill(tr("started watching {name}"), { name });
@@ -174,6 +182,17 @@ export function FriendActivityCard() {
   if (items.length === 0) return null;
 
   const openFriend = (id: string) => navigate(`/friend/${id}`);
+  /* Cada medio abre su ficha: ?movie= la de cine, ?title= la de series. Un id de
+     TMDB solo es único dentro del suyo (0067), así que mandar los dos por el
+     mismo parámetro abriría la otra cosa con el mismo número. */
+  const openEvent = (a: ActivityItem) => {
+    if (a.kind !== "movie") return openTitle(a.tmdb_id);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("movie", String(a.tmdb_id));
+      return next;
+    });
+  };
 
   return (
     <section className="flex flex-col gap-4">
@@ -185,7 +204,7 @@ export function FriendActivityCard() {
       <div className="card" style={{ padding: 6 }}>
         {shown.map((a) => {
           const art = tmdbImg(a.poster_path, "w92");
-          const titleName = locName(esNames, a.tmdb_id, a.title_name);
+          const titleName = locName(esNames, a.tmdb_id, a.title_name, a.kind);
           const isMe = a.friend_id === me;
           const flashed = Boolean(a.event_key) && a.event_key === flashKey;
           const count = a.ep_count ?? 1;
@@ -194,7 +213,7 @@ export function FriendActivityCard() {
               key={a.event_key ?? `${a.friend_id}|${a.tmdb_id}|${a.at}`}
               ref={flashed ? flashRef : undefined}
               className={`fr-activity${flashed ? " fr-flash" : ""}`}
-              onClick={() => openTitle(a.tmdb_id)}
+              onClick={() => openEvent(a)}
             >
               <span onClick={(e) => { e.stopPropagation(); openFriend(a.friend_id); }} style={{ flex: "0 0 auto" }}>
                 <FriendAvatar f={{ id: a.friend_id, name: a.friend_name, avatarUrl: a.friend_avatar }} size={38} />
@@ -210,7 +229,8 @@ export function FriendActivityCard() {
                     a lone ⊕ on its own line taxes all 30 of them. */}
                 <div className="fr-meta">
                   <span className="mute" style={{ fontSize: 11.5 }}>
-                    {relativeTime(a.at, new Date(), dateLocale())}{count > 1 && <> · {count} {tr("episodes")}</>}
+                    {relativeTime(a.at, new Date(), dateLocale())}
+                    {a.kind !== "movie" && count > 1 && <> · {count} {tr("episodes")}</>}
                   </span>
                   {a.event_key && (
                     <ReactionBar
@@ -224,6 +244,11 @@ export function FriendActivityCard() {
               {a.verb === "rated" && a.score != null && (
                 <span className="badge badge-soft" style={{ fontWeight: 800 }}>{a.score}/10</span>
               )}
+              {/* El glifo del medio, pegado a la carátula: es la columna que
+                  identifica el título, y ahí se lee como una etiqueta suya en
+                  vez de como un adorno suelto en la frase. En las dos, no solo
+                  en el cine — ver el par es lo que enseña la convención. */}
+              <MediumGlyph kind={a.kind} />
               <div className="mq-row-art" style={{ width: 34, height: 50, ...(art ? {} : { background: posterBg(titleName) }) }}>
                 {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
               </div>

@@ -2070,25 +2070,71 @@ Deno.serve(async (req) => {
     // enough to matter; the client resolves library status / your rating.
     const mPerson = path.match(/^\/person\/(\d+)$/);
     if (mPerson) {
-      const d = await fetchTmdb(apiKey, `/person/${mPerson[1]}?append_to_response=tv_credits,translations`);
-      const seen = new Set<number>();
+      const d = await fetchTmdb(
+        apiKey,
+        `/person/${mPerson[1]}?append_to_response=tv_credits,movie_credits,translations`,
+      );
+
+      /* La filmografía, con los dos medios en UNA lista.
+       *
+       * Cada crédito lleva su `kind` y el cliente pinta el glifo; no se separan
+       * en dos secciones porque la mayoría de la gente solo tiene uno, y quien
+       * tiene los dos suele venir justo a ver la carrera entera.
+       *
+       * Los "self" se filtran igual en ambos, pero con la vara de medir de cada
+       * medio: en series un cameo se cuela salvo que sume episodios, y en cine
+       * no hay episodios que contar — lo que delata a un documental o una gala
+       * es que la persona salga como ella misma sin personaje. Ahí el filtro es
+       * seco, porque un actor no acumula cincuenta apariciones como sí mismo en
+       * películas y sí en programas de entrevistas.
+       *
+       * Un `id` solo es único dentro de su medio (0067), así que lo visto se
+       * recuerda por pareja: sin eso, una película y una serie con el mismo id
+       * se comerían la una a la otra. */
+      const seen = new Set<string>();
       const shows: Any[] = [];
-      const credits = [...((d.tv_credits?.cast ?? []) as Any[])]
+      const selfish = (character: string) =>
+        /^(self|himself|herself|themselves)\b/i.test(character.trim());
+
+      const tvCredits = [...((d.tv_credits?.cast ?? []) as Any[])]
         .sort((a, b) => (b.episode_count ?? 0) - (a.episode_count ?? 0));
-      for (const c of credits) {
-        if (c?.id == null || seen.has(c.id)) continue;
+      for (const c of tvCredits) {
+        if (c?.id == null || seen.has(`tv:${c.id}`)) continue;
         const character: string = c.character ?? "";
-        const selfish = /^(self|himself|herself|themselves)\b/i.test(character.trim());
-        if ((selfish || !character) && (c.episode_count ?? 0) < 5) continue;
-        seen.add(c.id);
+        if ((selfish(character) || !character) && (c.episode_count ?? 0) < 5) continue;
+        seen.add(`tv:${c.id}`);
         shows.push({
           tmdb_id: c.id,
+          kind: "tv",
           name: c.name ?? c.original_name ?? "Untitled",
           poster_path: c.poster_path ?? null,
           first_air_date: c.first_air_date || null,
           vote_average: c.vote_average ?? null,
           character: character || null,
           episode_count: c.episode_count ?? null,
+        });
+      }
+
+      /* El cine no tiene recuento de episodios con el que ordenar, así que
+       * ordena por popularidad: es lo más cercano a "por lo que se la conoce",
+       * que es el orden que la ficha quiere. El cliente reordena por encima
+       * poniendo primero lo que está en TU biblioteca. */
+      const movieCredits = [...((d.movie_credits?.cast ?? []) as Any[])]
+        .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+      for (const c of movieCredits) {
+        if (c?.id == null || seen.has(`movie:${c.id}`)) continue;
+        const character: string = c.character ?? "";
+        if (selfish(character) || !character) continue;
+        seen.add(`movie:${c.id}`);
+        shows.push({
+          tmdb_id: c.id,
+          kind: "movie",
+          name: c.title ?? c.original_title ?? "Untitled",
+          poster_path: c.poster_path ?? null,
+          first_air_date: c.release_date || null,
+          vote_average: c.vote_average ?? null,
+          character: character || null,
+          episode_count: null,
         });
       }
       // es-ES biography from the translation set (plain es as fallback) — the

@@ -6,8 +6,14 @@ import { t } from "@/lib/i18n";
 
 const statsSchema = z.object({
   episodes_watched: z.number().int(),
+  /* Las dos cifras de cine (0069) se desdoblan en vez de sumarse a las de
+     series: contar una película como episodio es lo que hacía falsa la
+     etiqueta. Opcionales, como todo lo que llega con una migración que se
+     aplica a mano después de que el frontend ya esté fuera. */
+  movies_watched: z.number().int().optional().default(0),
   minutes_watched: z.number().int(),
   shows_followed: z.number().int(),
+  movies_followed: z.number().int().optional().default(0),
   coming_soon: z.number().int(),
   avg_rating: z.number().nullable(),
   friends: z.number().int(),

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { CalendarClock, ChevronLeft, ChevronRight, Clock, Eye, History, LayoutGrid, Share2, Star, Tv, Users } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Clapperboard, Clock, Eye, Film, History, LayoutGrid, Share2, Star, Tv, Users } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useLibrary } from "@/lib/library";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
@@ -164,9 +164,21 @@ export default function YouPage() {
       {stats && (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
           {[
+            /* Cine y series cuentan por separado (0069): una película no es un
+               episodio, y sumarlas bajo una etiqueta sola es lo que hacía falsa
+               la cifra. Los minutos sí van juntos — son minutos, y no cambian
+               de unidad al cambiar de medio.
+               Las dos de cine solo se pintan si tienes algo: a quien solo ve
+               series, dos ceros permanentes le dicen menos que nada. */
             { icon: Eye, label: tr("Episodes watched"), value: stats.episodes_watched.toLocaleString() },
+            ...(stats.movies_watched > 0
+              ? [{ icon: Film, label: tr("Movies watched"), value: stats.movies_watched.toLocaleString() }]
+              : []),
             { icon: Clock, label: tr("Time spent"), value: timeSpentLabel(stats.minutes_watched) },
             { icon: Tv, label: tr("Shows followed"), value: String(stats.shows_followed) },
+            ...(stats.movies_followed > 0
+              ? [{ icon: Clapperboard, label: tr("Movies in your list"), value: String(stats.movies_followed) }]
+              : []),
             { icon: CalendarClock, label: tr("Coming soon"), value: String(stats.coming_soon) },
             { icon: Users, label: tr("Friends"), value: String(stats.friends) },
             { icon: Star, label: tr("Avg. rating"), value: stats.avg_rating != null ? stats.avg_rating.toFixed(1) : "—" },

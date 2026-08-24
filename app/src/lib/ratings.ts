@@ -61,6 +61,9 @@ const ratedRowSchema = z.object({
   titles: z.object({
     id: z.string().uuid(),
     tmdb_id: z.number().int(),
+    /* El medio de lo puntuado. Tus notas son de los dos, y cruzarlas por el
+       número a secas confunde la película 1399 con la serie 1399 (0067). */
+    kind: z.enum(["tv", "movie"]),
     name: z.string(),
     poster_path: z.string().nullable(),
     first_air_date: z.string().nullable(),
@@ -81,7 +84,7 @@ export function useMyRatings() {
       // would fold friends' ratings into our own list.
       const { data, error } = await supabase
         .from("ratings")
-        .select("id, score, created_at, titles(id, tmdb_id, name, poster_path, first_air_date, genres)")
+        .select("id, score, created_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres)")
         .eq("user_id", userId!)
         .not("title_id", "is", null)
         .order("created_at", { ascending: false });
