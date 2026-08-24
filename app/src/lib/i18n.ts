@@ -120,6 +120,15 @@ const ES: Record<string, string> = {
      series y dice exactamente eso. */
   "Start something": "Empieza algo",
   "Just out": "Recién salidos",
+  /* Lanzamientos, la pantalla. Claves con prefijo y no las de cine ("Releases"
+     → "Estrenos") porque en juegos la palabra es otra: un juego no se estrena,
+     sale. Como toda clave con prefijo, lleva su entrada inglesa abajo para que
+     el prefijo no llegue nunca a la pantalla. */
+  "games: Releases": "Lanzamientos",
+  "games: My releases": "Mis lanzamientos",
+  "games: Announced": "Anunciados",
+  "No date yet": "Sin fecha",
+  "No releases in the games you follow.": "Ningún lanzamiento en los juegos que sigues.",
   "Nothing out recently.": "Nada recién salido.",
   "Nothing announced in the games you follow.": "Nada anunciado en los juegos que sigues.",
   "Nothing on the go — hit {key} and add a game.":
@@ -731,6 +740,9 @@ const EN: Record<string, string> = {
   "activity: Added": "Added",
   "self: rated {name}": "rated {name}",
   "self: added {name} to their watchlist": "added {name} to your watchlist",
+  "games: Releases": "Releases",
+  "games: My releases": "My releases",
+  "games: Announced": "Announced",
   "self: watched {eps} of {name}": "watched {eps} of {name}",
   "self: finished {name}": "finished {name}",
   "self: added {name} to their backlog": "added {name} to your backlog",

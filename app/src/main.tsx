@@ -26,6 +26,7 @@ import MovieReleasesPage from "@/features/movies/MovieReleasesPage";
 import MoviesExplorePage from "@/features/movies/MoviesExplorePage";
 import GamesPage from "@/features/games/GamesPage";
 import GamesTonightPage from "@/features/games/GamesTonightPage";
+import GameReleasesPage from "@/features/games/GameReleasesPage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
@@ -133,6 +134,7 @@ const router = createBrowserRouter([
          la ruta, la pestaña y el chip dicen los tres la misma palabra. */
       { path: "games", element: <Navigate to="/games/tonight" replace /> },
       { path: "games/tonight", element: <GamesTonightPage /> },
+      { path: "games/releases", element: <GameReleasesPage /> },
       { path: "games/backlog", element: <GamesPage /> },
       // La URL de antes de que la biblioteca tuviera nombre propio, viva como
       // redirección para que un enlace guardado siga llegando (igual que

@@ -46,10 +46,12 @@ const MOVIE_TABS = [
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
-/* Tres de las cinco. "Lanzamientos" y "Explorar" de juegos llegan en los dos
-   commits siguientes de esta misma rama, y hasta entonces sus pestañas NO se
-   pintan: una pestaña que lleva a una ruta sin página es peor que una pestaña
-   que falta. Amigos sigue siendo la misma en los tres modos.
+/* Cuatro de las cinco. "Explorar" de juegos llega en el commit siguiente de
+   esta misma rama, y hasta entonces su pestaña NO se pinta: una pestaña que
+   lleva a una ruta sin página es peor que una pestaña que falta. Amigos sigue
+   siendo la misma en los tres modos.
+
+   "Lanzamientos" y no "Estrenos": un juego no se estrena, sale.
 
    "Pendientes" ocupa el sitio que en los otros dos modos ocupa "Watchlist", y
    se llama distinto a propósito: es LA palabra que usa quien juega para lo que
@@ -59,6 +61,7 @@ const MOVIE_TABS = [
    música. */
 const GAME_TABS = [
   { path: "/games/tonight", label: "Tonight", icon: Clapperboard },
+  { path: "/games/releases", label: "games: Releases", icon: CalendarClock },
   { path: "/games/backlog", label: "Backlog", icon: Bookmark },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
