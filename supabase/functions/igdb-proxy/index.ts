@@ -321,12 +321,19 @@ function inBackground(work: Promise<unknown>) {
    La clave lleva el prefijo `game-` porque la tabla es compartida y un id de
    IGDB no significa nada contra una lista de TMDB. */
 
-const POOLS: Record<string, (nowMs: number) => string> = {
-  anticipated: (n) => anticipatedQuery(SEARCH_FIELDS, n),
-  new: (n) => newReleasesQuery(SEARCH_FIELDS, n),
-  popular: () => popularQuery(SEARCH_FIELDS),
-  "top-rated": () => topRatedQuery(SEARCH_FIELDS),
-};
+/* Un Map y no un objeto literal, y no es cosmético: con un objeto,
+   `POOLS[pool]` encuentra lo que hay en Object.prototype, y "constructor" pasa
+   el `[a-z-]+` de la ruta. /discover/constructor se colaba por el 404, llegaba
+   a construir una consulta que no era una cadena y acababa en una petición a
+   IGDB destinada a fallar — gastando, sin caché que lo pare, una de las cuatro
+   peticiones por segundo que tiene el proyecto entero. Un Map no tiene
+   prototipo que consultar. */
+const POOLS = new Map<string, (nowMs: number) => string>([
+  ["anticipated", (n) => anticipatedQuery(SEARCH_FIELDS, n)],
+  ["new", (n) => newReleasesQuery(SEARCH_FIELDS, n)],
+  ["popular", () => popularQuery(SEARCH_FIELDS)],
+  ["top-rated", () => topRatedQuery(SEARCH_FIELDS)],
+]);
 
 async function readDiscoverCache(admin: SupabaseClient, key: string): Promise<number[] | null> {
   const { data } = await admin
@@ -373,7 +380,7 @@ async function resolvePool(
   pool: string,
   force = false,
 ): Promise<number[]> {
-  const build = POOLS[pool];
+  const build = POOLS.get(pool);
   if (!build) return [];
   const key = `game-${pool}:`;
   if (!force) {
@@ -485,7 +492,7 @@ Deno.serve(async (req) => {
       const startedAt = new Date().toISOString();
       const summary: Record<string, number | string> = {};
       let ok = true;
-      for (const pool of Object.keys(POOLS)) {
+      for (const pool of POOLS.keys()) {
         try {
           summary[pool] = (await resolvePool(admin, pool, true)).length;
         } catch (e) {
@@ -517,7 +524,7 @@ Deno.serve(async (req) => {
     const mPool = path.match(/^\/discover\/([a-z-]+)$/);
     if (mPool) {
       const pool = mPool[1];
-      if (!POOLS[pool]) return json({ error: "not found" }, 404);
+      if (!POOLS.has(pool)) return json({ error: "not found" }, 404);
       const ids = await resolvePool(admin, pool);
       return json({ results: await gamesInOrder(admin, ids) });
     }

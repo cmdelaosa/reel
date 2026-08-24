@@ -41,12 +41,12 @@ alter table public.library_entries add column if not exists played_at timestampt
 comment on column public.library_entries.played_at is
   'Solo juegos: cuando cambio por ultima vez minutes_played o play_state, puesto por el disparador game_progress_touch (0075). Null = no consta. NO es "cuando lo terminaste": eso es el watch_event del episodio sintetico.';
 
--- Índice parcial: la única consulta es "mis juegos, por lo último tocado", y un
--- índice completo cargaría también las filas de series y cine, que tienen esta
--- columna siempre a null.
-create index if not exists library_entries_played_at_idx
-  on public.library_entries (user_id, played_at desc)
-  where played_at is not null;
+-- SIN índice, y merece decirse porque la reacción natural es ponerlo: nadie
+-- ORDENA por esta columna en SQL. rpc_library_rollup devuelve la biblioteca
+-- entera —son decenas de filas por persona, no miles— y quien decide a qué
+-- juego se vuelve es domain/gameTonight, en el cliente y con sus pruebas. Un
+-- índice sobre una columna que ninguna consulta filtra ni ordena solo cuesta
+-- escrituras, y encima aparenta que existe una consulta que lo usa.
 
 -- ============================================================
 -- 2. El disparador

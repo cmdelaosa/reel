@@ -1,9 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ChevronRight } from "lucide-react";
 import { useGameLibrary, type LibraryGame } from "@/lib/library";
-import { useSetGameProgress } from "@/lib/igdb";
-import { igdbImg } from "@/lib/igdb";
+import { igdbImg, useSetGameProgress } from "@/lib/igdb";
 import { formatPlaytime } from "@/domain/gameStatus";
 import { formatRelease } from "@/domain/gameRelease";
 import { orderByTouched, pickResume } from "@/domain/gameTonight";
@@ -58,8 +57,25 @@ export default function GamesTonightPage() {
       return next;
     });
 
-  const bump = (g: LibraryGame, delta: number) =>
-    setProgress.mutate({ titleId: g.title_id, minutesPlayed: Math.max(0, (g.minutes_played ?? 0) + delta) });
+  /* Lo último que hemos escrito nosotros, para no sumar dos veces sobre el mismo
+     número. `useSetGameProgress` invalida y espera al refetch, así que entre que
+     la escritura termina —y el botón se reactiva— y la biblioteca vuelve, el
+     render sigue enseñando los minutos de antes: dos pulsaciones seguidas de
+     "+30 min" escribían las dos 18 h 30, y la segunda parecía no hacer nada. */
+  const lastWritten = useRef<{ titleId: string; minutes: number } | null>(null);
+
+  const bump = (g: LibraryGame, delta: number) => {
+    const stored = g.minutes_played ?? 0;
+    // El máximo, no el último escrito a secas: si las horas se corrigen desde la
+    // ficha a un número menor, lo que manda es lo que dice la biblioteca en
+    // cuanto llega — y en cuanto llega los dos valen lo mismo.
+    const base = lastWritten.current?.titleId === g.title_id
+      ? Math.max(lastWritten.current.minutes, stored)
+      : stored;
+    const minutes = Math.max(0, base + delta);
+    lastWritten.current = { titleId: g.title_id, minutes };
+    setProgress.mutate({ titleId: g.title_id, minutesPlayed: minutes });
+  };
 
   const today = now.toISOString().slice(0, 10);
   const nowMs = now.getTime();

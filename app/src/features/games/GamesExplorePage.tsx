@@ -93,7 +93,15 @@ export default function GamesExplorePage() {
   const followed = useMemo(() => new Set(mine.map((g) => g.tmdb_id)), [mine]);
 
   const poolData = pool.data;
-  const chips = useMemo(() => topPlatforms(poolData ?? []), [poolData]);
+  /* Las elegidas van SIEMPRE, aunque no estén entre las más frecuentes de esta
+     rejilla. Sin eso, filtrar por Xbox 360 en Populares y pasar a Novedades
+     —donde esa plataforma no entra en las ocho— dejaba la rejilla vacía con un
+     filtro puesto y ningún chip encendido que quitar: sin salida salvo recargar.
+     Delante, además, para que se vea que siguen puestas. */
+  const chips = useMemo(
+    () => [...new Set([...platforms, ...topPlatforms(poolData ?? [])])],
+    [poolData, platforms],
+  );
 
   const items = useMemo(
     () =>

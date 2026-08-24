@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 import type { LibraryGame } from "@/lib/library";
 import { igdbImg } from "@/lib/igdb";
 import { formatPlaytime } from "@/domain/gameStatus";
-import { formatRelease } from "@/domain/gameRelease";
+import { formatRelease, isReleased } from "@/domain/gameRelease";
 import { isEs, t as tr } from "@/lib/i18n";
 import { airTimeZone } from "@/lib/region";
 import { dayOffset } from "@/domain/calendar";
@@ -45,7 +45,12 @@ export function GameReleaseRow({ g, now, periodNamedAbove = false }: {
   const art = igdbImg(g.poster_path, "cover_small");
 
   const exactDay = g.release_precision === "day";
-  const released = Boolean(g.first_air_date) && g.first_air_date! <= now.toISOString().slice(0, 10);
+  /* isReleased y no un `date <= hoy` escrito aquí: con una fecha ancha solo
+     cuenta como salido cuando el periodo ENTERO ha pasado, y con precisión
+     desconocida o 'tbd' no cuenta nunca. Esa cautela está razonada y probada en
+     el dominio; repetirla a mano era la forma de que un día dijeran cosas
+     distintas. */
+  const released = isReleased(g.first_air_date, g.release_precision, now.toISOString().slice(0, 10));
   const label = formatRelease(g.first_air_date, g.release_precision, { es });
 
   const platforms = g.platforms ?? [];
