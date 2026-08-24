@@ -102,8 +102,14 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
 
   const commitHours = () => {
     if (draft === null || !entry) return;
-    const parsed = Number(draft.replace(",", "."));
+    const text = draft.trim();
     setDraft(null);
+    // Vacío es "no he escrito nada", no "cero horas". Number("") es 0, así que
+    // sin esta guarda seleccionar el campo entero y salir con el tabulador
+    // borraba las horas de un juego con cuarenta encima, sin confirmación ni
+    // manera de deshacerlo.
+    if (!text) return;
+    const parsed = Number(text.replace(",", "."));
     if (!Number.isFinite(parsed) || parsed < 0) return;
     const asMinutes = Math.round(parsed * 60);
     if (asMinutes === minutes) return;

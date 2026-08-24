@@ -68,10 +68,6 @@ export function deriveGameStatus({
   return airedCount === 0 ? "upcoming" : "backlog";
 }
 
-/** Los tres cubos que admiten horas por delante. Un 'upcoming' no puede
- *  tenerlas y un 'backlog' deja de serlo en cuanto las tiene. */
-export const PLAYABLE: readonly GameStatus[] = ["playing", "ongoing", "finished", "dropped"];
-
 /** Cuánto llevas de lo que dura, en 0-100, contra la media de IGDB.
  *
  *  Devuelve null —no 0— cuando no hay denominador honesto, y ese null es la

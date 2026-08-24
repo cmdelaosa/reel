@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/features/auth/AuthProvider";
 import { trackedFetch } from "@/lib/connection";
 import { qk } from "@/lib/queryKeys";
 import {
@@ -58,20 +59,6 @@ export async function searchGames(q: string): Promise<TitleRow[]> {
   return gameSearchResponseSchema.parse(data).results;
 }
 
-/** El mismo buscador como hook, para las pantallas que lo usan directamente. */
-export function useGameSearch(query: string) {
-  const q = query.trim();
-  return useQuery({
-    queryKey: qk.gameSearch(q),
-    enabled: q.length >= 2,
-    queryFn: () => searchGames(q),
-    // La búsqueda va contra IGDB, que da 4 peticiones por segundo para TODA la
-    // app (no por usuario). Un minuto de caché por término evita que volver
-    // atrás y repetir la búsqueda gaste otra.
-    staleTime: 60_000,
-  });
-}
-
 /** La ficha de un juego, por su id de IGDB. */
 export function useGame(igdbId: number | null | undefined) {
   return useQuery({
@@ -99,10 +86,13 @@ export interface GameProgress {
  *  día que llegue tiene que poder distinguir lo que escribió ella de lo que
  *  corregiste tú, para no pisarte una cifra a mano (0073).
  *
- *  Optimista contra la biblioteca, como el resto de mutaciones de library.ts:
- *  cambiar de cubo o sumar media hora tiene que verse en el momento. */
+ *  Invalida y refetch, no optimista: el rollup recalcula conteos y estado a
+ *  partir de la fila, y adivinarlos aquí sería mantener esa derivación en dos
+ *  sitios. La escritura es una sola columna contra un índice, así que el viaje
+ *  se nota poco. */
 export function useSetGameProgress() {
   const qc = useQueryClient();
+  const { session } = useAuth();
   return useMutation({
     mutationFn: async ({ titleId, playState, minutesPlayed }: GameProgress) => {
       const patch: Record<string, unknown> = {};
@@ -113,9 +103,15 @@ export function useSetGameProgress() {
       }
       if (!Object.keys(patch).length) return;
 
+      // `user_id` explícito además de la RLS, como el resto de mutaciones del
+      // repo. Hoy la política "owner all" ya acota el UPDATE al dueño, pero un
+      // update cuyo alcance dependa SOLO de una política es un update que se
+      // vuelve global el día que alguien afloje la política — y la tabla ya
+      // tiene una segunda política de lectura para amigos.
       const { error } = await supabase
         .from("library_entries")
         .update(patch)
+        .eq("user_id", session!.user.id)
         .eq("title_id", titleId);
       if (error) throw new Error(error.message);
     },

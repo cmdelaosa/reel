@@ -8,7 +8,6 @@ import { libraryRowSchema, type LibraryRow, type TitleRow } from "@/lib/schemas"
 import { deriveStatus, watchProgress, type ShowStatus } from "@/domain/status";
 import { deriveMovieStatus, type MovieStatus } from "@/domain/movieStatus";
 import { deriveGameStatus, hoursProgress, type GameStatus } from "@/domain/gameStatus";
-import { igdbImg } from "@/lib/igdb";
 import { useAuth } from "@/features/auth/AuthProvider";
 import type { TitleCard } from "@/domain/types";
 
@@ -135,24 +134,6 @@ export function useGameLibrary() {
     [q.data],
   );
   return { ...q, data };
-}
-
-/** Poster-grid view-model for a library game. La carátula sale de igdbImg y no
- *  de tmdbImg: en un juego, `poster_path` es un hash de IGDB, no una ruta. */
-export function toGameCard(g: LibraryGame): TitleCard {
-  return {
-    id: String(g.tmdb_id),
-    name: g.name,
-    year: g.first_air_date?.slice(0, 4) ?? "TBA",
-    genres: g.genres.length ? g.genres : ["—"],
-    posterPath: igdbImg(g.poster_path),
-    voteAverage: g.vote_average ?? 0,
-    // La barra de la tarjeta solo tiene sentido mientras se juega: en un juego
-    // terminado diría "100%" de algo que ya no está en curso, y en uno sin
-    // empezar sería una barra vacía por cada carátula de la rejilla.
-    progress: g.status === "playing" && g.progress != null ? Math.min(g.progress, 100) : undefined,
-    stopped: g.status === "dropped",
-  };
 }
 
 /** Poster-grid view-model for a library show. */
