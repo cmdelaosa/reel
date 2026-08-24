@@ -5,6 +5,7 @@ import { useFriendships } from "@/lib/friends";
 import { useEventReactions } from "@/lib/reactions";
 import { byEvent, type ReactionRow } from "@/domain/reactions";
 import { relativeTime } from "@/domain/time";
+import { showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
 import { tmdbImg } from "@/lib/tmdb";
 import { dateLocale, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -58,9 +59,13 @@ function fill(s: string, nodes: Record<string, React.ReactNode>): React.ReactNod
    away with one verb ("watched"), Spanish does not ("vio" / "viste"). */
 function phrase(a: ActivityItem, titleName: string, isMe: boolean): React.ReactNode {
   const name = <b style={{ fontWeight: 700 }}>{titleName}</b>;
-  const eps = a.season_number != null && a.episode_number != null && (
-    <b style={{ fontWeight: 700 }}>{epRange(a)}</b>
-  );
+  // Solo cuando la frase lleva episodios: en cine no hay rango que componer, y
+  // construirlo para tirarlo deja el código afirmando justo encima lo que la
+  // rama de abajo niega.
+  const eps = watchedPhrase(a.kind) === "with-episodes"
+    && a.season_number != null && a.episode_number != null && (
+      <b style={{ fontWeight: 700 }}>{epRange(a)}</b>
+    );
   switch (a.verb) {
     case "rated":
       return fill(tr(isMe ? "self: rated {name}" : "rated {name}"), { name });
@@ -72,9 +77,9 @@ function phrase(a: ActivityItem, titleName: string, isMe: boolean): React.ReactN
     case "watched":
       /* Una película se ve entera y de una vez: no hay un "S1·E1 de" que
          anteponerle, y el episodio sintético que la sostiene por debajo (0067)
-         no es algo que nadie quiera leer. Así que el cine coge la frase corta
-         —"vio X"— y las series conservan la suya con el rango de episodios. */
-      if (a.kind === "movie") {
+         no es algo que nadie quiera leer. Cuál de las dos frases toca lo decide
+         domain/mediumCopy, que es donde está probado. */
+      if (watchedPhrase(a.kind) === "whole-title") {
         return fill(tr(isMe ? "self: watched {name}" : "watched {name}"), { name });
       }
       return fill(tr(isMe ? "self: watched {eps} of {name}" : "watched {eps} of {name}"), { eps, name });
@@ -230,7 +235,7 @@ export function FriendActivityCard() {
                 <div className="fr-meta">
                   <span className="mute" style={{ fontSize: 11.5 }}>
                     {relativeTime(a.at, new Date(), dateLocale())}
-                    {a.kind !== "movie" && count > 1 && <> · {count} {tr("episodes")}</>}
+                    {showsEpisodeCount(a.kind, count) && <> · {count} {tr("episodes")}</>}
                   </span>
                   {a.event_key && (
                     <ReactionBar

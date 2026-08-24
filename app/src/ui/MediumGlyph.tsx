@@ -14,9 +14,12 @@ import { t as tr } from "@/lib/i18n";
 export function MediumGlyph({ kind, size = 13 }: { kind: "tv" | "movie"; size?: number }) {
   const Icon = kind === "movie" ? Film : Tv;
   return (
+    // `title` y no `aria-label`: con role="img" el title ya es el nombre
+    // accesible, así que poner los dos hacía que varios lectores anunciaran
+    // "Película, Película" en cada una de las treinta filas del muro. Y el
+    // title, además, se ve al pasar el ratón, que es como se aprende un glifo.
     <span
       role="img"
-      aria-label={tr(kind === "movie" ? "Movie" : "TV series")}
       title={tr(kind === "movie" ? "Movie" : "TV series")}
       style={{ display: "inline-flex", flex: "0 0 auto", color: "var(--text-mute)" }}
     >

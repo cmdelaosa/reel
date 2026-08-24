@@ -4,6 +4,7 @@ import type { HistoryRow } from "@/lib/history";
 import { tmdbImg } from "@/lib/tmdb";
 import { useOpenTitle } from "@/lib/useOpenTitle";
 import { dateLocale, locName, t as tr, useEsNames } from "@/lib/i18n";
+import { historyLines } from "@/domain/mediumCopy";
 import { MediumGlyph } from "@/ui/MediumGlyph";
 import { posterBg } from "@/ui/posterBg";
 
@@ -12,10 +13,11 @@ import { posterBg } from "@/ui/posterBg";
    watched instead of the air-date/check affordance.
 
    Desde 0069 el historial lleva los dos medios, y una película no tiene ni
-   temporada ni episodio: donde una serie escribe "S02 · E07" y debajo el título
-   del episodio, una película escribe su propio título y debajo el año. Lo que
-   NO se hace es imprimirle "S01 · E01" al episodio sintético (0067): esa fila
-   existe para que "vista" tenga dónde escribirse, no para leerse. */
+   temporada ni episodio: donde una serie escribe "S02 · E07" y debajo el
+   título del episodio, una película escribe su propio título y debajo el
+   estudio. Lo que NO se hace es imprimirle "S01 · E01" al episodio sintético
+   (0067): esa fila existe para que "vista" tenga dónde escribirse, no para
+   leerse. */
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
@@ -26,6 +28,8 @@ export function HistoryEpRow({ ep }: { ep: HistoryRow }) {
   const art = tmdbImg(ep.poster_path, "w92");
   const esNames = useEsNames();
   const isMovie = ep.kind === "movie";
+  // Qué va en cada línea lo decide domain/mediumCopy, que es donde está probado.
+  const lines = historyLines(ep.kind);
   const showName = locName(esNames, ep.tmdb_id, ep.show_name, ep.kind);
 
   // Cada medio abre su propia ficha: ?movie= la de cine, ?title= la de series.
@@ -51,13 +55,11 @@ export function HistoryEpRow({ ep }: { ep: HistoryRow }) {
           <ChevronRight size={12} style={{ flex: "0 0 auto" }} />
         </span>
         <div className="cal-ep-se truncate">
-          {isMovie ? showName : `S${pad2(ep.season_number)} · E${pad2(ep.episode_number)}`}
+          {lines.headline === "title" ? showName : `S${pad2(ep.season_number)} · E${pad2(ep.episode_number)}`}
         </div>
-        {/* Bajo el título: en una serie el nombre del episodio; en una
-            película el estudio, que es lo que titles.network guarda para ella
-            (0067). Nunca el nombre del episodio sintético — es una copia del
-            título, y repetirlo dos renglones seguidos no dice nada. */}
-        <div className="cal-ep-name mute truncate">{isMovie ? ep.network : ep.episode_name}</div>
+        <div className="cal-ep-name mute truncate">
+          {lines.caption === "studio" ? ep.network : ep.episode_name}
+        </div>
       </div>
       <div className="cal-ep-right">
         <div className="cal-time">{fmtTime(ep.watched_at)}</div>

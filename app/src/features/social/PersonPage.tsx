@@ -121,8 +121,12 @@ export default function PersonPage() {
     const rows = (data?.shows ?? []).map((s) => {
       const key = `${s.kind}:${s.tmdb_id}`;
       const entry = byKey.get(key);
+      /* `stopped` se mira solo en series: es una columna de library_entries
+         que existe para los dos medios, pero el cine no tiene ese estado —una
+         peli no se deja a medias— y una fila marcada en la época en que el
+         botón existía pintaría aquí una etiqueta que el modo cine eliminó. */
       const status = !entry ? null
-        : entry.stopped ? "stopped"
+        : entry.stopped && s.kind === "tv" ? "stopped"
         : s.kind === "movie"
           ? deriveMovieStatus({ airedCount: entry.aired_count, watchedCount: entry.watched_count })
           : deriveStatus({
