@@ -9,6 +9,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   apicalypseTerm,
+  gameSearchRow,
   beatSeconds,
   canonicalRelease,
   gameRow,
@@ -330,6 +331,27 @@ Deno.test("un juego solo anunciado no finge una fecha", () => {
   assertEquals(row.first_air_date, null);
   assertEquals(row.release_precision, "tbd");
   assertEquals(row.platform_releases, {});
+});
+
+Deno.test("la fila de búsqueda lleva SIEMPRE las mismas claves", () => {
+  // El upsert va en lote y PostgREST usa una sola lista de columnas con la
+  // unión de las claves: la fila que omite una recibe un NULL explícito, no el
+  // default. Con `platforms` NOT NULL eso reventaba la búsqueda entera en
+  // cuanto un resultado no traía plataformas — "mario kart" iba y "mari" no.
+  const completo = gameSearchRow({
+    id: 1, name: "Con todo", summary: "algo",
+    cover: { image_id: "co1" }, platforms: [{ id: 48, name: "PlayStation 5" }],
+    total_rating: 80, total_rating_count: 5, hypes: 1,
+  });
+  const pelado = gameSearchRow({ id: 2, name: "Sin nada" });
+
+  assertEquals(Object.keys(completo).sort(), Object.keys(pelado).sort());
+  // Y los valores del pelado son los honestos, no ausencias.
+  assertEquals(pelado.platforms, []);
+  assertEquals(pelado.overview, null);
+  assertEquals(pelado.poster_path, null);
+  assertEquals(pelado.vote_average, null);
+  assertEquals(pelado.popularity, 0);
 });
 
 Deno.test("sin tiempos de IGDB la columna no viaja en el upsert", () => {
