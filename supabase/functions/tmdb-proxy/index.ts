@@ -2070,25 +2070,102 @@ Deno.serve(async (req) => {
     // enough to matter; the client resolves library status / your rating.
     const mPerson = path.match(/^\/person\/(\d+)$/);
     if (mPerson) {
-      const d = await fetchTmdb(apiKey, `/person/${mPerson[1]}?append_to_response=tv_credits,translations`);
-      const seen = new Set<number>();
+      const d = await fetchTmdb(
+        apiKey,
+        `/person/${mPerson[1]}?append_to_response=tv_credits,movie_credits,translations`,
+      );
+
+      /* La filmografía, con los dos medios en UNA lista.
+       *
+       * Cada crédito lleva su `kind` y el cliente pinta el glifo; no se separan
+       * en dos secciones porque la mayoría de la gente solo tiene uno, y quien
+       * tiene los dos suele venir justo a ver la carrera entera.
+       *
+       * Los "self" se filtran igual en ambos, pero con la vara de medir de cada
+       * medio: en series un cameo se cuela salvo que sume episodios, y en cine
+       * no hay episodios que contar — lo que delata a un documental o una gala
+       * es que la persona salga como ella misma sin personaje. Ahí el filtro es
+       * seco, porque un actor no acumula cincuenta apariciones como sí mismo en
+       * películas y sí en programas de entrevistas.
+       *
+       * Un `id` solo es único dentro de su medio (0067), así que lo visto se
+       * recuerda por pareja: sin eso, una película y una serie con el mismo id
+       * se comerían la una a la otra. */
+      const seen = new Set<string>();
       const shows: Any[] = [];
-      const credits = [...((d.tv_credits?.cast ?? []) as Any[])]
+      const selfish = (character: string) =>
+        /^(self|himself|herself|themselves)\b/i.test(character.trim());
+
+      const tvCredits = [...((d.tv_credits?.cast ?? []) as Any[])]
         .sort((a, b) => (b.episode_count ?? 0) - (a.episode_count ?? 0));
-      for (const c of credits) {
-        if (c?.id == null || seen.has(c.id)) continue;
+      for (const c of tvCredits) {
+        if (c?.id == null || seen.has(`tv:${c.id}`)) continue;
         const character: string = c.character ?? "";
-        const selfish = /^(self|himself|herself|themselves)\b/i.test(character.trim());
-        if ((selfish || !character) && (c.episode_count ?? 0) < 5) continue;
-        seen.add(c.id);
+        if ((selfish(character) || !character) && (c.episode_count ?? 0) < 5) continue;
+        seen.add(`tv:${c.id}`);
         shows.push({
           tmdb_id: c.id,
+          kind: "tv",
           name: c.name ?? c.original_name ?? "Untitled",
           poster_path: c.poster_path ?? null,
           first_air_date: c.first_air_date || null,
           vote_average: c.vote_average ?? null,
           character: character || null,
           episode_count: c.episode_count ?? null,
+        });
+      }
+
+      /* En cine cuentan las dos mitades del crédito, y la segunda es la razón
+       * por la que esta página recibe visitas desde la ficha de una película:
+       * quien dirige no sale en `cast`. Denis Villeneuve tiene 25 créditos de
+       * dirección en `crew` y 18 en `cast`, casi todos menores o como sí mismo
+       * — leer solo el reparto dejaba su ficha sin Dune, sin Arrival y sin
+       * Blade Runner 2049, que es todo aquello por lo que alguien pulsa su
+       * nombre.
+       *
+       * De `crew` solo dirección y guion: son los oficios que la ficha de una
+       * película nombra, y los únicos por los que se busca a una persona. El
+       * resto del equipo (montaje, cámara, "Thanks") llenaría la lista de
+       * títulos en los que esa persona no es lo que fuiste a ver.
+       *
+       * `character` guarda el papel en el reparto y el OFICIO en el equipo: la
+       * fila lo imprime igual, y "Director" bajo el título dice exactamente lo
+       * que hay que decir. */
+      // Por prioridad, no por el orden en que TMDB los liste: quien dirige y
+      // además firma el guion aparece dos veces sobre la misma película, y de
+      // las dos filas solo sobrevive la primera. Villeneuve salía como
+      // "Screenplay" en Dune: Part Two — cierto, y no es por lo que se le busca.
+      const DIRECTING_JOBS = ["Director", "Screenplay", "Writer"];
+      const movieCredits = [
+        ...((d.movie_credits?.cast ?? []) as Any[]).map((c) => ({ ...c, role: c.character ?? "" })),
+        ...((d.movie_credits?.crew ?? []) as Any[])
+          .filter((c) => DIRECTING_JOBS.includes(c?.job))
+          .sort((a, b) => DIRECTING_JOBS.indexOf(a.job) - DIRECTING_JOBS.indexOf(b.job))
+          .map((c) => ({ ...c, role: c.job as string })),
+        // sort estable: con la misma popularidad, el orden de arriba se conserva.
+      ].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+
+      for (const c of movieCredits) {
+        if (c?.id == null || seen.has(`movie:${c.id}`)) continue;
+        const role: string = c.role ?? "";
+        /* Como sí misma y sin papel se cae; sin papel A SECAS no, al revés que
+         * en series. Allí el recuento de episodios hace de salvavidas para el
+         * crédito mal anotado, y aquí no hay ninguno: TMDB deja `character`
+         * vacío en películas antiguas o poco editadas aunque el papel sea el
+         * protagonista, y descartarlas por eso borraba media filmografía de
+         * cualquiera con carrera larga. Un crédito sin papel se enseña sin
+         * papel. */
+        if (selfish(role)) continue;
+        seen.add(`movie:${c.id}`);
+        shows.push({
+          tmdb_id: c.id,
+          kind: "movie",
+          name: c.title ?? c.original_title ?? "Untitled",
+          poster_path: c.poster_path ?? null,
+          first_air_date: c.release_date || null,
+          vote_average: c.vote_average ?? null,
+          character: role || null,
+          episode_count: null,
         });
       }
       // es-ES biography from the translation set (plain es as fallback) — the

@@ -198,6 +198,10 @@ export type SagaResponse = z.infer<typeof sagaResponseSchema>;
 
 export const personShowSchema = z.object({
   tmdb_id: z.number().int(),
+  /* El medio de este crédito (0069): la filmografía va mezclada y cada fila
+     lleva su glifo. Opcional para que un proxy anterior a la ruta siga
+     validando — sus créditos eran todos de series. */
+  kind: z.enum(["tv", "movie"]).optional().default("tv"),
   name: z.string(),
   poster_path: z.string().nullable(),
   first_air_date: z.string().nullable(),

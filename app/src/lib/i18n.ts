@@ -126,6 +126,14 @@ const ES: Record<string, string> = {
   "No movies match these filters.": "Ninguna película encaja con estos filtros.",
   "Filters search the whole catalogue, not just what's in theatres.":
     "Los filtros buscan en todo el catálogo, no solo en cartelera.",
+  // Lo compartido: el glifo del medio y las cifras del perfil
+  "Filmography": "Filmografía",
+  "Movie": "Película",
+  "TV series": "Serie",
+  "Movies watched": "Películas vistas",
+  "Movies in your list": "Películas en tu lista",
+  "watched {name}": "vio {name}",
+  "self: watched {name}": "viste {name}",
 
   // ---- Settings sheet ----
   "Theme": "Tema",
@@ -662,6 +670,7 @@ const ES: Record<string, string> = {
    entry too, so the fallback prints the word rather than the key. */
 const EN: Record<string, string> = {
   "tab: Announced": "Announced",
+  "self: watched {name}": "watched {name}",
   "activity: watched": "watched",
   "activity: Watched": "Watched",
   "activity: Rated": "Rated",

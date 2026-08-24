@@ -4,18 +4,26 @@ import { useQuery } from "@tanstack/react-query";
 import { User, X } from "lucide-react";
 import { useFocusTrap } from "@/ui/useFocusTrap";
 import { getPerson, tmdbImg } from "@/lib/tmdb";
-import { useLibrary } from "@/lib/library";
+import { useLibrary, useMovieLibrary } from "@/lib/library";
 import { useMyRatings } from "@/lib/ratings";
 import { dateLocale, isEs, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { useOpenTitle, useTitleIntent } from "@/lib/useOpenTitle";
 import { deriveStatus } from "@/domain/status";
-import type { PersonShow } from "@/lib/schemas";
+import { deriveMovieStatus } from "@/domain/movieStatus";
+import type { LibraryRow, PersonShow } from "@/lib/schemas";
+import { MediumGlyph } from "@/ui/MediumGlyph";
 import { posterBg } from "@/ui/posterBg";
 import { Stars } from "@/ui";
 
-/* Actor page (route /person/:id) — every TV credit of an actor, annotated with
+/* Actor page (route /person/:id) — every credit of a person, annotated with
    YOUR library status and rating so "have I seen them in something?" answers
-   itself. Reached from the detail sheet's cast rail. */
+   itself. Reached from the cast rail of either detail sheet, and desde 0069
+   también desde la dirección de una película.
+
+   UNA LISTA, los dos medios, con el glifo por fila (decisión de producto,
+   24-ago-2026). No dos secciones ni dos pestañas: la mayoría de la gente solo
+   tiene un medio, y quien tiene los dos —Villeneuve, Fincher— suele venir justo
+   a ver la carrera entera de una vez. */
 
 const STATUS_LABEL: Record<string, { en: string; es: string }> = {
   watching: { en: "Watching", es: "Viendo" },
@@ -24,6 +32,9 @@ const STATUS_LABEL: Record<string, { en: string; es: string }> = {
   upcoming: { en: "Upcoming", es: "Próxima" },
   finished: { en: "Finished", es: "Terminada" },
   stopped: { en: "Stopped", es: "Abandonada" },
+  // Los tres del cine (domain/movieStatus). "watchlist" y "upcoming" los
+  // comparte con las series y ya están arriba; solo falta el suyo propio.
+  watched: { en: "Watched", es: "Vista" },
 };
 
 function ShowRow({ s, status, myScore, onOpen }: {
@@ -33,9 +44,10 @@ function ShowRow({ s, status, myScore, onOpen }: {
   onOpen: () => void;
 }) {
   const esNames = useEsNames();
-  const name = locName(esNames, s.tmdb_id, s.name);
+  const name = locName(esNames, s.tmdb_id, s.name, s.kind);
   const art = tmdbImg(s.poster_path, "w92");
-  const intent = useTitleIntent(s.tmdb_id);
+  // Solo en series: lo que precarga son temporadas y episodios.
+  const intent = useTitleIntent(s.kind === "tv" ? s.tmdb_id : undefined);
   const lang = dateLocale() === "es-ES" ? "es" : "en";
   return (
     <div className="card mq-row" onClick={onOpen} {...intent}>
@@ -44,7 +56,10 @@ function ShowRow({ s, status, myScore, onOpen }: {
         <div className="poster-sheen" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{name}</div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <MediumGlyph kind={s.kind} size={12} />
+          <span className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{name}</span>
+        </div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>
           {[s.first_air_date?.slice(0, 4), s.character].filter(Boolean).join(" · ")}
         </div>
@@ -82,26 +97,72 @@ export default function PersonPage() {
     queryFn: () => getPerson(personId),
   });
   const { data: library = [] } = useLibrary();
+  const { data: movies = [] } = useMovieLibrary();
   const { data: ratings = [] } = useMyRatings();
 
-  const byTmdb = useMemo(() => new Map(library.map((s) => [s.tmdb_id, s])), [library]);
-  const scoreByTmdb = useMemo(() => new Map(ratings.map((r) => [r.titles.tmdb_id, r.score])), [ratings]);
+  /* Las claves llevan el medio: un id de TMDB solo es único dentro del suyo
+     (0067), y aquí conviven los dos en la misma lista — sin él, la película
+     1399 saldría marcada con el estado de la serie 1399. */
+  const byKey = useMemo(() => {
+    // LibraryRow, no LibraryShow ni LibraryMovie: de las dos solo se leen las
+    // columnas que comparten (los recuentos, stopped, el estado de TMDB), y el
+    // estado se deriva aquí abajo con la función de cada medio.
+    const m = new Map<string, LibraryRow>();
+    for (const s of library) m.set(`tv:${s.tmdb_id}`, s);
+    for (const x of movies) m.set(`movie:${x.tmdb_id}`, x);
+    return m;
+  }, [library, movies]);
+  const scoreByKey = useMemo(
+    () => new Map(ratings.map((r) => [`${r.titles.kind}:${r.titles.tmdb_id}`, r.score])),
+    [ratings],
+  );
 
   const shows = useMemo(() => {
     const rows = (data?.shows ?? []).map((s) => {
-      const entry = byTmdb.get(s.tmdb_id);
-      const status = entry ? (entry.stopped ? "stopped" : deriveStatus({
-        airedCount: entry.aired_count,
-        watchedCount: entry.watched_count,
-        tmdbStatus: entry.tmdb_status,
-      })) : null;
-      return { s, status, myScore: scoreByTmdb.get(s.tmdb_id) ?? null };
+      const key = `${s.kind}:${s.tmdb_id}`;
+      const entry = byKey.get(key);
+      /* `stopped` se mira solo en series: es una columna de library_entries
+         que existe para los dos medios, pero el cine no tiene ese estado —una
+         peli no se deja a medias— y una fila marcada en la época en que el
+         botón existía pintaría aquí una etiqueta que el modo cine eliminó. */
+      const status = !entry ? null
+        : entry.stopped && s.kind === "tv" ? "stopped"
+        : s.kind === "movie"
+          ? deriveMovieStatus({ airedCount: entry.aired_count, watchedCount: entry.watched_count })
+          : deriveStatus({
+              airedCount: entry.aired_count,
+              watchedCount: entry.watched_count,
+              tmdbStatus: entry.tmdb_status,
+            });
+      return { s, status, myScore: scoreByKey.get(key) ?? null };
     });
-    // Your shows first (they're why you're here), then by run length.
+    /* Lo tuyo primero (es a lo que vienes), y después las dos carreras
+       ENTRELAZADAS, no encadenadas.
+
+       El proxy manda los créditos ya ordenados, cada medio por su vara —una
+       serie por los episodios que hizo, una película por su popularidad— pero
+       los manda seguidos: primero todas las series, luego todas las películas.
+       Respetar ese orden tal cual enterraba la filmografía de cine de cualquiera
+       con veinte créditos de televisión, que es justo lo que esta pantalla
+       acaba de dejar de hacer.
+
+       Así que cada crédito compite por su POSICIÓN dentro de su propio medio: el
+       mejor de series junto al mejor de cine, el segundo con el segundo. Es la
+       única comparación honesta entre dos escalas que no comparten unidad, y
+       deja arriba lo que de verdad conoces de esa persona en cualquiera de los
+       dos. Empates, a lo más reciente. */
+    const rank = new Map<string, number>();
+    const seenPerKind: Record<string, number> = { tv: 0, movie: 0 };
+    for (const r of rows) {
+      const key = `${r.s.kind}:${r.s.tmdb_id}`;
+      rank.set(key, seenPerKind[r.s.kind]++);
+    }
+    const rankOf = (r: (typeof rows)[number]) => rank.get(`${r.s.kind}:${r.s.tmdb_id}`) ?? 0;
     return rows.sort((a, b) =>
       Number(Boolean(b.status)) - Number(Boolean(a.status)) ||
-      (b.s.episode_count ?? 0) - (a.s.episode_count ?? 0));
-  }, [data, byTmdb, scoreByTmdb]);
+      rankOf(a) - rankOf(b) ||
+      (b.s.first_air_date ?? "").localeCompare(a.s.first_air_date ?? ""));
+  }, [data, byKey, scoreByKey]);
 
   const person = data?.person;
   const photo = tmdbImg(person?.profile_path, "h632");
@@ -187,7 +248,7 @@ export default function PersonPage() {
           <section className="flex flex-col gap-3">
             <div className="mq-sechead">
               <div>
-                <h2 className="section-title">{tr("shows").replace(/^./, (c) => c.toUpperCase())}</h2>
+                <h2 className="section-title">{tr("Filmography")}</h2>
               </div>
             </div>
             <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
