@@ -40,23 +40,21 @@ export type Any = any;
 
 export type Precision = "day" | "month" | "q1" | "q2" | "q3" | "q4" | "year" | "tbd";
 
-/** Los siete formatos de IGDB (`release_dates.category`), sin interpretar. */
-const CATEGORY: Record<number, Precision> = {
-  0: "day", // YYYYMMMMDD
-  1: "month", // YYYYMMMM
-  2: "year", // YYYY
-  3: "q1",
-  4: "q2",
-  5: "q3",
-  6: "q4",
-  7: "tbd",
-};
-
-/** El formato en texto de la tabla nueva `date_formats`, para cuando IGDB
- *  retire el enum deprecado. Se consultan los dos y gana este (ver `precisionOf`). */
-const FORMAT_TEXT: Record<string, Precision> = {
-  YYYYMMMMDD: "day",
-  YYYYMMMM: "month",
+/** Los ocho formatos de `/date_formats`, LEÍDOS DE LA API (24-ago-2026), no de
+ *  la documentación.
+ *
+ *  Importa la distinción: la tabla de enums de api-docs.igdb.com llama a estos
+ *  dos `YYYYMMMMDD` y `YYYYMMMM`, con Ms de más. La API devuelve `YYYYMMDD` y
+ *  `YYYYMM`. Con los nombres de la documentación puestos, el mapa no acertaba
+ *  ni una fecha de día exacto —o sea casi todas— y cada juego salía como
+ *  'tbd' y sin fecha. Silksong, con nueve plataformas y salido en septiembre
+ *  de 2025, llegaba a la base sin un solo dato de lanzamiento.
+ *
+ *  Se indexa también por id porque `date_format.id` trae el mismo 0-7 y
+ *  sobrevive a que IGDB retoque las etiquetas. */
+const BY_FORMAT: Record<string, Precision> = {
+  YYYYMMDD: "day",
+  YYYYMM: "month",
   YYYY: "year",
   YYYYQ1: "q1",
   YYYYQ2: "q2",
@@ -65,18 +63,32 @@ const FORMAT_TEXT: Record<string, Precision> = {
   TBD: "tbd",
 };
 
+const BY_ID: Record<number, Precision> = {
+  0: "day",
+  1: "month",
+  2: "year",
+  3: "q1",
+  4: "q2",
+  5: "q3",
+  6: "q4",
+  7: "tbd",
+};
+
 /** El formato de una fila de release_dates.
  *
- *  IGDB está migrando sus enums a tablas: `category` (0-7) está marcado como
- *  deprecado en favor de `date_format`, que es una referencia a /date_formats
- *  y cuyo `format` es la misma etiqueta en texto. Se leen los dos y manda el
- *  nuevo, para que el día que el enum desaparezca esto no note nada. Si no
- *  llega ninguno, la fila no dice nada de su formato y no se la cree: 'tbd'. */
+ *  La fuente es `date_format`, la referencia a /date_formats. El campo viejo
+ *  `category` NO se consulta: IGDB lo marca como deprecado y, comprobado
+ *  contra la API, ya no lo devuelve ni aunque se pida — mantener una rama para
+ *  él sería una rama que no se ejecuta nunca y que hace creer que hay
+ *  respaldo donde no lo hay.
+ *
+ *  Si no llega el formato, la fila no dice cuánto de su fecha es cierto y no
+ *  se la cree: 'tbd'. */
 export function precisionOf(row: Any): Precision {
   const text = row?.date_format?.format;
-  if (typeof text === "string" && FORMAT_TEXT[text]) return FORMAT_TEXT[text];
-  const cat = row?.category;
-  if (typeof cat === "number" && CATEGORY[cat]) return CATEGORY[cat];
+  if (typeof text === "string" && BY_FORMAT[text]) return BY_FORMAT[text];
+  const id = row?.date_format?.id;
+  if (typeof id === "number" && BY_ID[id]) return BY_ID[id];
   return "tbd";
 }
 
@@ -94,22 +106,23 @@ const lastDayOfMonth = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).get
 export function windowEnd(row: Any, precision: Precision): string | null {
   if (precision === "tbd") return null;
 
-  let y = typeof row?.y === "number" ? row.y : null;
-  let m = typeof row?.m === "number" ? row.m : null;
-  let d = typeof row?.d === "number" ? row.d : null;
+  // El timestamp se lee SIEMPRE, no solo cuando falta el año: comprobado
+  // contra la API, IGDB no manda `d` ni siquiera en las fechas de día exacto
+  // —Silksong llega con y=2025, m=9 y sin día—, y el 4 de septiembre está solo
+  // aquí. Sin esto, una fecha exacta se degradaba al último día de su mes:
+  // veintiséis días de más, y el juego contaba como no salido casi un mes.
+  const stamp = typeof row?.date === "number" ? new Date(row.date * 1000) : null;
 
-  if (y === null && typeof row?.date === "number") {
-    const t = new Date(row.date * 1000);
-    y = t.getUTCFullYear();
-    m ??= t.getUTCMonth() + 1;
-    d ??= t.getUTCDate();
-  }
+  const y = typeof row?.y === "number" ? row.y : stamp?.getUTCFullYear() ?? null;
+  const m = typeof row?.m === "number" ? row.m : stamp ? stamp.getUTCMonth() + 1 : null;
+  const d = typeof row?.d === "number" ? row.d : stamp?.getUTCDate() ?? null;
+
   if (y === null) return null;
 
   switch (precision) {
     case "day":
-      // Un formato que dice "día exacto" sin día es una contradicción de la
-      // fuente; se degrada al final del mes, que es lo que sí se sabe.
+      // Sin día NI timestamp, la fuente se contradice: promete un día exacto
+      // y no lo trae. Se degrada al final del mes, que es lo único que queda.
       return m === null ? iso(y, 12, 31) : iso(y, m, d ?? lastDayOfMonth(y, m));
     case "month":
       return m === null ? iso(y, 12, 31) : iso(y, m, lastDayOfMonth(y, m));
@@ -327,6 +340,7 @@ export function gameRow(d: Any, ttb: Any = null) {
  *  juego que ya se había abierto entero. */
 export function gameSearchRow(r: Any) {
   const platformNames = platformIndex(r?.platforms);
+  const popularity = (r?.hypes ?? 0) + (r?.total_rating_count ?? 0);
   return {
     tmdb_id: r.id,
     kind: "game",
@@ -335,5 +349,9 @@ export function gameSearchRow(r: Any) {
     ...(r.cover?.image_id ? { poster_path: r.cover.image_id } : {}),
     ...(platformNames.size ? { platforms: [...platformNames.values()].sort() } : {}),
     ...(rating10(r) !== null ? { vote_average: rating10(r) } : {}),
+    // La búsqueda ya trae las dos señales porque rankSearch las necesita, así
+    // que se guardan de paso: un juego que solo se ha visto en un buscador
+    // llega a la biblioteca con su popularidad puesta, sin abrir la ficha.
+    ...(popularity > 0 ? { popularity } : {}),
   };
 }

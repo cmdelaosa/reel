@@ -22,30 +22,43 @@ import {
 
 /* ── precisionOf: el enum viejo, la tabla nueva, y ninguno ─────────────── */
 
-Deno.test("precisionOf prefiere date_format al enum deprecado", () => {
-  // IGDB está migrando enums a tablas y durante la transición manda los dos.
-  // Si ganara el viejo, el día que lo retiren todo pasaría a ser 'tbd' de
-  // golpe y el catálogo entero se quedaría sin fechas sin que nada fallara.
-  assertEquals(precisionOf({ category: 7, date_format: { format: "YYYYMMMMDD" } }), "day");
+Deno.test("los formatos son los que devuelve la API, no los de la documentación", () => {
+  // api-docs.igdb.com llama a estos dos YYYYMMMMDD y YYYYMMMM, con Ms de más.
+  // La API manda YYYYMMDD y YYYYMM. Con los nombres de la documentación, el
+  // formato más común de todos no se reconocía, cada juego salía 'tbd' y el
+  // catálogo entero se quedaba sin fechas — en silencio, que es lo peor.
+  assertEquals(precisionOf({ date_format: { id: 0, format: "YYYYMMDD" } }), "day");
+  assertEquals(precisionOf({ date_format: { id: 1, format: "YYYYMM" } }), "month");
+  assertEquals(precisionOf({ date_format: { id: 2, format: "YYYY" } }), "year");
+  assertEquals(precisionOf({ date_format: { id: 3, format: "YYYYQ1" } }), "q1");
+  assertEquals(precisionOf({ date_format: { id: 6, format: "YYYYQ4" } }), "q4");
+  assertEquals(precisionOf({ date_format: { id: 7, format: "TBD" } }), "tbd");
 });
 
-Deno.test("precisionOf cae al enum cuando no hay tabla", () => {
-  assertEquals(precisionOf({ category: 0 }), "day");
-  assertEquals(precisionOf({ category: 1 }), "month");
-  assertEquals(precisionOf({ category: 2 }), "year");
-  assertEquals(precisionOf({ category: 3 }), "q1");
-  assertEquals(precisionOf({ category: 6 }), "q4");
-  assertEquals(precisionOf({ category: 7 }), "tbd");
+Deno.test("si la etiqueta cambia, queda el id", () => {
+  // El id (0-7) es la misma numeración de siempre. Es el respaldo por si IGDB
+  // retoca los textos, que ya lo ha hecho una vez.
+  assertEquals(precisionOf({ date_format: { id: 0, format: "lo que sea" } }), "day");
+  assertEquals(precisionOf({ date_format: { id: 6 } }), "q4");
 });
 
 Deno.test("una fila que no dice su formato no se cree", () => {
   // Sin formato no hay forma de saber si el timestamp es un día real. 'tbd'
   // deja el juego sin fecha, que es peor que una fecha buena y mejor que una
-  // inventada.
+  // inventada. `category` entra aquí a propósito: está deprecado y la API ya
+  // no lo manda, así que una fila que solo lo trajera no es de fiar.
   assertEquals(precisionOf({ date: 1_800_000_000 }), "tbd");
+  assertEquals(precisionOf({ category: 0 }), "tbd");
   assertEquals(precisionOf({}), "tbd");
   assertEquals(precisionOf(null), "tbd");
 });
+
+/* Los formatos tal y como los devuelve la API, para no repetirlos en cada
+   fixture. La expansión de IGDB trae siempre el id junto al texto. */
+const DAY = { id: 0, format: "YYYYMMDD" };
+const Q2 = { id: 4, format: "YYYYQ2" };
+const Q4 = { id: 6, format: "YYYYQ4" };
+const TBD = { id: 7, format: "TBD" };
 
 /* ── windowEnd: el último día del periodo prometido ─────────────────────── */
 
@@ -70,12 +83,23 @@ Deno.test("un año se guarda como su último día", () => {
   assertEquals(windowEnd({ y: 2027 }, "year"), "2027-12-31");
 });
 
-Deno.test("Q4 no empieza en octubre", () => {
-  // El caso que da nombre al fichero. IGDB manda el 1 de octubre como
-  // timestamp de un "Q4 2027"; guardarlo daría el juego por salido tres meses
-  // antes de que exista. La fecha guardada tiene que ser el final del periodo.
-  const row = { y: 2027, m: 10, d: 1, date: 1_822_521_600, category: 6 };
-  assertEquals(windowEnd(row, precisionOf(row)), "2027-12-31");
+Deno.test("en un periodo ancho manda la etiqueta, no el timestamp", () => {
+  // El caso que da nombre al fichero. Una fila de "Q2 2027" trae un timestamp
+  // concreto —aquí el 1 de abril— que nadie ha prometido; creérselo daría el
+  // juego por salido tres meses antes de que exista. Lo que se guarda es el
+  // final del periodo que la etiqueta anuncia.
+  const row = { y: 2027, m: 4, d: 1, date: 1_806_796_800, date_format: Q2 };
+  assertEquals(windowEnd(row, precisionOf(row)), "2027-06-30");
+});
+
+Deno.test("una fecha de día exacto saca el día del timestamp", () => {
+  // Comprobado contra la API el 24-ago-2026: IGDB NO manda `d`, ni siquiera en
+  // las fechas de día exacto. Silksong llega con y=2025, m=9, sin día, y el 4
+  // de septiembre solo está en el unix. Leyendo únicamente y/m se guardaba el
+  // 30 de septiembre: veintiséis días de más, y el juego contando como no
+  // salido casi un mes después de estarlo.
+  const row = { y: 2025, m: 9, date: 1_756_944_000, date_format: DAY };
+  assertEquals(windowEnd(row, precisionOf(row)), "2025-09-04");
 });
 
 Deno.test("TBD no tiene fecha", () => {
@@ -92,9 +116,9 @@ Deno.test("sin y/m/d se recurre al timestamp", () => {
   assertEquals(windowEnd({ date: 1_804_809_600 }, "day"), "2027-03-12");
 });
 
-Deno.test("un 'día exacto' sin día se degrada al final del mes", () => {
-  // Contradicción de la fuente: el formato promete un día que no viene. Se
-  // guarda lo único que sí se sabe en vez de inventar el 1.
+Deno.test("un 'día exacto' sin día NI timestamp se degrada al final del mes", () => {
+  // Contradicción de la fuente: el formato promete un día que no viene por
+  // ningún lado. Se guarda lo único que sí se sabe en vez de inventar el 1.
   assertEquals(windowEnd({ y: 2027, m: 6 }, "day"), "2027-06-30");
 });
 
@@ -106,9 +130,9 @@ Deno.test("de cada plataforma se guarda la fecha más temprana", () => {
   // La misma PS5 sale en tres regiones con tres días. "¿Cuándo salió?" tiene
   // una sola respuesta y es la primera.
   const rows = [
-    { platform: 48, y: 2027, m: 3, d: 20, category: 0, region: 1 },
-    { platform: 48, y: 2027, m: 3, d: 12, category: 0, region: 2 },
-    { platform: 48, y: 2027, m: 4, d: 2, category: 0, region: 5 },
+    { platform: 48, y: 2027, m: 3, d: 20, date_format: DAY, region: 1 },
+    { platform: 48, y: 2027, m: 3, d: 12, date_format: DAY, region: 2 },
+    { platform: 48, y: 2027, m: 4, d: 2, date_format: DAY, region: 5 },
   ];
   assertEquals(platformReleases(rows, NAMES), {
     "PlayStation 5": { date: "2027-03-12", precision: "day" },
@@ -117,8 +141,8 @@ Deno.test("de cada plataforma se guarda la fecha más temprana", () => {
 
 Deno.test("cada plataforma lleva su propia precisión", () => {
   const rows = [
-    { platform: 48, y: 2027, m: 3, d: 12, category: 0 },
-    { platform: 130, y: 2027, category: 6 },
+    { platform: 48, y: 2027, m: 3, d: 12, date_format: DAY },
+    { platform: 130, y: 2027, date_format: Q4 },
   ];
   assertEquals(platformReleases(rows, NAMES), {
     "PlayStation 5": { date: "2027-03-12", precision: "day" },
@@ -129,12 +153,12 @@ Deno.test("cada plataforma lleva su propia precisión", () => {
 Deno.test("una plataforma desconocida se descarta, no se agrupa", () => {
   // Una fecha sin plataforma no se puede pintar ni filtrar; guardarla bajo un
   // "Otras" solo sirve para que un día alguien la cuente como si fuera algo.
-  const rows = [{ platform: 999, y: 2027, m: 1, d: 1, category: 0 }];
+  const rows = [{ platform: 999, y: 2027, m: 1, d: 1, date_format: DAY }];
   assertEquals(platformReleases(rows, NAMES), {});
 });
 
 Deno.test("platform expandido como objeto también vale", () => {
-  const rows = [{ platform: { id: 48, name: "PlayStation 5" }, y: 2027, m: 3, d: 12, category: 0 }];
+  const rows = [{ platform: { id: 48, name: "PlayStation 5" }, y: 2027, m: 3, d: 12, date_format: DAY }];
   assertEquals(platformReleases(rows, NAMES), {
     "PlayStation 5": { date: "2027-03-12", precision: "day" },
   });
@@ -144,8 +168,8 @@ Deno.test("una fila TBD no ocupa la plataforma", () => {
   // Sin esto, un "PS5: TBD" junto a un "PS5: 12 de marzo" podía dejar la
   // plataforma sin fecha según el orden en que llegaran.
   const rows = [
-    { platform: 48, category: 7 },
-    { platform: 48, y: 2027, m: 3, d: 12, category: 0 },
+    { platform: 48, date_format: TBD },
+    { platform: 48, y: 2027, m: 3, d: 12, date_format: DAY },
   ];
   assertEquals(platformReleases(rows, NAMES), {
     "PlayStation 5": { date: "2027-03-12", precision: "day" },
@@ -254,8 +278,8 @@ const DETAIL = {
   genres: [{ name: "Platform" }, { name: "Adventure" }],
   platforms: [{ id: 48, name: "PlayStation 5" }, { id: 130, name: "Nintendo Switch" }],
   release_dates: [
-    { platform: 130, y: 2027, m: 3, d: 12, category: 0 },
-    { platform: 48, y: 2027, category: 6 },
+    { platform: 130, y: 2027, m: 3, d: 12, date_format: DAY },
+    { platform: 48, y: 2027, date_format: Q4 },
   ],
   involved_companies: [{ developer: true, company: { name: "Team Cherry" } }],
   total_rating: 91.2,

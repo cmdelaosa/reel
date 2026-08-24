@@ -50,6 +50,7 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { type Any, apicalypseTerm, gameRow, gameSearchRow } from "./normalize.ts";
+import { GAME_TYPE_FILTER, rankSearch } from "./rank.ts";
 
 const IGDB = "https://api.igdb.com/v4";
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
@@ -203,7 +204,9 @@ const DETAIL_FIELDS = [
   "release_dates.d",
   "release_dates.m",
   "release_dates.y",
-  "release_dates.category",
+  // `date_format` y no `category`: el enum viejo está deprecado y, comprobado
+  // contra la API, ya no se devuelve ni pidiéndolo. La expansión trae el `id`
+  // junto al `format` sin pedirlo, que es el respaldo de normalize.ts.
   "release_dates.date_format.format",
   "involved_companies.developer",
   "involved_companies.publisher",
@@ -218,6 +221,10 @@ const DETAIL_FIELDS = [
   "external_games.external_game_source.name",
 ].join(",");
 
+/* `hypes` y `total_rating_count` no se pintan en ningún sitio: son lo que
+   rankSearch necesita para ordenar. Sin ellos la popularidad sale 0 en todas
+   las filas y el reordenado se queda en nada —silenciosamente, que es lo peor
+   de esa clase de fallo—. */
 const SEARCH_FIELDS = [
   "name",
   "summary",
@@ -225,7 +232,9 @@ const SEARCH_FIELDS = [
   "platforms.id",
   "platforms.name",
   "total_rating",
+  "total_rating_count",
   "rating",
+  "hypes",
 ].join(",");
 
 /* ─────────────────────────── Base de datos ──────────────────────────────── */
@@ -347,14 +356,17 @@ Deno.serve(async (req) => {
   try {
     // GET /search?q= — búsqueda por nombre.
     //
-    // `where version_parent = null` quita las ediciones (Deluxe, Game of the
-    // Year, Complete), que son filas propias en IGDB y llenarían la lista con
-    // cinco veces el mismo juego. Los DLC sí salen: son cosas que alguien
-    // juega y puede querer apuntar, y esconderlos sería decidir por él.
+    // Dos filtros en el WHERE, y los dos quitan cosas que no son juegos:
+    // `version_parent = null` las ediciones (Deluxe, Game of the Year), que
+    // son filas propias en IGDB y llenarían la lista con cinco veces lo mismo;
+    // GAME_TYPE_FILTER los Season, Update, Bundle y Mod. Que ese segundo vaya
+    // AQUÍ y no al recibir es la mitad del arreglo — ver rank.ts: filtrando
+    // después, "mario kart" se quedaba sin un solo resultado.
     //
-    // Los resultados se guardan como filas parciales, igual que hace
-    // tmdb-proxy con las suyas: así abrir la ficha luego ya encuentra algo, y
-    // la que ya estuviera entera no pierde lo que la búsqueda no trae.
+    // El orden lo pone rankSearch, no IGDB. Los resultados se guardan como
+    // filas parciales, igual que hace tmdb-proxy con las suyas: así abrir la
+    // ficha luego ya encuentra algo, y la que ya estuviera entera no pierde lo
+    // que la búsqueda no trae.
     if (path === "/search") {
       const q = (url.searchParams.get("q") ?? "").trim();
       if (!q) return json({ results: [] });
@@ -365,16 +377,22 @@ Deno.serve(async (req) => {
       const found = await igdb(
         "games",
         `search "${term}"; fields ${SEARCH_FIELDS}; ` +
-          `where version_parent = null; limit 20;`,
+          `where version_parent = null & ${GAME_TYPE_FILTER}; limit 20;`,
       );
       if (!found.length) return json({ results: [] });
 
-      const results = await upsertReturning(admin, found.map(gameSearchRow), "kind,tmdb_id");
-      // El upsert devuelve las filas en el orden de la base, no en el de
-      // relevancia que IGDB acaba de calcular. Se reordenan por el de IGDB,
-      // que es lo único que sabe cuál de los cinco Zelda buscaba la persona.
-      const rank = new Map(found.map((r: Any, i: number) => [r.id, i]));
-      results.sort((a: Any, b: Any) => (rank.get(a.tmdb_id) ?? 99) - (rank.get(b.tmdb_id) ?? 99));
+      const ranked = rankSearch(found, q);
+      const results = await upsertReturning(admin, ranked.map(gameSearchRow), "kind,tmdb_id");
+      // El upsert devuelve las filas en el orden de la base, no en el que
+      // acaba de decidir rankSearch, así que hay que reimponerlo. El `??
+      // Number.MAX_SAFE_INTEGER` es para lo que no debería pasar: una fila
+      // devuelta que no estaba en la petición se va al final en vez de
+      // colarse la primera, que es lo que hacía un 99 con listas de 20.
+      const order = new Map(ranked.map((r: Any, i: number) => [r.id, i]));
+      results.sort((a: Any, b: Any) =>
+        (order.get(a.tmdb_id) ?? Number.MAX_SAFE_INTEGER) -
+        (order.get(b.tmdb_id) ?? Number.MAX_SAFE_INTEGER)
+      );
 
       return json({ results }, 200, { "X-Cache": "MISS" });
     }
