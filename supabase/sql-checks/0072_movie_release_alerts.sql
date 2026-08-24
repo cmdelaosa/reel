@@ -1,13 +1,16 @@
--- Pruebas de pending_movie_release_alerts (0071), en SQL puro y contra una base
+-- Pruebas de pending_movie_release_alerts (0072), en SQL puro y contra una base
 -- de desarrollo. Se corren a mano:
 --
 --   supabase db reset
---   docker cp supabase/tests/0071_movie_release_alerts.test.sql supabase_db_tvtime:/tmp/t.sql
+--   docker cp supabase/sql-checks/0072_movie_release_alerts.sql supabase_db_tvtime:/tmp/t.sql
 --   docker exec supabase_db_tvtime psql -U postgres -f /tmp/t.sql
 --
--- FUERA de supabase/migrations a propósito: el CLI aplica en orden TODO lo que
--- encuentra ahí, así que un fichero de pruebas en esa carpeta se ejecutaría
--- contra producción en cada `db push`.
+-- Ni en supabase/migrations ni en supabase/tests, y las dos exclusiones tienen
+-- su motivo. En migrations el CLI aplica en orden TODO lo que encuentra, así
+-- que esto se ejecutaría contra producción en cada `db push`. Y supabase/tests
+-- es la carpeta que `supabase test db` corre esperando pgTAP: estas
+-- comprobaciones usan `assert` de plpgsql, no un plan, así que ahí saldrían
+-- como cero pruebas — silencio que se lee como aprobado.
 --
 -- No las ejecuta el CI —este proyecto no levanta Postgres ahí— pero existir por
 -- escrito es la diferencia entre una regla comprobada y una recordada: las seis
@@ -27,7 +30,7 @@ on conflict (id) do nothing;
 update public.profiles set country = 'ES'
  where id = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 
--- Cuatro películas, una por caso. El trigger de 0067 les pone su episodio.
+-- Cuatro películas, una por caso. synthetic_episode_sync les pone su episodio.
 insert into public.titles (tmdb_id, kind, name, first_air_date, release_dates) values
   (990001, 'movie', 'Hoy en cines', current_date,
    jsonb_build_object('ES', jsonb_build_object('theatrical', current_date::text))),
@@ -61,7 +64,7 @@ begin
     'las fechas son por país: DE no avisa a quien tiene ES';
 end $$;
 
--- 2. Las DOS fechas de una misma película avisan por separado. Es lo que 0071
+-- 2. Las DOS fechas de una misma película avisan por separado. Es lo que 0072
 --    existe para permitir, y lo que la clave vieja hacía imposible.
 do $$
 begin

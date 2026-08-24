@@ -132,7 +132,7 @@ const ES: Record<string, string> = {
   "TV series": "Serie",
   "Movies watched": "Películas vistas",
   "Movies in your list": "Películas en tu lista",
-  // Avisos de estreno de cine (0071)
+  // Avisos de estreno de cine (0072)
   "In theatres today": "Hoy en cines",
   "Streaming today": "Hoy en streaming",
   "A movie": "Una película",

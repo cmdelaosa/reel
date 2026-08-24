@@ -26,6 +26,33 @@ jobs:
       - run: npm ci
       - run: npm run check
 
+  # Dos ramas abiertas a la vez miran el último número de supabase/migrations y
+  # eligen el siguiente; la primera en fusionarse gana y la segunda no lo
+  # descubre hasta que `db push` falla contra PRODUCCIÓN con un 23505 sobre
+  # schema_migrations. Pasó el 24-ago-2026 con dos 0071 (videojuegos y avisos de
+  # cine). Aquí cuesta un segundo y falla en la PR, que es donde se arregla sin
+  # tocar nada aplicado.
+  migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Un número de migración, un fichero
+        run: |
+          dupes=$(ls supabase/migrations/*.sql \
+            | xargs -n1 basename \
+            | cut -d_ -f1 \
+            | sort | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "::error::Números de migración repetidos: $dupes"
+            ls supabase/migrations/*.sql | xargs -n1 basename | grep -E "^($(echo "$dupes" | paste -sd'|' -))_"
+            echo
+            echo "El que se renumera es el que NO esté aplicado en la base hosted:"
+            echo "un número ya registrado en supabase_migrations.schema_migrations"
+            echo "no se puede renombrar sin tocar a mano el registro de producción."
+            exit 1
+          fi
+          echo "sin repetidos: $(ls supabase/migrations/*.sql | wc -l | tr -d ' ') migraciones"
+
   # The Deno edge functions aren't covered by the app's tsc or vitest — type-check
   # them here so the unattended crons + importer can't ship a type error (audit
   # D2), and run whatever *_test.ts they carry. Function logic worth testing goes

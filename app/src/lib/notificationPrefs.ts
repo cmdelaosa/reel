@@ -40,7 +40,7 @@ export const NOTIFICATION_TYPES: readonly NotificationTypeSpec[] = [
   /* Propia, y no un reaprovechamiento de la de arriba: quien lleva una lista de
      películas y ninguna serie querría esta encendida y aquella no, y una casilla
      rotulada "Nuevos episodios" que además gobernara el cine estaría mintiendo
-     sobre lo que hace. Mismos valores por defecto (0071). */
+     sobre lo que hace. Mismos valores por defecto (0072). */
   { type: "movie_release", label: "Movie releases", sub: "When a movie on your list reaches cinemas or streaming", channels: ["inapp", "email"], defaults: { inapp: true, email: false } },
   // Email ON by default — a friend request is rare, personal, and useless to
   // learn about a week later, which is exactly what mail is for.
