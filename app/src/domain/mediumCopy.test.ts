@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { historyLines, showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
+import { addedList, historyLines, showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
 
-/* La regla que estas pruebas sostienen es una sola, y es la que el episodio
-   sintético de 0067 pone en peligro cada vez que alguien toca estas pantallas:
-   una película nunca se cuenta por episodios, por mucho que por debajo tenga
-   uno. */
+/* La regla que estas pruebas sostienen es una sola, y es la que los episodios
+   sintéticos de 0067 y 0071 ponen en peligro cada vez que alguien toca estas
+   pantallas: ni una película ni un videojuego se cuentan por episodios, por
+   mucho que por debajo tengan uno.
+
+   La segunda, que llegó con los juegos (0074): el mismo watch_event no se dice
+   con las mismas palabras en los tres medios. */
 
 describe("watchedPhrase", () => {
   it("una serie se cuenta por episodios", () => {
@@ -13,6 +16,24 @@ describe("watchedPhrase", () => {
 
   it("una película se cuenta entera", () => {
     expect(watchedPhrase("movie")).toBe("whole-title");
+  });
+
+  it("un juego no se ve: se termina", () => {
+    // Mismo watch_event que en cine, otra frase. Si esto volviera a
+    // "whole-title", el muro publicaría "Vio Silksong" — la etiqueta prestada
+    // que 0071 se negó a publicar.
+    expect(watchedPhrase("game")).toBe("whole-title-finished");
+  });
+});
+
+describe("addedList", () => {
+  it("series y cine añaden a la watchlist", () => {
+    expect(addedList("tv")).toBe("watchlist");
+    expect(addedList("movie")).toBe("watchlist");
+  });
+
+  it("un juego se añade a los pendientes, que es como se llama su cubo", () => {
+    expect(addedList("game")).toBe("backlog");
   });
 });
 
@@ -31,6 +52,11 @@ describe("showsEpisodeCount", () => {
     expect(showsEpisodeCount("movie", 3)).toBe(false);
     expect(showsEpisodeCount("movie", 1)).toBe(false);
   });
+
+  it("un juego tampoco, por lo mismo", () => {
+    expect(showsEpisodeCount("game", 3)).toBe(false);
+    expect(showsEpisodeCount("game", 1)).toBe(false);
+  });
 });
 
 describe("historyLines", () => {
@@ -41,5 +67,11 @@ describe("historyLines", () => {
   it("en una película manda ella, y debajo el estudio", () => {
     // Nunca "episode-name": en una película es una copia de su propio título.
     expect(historyLines("movie")).toEqual({ headline: "title", caption: "studio" });
+  });
+
+  it("en un juego manda él, y debajo el desarrollador", () => {
+    // `network` en un juego es el estudio que lo hizo (normalize.ts), así que
+    // la misma caption vale sin cambiar de columna.
+    expect(historyLines("game")).toEqual({ headline: "title", caption: "studio" });
   });
 });

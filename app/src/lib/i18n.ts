@@ -106,6 +106,8 @@ const ES: Record<string, string> = {
   "Play state": "En qué punto estás",
   "Time played": "Tiempo jugado",
   "Hours played": "Horas jugadas",
+  "Games finished": "Juegos terminados",
+  "Games in your list": "Juegos en tu lista",
   "hours": "horas",
   "of {total}": "de {total}",
   "Mark finished": "Marcar terminado",
@@ -396,6 +398,16 @@ const ES: Record<string, string> = {
   "self: rated {name}": "puntuaste {name}",
   "self: added {name} to their watchlist": "añadiste {name} a tu lista",
   "self: watched {eps} of {name}": "viste {eps} de {name}",
+  /* Los juegos (0074). El evento por debajo es el MISMO watch_event del
+     episodio sintético que en cine, y aun así la frase es otra: lo que ese
+     evento significa en un juego es que te salieron los créditos, no que lo
+     hayas visto. Y la lista a la que se añade se llama "pendientes", que es el
+     nombre del cubo de la biblioteca — decirle "lista" a secas obligaría a
+     recordar cuál. */
+  "finished {name}": "terminó {name}",
+  "self: finished {name}": "terminaste {name}",
+  "added {name} to their backlog": "añadió {name} a sus pendientes",
+  "self: added {name} to their backlog": "añadiste {name} a tus pendientes",
   // Reactions on those rows (0058)
   "React": "Reaccionar",
   "Reaction": "Reacción",
@@ -710,6 +722,8 @@ const EN: Record<string, string> = {
   "self: rated {name}": "rated {name}",
   "self: added {name} to their watchlist": "added {name} to your watchlist",
   "self: watched {eps} of {name}": "watched {eps} of {name}",
+  "self: finished {name}": "finished {name}",
+  "self: added {name} to their backlog": "added {name} to your backlog",
 };
 
 /** Dictionaries by language. */
@@ -812,8 +826,12 @@ export function locName(
   esNames: Map<string, string>,
   tmdbId: number | string | null | undefined,
   fallback: string,
-  kind: "tv" | "movie" = "tv",
+  kind: "tv" | "movie" | "game" = "tv",
 ): string {
   if (!isEs() || tmdbId == null) return fallback;
+  // 'game' se acepta y nunca acierta: name_es lo llena tmdb-proxy (0046) y IGDB
+  // no tiene traducciones, así que un juego cae siempre al nombre original. Se
+  // admite igualmente para que las listas mezcladas —el muro, el historial—
+  // llamen a locName con el kind de la fila sin ramificar antes.
   return esNames.get(`${kind}:${Number(tmdbId)}`) ?? fallback;
 }

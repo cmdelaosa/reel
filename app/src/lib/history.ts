@@ -13,10 +13,11 @@ export const historyRowSchema = z.object({
   episode_id: z.string().uuid(),
   title_id: z.string().uuid(),
   tmdb_id: z.number().int(),
-  /* El medio (0069). Opcional por lo de siempre: el frontend se despliega
-     solo al mergear y la migración va a mano, así que hay una ventana en la
-     que la columna no existe todavía. Sin ella se lee como serie. */
-  kind: z.enum(["tv", "movie"]).optional().default("tv"),
+  /* El medio (0069; los juegos, 0074). Opcional por lo de siempre: el frontend
+     se despliega solo al mergear y la migración va a mano, así que hay una
+     ventana en la que la columna no existe todavía. Sin ella se lee como
+     serie. */
+  kind: z.enum(["tv", "movie", "game"]).optional().default("tv"),
   show_name: z.string(),
   poster_path: z.string().nullable(),
   network: z.string().nullable(),
