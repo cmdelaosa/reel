@@ -5,8 +5,8 @@ import { useFriendships } from "@/lib/friends";
 import { useEventReactions } from "@/lib/reactions";
 import { byEvent, type ReactionRow } from "@/domain/reactions";
 import { relativeTime } from "@/domain/time";
-import { showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
-import { tmdbImg } from "@/lib/tmdb";
+import { addedList, showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
+import { thumbArt } from "@/lib/artwork";
 import { dateLocale, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useOpenTitle } from "@/lib/useOpenTitle";
@@ -59,10 +59,11 @@ function fill(s: string, nodes: Record<string, React.ReactNode>): React.ReactNod
    away with one verb ("watched"), Spanish does not ("vio" / "viste"). */
 function phrase(a: ActivityItem, titleName: string, isMe: boolean): React.ReactNode {
   const name = <b style={{ fontWeight: 700 }}>{titleName}</b>;
-  // Solo cuando la frase lleva episodios: en cine no hay rango que componer, y
-  // construirlo para tirarlo deja el código afirmando justo encima lo que la
-  // rama de abajo niega.
-  const eps = watchedPhrase(a.kind) === "with-episodes"
+  const shape = watchedPhrase(a.kind);
+  // Solo cuando la frase lleva episodios: ni en cine ni en juegos hay rango que
+  // componer, y construirlo para tirarlo deja el código afirmando justo encima
+  // lo que la rama de abajo niega.
+  const eps = shape === "with-episodes"
     && a.season_number != null && a.episode_number != null && (
       <b style={{ fontWeight: 700 }}>{epRange(a)}</b>
     );
@@ -70,16 +71,28 @@ function phrase(a: ActivityItem, titleName: string, isMe: boolean): React.ReactN
     case "rated":
       return fill(tr(isMe ? "self: rated {name}" : "rated {name}"), { name });
     case "added":
-      return fill(
-        tr(isMe ? "self: added {name} to their watchlist" : "added {name} to their watchlist"),
-        { name },
-      );
+      /* La lista tiene otro nombre en cada medio: se añade a la watchlist una
+         serie o una película, y a los PENDIENTES un juego — que es como se
+         llama su cubo en la biblioteca. Cuál toca lo decide domain/mediumCopy. */
+      return addedList(a.kind) === "backlog"
+        ? fill(
+            tr(isMe ? "self: added {name} to their backlog" : "added {name} to their backlog"),
+            { name },
+          )
+        : fill(
+            tr(isMe ? "self: added {name} to their watchlist" : "added {name} to their watchlist"),
+            { name },
+          );
     case "watched":
-      /* Una película se ve entera y de una vez: no hay un "S1·E1 de" que
-         anteponerle, y el episodio sintético que la sostiene por debajo (0067)
-         no es algo que nadie quiera leer. Cuál de las dos frases toca lo decide
+      /* Una película se ve entera y de una vez, y un juego ni siquiera se ve:
+         se termina. En los dos casos no hay un "S1·E1 de" que anteponerle, y el
+         episodio sintético que los sostiene por debajo (0067, 0071) no es algo
+         que nadie quiera leer. Cuál de las tres frases toca lo decide
          domain/mediumCopy, que es donde está probado. */
-      if (watchedPhrase(a.kind) === "whole-title") {
+      if (shape === "whole-title-finished") {
+        return fill(tr(isMe ? "self: finished {name}" : "finished {name}"), { name });
+      }
+      if (shape === "whole-title") {
         return fill(tr(isMe ? "self: watched {name}" : "watched {name}"), { name });
       }
       return fill(tr(isMe ? "self: watched {eps} of {name}" : "watched {eps} of {name}"), { eps, name });
@@ -187,14 +200,16 @@ export function FriendActivityCard() {
   if (items.length === 0) return null;
 
   const openFriend = (id: string) => navigate(`/friend/${id}`);
-  /* Cada medio abre su ficha: ?movie= la de cine, ?title= la de series. Un id de
-     TMDB solo es único dentro del suyo (0067), así que mandar los dos por el
-     mismo parámetro abriría la otra cosa con el mismo número. */
+  /* Cada medio abre su ficha: ?title= la de series, ?movie= la de cine y ?game=
+     la de juegos. Un id solo es único dentro de su medio —y el de un juego ni
+     siquiera es de TMDB, es de IGDB (0071)—, así que mandarlos todos por el
+     mismo parámetro abriría otra cosa con el mismo número. */
   const openEvent = (a: ActivityItem) => {
-    if (a.kind !== "movie") return openTitle(a.tmdb_id);
+    if (a.kind === "tv") return openTitle(a.tmdb_id);
+    const param = a.kind === "movie" ? "movie" : "game";
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set("movie", String(a.tmdb_id));
+      next.set(param, String(a.tmdb_id));
       return next;
     });
   };
@@ -208,7 +223,11 @@ export function FriendActivityCard() {
       </div>
       <div className="card" style={{ padding: 6 }}>
         {shown.map((a) => {
-          const art = tmdbImg(a.poster_path, "w92");
+          /* La carátula sale de una fuente distinta según el medio: un juego
+             guarda un hash de IGDB donde series y cine guardan una ruta de
+             TMDB (0071). thumbArt lo resuelve; tmdbImg a secas devolvía una URL
+             que responde 404 en silencio. */
+          const art = thumbArt(a.kind, a.poster_path);
           const titleName = locName(esNames, a.tmdb_id, a.title_name, a.kind);
           const isMe = a.friend_id === me;
           const flashed = Boolean(a.event_key) && a.event_key === flashKey;

@@ -109,11 +109,11 @@ const activitySchema = z.array(
     // enum so either side can deploy first without breaking the feed.
     verb: z.enum(activityVerbs),
     tmdb_id: z.number().int(),
-    /* El medio (0069). Opcional para que un cliente desplegado antes de la
-       migración siga pintando la lista — se lee como serie, que es lo que
-       había — y porque el frontend sale solo al mergear mientras la
-       migración va a mano. */
-    kind: z.enum(["tv", "movie"]).optional().default("tv"),
+    /* El medio (0069; los juegos, 0074). Opcional para que un cliente
+       desplegado antes de la migración siga pintando la lista — se lee como
+       serie, que es lo que había — y porque el frontend sale solo al mergear
+       mientras la migración va a mano. */
+    kind: z.enum(["tv", "movie", "game"]).optional().default("tv"),
     title_name: z.string(),
     poster_path: z.string().nullable(),
     score: z.number().int().nullable(),
