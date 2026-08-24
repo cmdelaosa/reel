@@ -49,11 +49,33 @@ export const watchedPhrase = (kind: Medium): WatchedPhrase =>
 /** Cómo se llama la lista a la que se añade algo, que no es la misma en los tres
  *  medios: series y cine tienen "watchlist" y los juegos, "pendientes" — que es
  *  el nombre del cubo que ya existe en la biblioteca (Backlog). Decirle
- *  watchlist a una lista de juegos es decir "ver" de algo que se juega. */
-export type AddedList = "watchlist" | "backlog";
+ *  watchlist a una lista de juegos es decir "ver" de algo que se juega.
+ *
+ *  Y desde 0077 hay una TERCERA, que no la decide el medio sino la fila: un
+ *  juego marcado "Lo tengo" (`library_entries.owned`, 0076) no está en
+ *  Pendientes — ese estado existe justo para sacarlo de ese cubo—, así que de
+ *  él se dice que fue a su BIBLIOTECA. Es lo que pasa con todo lo que entra
+ *  por la importación de Steam. */
+export type AddedList = "watchlist" | "backlog" | "library";
 
+/** Lo que se puede saber mirando SOLO el medio. Se queda porque es el respaldo
+ *  de `addedListOf`: un cliente nuevo contra un servidor viejo no recibe la
+ *  lista y esto es lo que había. */
 export const addedList = (kind: Medium): AddedList =>
   kind === "game" ? "backlog" : "watchlist";
+
+/** La lista de una fila del muro.
+ *
+ *  Manda lo que diga el servidor, y no es pereza: quien sabe si la fila estaba
+ *  marcada como "Lo tengo" es la consulta que la leyó, y recalcularlo aquí
+ *  significaría mandar `owned` en cada fila del muro para volver a aplicar la
+ *  misma regla — dos copias de una decisión que un día dirán cosas distintas.
+ *  El respaldo es para el hueco entre desplegar el frontend y aplicar la
+ *  migración, en el que la columna no llega. */
+export const addedListOf = (kind: Medium, fromServer?: string | null): AddedList =>
+  fromServer === "watchlist" || fromServer === "backlog" || fromServer === "library"
+    ? fromServer
+    : addedList(kind);
 
 /** Si la fila puede decir "· N episodios" bajo el texto. Ni una película ni un
  *  juego tienen varios episodios que agrupar, así que el recuento nunca es suyo

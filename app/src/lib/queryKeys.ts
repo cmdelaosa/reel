@@ -37,6 +37,10 @@ export const qk = {
   watchHeatmap: ["watchHeatmap"] as const,
   notifications: ["notifications"] as const,
   friendActivity: (limit: number) => ["friendActivity", limit] as const,
+  /* El detalle de una fila plegada del muro (0077). Por clave de evento, que
+     es lo que identifica esa fila en todo lo demás — las reacciones ya viajan
+     por ella. */
+  addedBatch: (eventKey: string) => ["addedBatch", eventKey] as const,
   /* The whole key list, sorted — the cache key has to BE the query's input.
      Keyed by a digest of it (the newest event + the count) instead, two pages
      that shared a head and a length served each other's reactions, and a row

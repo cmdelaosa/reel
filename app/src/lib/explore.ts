@@ -129,9 +129,55 @@ const activitySchema = z.array(
     to_season: z.number().int().nullable().optional(),
     to_episode: z.number().int().nullable().optional(),
     ep_count: z.number().int().optional(),
+    /* 0077: lo añadido viene plegado por (persona, día, lista). `added_count`
+       es cuántas cosas hay en el grupo —1 en una fila normal— y `added_list`
+       dónde cayeron, que desde 0076 ya no lo decide el medio (un juego con
+       "Lo tengo" va a la biblioteca, no a los pendientes). Opcionales, como
+       todo lo que este esquema fue ganando: un frontend desplegado antes que
+       la migración pinta la fila de siempre en vez de romperse. */
+    added_count: z.number().int().nullable().optional(),
+    added_list: z.enum(["watchlist", "backlog", "library"]).nullable().optional(),
   }),
 );
 export type ActivityItem = z.infer<typeof activitySchema>[number];
+
+/* Los títulos que hay detrás de una fila plegada. Se piden al desplegarla y no
+   viajan en el muro: treinta filas con su lista entera dentro pueden ser miles
+   de títulos para pintar tres frases, y lo normal es que nadie despliegue
+   ninguna. */
+const addedBatchSchema = z.array(
+  z.object({
+    tmdb_id: z.number().int(),
+    kind: z.enum(["tv", "movie", "game"]),
+    name: z.string(),
+    poster_path: z.string().nullable(),
+    added_at: z.string(),
+  }),
+);
+export type AddedBatchItem = z.infer<typeof addedBatchSchema>[number];
+
+/** El detalle de un grupo del muro, por su clave de evento.
+ *
+ *  La clave lleva dentro de quién y de qué día es, y el servidor la parte: es
+ *  el mismo identificador que 0058 usa para las reacciones, así que no hace
+ *  falta una segunda forma de nombrar la misma fila. Quién puede leerla lo
+ *  decide la RLS de `library_entries`, no esta consulta.
+ *
+ *  `enabled` es lo que la hace perezosa: no se pide hasta que alguien despliega
+ *  la fila, y `staleTime` en infinito porque lo añadido un día pasado ya no
+ *  cambia. */
+export function useAddedBatch(eventKey: string | null) {
+  return useQuery({
+    queryKey: qk.addedBatch(eventKey ?? ""),
+    enabled: Boolean(eventKey),
+    staleTime: Infinity,
+    queryFn: async (): Promise<AddedBatchItem[]> => {
+      const { data, error } = await supabase.rpc("rpc_added_batch", { p_event_key: eventKey });
+      if (error) throw error;
+      return addedBatchSchema.parse(data);
+    },
+  });
+}
 
 /** The circle's wall. Deliberately ungated: the RPC builds the circle from
  *  `friendships` itself, so asking the caller to prove it has friends first
