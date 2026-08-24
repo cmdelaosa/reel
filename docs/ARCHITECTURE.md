@@ -36,8 +36,8 @@ reel/
 │   └── …vite config, tsconfig, eslint, vitest
 ├── supabase/               created P0-C4
 │   ├── migrations/         numbered SQL, never edited after merge — always add a new one
-│   ├── functions/          tmdb-proxy/, episode-refresh/, alerts/, importer/,
-│   │                       export/, friend-request-email/
+│   ├── functions/          tmdb-proxy/, igdb-proxy/, episode-refresh/, alerts/,
+│   │                       importer/, export/, friend-request-email/
 │   └── seed/               dev fixtures
 └── scripts/                offline tooling (tvtime-import/)
 ```
@@ -85,12 +85,14 @@ invites (
   UPDATE grant on `profiles`, so the gate can't be self-served.
   Profiles of un-invited users stay locked out by app routing **and** RLS on user-data tables.
 
-### Metadata cache (TMDB mirror — public read, service-role write)
+### Metadata cache (TMDB + IGDB mirror — public read, service-role write)
 
 ```sql
 titles (
-  id uuid pk, tmdb_id int unique not null,
-  kind text not null check (kind in ('tv','movie')),   -- movie-ready, tv-only UI
+  id uuid pk, tmdb_id int not null,        -- id en la fuente de SU medio: TMDB para tv/movie,
+                                           -- IGDB para game. Unico solo junto a kind (0067/0069):
+                                           -- /tv/1399 y /movie/1399 son cosas distintas.
+  kind text not null check (kind in ('tv','movie','game')),
   name text not null, overview text,
   poster_path text, backdrop_path text,
   first_air_date date, status text,        -- TMDB: Returning Series | Ended | Canceled | …
@@ -344,6 +346,35 @@ documented in [DETAIL-PERFORMANCE.md](DETAIL-PERFORMANCE.md).
   cache, in rounds until `remaining` is 0).
 - Network logos: static SVGs in `app/public/logos/` (already sourced in the prototype —
   Netflix/Apple/Disney official vectors, styled wordmark tiles for the rest).
+
+## IGDB integration (videojuegos)
+
+- TMDB no tiene juegos. La fuente es **IGDB**, que es de Twitch: la
+  autenticación es *client credentials* con un Client ID y un Client Secret del
+  PROYECTO (`IGDB_CLIENT_ID` / `IGDB_CLIENT_SECRET`), no un login por usuario.
+  Nadie ve nunca a Twitch. El token que devuelve dura ~60 dias y se cachea en el
+  isolate.
+- Edge Function `igdb-proxy`: `GET /search?q=`, `GET /game/:igdbId`. Escribe
+  filas de `titles` con `kind='game'` y devuelve las cacheadas, igual que
+  tmdb-proxy. La traduccion del payload vive en `normalize.ts`, con tests que
+  corre el job `edge` de CI.
+- **El limite son 4 req/s por Client ID, compartidas entre todos los usuarios**
+  (en TMDB el limite es holgado y de facto por usuario). La caché de `titles`
+  no es una optimizacion aqui: es la unica forma de servir a mas de cuatro
+  personas a la vez.
+- Un juego, como una pelicula, mantiene un episodio sintetico S1E1 (trigger
+  `synthetic_episode_sync`, migracion 0069) para no ramificar las ~27 funciones
+  que leen `watch_events`. Las cinco superficies de series que ese episodio
+  podria contaminar —calendario, avisos por correo, historial, muro y
+  estadisticas— ya filtran `t.kind = 'tv'` desde que el cine paso por ahi, asi
+  que los juegos quedan fuera sin tocar nada.
+- Fechas: IGDB devuelve un timestamp concreto incluso para un "Q4 2027", asi que
+  `titles.release_precision` guarda cuanto de `first_air_date` es real
+  (`day | month | q1..q4 | year | tbd`) y la fecha guardada es el ULTIMO dia del
+  periodo anunciado — de los dos errores posibles, "todavia no" se corrige solo
+  y "ya salio" manda a alguien a buscar algo que no existe.
+- Imagenes: `images.igdb.com/igdb/image/upload/t_{size}/{hash}.jpg`, y
+  `poster_path` guarda el hash pelado, no una ruta como en TMDB.
 
 ## UI parity map (prototype file → production home)
 

@@ -36,7 +36,7 @@ linked hosted DB.
 ## 2. Deploy the edge functions
 
 ```bash
-supabase functions deploy tmdb-proxy episode-refresh alerts importer export \
+supabase functions deploy tmdb-proxy igdb-proxy episode-refresh alerts importer export \
   friend-request-email
 ```
 
@@ -53,6 +53,8 @@ until the function lands, which pg_net swallows silently).
 
 ```bash
 supabase secrets set TMDB_API_KEY=...        # TMDB v4 read access token (or v3 key)
+supabase secrets set IGDB_CLIENT_ID=...       # Twitch app Client ID  (videojuegos)
+supabase secrets set IGDB_CLIENT_SECRET=...   # Twitch app Client Secret
 supabase secrets set RESEND_API_KEY=...       # Resend API key
 supabase secrets set RESEND_FROM="Reel <alerts@yourdomain.com>"   # verified domain
 ```
@@ -64,6 +66,20 @@ API settings page as the key) goes in an `Authorization` header, a **v3 key**
 Prefer the token — a credential in a URL is one failed connection away from
 being quoted back in an error message, which is how this one reached both the
 browser and `job_runs`. Swapping the secret is enough; nothing else changes.
+
+**IGDB (videojuegos).** IGDB es de Twitch y su API va por *client credentials*:
+un solo par de credenciales del PROYECTO, no un login por usuario. Se sacan una
+vez en [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) — cuenta
+de Twitch con 2FA activado, "Register Your Application", **OAuth Redirect URL**
+`http://localhost` (IGDB no la usa, pero el formulario la exige) y **Client
+Type: Confidential**, que es lo que habilita el botón de generar el secreto.
+Sin estos dos secretos `igdb-proxy` responde 500 a todo y el modo de juegos se
+queda sin catálogo; el resto de la app no se entera.
+
+El límite de IGDB son **4 peticiones por segundo por Client ID**, compartidas
+entre todos los usuarios de la app — no por usuario, como en TMDB. Por eso
+`igdb-proxy` sirve siempre de la caché de `titles` y solo va a la red cuando no
+hay fila o tiene más de 24 h.
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected
 automatically. Without `RESEND_FROM` the alerts function **skips email** (it will
