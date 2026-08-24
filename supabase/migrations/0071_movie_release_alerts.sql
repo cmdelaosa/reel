@@ -17,6 +17,14 @@
 -- La clave gana una tercera columna con QUÉ se avisó. 'episode' para las series
 -- (el valor por defecto, así que las filas que ya existen quedan donde estaban
 -- sin tocarlas), 'theatrical' y 'digital' para los dos estrenos de una película.
+--
+-- ⚠ ESTA MIGRACIÓN Y functions/alerts VAN JUNTAS, sin día de por medio.
+-- Es la primera de este proyecto en la que el orden no salva nada: entre las
+-- dos, el alerts viejo hace upsert con onConflict "user_id,episode_id" y ya no
+-- hay ninguna restricción única con esa forma, así que la corrida falla entera;
+-- y al revés, el alerts nuevo pide una columna `event` que aún no existe. Si el
+-- cron diario cae en esa ventana, sus avisos no se sellan y su ventana de 24 h
+-- expira: se pierden. Despliega las dos seguidas (ver docs/DEPLOY.md).
 
 alter table public.notifications_sent
   add column if not exists event text not null default 'episode';
@@ -26,7 +34,9 @@ comment on column public.notifications_sent.event is
   '0071). Una película tiene un solo episodio sintético y dos estrenos, así que '
   'sin esto el segundo aviso se perdía como duplicado del primero.';
 
-alter table public.notifications_sent drop constraint notifications_sent_pkey;
+-- IF EXISTS como las dos de arriba: reaplicar la migración a mano contra una
+-- base local es algo que se hace, y fallar a medias es peor que no hacer nada.
+alter table public.notifications_sent drop constraint if exists notifications_sent_pkey;
 alter table public.notifications_sent
   add constraint notifications_sent_pkey primary key (user_id, episode_id, event);
 
@@ -84,8 +94,13 @@ as $$
       t.tmdb_id,
       t.name,
       -- El episodio sintético: la fila con la que se sella el aviso, y la misma
-      -- que marca la película como vista.
-      (select e.id from public.episodes e where e.title_id = t.id limit 1) as episode_id,
+      -- que marca la película como vista. Ordenado aunque el trigger de 0067
+      -- garantice uno solo: sin ORDER BY, dos filas (un importador, una
+      -- migración futura) darían un id distinto en cada plan, y el sello de una
+      -- corrida no valdría para la siguiente — aviso repetido y nada que lo
+      -- delate.
+      (select e.id from public.episodes e where e.title_id = t.id
+        order by e.season_number, e.episode_number, e.id limit 1) as episode_id,
       t.release_dates -> coalesce(nullif(p.country, ''), 'ES') as here
     from public.library_entries le
     join public.titles t on t.id = le.title_id

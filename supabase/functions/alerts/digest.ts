@@ -16,8 +16,10 @@ export interface Alertable {
   event: string;
   /** El tipo de notificación, que es también el de las preferencias. */
   type: "new_episode" | "movie_release";
-  /** Una línea para el correo. */
-  line: string;
+  /** El título, que en el correo va destacado. */
+  title: string;
+  /** El resto de la línea: el episodio, o qué estreno es. */
+  detail: string;
   payload: Record<string, unknown>;
 }
 
@@ -42,7 +44,11 @@ export const escapeHtml = (s: string) =>
 export function digestHtml(rows: Alertable[]): string {
   const blocks = groupByType(rows)
     .map(([type, list]) => {
-      const items = list.map((r) => `<li>${escapeHtml(r.line)}</li>`).join("");
+      // El título en negrita y el detalle detrás, como iba antes de que hubiera
+      // dos fuentes: quince líneas planas son bastante menos legibles.
+      const items = list
+        .map((r) => `<li><strong>${escapeHtml(r.title)}</strong> — ${escapeHtml(r.detail)}</li>`)
+        .join("");
       return `<p>${heading(type)}</p><ul>${items}</ul>`;
     })
     .join("");
@@ -51,7 +57,7 @@ export function digestHtml(rows: Alertable[]): string {
 
 export function digestText(rows: Alertable[]): string {
   const blocks = groupByType(rows)
-    .map(([type, list]) => `${heading(type)}\n${list.map((r) => `• ${r.line}`).join("\n")}`)
+    .map(([type, list]) => `${heading(type)}\n${list.map((r) => `• ${r.title} — ${r.detail}`).join("\n")}`)
     .join("\n\n");
   return `${blocks}\n\n— Reel`;
 }

@@ -53,7 +53,8 @@ const episodeAlertable = (r: Pending): Alertable => ({
   episode_id: r.episode_id,
   event: "episode",
   type: "new_episode",
-  line: `${r.show_name} — S${r.season_number} · E${r.episode_number}${r.episode_name ? ` “${r.episode_name}”` : ""}`,
+  title: r.show_name,
+  detail: `S${r.season_number} · E${r.episode_number}${r.episode_name ? ` “${r.episode_name}”` : ""}`,
   payload: {
     tmdb_id: r.tmdb_id,
     show_name: r.show_name,
@@ -71,7 +72,8 @@ const movieAlertable = (r: PendingMovie): Alertable => ({
   // Dos frases distintas, porque son dos cosas distintas que hacer: una te
   // manda al cine y la otra al sofá. Decir "ya está disponible" a las dos es
   // exactamente el error que 0069 se negó a cometer.
-  line: `${r.movie_name} — ${r.release_kind === "theatrical" ? "in theatres today" : "streaming today"}`,
+  title: r.movie_name,
+  detail: r.release_kind === "theatrical" ? "in theatres today" : "streaming today",
   payload: {
     tmdb_id: r.tmdb_id,
     movie_name: r.movie_name,
@@ -113,10 +115,18 @@ Deno.serve(async (req) => {
     admin.rpc("pending_new_episode_alerts"),
     admin.rpc("pending_movie_release_alerts"),
   ]);
-  const failure = episodes.error ?? movies.error;
-  if (failure) {
-    await logRun(false, { error: failure.message });
-    return new Response(JSON.stringify({ error: failure.message }), { status: 500 });
+  /* Una fuente caída no se lleva la otra por delante. Cada aviso tiene una
+     ventana de 24 h y el cron corre una vez al día: cortar la corrida entera
+     porque una de las dos consultas falló tira también los avisos que estaban
+     perfectamente, y esos no vuelven. Se avisa de lo que hay y el fallo queda
+     en el informe del run, que es donde se mira si algo dejó de salir. */
+  const failed = [
+    episodes.error ? `episodes: ${episodes.error.message}` : null,
+    movies.error ? `movies: ${movies.error.message}` : null,
+  ].filter(Boolean) as string[];
+  if (failed.length === 2) {
+    await logRun(false, { error: failed.join(" | ") });
+    return new Response(JSON.stringify({ error: failed.join(" | ") }), { status: 500 });
   }
   const episodeRows = (episodes.data ?? []) as Pending[];
   const movieRows = (movies.data ?? []) as PendingMovie[];
@@ -126,6 +136,10 @@ Deno.serve(async (req) => {
   ];
 
   const report = {
+    // Presente siempre, vacío cuando las dos fuentes respondieron: un informe
+    // con `sourceErrors` lleno dice que ese día faltó la mitad de los avisos
+    // aunque el resto saliera bien, y es donde se mira si algo dejó de salir.
+    sourceErrors: failed,
     pending: rows.length,
     pendingEpisodes: episodeRows.length,
     pendingMovies: movieRows.length,
@@ -201,6 +215,8 @@ Deno.serve(async (req) => {
   // Con el correo encendido en AL MENOS uno de los dos tipos; el digest luego
   // solo lleva las filas de los tipos que esa persona sí quiere por correo.
   const emailUsers = [...new Set(freshRows.filter(emailOn).map((r) => r.user_id))];
+  // Nadie con el correo encendido en un tipo del que hoy no hay nada: sin esto
+  // el informe los contaba como "se les dejó de enviar" algo que no existía.
   if (emailUsers.length > 0) {
     if (!resendKey || !EMAIL_FROM) {
       // Missing key or verified sender → in-app notifications still landed
