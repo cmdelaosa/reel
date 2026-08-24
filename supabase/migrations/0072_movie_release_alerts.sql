@@ -94,8 +94,10 @@ as $$
       t.tmdb_id,
       t.name,
       -- El episodio sintético: la fila con la que se sella el aviso, y la misma
-      -- que marca la película como vista. Ordenado aunque el trigger de 0067
-      -- garantice uno solo: sin ORDER BY, dos filas (un importador, una
+      -- que marca la película como vista. Ordenado aunque el trigger la
+      -- garantice única (synthetic_episode_sync, nacido en 0067 como
+      -- movie_episode_sync y ampliado a los juegos en 0071):
+      -- sin ORDER BY, dos filas (un importador, una
       -- migración futura) darían un id distinto en cada plan, y el sello de una
       -- corrida no valdría para la siguiente — aviso repetido y nada que lo
       -- delate.
@@ -129,7 +131,8 @@ as $$
   from events e
   where e.episode_id is not null
     -- La misma ventana de 24 h que las series, sobre el día del estreno leído
-    -- a medianoche UTC — la hora que el trigger de 0067 le pone al episodio
+    -- a medianoche UTC — la hora que synthetic_episode_sync (0067, ampliado
+    -- en 0071) le pone al episodio
     -- sintético, y la que cae en el día correcto en todo el huso CET.
     and (e.day::timestamp at time zone 'UTC') <= now()
     and (e.day::timestamp at time zone 'UTC') > now() - interval '24 hours'
