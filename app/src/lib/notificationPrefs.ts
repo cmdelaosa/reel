@@ -37,6 +37,11 @@ export interface NotificationTypeSpec {
 export const NOTIFICATION_TYPES: readonly NotificationTypeSpec[] = [
   // Email off: the digest covers a whole library, so opting in is the user's call.
   { type: "new_episode", label: "New episodes", sub: "Only shows you're watching or waiting for", channels: ["inapp", "email"], defaults: { inapp: true, email: false } },
+  /* Propia, y no un reaprovechamiento de la de arriba: quien lleva una lista de
+     películas y ninguna serie querría esta encendida y aquella no, y una casilla
+     rotulada "Nuevos episodios" que además gobernara el cine estaría mintiendo
+     sobre lo que hace. Mismos valores por defecto (0071). */
+  { type: "movie_release", label: "Movie releases", sub: "When a movie on your list reaches cinemas or streaming", channels: ["inapp", "email"], defaults: { inapp: true, email: false } },
   // Email ON by default — a friend request is rare, personal, and useless to
   // learn about a week later, which is exactly what mail is for.
   { type: "friend_request", label: "Friend requests", sub: "When someone adds you", channels: ["inapp", "email"], defaults: { inapp: true, email: true } },
