@@ -46,6 +46,9 @@ export const titleRowSchema = z.object({
   // migración) y nulas en series y en las películas sueltas.
   collection_id: z.number().int().nullable().optional(),
   collection_name: z.string().nullable().optional(),
+  // Fechas de estreno por país y tipo (0068), {"ES": {theatrical, digital}}.
+  // Null en series y en las películas que TMDB aún no fecha en ningún país.
+  release_dates: z.record(z.string(), z.record(z.string(), z.string())).nullable().optional(),
 });
 export type TitleRow = z.infer<typeof titleRowSchema>;
 
@@ -170,6 +173,22 @@ export const movieResponseSchema = z.object({
   episode_id: z.string().uuid().nullable(),
 });
 export type MovieResponse = z.infer<typeof movieResponseSchema>;
+
+/** Fila de rpc_movie_releases — un ESTRENO, no una película: la que tiene fecha
+ *  de cine y de streaming devuelve dos, con la misma marca de vista. */
+export const movieReleaseSchema = z.object({
+  title_id: z.string().uuid(),
+  tmdb_id: z.number().int(),
+  name: z.string(),
+  poster_path: z.string().nullable(),
+  genres: z.array(z.string()),
+  runtime: z.number().int().nullable(),
+  vote_average: z.number().nullable(),
+  release_kind: z.enum(["theatrical", "digital", "release"]),
+  release_at: z.string(),
+  watch_event_id: z.string().uuid().nullable(),
+});
+export type MovieRelease = z.infer<typeof movieReleaseSchema>;
 
 export const sagaResponseSchema = z.object({
   collection: z.object({ id: z.number().int(), name: z.string().nullable() }).nullable(),

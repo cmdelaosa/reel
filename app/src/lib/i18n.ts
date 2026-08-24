@@ -97,6 +97,35 @@ const ES: Record<string, string> = {
   "Writers": "Guion",
   "This film": "Esta película",
   "No movies yet — hit {key} and add one.": "Aún no hay películas — pulsa {key} y añade una.",
+  // Portada de cine
+  "Movie night pick": "La de esta noche",
+  "Your watchlist": "Tu lista",
+  "New to stream": "Nuevo en streaming",
+  "In theatres soon": "Pronto en cines",
+  "Nothing new on your services.": "Nada nuevo en tus plataformas.",
+  "No dated releases yet.": "Aún no hay estrenos con fecha.",
+  "Nothing pending — hit {key} and add a movie.": "Nada pendiente — pulsa {key} y añade una película.",
+  // Estrenos
+  "Releases": "Estrenos",
+  "My releases": "Mis estrenos",
+  "In theatres": "En cines",
+  /* Ya existe "Announced" con otro sentido: en la ficha califica UNA película
+     sin fecha ("Anunciada"), y aquí nombra una lista. Misma palabra inglesa,
+     dos significados y dos géneros gramaticales, así que dos claves — la regla
+     que los verbos del muro ya siguen unas líneas más abajo. */
+  "tab: Announced": "Anunciadas",
+  "Streaming": "Streaming",
+  "Release": "Estreno",
+  "Mark {name} watched": "Marcar {name} como vista",
+  "No dated releases in the movies you follow.": "Ninguna de tus películas tiene fecha.",
+  "That's the start of your releases.": "Aquí empiezan tus estrenos.",
+  "Nothing of yours in theatres right now.": "Ninguna de las tuyas está en cines ahora mismo.",
+  "Nothing announced in the movies you follow.": "Ninguna de tus películas está por estrenar.",
+  // Explorar cine
+  "Popular": "Populares",
+  "No movies match these filters.": "Ninguna película encaja con estos filtros.",
+  "Filters search the whole catalogue, not just what's in theatres.":
+    "Los filtros buscan en todo el catálogo, no solo en cartelera.",
 
   // ---- Settings sheet ----
   "Theme": "Tema",
@@ -632,6 +661,7 @@ const ES: Record<string, string> = {
    disambiguates a meaning and must never reach the screen. Those get an English
    entry too, so the fallback prints the word rather than the key. */
 const EN: Record<string, string> = {
+  "tab: Announced": "Announced",
   "activity: watched": "watched",
   "activity: Watched": "Watched",
   "activity: Rated": "Rated",
@@ -680,6 +710,21 @@ const GENRES_ES: Record<string, string> = {
   "Talk": "Programas de entrevistas",
   "War & Politics": "Guerra y política",
   "Western": "Western",
+  // Géneros de CINE: otra taxonomía de TMDB, con nombres propios. Comparten
+  // clave con los de series los que se llaman igual en inglés (Animation,
+  // Comedy, Crime, Documentary, Drama, Family, Mystery, Western) y por eso no
+  // se repiten aquí.
+  "Action": "Acción",
+  "Adventure": "Aventura",
+  "Fantasy": "Fantasía",
+  "History": "Historia",
+  "Horror": "Terror",
+  "Music": "Música",
+  "Romance": "Romance",
+  "Science Fiction": "Ciencia ficción",
+  "Thriller": "Thriller",
+  "TV Movie": "Película de TV",
+  "War": "Bélica",
 };
 
 const GENRES: Partial<Record<LanguageName, Record<string, string>>> = { es: GENRES_ES };

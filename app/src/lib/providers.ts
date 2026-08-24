@@ -119,6 +119,12 @@ async function fetchProviders(keys: ProviderKey[]): Promise<Map<ProviderKey, Pro
    subscription provider in this country. Both mean: draw no logo. */
 const loadBatched = createBatcher(fetchProviders);
 
+/** El cargador por lotes, suelto. Para quien necesita los proveedores de varios
+ *  títulos a la vez y por tanto no puede llamar al hook en un bucle (Tonight de
+ *  cine elige el hero entre las primeras pendientes): mismos lotes, misma clave
+ *  de caché, sin la regla de los hooks. */
+export const loadMovieProviders = (tmdbId: number) => loadBatched(`movie:${tmdbId}`);
+
 /** Subscription providers for one title in the viewer's country, best first.
  *  Empty when it isn't available here — which is a real answer, not a gap. */
 export function useProviders(tmdbId: number | null | undefined, kind: "tv" | "movie" = "tv") {
