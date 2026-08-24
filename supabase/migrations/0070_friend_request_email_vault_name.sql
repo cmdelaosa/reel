@@ -26,9 +26,17 @@
 -- redeploy. Moving the reader is a migration, applies with `db push`, and needs
 -- no coordination. One name survives, and it is the one already in production.
 --
--- 0052's one-shot backfill has the same stale name. It is a `do $$` block that
--- ran once, in July, against a project where it also found nothing; leaving it
--- is honest history and rewriting it would change nothing that runs again.
+-- THIS IS THE SECOND TIME. 0052's one-shot backfill guessed the same wrong name
+-- and skipped for the same reason, and `0053_backfill_air_times_via_cron_job.sql`
+-- exists only to work around it — its header says so in as many words, and its
+-- fix was to copy the Authorization header out of a cron job that was already
+-- working rather than name the secret at all. So the failure mode has a track
+-- record: whenever something new calls an edge function from SQL, the obvious
+-- name is the one that gets typed, and the guard hides the mistake.
+--
+-- 0052 itself keeps the stale name. It is a `do $$` block that ran once, found
+-- nothing, and was superseded by 0053; leaving it is honest history and
+-- rewriting it would change nothing that runs again.
 create or replace function public.queue_friend_request_email(
   p_user uuid,
   p_handle text,

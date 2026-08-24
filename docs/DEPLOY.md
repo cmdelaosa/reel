@@ -146,7 +146,7 @@ newer `sb_secret_…` key is not. The secret's name is `episode_refresh_service_
 obvious `service_role_key`, which no project here has ever held.
 
 ```sql
-select name from vault.secrets;   -- whatever it is called here
+select name from vault.secrets;   -- expect episode_refresh_service_key
 ```
 
 ```sql
