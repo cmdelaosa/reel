@@ -133,7 +133,11 @@ function ReleaseFeed({ view }: { view: View }) {
           <div className="cal-daysep">
             <span>{separatorOf(g, now, tz, es)}</span>
           </div>
-          {g.items.map((game) => <GameReleaseRow key={game.title_id} g={game} now={now} />)}
+          {/* El separador ya nombra el periodo en todo lo que no es un día
+              exacto, así que la fila no lo repite dos renglones más abajo. */}
+          {g.items.map((game) => (
+            <GameReleaseRow key={game.title_id} g={game} now={now} periodNamedAbove={g.kind !== "day"} />
+          ))}
         </div>
       ))}
     </div>

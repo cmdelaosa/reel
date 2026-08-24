@@ -30,7 +30,16 @@ import { posterBg } from "@/ui/posterBg";
    película sale dos veces. En juegos la pregunta equivalente es en qué juegas:
    un lanzamiento que no llega a tu consola no es tu lanzamiento. */
 
-export function GameReleaseRow({ g, now }: { g: LibraryGame; now: Date }) {
+export function GameReleaseRow({ g, now, periodNamedAbove = false }: {
+  g: LibraryGame;
+  now: Date;
+  /** True cuando la fila va debajo de un separador que YA nombra el periodo —
+   *  el feed de Lanzamientos agrupa por él. Sin esto, un juego de Q4 2027 salía
+   *  con "Q4 2027" en el separador y "Q4 2027" otra vez a su derecha, dos
+   *  renglones más abajo. En Esta noche no hay separador, así que la fila lo
+   *  dice ella y esto se queda en false. */
+  periodNamedAbove?: boolean;
+}) {
   const [, setSearchParams] = useSearchParams();
   const es = isEs();
   const art = igdbImg(g.poster_path, "cover_small");
@@ -83,7 +92,7 @@ export function GameReleaseRow({ g, now }: { g: LibraryGame; now: Date }) {
             </div>
             <div className="cal-when mute">{label}</div>
           </>
-        ) : (
+        ) : periodNamedAbove ? null : (
           /* Sin día exacto no hay número. "Q4 2027" a secas dice todo lo que la
              fuente dijo, y ni un día más. */
           <div className="cal-when mute" style={{ fontWeight: 700 }}>{label}</div>

@@ -16,6 +16,7 @@ export const qk = {
      de IGDB, otro espacio de numeración entero (0071). */
   gameSearch: (q: string) => ["gameSearch", q] as const,
   game: (igdbId: number) => ["game", igdbId] as const,
+  gamePool: (pool: string) => ["gamePool", pool] as const,
   title: (tmdbId: number) => ["title", tmdbId] as const,
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,

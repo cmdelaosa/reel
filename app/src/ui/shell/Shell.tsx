@@ -46,10 +46,9 @@ const MOVIE_TABS = [
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
-/* Cuatro de las cinco. "Explorar" de juegos llega en el commit siguiente de
-   esta misma rama, y hasta entonces su pestaña NO se pinta: una pestaña que
-   lleva a una ruta sin página es peor que una pestaña que falta. Amigos sigue
-   siendo la misma en los tres modos.
+/* Las cinco, como los otros dos modos. Amigos es LA MISMA página en los tres
+   (solo cambia el acento), así que apunta a la misma ruta — y por eso aparece
+   en las tres listas, que es lo que SHARED_PATHS detecta abajo.
 
    "Lanzamientos" y no "Estrenos": un juego no se estrena, sale.
 
@@ -63,6 +62,7 @@ const GAME_TABS = [
   { path: "/games/tonight", label: "Tonight", icon: Clapperboard },
   { path: "/games/releases", label: "games: Releases", icon: CalendarClock },
   { path: "/games/backlog", label: "Backlog", icon: Bookmark },
+  { path: "/games/explore", label: "Explore", icon: Compass },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 

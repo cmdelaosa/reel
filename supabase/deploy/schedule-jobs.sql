@@ -43,7 +43,7 @@ create extension if not exists pg_net;
 --    401 (`UNAUTHORIZED_NO_AUTH_HEADER`) that looks exactly like a bad key, so
 --    it reads as "wrong secret" rather than "no secret by that name" — and
 --    pg_net swallows it into net._http_response, where nobody is looking.
---    If you rename it, rename it in all five call sites below at the same time.
+--    If you rename it, rename it in every call site below at the same time.
 select vault.create_secret('<SERVICE_ROLE_KEY>', 'episode_refresh_service_key');
 
 -- 3a. episode-refresh — daily 05:00 UTC. Refreshes titles + latest seasons.
@@ -110,7 +110,35 @@ select cron.schedule(
   $$
 );
 
--- 3d. One-time backfill: fire episode-refresh NOW with ?force=1 so every
+-- 3d. igdb-warm — daily 04:20 UTC. Rebuilds the four Explore grids of the games
+--     mode (most anticipated, new releases, popular, top rated). Same job as
+--     discover-warm, other catalogue, and MÁS necesario: IGDB gives the whole
+--     project four requests per SECOND, shared by everyone — the same budget
+--     every search and every game sheet comes out of. A cold Explore is four of
+--     them spent at once, in the middle of the day, competing with whoever else
+--     is using the app.
+--     Twenty minutes before discover-warm only out of habit: the two limits are
+--     unrelated (different API, different credential), so moving either is safe.
+--     Check it like the others:
+--       select ok, summary, started_at from public.job_runs
+--        where job = 'igdb-warm' order by started_at desc limit 5;
+select cron.schedule(
+  'igdb-warm-daily',
+  '20 4 * * *',
+  $$
+    select net.http_post(
+      url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/igdb-proxy/warm',
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'episode_refresh_service_key'),
+        'Content-Type', 'application/json'
+      ),
+      body    := '{}'::jsonb,
+      timeout_milliseconds := 120000
+    );
+  $$
+);
+
+-- 3e. One-time backfill: fire episode-refresh NOW with ?force=1 so every
 --     followed title gets its derivations (aired_count, upcoming_season_number)
 --     recomputed immediately, bypassing the staleness gate — instead of waiting
 --     up to ~a day for the daily cron to reach it. Safe to omit or re-run.
@@ -123,7 +151,7 @@ select net.http_post(
   body    := '{}'::jsonb
 );
 
--- 3e. Fill the discovery caches NOW rather than waiting for tomorrow's 04:40 —
+-- 3f. Fill the discovery caches NOW rather than waiting for tomorrow's 04:40 —
 --     right after a deploy they are empty, which is exactly the cold-start this
 --     job exists to prevent. Safe to re-run.
 select net.http_post(
@@ -136,7 +164,18 @@ select net.http_post(
   timeout_milliseconds := 120000
 );
 
--- 4. Verify. All three jobs should be listed; after the first fire,
+-- 3g. Y las cuatro rejillas de juegos, por lo mismo.
+select net.http_post(
+  url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/igdb-proxy/warm',
+  headers := jsonb_build_object(
+    'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'episode_refresh_service_key'),
+    'Content-Type', 'application/json'
+  ),
+  body    := '{}'::jsonb,
+  timeout_milliseconds := 120000
+);
+
+-- 4. Verify. All four jobs should be listed; after the first fire,
 --    job_run_details shows status='succeeded'.
 --   select jobname, schedule, active from cron.job;
 --   select jobname, status, return_message, start_time

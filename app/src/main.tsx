@@ -27,6 +27,7 @@ import MoviesExplorePage from "@/features/movies/MoviesExplorePage";
 import GamesPage from "@/features/games/GamesPage";
 import GamesTonightPage from "@/features/games/GamesTonightPage";
 import GameReleasesPage from "@/features/games/GameReleasesPage";
+import GamesExplorePage from "@/features/games/GamesExplorePage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
@@ -140,6 +141,7 @@ const router = createBrowserRouter([
       // redirección para que un enlace guardado siga llegando (igual que
       // /friends/kpis).
       { path: "games/library", element: <Navigate to="/games/backlog" replace /> },
+      { path: "games/explore", element: <GamesExplorePage /> },
       { path: "explore", element: <ExplorePage /> },
       { path: "collection/:slug", element: <CollectionPage /> },
       { path: "calendar", element: <CalendarPage /> },
