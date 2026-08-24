@@ -16,8 +16,8 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { PNG } from "pngjs";
+import { tmdbFetch as callTmdb } from "../../supabase/functions/_shared/tmdb.ts";
 
-const TMDB = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p/w92";
 
 function readEnv() {
@@ -36,7 +36,7 @@ function readEnv() {
 // deno-lint-ignore no-explicit-any
 type Any = any;
 const tmdbFetch = (key: string, path: string): Promise<Any> =>
-  fetch(`${TMDB}${path}${path.includes("?") ? "&" : "?"}api_key=${key}`).then((r) => {
+  callTmdb(key, path).then((r) => {
     if (!r.ok) throw new Error(`TMDB ${path}: ${r.status}`);
     return r.json();
   });

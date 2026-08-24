@@ -55,8 +55,8 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { boostSpanish, capNonWestern } from "./rank.ts";
+import { redactCredential, tmdbFetch as callTmdb } from "../_shared/tmdb.ts";
 
-const TMDB = "https://api.themoviedb.org/3";
 const TVMAZE = "https://api.tvmaze.com";
 
 /* Which instant an episode is released, and who gets to say so: a broadcaster's
@@ -1027,7 +1027,7 @@ const hasFreshEpisodes = (title: Any) => freshWithin(title?.episodes_refreshed_a
 // hosted; a detached promise on the local serve runtime, which stays alive).
 // Failures are logged, never surfaced to the caller.
 function inBackground(work: Promise<unknown>) {
-  const guarded = work.catch((err) => console.error(`background refresh: ${String(err)}`));
+  const guarded = work.catch((err) => console.error(`background refresh: ${redactCredential(String(err))}`));
   (globalThis as Any).EdgeRuntime?.waitUntil?.(guarded);
 }
 
@@ -1193,11 +1193,23 @@ async function fillWholeShow(
   if (error) console.error(`episodes_refreshed_at: ${error.message}`);
 }
 
+/** An error whose message this function wrote itself, so it is safe to hand
+ *  back to the browser.
+ *
+ *  The top-level catch answers everything else with a flat "upstream error"
+ *  (see the bottom of this file). That is deliberately blunt, and this class is
+ *  what stops it from also erasing the one message that was worth reading: a
+ *  TMDB status against a TMDB path, which says "TMDB 404s this show" rather
+ *  than "something went wrong". TMDB's own status and body carry no secret of
+ *  ours; a `fetch` rejection does. */
+class UpstreamError extends Error {}
+
 const fetchTmdb = async (apiKey: string, p: string) => {
-  const res = await fetch(`${TMDB}${p}${p.includes("?") ? "&" : "?"}api_key=${apiKey}`, {
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-  });
-  if (!res.ok) throw new Error(`TMDB ${p}: ${res.status}`); // don't treat an error body as data
+  // callTmdb owns the credential: header when the secret is a v4 read token,
+  // query string when it is a v3 key, and in neither case does a network
+  // failure come back carrying the URL. See _shared/tmdb.ts.
+  const res = await callTmdb(apiKey, p, { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) }, console.error);
+  if (!res.ok) throw new UpstreamError(`TMDB ${p}: ${res.status}`); // don't treat an error body as data
   return res.json();
 };
 
@@ -1760,7 +1772,10 @@ Deno.serve(async (req) => {
           summary[name] = (await run()).length;
         } catch (e) {
           ok = false;
-          summary[name] = `error: ${e instanceof Error ? e.message : String(e)}`;
+          // Redacted because this row is kept: an error text that reaches
+          // job_runs outlives the incident it describes, and the one thing it
+          // must never outlive with is the key.
+          summary[name] = redactCredential(`error: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
       // Best-effort bookkeeping — never fail the run on the log write (0029).
@@ -2269,6 +2284,19 @@ Deno.serve(async (req) => {
 
     return json({ error: "not found" }, 404);
   } catch (err) {
-    return json({ error: String(err) }, 502);
+    // The detail goes to the log; the browser gets a sentence. This used to be
+    // `String(err)`, which meant every error this function could possibly throw
+    // was published to whoever asked — and one of them, the TypeError from a
+    // failed `fetch`, is built out of the request URL, TMDB key and all. That
+    // particular hole is closed at the source now (_shared/tmdb.ts), but the
+    // shape of the answer was the real bug: an unknown error is not something
+    // to read out loud.
+    //
+    // UpstreamError is the exception, and the useful one: a TMDB status against
+    // a TMDB path, written here, carrying nothing of ours. The client renders
+    // it, and it is what tells a "TMDB doesn't have this" apart from a "we
+    // broke".
+    console.error("tmdb-proxy", path, redactCredential(err instanceof Error ? (err.stack ?? err.message) : String(err)));
+    return json({ error: err instanceof UpstreamError ? err.message : "upstream error" }, 502);
   }
 });

@@ -46,6 +46,9 @@ reel/
 
 - `app/.env.local` (gitignored): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
 - Edge function secrets (`supabase secrets set`): `TMDB_API_KEY`, `RESEND_API_KEY`.
+  `TMDB_API_KEY` holds a v4 read access token or a v3 key; `supabase/functions/_shared/tmdb.ts`
+  is the only place either one touches a request, and the only place that decides
+  whether it rides in a header or the query string. See DEPLOY.md.
 - The author's TV Time zip lives **outside the repo** (`~/tvtime-export/`); scripts take a path arg.
 - CI (GitHub Actions): `npm run check` = `tsc --noEmit && eslint . && vitest run` in `app/`.
 

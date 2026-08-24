@@ -7,6 +7,9 @@
  */
 
 import { unzipSync, strFromU8 } from "fflate";
+// Relative, extension-ful, dependency-free — the one import shape both runtimes
+// this file serves (Node via tsx, Deno via the importer function) agree on.
+import { tmdbFetch as callTmdb } from "../../supabase/functions/_shared/tmdb.ts";
 
 // Minimal shapes for the injected Supabase client (avoids a hard dep on the
 // exact supabase-js version across runtimes).
@@ -16,7 +19,6 @@ export interface DbClient {
 // deno-lint-ignore no-explicit-any
 type Any = any;
 
-const TMDB = "https://api.themoviedb.org/3";
 const AIR_TIME = "T21:00:00Z";
 
 // Verified against the real export headers (2026-07).
@@ -213,8 +215,14 @@ export function parseWatches(files: Record<string, string>): Map<string, Episode
 
 // ── TMDB + upserts ──────────────────────────────────────────────────────────
 type Json = Record<string, unknown>;
+// Whatever this throws ends up in `import_jobs.report.error`, which the client
+// puts on screen and the row keeps — so the credential must not be able to ride
+// along in it. callTmdb is where that is enforced (see _shared/tmdb.ts); it also
+// sends the key as a header instead of a query parameter when the secret is a v4
+// read token. No logger is passed: the CLI prints the throw itself, and the edge
+// function's job row carries it.
 const tmdbFetch = (key: string, path: string): Promise<Json> =>
-  fetch(`${TMDB}${path}${path.includes("?") ? "&" : "?"}api_key=${key}`).then((r) => r.json() as Promise<Json>);
+  callTmdb(key, path).then((r) => r.json() as Promise<Json>);
 
 // Curated TheTVDB→TMDB overrides for series TV Time still exports under an id
 // that TheTVDB has since deleted or merged (a season expansion renumbers the
