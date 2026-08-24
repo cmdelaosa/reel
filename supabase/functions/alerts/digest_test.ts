@@ -37,7 +37,7 @@ Deno.test("un solo tipo no imprime el encabezado del otro", () => {
 });
 
 Deno.test("las dos fechas de una misma película caben en el mismo correo", () => {
-  // Es lo que 0071 existe para permitir: dos avisos, un episodio sintético.
+  // Es lo que 0072 existe para permitir: dos avisos, un episodio sintético.
   const text = digestText([
     movie("Dune", "in theatres today", "theatrical"),
     movie("Dune", "streaming today", "digital"),

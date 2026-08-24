@@ -1,8 +1,8 @@
--- Pruebas de pending_movie_release_alerts (0071), en SQL puro y contra una base
+-- Pruebas de pending_movie_release_alerts (0072), en SQL puro y contra una base
 -- de desarrollo. Se corren a mano:
 --
 --   supabase db reset
---   docker cp supabase/tests/0071_movie_release_alerts.test.sql supabase_db_tvtime:/tmp/t.sql
+--   docker cp supabase/tests/0072_movie_release_alerts.test.sql supabase_db_tvtime:/tmp/t.sql
 --   docker exec supabase_db_tvtime psql -U postgres -f /tmp/t.sql
 --
 -- FUERA de supabase/migrations a propósito: el CLI aplica en orden TODO lo que
@@ -61,7 +61,7 @@ begin
     'las fechas son por país: DE no avisa a quien tiene ES';
 end $$;
 
--- 2. Las DOS fechas de una misma película avisan por separado. Es lo que 0071
+-- 2. Las DOS fechas de una misma película avisan por separado. Es lo que 0072
 --    existe para permitir, y lo que la clave vieja hacía imposible.
 do $$
 begin

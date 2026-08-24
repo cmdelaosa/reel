@@ -45,8 +45,8 @@ Deploy migrations before the functions. `tmdb-proxy` uses the
 JWT/invite validation into one database round trip. Deploying the function
 first would make metadata requests return 401 until the migration lands.
 
-⚠️ **Migration 0071 and `alerts` must go out back to back**, in the same
-sitting. It is the one pair where neither order is safe on its own: 0071
+⚠️ **Migration 0072 and `alerts` must go out back to back**, in the same
+sitting. It is the one pair where neither order is safe on its own: 0072
 rewrites the primary key of `notifications_sent`, so the *old* `alerts` upserts
 against a unique constraint that no longer exists and the whole run errors —
 while the *new* `alerts` against the old schema asks for an `event` column that

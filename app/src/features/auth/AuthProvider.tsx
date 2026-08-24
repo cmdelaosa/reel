@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    *
    * Vive en localStorage (lib/settings) porque quien lo lee en cada pantalla es
    * el cliente: decide los proveedores y la zona horaria de las horas de
-   * emisión. Pero desde 0071 hay un lector que NO es el navegador — el cron de
+   * emisión. Pero desde 0072 hay un lector que NO es el navegador — el cron de
    * avisos, que necesita saber en qué país mirar la fecha de estreno de una
    * película para no avisar a un alemán de que algo llega hoy a los cines
    * españoles. Y `profiles.country` no lo escribía nadie: existía desde 0001 y

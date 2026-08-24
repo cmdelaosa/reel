@@ -12,7 +12,7 @@
 export interface Alertable {
   user_id: string;
   episode_id: string;
-  /** La tercera columna del sello (0071): 'episode' | 'theatrical' | 'digital'. */
+  /** La tercera columna del sello (0072): 'episode' | 'theatrical' | 'digital'. */
   event: string;
   /** El tipo de notificación, que es también el de las preferencias. */
   type: "new_episode" | "movie_release";

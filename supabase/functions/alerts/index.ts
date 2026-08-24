@@ -3,7 +3,7 @@
 // Avisa de DOS cosas, cada una con su preferencia y sus palabras:
 //
 //   * un episodio nuevo de una serie que sigues (new_episode), y
-//   * el estreno de una película que sigues (movie_release, 0071) — las dos
+//   * el estreno de una película que sigues (movie_release, 0072) — las dos
 //     fechas avisan, la de cines y la de streaming, porque son dos momentos
 //     distintos en los que puedes hacer dos cosas distintas.
 //
@@ -13,7 +13,7 @@
 // tenga el correo encendido recibe UN digest por corrida con lo suyo de los dos
 // tipos, vía Resend (se salta con un log si falta RESEND_API_KEY).
 //
-// El sello lleva QUÉ se avisó desde 0071: una película tiene un solo episodio
+// El sello lleva QUÉ se avisó desde 0072: una película tiene un solo episodio
 // sintético y dos estrenos, así que sin esa tercera columna el aviso de
 // streaming se perdía como duplicado del de cines.
 //
@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
     .from("notifications_sent")
     .upsert(
       rows.map((r) => ({ user_id: r.user_id, episode_id: r.episode_id, event: r.event })),
-      // `event` entra en el conflicto desde 0071: sin él, el aviso de streaming
+      // `event` entra en el conflicto desde 0072: sin él, el aviso de streaming
       // de una película se sella contra el de cines —misma fila de episodes— y
       // se descarta como duplicado de algo que no es.
       { onConflict: "user_id,episode_id,event", ignoreDuplicates: true },

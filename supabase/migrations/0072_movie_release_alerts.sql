@@ -1,4 +1,4 @@
--- 0071_movie_release_alerts.sql
+-- 0072_movie_release_alerts.sql
 -- Avisos de estreno de película: LAS DOS FECHAS avisan (decisión de producto,
 -- 24-ago-2026). Cuando llega a los cines y cuando llega a streaming.
 --
@@ -31,7 +31,7 @@ alter table public.notifications_sent
 
 comment on column public.notifications_sent.event is
   'Qué se avisó de esta fila: episode (series) | theatrical | digital (cine, '
-  '0071). Una película tiene un solo episodio sintético y dos estrenos, así que '
+  '0072). Una película tiene un solo episodio sintético y dos estrenos, así que '
   'sin esto el segundo aviso se perdía como duplicado del primero.';
 
 -- IF EXISTS como las dos de arriba: reaplicar la migración a mano contra una
