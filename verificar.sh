@@ -77,11 +77,20 @@ saltada() {                             # saltada <título> <motivo>
 # fusionarse ganó y la segunda no lo descubrió hasta que `db push` falló contra
 # PRODUCCIÓN con un 23505 sobre `schema_migrations`.
 titulo "un número de migración, un fichero"
+migraciones=$(ls "$repo"/supabase/migrations/*.sql 2>/dev/null | wc -l | tr -d ' ')
 dupes=$(ls "$repo"/supabase/migrations/*.sql 2>/dev/null |
   xargs -n1 basename |
   cut -d_ -f1 |
   sort | uniq -d)
-if [ -n "$dupes" ]; then
+# Cero ficheros no es «no hay repetidos», es «no he mirado nada», y las dos cosas
+# imprimían el mismo `ok`. reel tiene setenta y pico: un cero aquí significa que
+# el directorio se ha movido y que esta sección lleva sin comprobar nada desde
+# entonces, sin que se note.
+if [ "$migraciones" -eq 0 ]; then
+  printf '  FALLO   no he encontrado ni una migración en supabase/migrations/\n'
+  printf '          Un cero no es «sin repetidos»: es que aquí no he mirado nada.\n'
+  fallos=$((fallos + 1))
+elif [ -n "$dupes" ]; then
   printf '  FALLO   números repetidos: %s\n' "$(printf '%s' "$dupes" | tr '\n' ' ')"
   ls "$repo"/supabase/migrations/*.sql | xargs -n1 basename |
     grep -E "^($(printf '%s' "$dupes" | paste -sd'|' -))_" | sed 's/^/          /'
@@ -90,8 +99,7 @@ if [ -n "$dupes" ]; then
   printf '          no se puede renombrar sin tocar a mano el registro de producción.\n'
   fallos=$((fallos + 1))
 else
-  printf '  ok      sin repetidos (%s migraciones)\n' \
-    "$(ls "$repo"/supabase/migrations/*.sql 2>/dev/null | wc -l | tr -d ' ')"
+  printf '  ok      sin repetidos (%s migraciones)\n' "$migraciones"
 fi
 
 # ── La app ──────────────────────────────────────────────────────────────────
@@ -101,16 +109,27 @@ if toca app; then
   # `npm ci` solo cuando hace falta: un worktree recién abierto no trae
   # node_modules —son seis segundos— y un package-lock más nuevo que la carpeta
   # significa que lo instalado ya no es lo que el lock dice.
+  #
+  # El `2>&1` envuelve al `cd` TAMBIÉN, y por eso van entre llaves: pegado solo
+  # al `npm`, el «No such file or directory» del `cd` se escapaba a la terminal
+  # por su cuenta mientras `$salida` quedaba vacía, o sea un FALLO sin motivo
+  # debajo y el motivo suelto tres líneas más arriba.
   if [ ! -d "$repo/app/node_modules" ] ||
      [ "$repo/app/package-lock.json" -nt "$repo/app/node_modules" ]; then
     printf '  ...     instalando dependencias (node_modules al día no las trae)\n'
-    if ! salida=$( cd "$repo/app" && npm ci --no-audit --fund=false 2>&1 ); then
+    if ! salida=$( { cd "$repo/app" && npm ci --no-audit --fund=false; } 2>&1 ); then
       printf '  FALLO   npm ci\n'
       printf '%s\n' "$salida" | tail -20 | sed 's/^/          /'
       fallos=$((fallos + 1))
+      instalado=0
     fi
   fi
-  if salida=$( cd "$repo/app" && npm run check 2>&1 ); then
+  # Con la instalación rota, `npm run check` falla seguro y por lo mismo: dos
+  # rojos para una sola causa, y el de arriba —el que hay que leer— enterrado
+  # bajo cuarenta líneas de tsc quejándose de que no encuentra nada.
+  if [ "${instalado:-1}" = 0 ]; then
+    printf '  ----    npm run check: no lo lanzo, la instalación ha fallado\n'
+  elif salida=$( { cd "$repo/app" && npm run check; } 2>&1 ); then
     printf '  ok      npm run check\n'
   else
     printf '  FALLO   npm run check\n'
@@ -142,9 +161,11 @@ if toca supabase/functions; then
     # hace que `probar-rama.sh` se plante con «el worktree tiene cambios sin
     # guardar». Un freno que ensucia el árbol que va a juzgar se acaba apagando.
     malas=""
+    miradas=0
     for dir in "$repo"/supabase/functions/*/; do
       f="${dir}index.ts"
       [ -f "$f" ] || continue
+      miradas=$((miradas + 1))
       cfg="${dir}deno.json"
       if [ -f "$cfg" ]; then
         salida=$(deno check --no-lock --config "$cfg" "$f" 2>&1) || malas="$malas$salida"$'\n'
@@ -152,12 +173,21 @@ if toca supabase/functions; then
         salida=$(deno check --no-lock "$f" 2>&1) || malas="$malas$salida"$'\n'
       fi
     done
-    if [ -n "$malas" ]; then
+    # Sin el contador, un glob que no casa con nada recorre cero funciones, deja
+    # `malas` vacía e imprime el mismo `ok` que haber comprobado las siete. Y se
+    # llega aquí justo cuando el cambio TOCA `supabase/functions` — mover o
+    # renombrar ese directorio entra en esa definición—, así que el día que pase
+    # será el día en que esta sección deje de mirar nada y siga diciendo que sí.
+    if [ "$miradas" -eq 0 ]; then
+      printf '  FALLO   no he encontrado ni un index.ts en supabase/functions/*/\n'
+      printf '          Cero funciones comprobadas no es un aprobado.\n'
+      fallos=$((fallos + 1))
+    elif [ -n "$malas" ]; then
       printf '  FALLO   deno check\n'
       printf '%s' "$malas" | tail -40 | sed 's/^/          /'
       fallos=$((fallos + 1))
     else
-      printf '  ok      deno check\n'
+      printf '  ok      deno check (%s funciones)\n' "$miradas"
     fi
     # Sin ficheros de prueba se aprueba: la mayoría de funciones todavía no
     # tiene, y eso no es un fallo.
