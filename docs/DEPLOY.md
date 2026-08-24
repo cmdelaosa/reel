@@ -123,6 +123,12 @@ once:
    not the one the name suggests.
 3. Run it in the hosted **SQL Editor**.
 
+Then confirm:
+
+```sql
+select jobname, schedule, active from cron.job;   -- expect all three, active
+```
+
 ### Which service key
 
 Every one of these functions authenticates a caller as the cron by comparing the
@@ -157,12 +163,6 @@ daily, check `job_runs`. Only re-run the Vault step if you are provisioning a ne
 project or the crons have actually stopped; seeding it with the legacy JWT would
 break all three at once, and the 401 dies inside `net._http_response` where
 nobody is looking.
-
-Then confirm:
-
-```sql
-select jobname, schedule, active from cron.job;   -- expect all three, active
-```
 
 `schedule-jobs.sql` also fires two one-time calls:
 
@@ -251,11 +251,12 @@ steps: [MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md).
 - [ ] Magic-link login works **to a non-team email address** (proves custom SMTP).
 - [ ] A fresh signup is walled at `/invite` until it redeems a code, and can't
       write data before then (invite gate).
-- [ ] Manually invoke each cron once and check the JSON report. `$SR` is the
-      `sb_secret_…` key — see [Which service key](#which-service-key); a
-      `{"error":"not invited"}` here means you used the legacy JWT, not that
-      anything is wrong with the deploy.
+- [ ] Manually invoke each cron once and check the JSON report. A
+      `{"error":"not invited"}` here means you used the legacy JWT rather than
+      the `sb_secret_…` key, not that anything is wrong with the deploy — see
+      [Which service key](#which-service-key).
       ```bash
+      SR=$(supabase projects api-keys --project-ref <ref> --reveal -o env | grep '^SUPABASE_DEFAULT_KEY=' | cut -d= -f2- | tr -d '"')
       curl -X POST https://<ref>.supabase.co/functions/v1/episode-refresh \
         -H "Authorization: Bearer $SR"
       curl -X POST https://<ref>.supabase.co/functions/v1/alerts \
