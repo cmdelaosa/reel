@@ -9,6 +9,15 @@ authoritative record of **product decisions**; update it as decisions change.
 > (status table) + [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) + `docs/phases/PHASE-N.md`.
 > The Roadmap section below is superseded by those files.
 
+> **Scope has moved since this interview (August 2026).** Everything below still records what
+> was decided *then*, and the "TV only, movies deferred" rows are the biggest thing time has
+> undone: Reel now ships **three media** — TV, Movies and **videogames** — as modes sharing one
+> library, one wall and one friends layer. `titles.kind` is `tv | movie | game`, games come from
+> IGDB rather than TMDB, and a Steam importer fills a library the way the TV Time zip does.
+> The rows are left standing rather than rewritten: this file is the record of a decision, and a
+> decision quietly edited to match the present teaches nothing. What is authoritative *today*
+> is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the migration headers.
+
 ## Product vision
 
 - Track TV shows: what you're watching, what's next, what you've seen, and how you rated it.

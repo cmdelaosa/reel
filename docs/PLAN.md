@@ -104,7 +104,7 @@ Tick a box **in the same commit** that completes it.
 - [x] **P1-C2** `feat(auth): invite-code gate on first sign-in`
 - [x] **P1-C3** `feat(app): marquee shell — top tabs, routes, mobile dock, settings sheet`
 - [x] **P1-C4** `feat(app): onboarding — display name, handle, avatar upload`
-- [ ] **P1-C5** `chore: deploy web app (Vercel) + auth redirect config` → **login on prod URL** — full runbook: [docs/DEPLOY.md](DEPLOY.md) (Supabase link/push, functions, secrets, SMTP, cron scheduling)
+- [x] **P1-C5** `chore: deploy web app + auth redirect config` → **login on prod URL** — full runbook: [docs/DEPLOY.md](DEPLOY.md) (Supabase link/push, functions, secrets, SMTP, cron scheduling). Shipped on Vercel, then moved to **Cloudflare Workers** in July 2026 ([MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md)); live at reel-app.com. The box stayed unticked long after the deploy existed.
 
 ### Phase 2 — Core library loop ([docs/phases/PHASE-2.md](phases/PHASE-2.md))
 
@@ -122,7 +122,7 @@ Tick a box **in the same commit** that completes it.
 ### Phase 3 — Round out + onboard friends ([docs/phases/PHASE-3.md](phases/PHASE-3.md))
 
 - [x] **P3-C1** `feat(notifications): in-app inbox + bell + read state`
-- [ ] **P3-C2** `feat(edge): new-episode alert job → inbox rows + Resend email`
+- [x] **P3-C2** `feat(edge): new-episode alert job → inbox rows + Resend email` — `supabase/functions/alerts`, on the daily cron. Also covers movie releases since 0072 (theatrical and digital alert separately). Email only goes out to people who turned it on per type, and only with `RESEND_FROM` set; the in-app row lands either way.
 - [x] **P3-C3** `feat(notifications): preferences UI (per-type in-app/email toggles)`
 - [x] **P3-C4** `feat(import): in-app TV Time zip importer (upload → job → report)`
 - [x] **P3-C5** `feat(invites): create/share invite codes UI`
@@ -150,9 +150,16 @@ Outline only — see the phase file. Specced when Phase 5 ships.
 
 ## Scope guardrails
 
-- **Movies stay deferred** (schema is movie-ready; no movie UI).
-- **No rewatch tracking** in v1 (`watch_events` unique per user+episode; column reserved).
-- **Episode-level ratings** exist in schema; UI ships show-level only until after Phase 5.
+> These were the guardrails **for the six phases above**, and three of the four have since been
+> lifted on purpose — after Phase 5, not inside it. Left here with what actually happened,
+> because a guardrail silently deleted reads as if it had never been decided.
+
+- ~~**Movies stay deferred** (schema is movie-ready; no movie UI)~~ — **lifted August 2026.**
+  Movies shipped as a full mode (migrations 0067–0069, 0072), and **videogames** after them
+  (0071–0078, IGDB + a Steam importer). `titles.kind` is `tv | movie | game`.
+- **No rewatch tracking** still holds (`watch_events` unique per user+episode; column reserved).
+- ~~**Episode-level ratings** exist in schema; UI ships show-level only~~ — **lifted July 2026**:
+  per-episode ratings and a per-season IMDb graph ship in the title sheet (0057).
 - The classic (sidebar) shell and the Design Lab are **prototype-only** — production ships the
   Marquee shell with the glass look, plus theme (system/dark/OLED/light), accent and density
   in Settings (P1 grill decision; radius stays prototype-only).

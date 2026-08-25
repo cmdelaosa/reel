@@ -1,22 +1,32 @@
 # Reel
 
-**An invite-only TV tracker built for a small group of friends — live at [reel-app.com](https://reel-app.com).**
+**An invite-only tracker for TV, film and games, built for a small group of friends — live at
+[reel-app.com](https://reel-app.com).**
 
 Reel replaced [TV Time](https://www.tvtime.com/) for our group when it shut down: what you're
 watching, what's next tonight, when shows return, how everyone rated them — with your whole
-history imported from TV Time's GDPR export.
+history imported from TV Time's GDPR export. It has since grown two more modes, **Movies** and
+**Games**, that share the same library, wall and friends.
 
 ![Reel landing page](docs/assets/landing.png)
 
 ## Features
 
+- **Three modes, one app** — TV, Movies and Games, switched from the top bar, each with its own
+  accent colour. Same library, same wall, same friends; the pages change only where the medium
+  demands it (a film is atomic, so no "continue watching"; a game's progress is hours, not episodes).
 - **Tonight** — what's next across everything you follow, one tap to mark watched.
-- **Calendar** — upcoming episodes with real air *times* (TVmaze), shown in your timezone.
+- **Calendar** — upcoming episodes with real air *times* (TVmaze), shown in your timezone. In
+  Movies it becomes **Releases**, where a film can appear twice: once for cinemas, once for streaming.
 - **Ratings** — TMDB + IMDb scores per show and per episode, with a per-season episode graph
   (IMDb figures imported from IMDb's own published datasets — no scraping).
 - **Friends** — activity feed with emoji reactions, taste-match %, per-friend comparison, stats.
+  The wall mixes all three media and folds bulk adds ("added 39 games to their library").
 - **Where to watch** — streaming providers for *your* country, not the show's US network.
-- **Import / export** — one-shot import from a TV Time GDPR zip; full export of your own data anytime.
+- **Alerts** — a daily job that tells you when a show you follow has something new, and when a
+  film you're waiting for reaches cinemas or streaming — in-app always, by email if you ask.
+- **Import / export** — one-shot import from a TV Time GDPR zip, or from **Steam** (with the state
+  and score you give each game on the way in); full export of your own data anytime.
 - **EN/ES**, installable PWA, invite-only signup.
 
 ## Stack
@@ -25,9 +35,10 @@ history imported from TV Time's GDPR export.
 |---|---|
 | Frontend | React + TypeScript (strict) + Vite, TanStack Query, zod on every boundary |
 | Backend | Supabase — Postgres with RLS as the *only* authorization layer, Deno Edge Functions, pg_cron |
+| Metadata | TMDB (TV + film), TVmaze (air times), IMDb datasets (ratings), IGDB (games), Steam Web API (library import) |
 | Hosting | Cloudflare Workers (static assets + SPA fallback) |
 | Email | Resend (magic links, daily digests) |
-| CI / tests | vitest (~150 unit tests on pure domain logic), Playwright e2e against a full local Supabase stack — including an [RLS isolation spec](app/e2e/rls.spec.ts) — GitHub Actions |
+| CI / tests | vitest (287 unit tests on pure domain logic), Playwright e2e against a full local Supabase stack — including an [RLS isolation spec](app/e2e/rls.spec.ts) — GitHub Actions |
 
 ## How it was built
 
@@ -77,6 +88,8 @@ The production instance is invite-only and its API keys are not in this repo —
 This product uses the [TMDB](https://www.themoviedb.org/) API but is not endorsed or certified
 by TMDB. Air times come from the [TVmaze](https://www.tvmaze.com/api) API (CC BY-SA). IMDb
 ratings come from [IMDb's non-commercial datasets](https://developer.imdb.com/non-commercial-datasets/).
+Game metadata comes from [IGDB](https://www.igdb.com/); the optional library import talks to the
+[Steam Web API](https://steamcommunity.com/dev), and Reel is not affiliated with Valve.
 
 ## License
 
