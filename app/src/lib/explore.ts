@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { qk } from "@/lib/queryKeys";
 import { getTrending, getPopular, getPopularNow, getTopRated } from "@/lib/tmdb";
+import type { Medium } from "@/lib/medium";
 import type { TitleRow } from "@/lib/schemas";
 
 export function useTrending() {
@@ -87,14 +88,45 @@ export type PopularWithFriends = z.infer<typeof popularSchema>[number];
  *  the "has friends at all" check and the tab gate — same reason as
  *  {@link useTopRated}: an RPC nobody is looking at should not be competing for
  *  the page's first paint. */
-export function usePopularWithFriends(enabled: boolean) {
+export function usePopularWithFriends(enabled: boolean, kind: Medium = "tv") {
   return useQuery({
-    queryKey: ["popularWithFriends"],
+    queryKey: ["popularWithFriends", kind],
     enabled,
     queryFn: async (): Promise<PopularWithFriends[]> => {
-      const { data, error } = await supabase.rpc("rpc_popular_with_friends");
+      const { data, error } = await supabase.rpc("rpc_popular_with_friends", { p_kind: kind });
       if (error) throw error;
       return popularSchema.parse(data);
+    },
+  });
+}
+
+const bestRatedSchema = z.array(
+  z.object({
+    tmdb_id: z.number().int(),
+    name: z.string(),
+    poster_path: z.string().nullable(),
+    first_air_date: z.string().nullable(),
+    vote_average: z.number().nullable(),
+    avg_score: z.coerce.number(),
+    count: z.number().int(),
+    raters: z.array(friendRefSchema.extend({ score: z.number().int() })),
+    i_follow: z.boolean(),
+  }),
+);
+export type BestRatedByFriends = z.infer<typeof bestRatedSchema>[number];
+
+/** Lo que tu círculo ha puntuado más alto, en un medio. `avg_score` viene de un
+ *  `round(...)::numeric` de Postgres, que PostgREST serializa como CADENA para
+ *  no perder precisión — de ahí el `coerce`, y no un `z.number()` que fallaría
+ *  contra "8.5". */
+export function useBestRatedByFriends(enabled: boolean, kind: Medium = "tv") {
+  return useQuery({
+    queryKey: ["bestRatedByFriends", kind],
+    enabled,
+    queryFn: async (): Promise<BestRatedByFriends[]> => {
+      const { data, error } = await supabase.rpc("rpc_best_rated_by_friends", { p_kind: kind });
+      if (error) throw error;
+      return bestRatedSchema.parse(data);
     },
   });
 }

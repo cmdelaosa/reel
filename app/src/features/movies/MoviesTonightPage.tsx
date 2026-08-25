@@ -6,6 +6,7 @@ import { useMovieLibrary, type LibraryMovie } from "@/lib/library";
 import { useMovieReleases } from "@/lib/movies";
 import { useMovieEpisodeIds } from "@/features/movies/data";
 import { MovieReleaseRow } from "@/features/movies/MovieReleaseRow";
+import MoviesExplorePage from "@/features/movies/MoviesExplorePage";
 import { useMarkWatched } from "@/lib/watch";
 import { loadMovieProviders } from "@/lib/providers";
 import { qk } from "@/lib/queryKeys";
@@ -107,6 +108,24 @@ export default function MoviesTonightPage() {
     .filter((r) => r.release_kind === "theatrical" && new Date(r.release_at).getTime() > nowMs)
     .sort((a, b) => a.release_at.localeCompare(b.release_at))
     .slice(0, 4);
+
+  /* Sin una sola película en la biblioteca, esta pantalla no tiene nada que
+     decir: no hay elección de esta noche, no hay lista, y las dos columnas de
+     abajo salen de TUS estrenos, así que también están vacías. Lo que se
+     enseñaba entonces era un cartel de "añade una peli" rodeado de huecos.
+     Mientras esté así, la portada de cine ES Explorar.
+
+     En el sitio, no por redirección: la pestaña activa sigue siendo Tonight y
+     la URL no cambia, que es la diferencia entre "aquí todavía no hay nada
+     tuyo, mira lo que hay" y una pestaña que te echa a otra parte. En cuanto
+     añadas la primera película esta pantalla vuelve sola.
+
+     Va DESPUÉS de todos los hooks —incluidos los de arriba, que ya se han
+     llamado— porque un return temprano antes de ellos rompería el orden en el
+     primer render con biblioteca. Lo que se paga por eso son dos consultas que
+     no se van a pintar; ninguna es cara y ambas estarán calientes cuando esta
+     pantalla vuelva a servir para algo. */
+  if (!isPending && movies.length === 0) return <MoviesExplorePage />;
 
   return (
     <div className="screen mq-page">
