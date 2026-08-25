@@ -756,11 +756,21 @@ function releaseDateMap(d: Any): Record<string, Record<string, string>> | undefi
 // Parcial, como searchRow: /search/movie trae genre_ids y ni duración ni
 // estudio ni estado, así que esas columnas se omiten en vez de nulificarse para
 // no vaciar una fila que un detalle completo ya había rellenado.
-function movieSearchRow(r: Any) {
+function movieSearchRow(r: Any, nameEs?: string) {
+  const name = r.title ?? r.original_title ?? "Untitled";
   return {
     tmdb_id: r.id,
     kind: "movie",
-    name: r.title ?? r.original_title ?? "Untitled",
+    name,
+    /* Solo cuando difiere del canónico. `name_es` con el mismo texto no es una
+       traducción, es ruido: 0046 lo lee como "esto tiene título en español", y
+       el cliente lo antepone al nombre — daría igual, pero llena la mitad de la
+       tabla de duplicados y hace imposible saber de un vistazo qué está
+       traducido de verdad. Sin traducción se deja fuera del objeto (no null),
+       que es la regla que ya siguen providers y translations más abajo: así un
+       reingreso desde una lista sin idioma no BORRA lo que el detalle escribió.
+       Poner null aquí sería peor que no traer nada. */
+    ...(nameEs && nameEs !== name ? { name_es: nameEs } : {}),
     overview: r.overview ?? null,
     poster_path: r.poster_path ?? null,
     backdrop_path: r.backdrop_path ?? null,
@@ -1207,6 +1217,54 @@ async function fillWholeShow(
  *  ours; a `fetch` rejection does. */
 class UpstreamError extends Error {}
 
+/** Las mismas páginas, dos veces: en el idioma por defecto y en español.
+ *
+ *  ── Por qué hace falta ────────────────────────────────────────────────────
+ *  `movieSearchRow` nace de una lista (/discover, /trending, /movie/upcoming…)
+ *  y esas listas traen UN idioma, el que pidas. El detalle de un título sí trae
+ *  `translations` y por eso una ficha abierta rellena `name_es` (0046) — pero
+ *  una rejilla de descubrimiento no abre fichas. Resultado: todo lo que entra
+ *  por una lista y nunca se abre se queda sin traducir, y con la biblioteca de
+ *  cine vacía eso era LITERALMENTE TODO el cine: la portada en español con
+ *  todos los títulos en inglés.
+ *
+ *  ── El coste ──────────────────────────────────────────────────────────────
+ *  Duplica las peticiones de estas rejillas, y no lo esconde. Dos cosas lo
+ *  hacen asumible: van en el mismo `Promise.all`, así que en reloj de pared no
+ *  cuestan nada más; y lo que sale de aquí se cachea 24 h en `discover_cache`
+ *  además de escribirse en `titles`, con el cron de calentado pagando la
+ *  primera. No se hace en `/search`, que es interactivo y por consulta única.
+ *
+ *  Devuelve las páginas del idioma canónico —que son las que mandan para todo
+ *  lo demás— y un mapa id → título en español. */
+async function fetchMoviePages(
+  apiKey: string, pathFor: (page: number) => string, pages: number,
+): Promise<{ pages: Any[]; esTitle: Map<number, string> }> {
+  const [base, es] = await Promise.all([
+    Promise.all(Array.from({ length: pages }, (_, i) => fetchTmdb(apiKey, pathFor(i + 1)))),
+    /* El español, tolerante a fallos: si esta mitad se cae, la rejilla sale en
+       el idioma canónico en vez de no salir. Un título sin traducir es un mal
+       menor; una portada vacía porque TMDB tuvo un mal minuto, no. */
+    Promise.all(Array.from({ length: pages }, (_, i) => {
+      // `?` o `&` según lo que traiga la ruta. Hoy las seis la traen con query,
+      // así que un `&` a pelo funcionaría; el día que alguien pase una ruta
+      // limpia, `&language=es-ES` no sería un error visible sino un parámetro
+      // que TMDB ignora — o sea, el idioma dejaría de aplicarse en silencio y
+      // volveríamos a los títulos en inglés sin nada que lo delate.
+      const p = pathFor(i + 1);
+      return fetchTmdb(apiKey, `${p}${p.includes("?") ? "&" : "?"}language=es-ES`)
+        .catch(() => ({ results: [] }));
+    })),
+  ]);
+  const esTitle = new Map<number, string>();
+  for (const p of es) {
+    for (const r of ((p as Any).results ?? []) as Any[]) {
+      if (r?.id != null && typeof r.title === "string" && r.title) esTitle.set(r.id, r.title);
+    }
+  }
+  return { pages: base, esTitle };
+}
+
 const fetchTmdb = async (apiKey: string, p: string) => {
   // callTmdb owns the credential: header when the secret is a v4 read token,
   // query string when it is a v3 key, and in neither case does a network
@@ -1500,13 +1558,13 @@ async function resolveMovieTrending(admin: SupabaseClient, apiKey: string, force
   }
   const PAGES = 2;
   const KEEP = 24;
-  const pages = await Promise.all(
-    Array.from({ length: PAGES }, (_, i) => fetchTmdb(apiKey, `/trending/movie/week?page=${i + 1}`)),
+  const { pages, esTitle } = await fetchMoviePages(
+    apiKey, (page) => `/trending/movie/week?page=${page}`, PAGES,
   );
   const uniq = capNonWestern(dedupeVisible(pages));
   uniq.length = Math.min(uniq.length, KEEP);
   if (uniq.length === 0) return [];
-  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  await upsertReturning(admin, "titles", uniq.map((r) => movieSearchRow(r, esTitle.get(r.id))), "kind,tmdb_id");
   const ids = uniq.map((r) => r.id as number);
   await writeDiscoverCache(admin, key, ids);
   return ids;
@@ -1532,9 +1590,8 @@ async function resolveMovieNowPlaying(
   }
   const PAGES = 3;
   const KEEP = 40;
-  const pages = await Promise.all(
-    Array.from({ length: PAGES }, (_, i) =>
-      fetchTmdb(apiKey, `/movie/now_playing?region=${encodeURIComponent(region)}&page=${i + 1}`)),
+  const { pages, esTitle } = await fetchMoviePages(
+    apiKey, (page) => `/movie/now_playing?region=${encodeURIComponent(region)}&page=${page}`, PAGES,
   );
   const visible = dedupeVisible(pages);
   // Un solo orden, y el último que se aplica manda: popularidad primero para
@@ -1544,7 +1601,7 @@ async function resolveMovieNowPlaying(
   const uniq = capNonWestern(boostSpanish(visible));
   uniq.length = Math.min(uniq.length, KEEP);
   if (uniq.length === 0) return [];
-  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  await upsertReturning(admin, "titles", uniq.map((r) => movieSearchRow(r, esTitle.get(r.id))), "kind,tmdb_id");
   const ids = uniq.map((r) => r.id as number);
   await writeDiscoverCache(admin, key, ids);
   return ids;
@@ -1570,9 +1627,8 @@ async function resolveMovieUpcoming(
   }
   const PAGES = 3;
   const KEEP = 40;
-  const pages = await Promise.all(
-    Array.from({ length: PAGES }, (_, i) =>
-      fetchTmdb(apiKey, `/movie/upcoming?region=${encodeURIComponent(region)}&page=${i + 1}`)),
+  const { pages, esTitle } = await fetchMoviePages(
+    apiKey, (page) => `/movie/upcoming?region=${encodeURIComponent(region)}&page=${page}`, PAGES,
   );
   const today = new Date().toISOString().slice(0, 10);
   const future = dedupeVisible(pages)
@@ -1590,7 +1646,7 @@ async function resolveMovieUpcoming(
   uniq.length = Math.min(uniq.length, KEEP);
   uniq.sort((a: Any, b: Any) => String(a.release_date).localeCompare(String(b.release_date)));
   if (uniq.length === 0) return [];
-  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  await upsertReturning(admin, "titles", uniq.map((r) => movieSearchRow(r, esTitle.get(r.id))), "kind,tmdb_id");
   const ids = uniq.map((r) => r.id as number);
   await writeDiscoverCache(admin, key, ids);
   return ids;
@@ -1628,21 +1684,20 @@ async function resolveMovieNewToStream(
     : "";
   const PAGES = 3;
   const KEEP = 40;
-  const pages = await Promise.all(
-    Array.from({ length: PAGES }, (_, i) =>
-      fetchTmdb(
-        apiKey,
-        `/discover/movie?sort_by=popularity.desc&include_adult=false` +
-        `&watch_region=${encodeURIComponent(region)}` +
-        `&with_watch_monetization_types=flatrate${withProviders}` +
-        `&with_release_type=4` +
-        `&release_date.gte=${from}&release_date.lte=${to}&page=${i + 1}`,
-      )),
+  const { pages, esTitle } = await fetchMoviePages(
+    apiKey,
+    (page) =>
+      `/discover/movie?sort_by=popularity.desc&include_adult=false` +
+      `&watch_region=${encodeURIComponent(region)}` +
+      `&with_watch_monetization_types=flatrate${withProviders}` +
+      `&with_release_type=4` +
+      `&release_date.gte=${from}&release_date.lte=${to}&page=${page}`,
+    PAGES,
   );
   const uniq = capNonWestern(boostSpanish(dedupeVisible(pages)));
   uniq.length = Math.min(uniq.length, KEEP);
   if (uniq.length === 0) return [];
-  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  await upsertReturning(admin, "titles", uniq.map((r) => movieSearchRow(r, esTitle.get(r.id))), "kind,tmdb_id");
   const ids = uniq.map((r) => r.id as number);
   await writeDiscoverCache(admin, key, ids);
   return ids;
@@ -1663,15 +1718,25 @@ async function resolveMoviePopular(
     (to ? `&primary_release_date.lte=${to}-12-31` : "");
   const PAGES = 5;
   const ES_PAGES = 2;
-  const pages = await Promise.all([
-    ...Array.from({ length: PAGES }, (_, i) =>
-      fetchTmdb(apiKey, `/discover/movie?sort_by=popularity.desc&include_adult=false&page=${i + 1}${yearParams}`)),
-    ...Array.from({ length: ES_PAGES }, (_, i) =>
-      fetchTmdb(apiKey, `/discover/movie?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&page=${i + 1}${yearParams}`)),
+  /* Esta rejilla pide dos juegos de páginas —el catálogo y el suelo español—,
+     así que son dos llamadas al ayudante y sus dos mapas se funden. El orden de
+     `dedupeVisible` sobre las páginas concatenadas es el de antes. */
+  const [global, spain] = await Promise.all([
+    fetchMoviePages(
+      apiKey,
+      (page) => `/discover/movie?sort_by=popularity.desc&include_adult=false&page=${page}${yearParams}`,
+      PAGES,
+    ),
+    fetchMoviePages(
+      apiKey,
+      (page) => `/discover/movie?sort_by=popularity.desc&include_adult=false&with_origin_country=ES&page=${page}${yearParams}`,
+      ES_PAGES,
+    ),
   ]);
-  const uniq = capNonWestern(boostSpanish(dedupeVisible(pages)));
+  const esTitle = new Map([...global.esTitle, ...spain.esTitle]);
+  const uniq = capNonWestern(boostSpanish(dedupeVisible([...global.pages, ...spain.pages])));
   if (uniq.length === 0) return [];
-  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  await upsertReturning(admin, "titles", uniq.map((r) => movieSearchRow(r, esTitle.get(r.id))), "kind,tmdb_id");
   const ids = uniq.map((r) => r.id as number);
   await writeDiscoverCache(admin, key, ids);
   return ids;
@@ -1706,13 +1771,12 @@ async function resolveMovieTopRated(
     (to ? `&primary_release_date.lte=${to}-12-31` : "") +
     (genres.length ? `&with_genres=${genres.join("%7C")}` : "");
   const PAGES = 8;
-  const pages = await Promise.all(
-    Array.from({ length: PAGES }, (_, i) =>
-      fetchTmdb(apiKey, `/discover/movie?include_adult=false${params}&page=${i + 1}`)),
+  const { pages, esTitle } = await fetchMoviePages(
+    apiKey, (page) => `/discover/movie?include_adult=false${params}&page=${page}`, PAGES,
   );
   const uniq = capNonWestern(dedupeVisible(pages));
   if (uniq.length === 0) return [];
-  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  await upsertReturning(admin, "titles", uniq.map((r) => movieSearchRow(r, esTitle.get(r.id))), "kind,tmdb_id");
   const ids = uniq.map((r) => r.id as number);
   await writeDiscoverCache(admin, key, ids);
   return ids;
@@ -2015,7 +2079,7 @@ Deno.serve(async (req) => {
       ]);
       const results: Any[] = data.results ?? [];
       if (results.length === 0) return json({ results: [] });
-      let saved = await upsertReturning(admin, "titles", results.map(movieSearchRow), "kind,tmdb_id");
+      let saved = await upsertReturning(admin, "titles", results.map((r: Any) => movieSearchRow(r)), "kind,tmdb_id");
       const esById = new Map(((esData?.results ?? []) as Any[]).map((r) => [r.id, r]));
       if (wantEs && esById.size > 0) {
         const patches = results
@@ -2212,7 +2276,7 @@ Deno.serve(async (req) => {
       // Por fecha de estreno; las anunciadas sin fecha van al final, que es
       // donde la siguiente entrega de una saga pertenece.
       parts.sort((a, b) => (a.release_date || "9999").localeCompare(b.release_date || "9999"));
-      const saved = await upsertReturning(admin, "titles", parts.map(movieSearchRow), "kind,tmdb_id");
+      const saved = await upsertReturning(admin, "titles", parts.map((r: Any) => movieSearchRow(r)), "kind,tmdb_id");
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
       return json({
         collection: { id: d.id, name: meta.collection_name ?? d.name ?? null },
