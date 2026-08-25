@@ -91,6 +91,142 @@ const ES: Record<string, string> = {
   "TV": "Series",
   "Movies": "Cine",
   "My Movies": "Mi cine",
+  /* Videojuegos. "Sin final" y no "En curso" para 'ongoing': lo que dice no es
+     que lo estés jugando ahora —eso es "Jugando"— sino que el juego no se
+     acaba. Un CS que llevas un año sin tocar sigue sin tener final. */
+  "My Games": "Mis juegos",
+  "IGDB via Reel proxy": "IGDB vía el proxy de Reel",
+  "Games": "Juegos",
+  "Game": "Juego",
+  "Game details": "Ficha del juego",
+  "Playing": "Jugando",
+  "Backlog": "Pendientes",
+  "Ongoing": "Sin final",
+  "Dropped": "Abandonados",
+  "Play state": "En qué punto estás",
+  "Time played": "Tiempo jugado",
+  "Hours played": "Horas jugadas",
+  "Games finished": "Juegos terminados",
+  "Games in your list": "Juegos en tu lista",
+  "hours": "horas",
+  "of {total}": "de {total}",
+  "Mark finished": "Marcar terminado",
+  "Finished — tap to clear": "Terminado — toca para quitarlo",
+  "Platforms": "Plataformas",
+  "Library": "Biblioteca",
+  /* Esta noche, en juegos. El héroe no dice "elige juego": un juego empezado se
+     retoma, y elegir es lo que se hace en la pestaña Pendientes. De ahí que
+     reutilice "Pick up where you left off", que ya existe en el Esta noche de
+     series y dice exactamente eso. */
+  "Start something": "Empieza algo",
+  "Just out": "Recién salidos",
+  /* Lanzamientos, la pantalla. Claves con prefijo y no las de cine ("Releases"
+     → "Estrenos") porque en juegos la palabra es otra: un juego no se estrena,
+     sale. Como toda clave con prefijo, lleva su entrada inglesa abajo para que
+     el prefijo no llegue nunca a la pantalla. */
+  "games: Releases": "Lanzamientos",
+  "games: My releases": "Mis lanzamientos",
+  "games: Announced": "Anunciados",
+  "No date yet": "Sin fecha",
+  "No releases in the games you follow.": "Ningún lanzamiento en los juegos que sigues.",
+  /* Explorar, en juegos. "Más esperados" y no "Tendencias": IGDB no publica
+     nada parecido a lo que la gente juega esta semana, y sí `hypes`, que es
+     cuánta gente sigue un juego SIN SALIR. Resulta ser además la pregunta que
+     más se hace de los videojuegos. */
+  "Most anticipated": "Más esperados",
+  "New releases": "Novedades",
+  "No games on those platforms here.": "Aquí no hay juegos de esas plataformas.",
+  "Nothing to show right now.": "Nada que enseñar ahora mismo.",
+  "Nothing out recently.": "Nada recién salido.",
+  "Nothing announced in the games you follow.": "Nada anunciado en los juegos que sigues.",
+  "Nothing on the go — hit {key} and add a game.":
+    "No tienes nada entre manos — pulsa {key} y añade un juego.",
+  "Most played": "Más jugados",
+  /* Steam (0076). "Lo tengo" y no "En propiedad": lo que responde es la
+     pregunta que uno se hace en la tienda con el móvil en la mano, y esa
+     pregunta se hace con esas tres palabras. */
+  "Owned": "Lo tengo",
+  "from Steam": "de Steam",
+  "Steam account": "Cuenta de Steam",
+  "Connect Steam": "Conectar Steam",
+  "Connected": "Conectada",
+  "Disconnect": "Desconectar",
+  "Sync again": "Volver a sincronizar",
+  "Look at my Steam library": "Mirar mi biblioteca de Steam",
+  "Connect your Steam account to bring in the hours you've already played. Reel only reads your games list — it never posts anything.":
+    "Conecta tu cuenta de Steam para traerte las horas que ya has jugado. Reel solo lee tu lista de juegos — no publica nada.",
+  "Your Steam profile's game details have to be public, or Steam sends back an empty list.":
+    "Los detalles de juego de tu perfil de Steam tienen que ser públicos, o Steam devuelve una lista vacía.",
+  "Steam account connected.": "Cuenta de Steam conectada.",
+  "You cancelled the Steam sign-in.": "Cancelaste la identificación en Steam.",
+  "That sign-in attempt expired. Try again.": "Ese intento caducó. Vuelve a probar.",
+  "That Steam account is already connected to another Reel account.":
+    "Esa cuenta de Steam ya está conectada a otra cuenta de Reel.",
+  "Steam couldn't confirm that sign-in. Try again.":
+    "Steam no ha podido confirmar esa identificación. Vuelve a probar.",
+  "Couldn't save the Steam account. Try again.":
+    "No se ha podido guardar la cuenta de Steam. Vuelve a probar.",
+  "That sign-in link was started from another account, so nothing was linked.":
+    "Ese enlace lo empezó otra cuenta, así que no se ha enlazado nada.",
+  "Asking Steam for your games…": "Pidiéndole a Steam tus juegos…",
+  "Steam sent back an empty list": "Steam ha devuelto una lista vacía",
+  "That's what a private profile looks like — Steam answers with no games and no error. In Steam: Profile → Edit profile → Privacy Settings, and set \"Game details\" to Public. Then sync again.":
+    "Así es como se ve un perfil privado: Steam contesta sin juegos y sin error. En Steam: Perfil → Editar perfil → Configuración de privacidad, y pon «Detalles del juego» en Público. Luego vuelve a sincronizar.",
+  "Couldn't read your Steam library": "No se ha podido leer tu biblioteca de Steam",
+  "Steam didn't answer. Try again in a moment.": "Steam no ha contestado. Prueba dentro de un rato.",
+  "What's coming in": "Qué va a entrar",
+  "{n} of {total} selected": "{n} de {total} marcados",
+  "Only what I follow": "Solo lo que sigo",
+  "None": "Nada",
+  // "In your library" ya está traducida más abajo (la ficha la usa para el
+  // botón de añadir): una clave, una traducción.
+  "use Steam's": "usar la de Steam",
+  "you: {yours} · Steam: {theirs}": "tú: {yours} · Steam: {theirs}",
+  "{n} games have hours you typed yourself. They're kept as they are unless you tick \"use Steam's\".":
+    "{n} juegos tienen horas escritas por ti. Se quedan como están salvo que marques «usar la de Steam».",
+  "Import {n} games": "Importar {n} juegos",
+  /* La pantalla de confirmar de 0078: montones, tandas y lo que se dice de cada
+     juego. "Finished it" es su propia clave y no "Finished" porque esa dice
+     "Terminadas" — la de las series. */
+  "Piles": "Montones",
+  "Every game": "Todos",
+  "Already in Reel": "Ya en Reel",
+  "More than 10 hours": "Con más de 10 h",
+  "Never opened": "Sin tocar nunca",
+  "Hours in conflict": "Horas en conflicto",
+  "Decided so far": "Ya decidido",
+  "{n} ticked": "{n} marcados",
+  "{n} with a state": "{n} con estado",
+  "{n} with a rating": "{n} con nota",
+  "To the {n} ticked in this pile:": "A los {n} marcados de este montón:",
+  "and a rating": "y nota",
+  "Apply to the ticked ones": "Aplicar a los marcados",
+  "Finished it": "Terminado",
+  "Import {name}": "Importar {name}",
+  "in Reel": "en Reel",
+  "last played {date}": "última partida {date}",
+  "never opened": "sin tocar nunca",
+  "use Steam's {hours}": "usar las {hours} de Steam",
+  "you typed {hours}": "tú escribiste {hours}",
+  "saved as finished on {date}, your last session": "se guardará como terminado el {date}, tu última partida",
+  "Steam has no last session for this one, so it'll be saved with today's date":
+    "Steam no sabe cuándo lo jugaste por última vez, así que se guardará con la fecha de hoy",
+  "Anything without a state comes in as yours, undecided.":
+    "Lo que no lleve estado entra como tuyo y sin decidir.",
+  "Marked finished": "Marcados terminados",
+  "Given a rating": "Con nota",
+  "Anything you didn't give a state to arrives marked as owned and undecided: Steam's hours are lifetime totals and say nothing about what you're playing now.":
+    "Lo que no marcaste con un estado entra como «lo tengo» y sin decidir: las horas de Steam son de por vida y no dicen nada sobre lo que estás jugando ahora.",
+  "What you marked as finished is dated with your last session on Steam, not with today.":
+    "Lo que marcaste como terminado lleva la fecha de tu última partida en Steam, no la de hoy.",
+  "Looking up {n} games IGDB didn't have yet…": "Buscando {n} juegos que IGDB aún no tenía…",
+  "Added or updated": "Añadidos o actualizados",
+  "Conflicts kept as yours": "Conflictos que se quedan como tuyos",
+  "Imported games arrive marked as owned, with no play state: Steam's hours are lifetime totals and say nothing about what you're playing now.":
+    "Lo importado entra marcado como «lo tengo» y sin estado: las horas de Steam son de por vida y no dicen nada sobre lo que estás jugando ahora.",
+  "Your Steam library came back empty, and the profile is public — so there's nothing to import.":
+    "Tu biblioteca de Steam ha vuelto vacía, y el perfil es público — así que no hay nada que importar.",
+  "No games yet — hit {key} and add one.": "Aún no hay juegos — pulsa {key} y añade uno.",
   "Movie details": "Ficha de la película",
   "Director": "Dirección",
   "Directors": "Dirección",
@@ -373,6 +509,36 @@ const ES: Record<string, string> = {
   "self: rated {name}": "puntuaste {name}",
   "self: added {name} to their watchlist": "añadiste {name} a tu lista",
   "self: watched {eps} of {name}": "viste {eps} de {name}",
+  /* Los juegos (0074). El evento por debajo es el MISMO watch_event del
+     episodio sintético que en cine, y aun así la frase es otra: lo que ese
+     evento significa en un juego es que te salieron los créditos, no que lo
+     hayas visto. Y la lista a la que se añade se llama "pendientes", que es el
+     nombre del cubo de la biblioteca — decirle "lista" a secas obligaría a
+     recordar cuál. */
+  "finished {name}": "terminó {name}",
+  "self: finished {name}": "terminaste {name}",
+  "added {name} to their backlog": "añadió {name} a sus pendientes",
+  "self: added {name} to their backlog": "añadiste {name} a tus pendientes",
+  /* La biblioteca, que es la tercera lista (0077). No la decide el medio sino
+     la fila: un juego marcado "Lo tengo" NO está en pendientes, así que decir
+     que se añadió ahí sería mentir sobre dónde cayó. Es lo que pasa con todo
+     lo que entra por la importación de Steam. */
+  "added {name} to their library": "añadió {name} a su biblioteca",
+  "self: added {name} to their library": "añadiste {name} a tu biblioteca",
+  /* Y las plegadas: "añadió 39 juegos a su biblioteca". El sustantivo va
+     aparte ({things}) porque en español lleva género y el orden de la frase no
+     es el inglés — que es justo para lo que estas claves son la frase entera y
+     no trozos encadenados. */
+  "added {count} {things} to their library": "añadió {count} {things} a su biblioteca",
+  "self: added {count} {things} to their library": "añadiste {count} {things} a tu biblioteca",
+  "added {count} {things} to their backlog": "añadió {count} {things} a sus pendientes",
+  "self: added {count} {things} to their backlog": "añadiste {count} {things} a tus pendientes",
+  "added {count} {things} to their watchlist": "añadió {count} {things} a su lista",
+  "self: added {count} {things} to their watchlist": "añadiste {count} {things} a tu lista",
+  "games": "juegos",
+  "movies": "películas",
+  "See which ones": "Ver cuáles",
+  "+{n} more — the rest are in their library": "+{n} más — el resto, en su biblioteca",
   // Reactions on those rows (0058)
   "React": "Reaccionar",
   "Reaction": "Reacción",
@@ -686,7 +852,16 @@ const EN: Record<string, string> = {
   "activity: Added": "Added",
   "self: rated {name}": "rated {name}",
   "self: added {name} to their watchlist": "added {name} to your watchlist",
+  "games: Releases": "Releases",
+  "games: My releases": "My releases",
+  "games: Announced": "Announced",
   "self: watched {eps} of {name}": "watched {eps} of {name}",
+  "self: finished {name}": "finished {name}",
+  "self: added {name} to their backlog": "added {name} to your backlog",
+  "self: added {name} to their library": "added {name} to your library",
+  "self: added {count} {things} to their library": "added {count} {things} to your library",
+  "self: added {count} {things} to their backlog": "added {count} {things} to your backlog",
+  "self: added {count} {things} to their watchlist": "added {count} {things} to your watchlist",
 };
 
 /** Dictionaries by language. */
@@ -789,8 +964,12 @@ export function locName(
   esNames: Map<string, string>,
   tmdbId: number | string | null | undefined,
   fallback: string,
-  kind: "tv" | "movie" = "tv",
+  kind: "tv" | "movie" | "game" = "tv",
 ): string {
   if (!isEs() || tmdbId == null) return fallback;
+  // 'game' se acepta y nunca acierta: name_es lo llena tmdb-proxy (0046) y IGDB
+  // no tiene traducciones, así que un juego cae siempre al nombre original. Se
+  // admite igualmente para que las listas mezcladas —el muro, el historial—
+  // llamen a locName con el kind de la fila sin ramificar antes.
   return esNames.get(`${kind}:${Number(tmdbId)}`) ?? fallback;
 }

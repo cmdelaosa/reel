@@ -108,6 +108,27 @@ export function popularityOf(g: any): number {
   return (g?.hypes ?? 0) + (g?.total_rating_count ?? 0);
 }
 
+/** Une los resultados de las dos consultas quitando repetidos, conservando el
+ *  orden de llegada y, ante un empate, la primera aparición.
+ *
+ *  Existe porque una sola consulta no basta (ver la cabecera de la ruta
+ *  /search en index.ts): la de nombre acierta con lo que escribes a medias y
+ *  la de relevancia con los acentos, y hacen falta las dos. Pura y aquí para
+ *  poder probar que NO duplica y que NO pierde. */
+export function mergeResults<T extends { id?: number }>(...lists: readonly (readonly T[])[]): T[] {
+  const seen = new Set<number>();
+  const out: T[] = [];
+  for (const list of lists) {
+    for (const row of list) {
+      if (typeof row?.id !== "number") continue;
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      out.push(row);
+    }
+  }
+  return out;
+}
+
 /** Reordena los resultados de una búsqueda. No filtra: eso ya lo hizo el
  *  WHERE. No pierde filas. */
 export function rankSearch<T>(rows: readonly T[], term: string): T[] {

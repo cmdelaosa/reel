@@ -7,7 +7,7 @@ import { z } from "zod";
 export const titleRowSchema = z.object({
   id: z.string().uuid(),
   tmdb_id: z.number().int(),
-  kind: z.enum(["tv", "movie"]),
+  kind: z.enum(["tv", "movie", "game"]),
   name: z.string(),
   // Localization columns (0046). Optional so rows from a DB that predates the
   // migration — or older persisted cache entries — still validate.
@@ -24,6 +24,31 @@ export const titleRowSchema = z.object({
   episode_run_time: z.number().int().nullable(),
   vote_average: z.number().nullable(),
   popularity: z.number().nullable(),
+  /* Videojuegos (0071). Opcionales por lo mismo que las de localización: una
+     base anterior a la migración, o una entrada vieja de la caché persistida,
+     siguen validando. En series y películas llegan nulas o vacías.
+
+     `poster_path` en un juego NO es una ruta de TMDB sino el hash de la imagen
+     en IGDB; quien lo pinta usa igdbImg() y no tmdbImg(). El tipo es el mismo
+     string, así que esto solo lo dice el comentario. */
+  release_precision: z
+    .enum(["day", "month", "q1", "q2", "q3", "q4", "year", "tbd"])
+    .nullable()
+    .optional(),
+  platforms: z.array(z.string()).nullable().optional(),
+  platform_releases: z
+    .record(z.string(), z.object({ date: z.string(), precision: z.string() }))
+    .nullable()
+    .optional(),
+  beat_seconds: z
+    .object({
+      hastily: z.number().optional(),
+      normally: z.number().optional(),
+      completely: z.number().optional(),
+    })
+    .nullable()
+    .optional(),
+  steam_appid: z.number().int().nullable().optional(),
   // IMDb score (0057), imported from IMDb's published datasets by
   // scripts/imdb-ratings. Optional so rows from a DB that predates the column —
   // or older persisted cache — still parse, and null while a title hasn't been
@@ -109,7 +134,7 @@ export const libraryRowSchema = z.object({
   // El medio (0067). Una sola biblioteca para los dos modos; quien la lee
   // decide qué mitad enseña. Opcional para que una base anterior a la
   // migración siga validando — se lee como 'tv', que es lo que había.
-  kind: z.enum(["tv", "movie"]).optional().default("tv"),
+  kind: z.enum(["tv", "movie", "game"]).optional().default("tv"),
   name: z.string(),
   poster_path: z.string().nullable(),
   first_air_date: z.string().nullable(),
@@ -128,8 +153,50 @@ export const libraryRowSchema = z.object({
   next_air_datetime: z.string().nullable(),
   upcoming_season_number: z.number().int().nullable(),
   upcoming_season_air_date: z.string().nullable(),
+  /* Videojuegos (0073). `play_state` es lo que la persona dijo a mano;
+     TERMINADO no está aquí — es watched_count, el mismo watch_event que en los
+     otros dos medios. Ver domain/gameStatus.ts. */
+  play_state: z.enum(["backlog", "playing", "ongoing", "dropped"]).nullable().optional(),
+  minutes_played: z.number().int().nullable().optional(),
+  /* Cuándo tocaste el juego por última vez (0075) — lo escribe un disparador
+     cuando cambian las horas o el estado. NO es "cuándo lo terminaste", que es
+     last_watched_at. Null en las filas anteriores a la migración, que no se
+     rellenaron a propósito: ordenar cae a added_at (domain/gameTonight). */
+  played_at: z.string().nullable().optional(),
+  /* Steam (0076). `owned` es ortogonal al estado —"es mío", no "voy por
+     aquí"— y saca de "Pendientes" lo que tienes y no has empezado; ver
+     domain/gameStatus.ts. `minutes_source` es lo que deja a la ficha decir de
+     dónde salen las horas sin una consulta más. */
+  owned: z.boolean().nullable().optional(),
+  minutes_source: z.enum(["manual", "steam"]).nullable().optional(),
+  release_precision: z
+    .enum(["day", "month", "q1", "q2", "q3", "q4", "year", "tbd"])
+    .nullable()
+    .optional(),
+  platforms: z.array(z.string()).nullable().optional(),
+  beat_seconds: z
+    .object({
+      hastily: z.number().optional(),
+      normally: z.number().optional(),
+      completely: z.number().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 export type LibraryRow = z.infer<typeof libraryRowSchema>;
+
+/* ---- igdb-proxy ---- */
+
+export const gameSearchResponseSchema = z.object({ results: z.array(titleRowSchema) });
+
+/** La ficha de un juego. `episode_id` es el episodio sintético (0071), que es
+ *  donde se escribe "terminado" — mismo trato que en cine y por el mismo
+ *  motivo: watch_events sigue siendo una tabla de episodios. */
+export const gameResponseSchema = z.object({
+  title: titleRowSchema,
+  episode_id: z.string().uuid().nullable(),
+});
+export type GameResponse = z.infer<typeof gameResponseSchema>;
 
 export const searchResponseSchema = z.object({ results: z.array(titleRowSchema) });
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
@@ -201,7 +268,7 @@ export const personShowSchema = z.object({
   /* El medio de este crédito (0069): la filmografía va mezclada y cada fila
      lleva su glifo. Opcional para que un proxy anterior a la ruta siga
      validando — sus créditos eran todos de series. */
-  kind: z.enum(["tv", "movie"]).optional().default("tv"),
+  kind: z.enum(["tv", "movie", "game"]).optional().default("tv"),
   name: z.string(),
   poster_path: z.string().nullable(),
   first_air_date: z.string().nullable(),

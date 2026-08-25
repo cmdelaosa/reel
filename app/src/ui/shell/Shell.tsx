@@ -1,13 +1,15 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import {
-  Bell, Bookmark, CalendarClock, Clapperboard, Compass, Film, Play, Search, Sliders, Tv, Users,
+  Bell, Bookmark, CalendarClock, Clapperboard, Compass, Film, Gamepad2, Link2, Play, Search,
+  Sliders, Tv, Users,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
 import { useNotifications, useNotificationsRealtime } from "@/lib/notifications";
-import { isMoviePath, setMedium, useMedium, type Medium } from "@/lib/medium";
+import { mediumOfPath, setMedium, useMedium, type Medium } from "@/lib/medium";
 import { MovieSheet } from "@/features/movies/MovieSheet";
+import { GameSheet } from "@/features/games/GameSheet";
 import { NotifPanel } from "@/ui/shell/NotifPanel";
 import { Palette } from "@/ui/shell/Palette";
 import { SettingsSheet } from "@/ui/shell/SettingsSheet";
@@ -44,6 +46,38 @@ const MOVIE_TABS = [
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 
+/* Las cinco, como los otros dos modos. Amigos es LA MISMA página en los tres
+   (solo cambia el acento), así que apunta a la misma ruta — y por eso aparece
+   en las tres listas, que es lo que SHARED_PATHS detecta abajo.
+
+   "Lanzamientos" y no "Estrenos": un juego no se estrena, sale.
+
+   "Pendientes" ocupa el sitio que en los otros dos modos ocupa "Watchlist", y
+   se llama distinto a propósito: es LA palabra que usa quien juega para lo que
+   tiene por jugar, y además es el nombre del cubo al que la pestaña lleva, así
+   que la pestaña y el chip dicen lo mismo. "Playlist" habría rimado con las
+   otras dos y significado otra cosa — en una app de tres medios se lee como
+   música.
+
+   Y una SEXTA, que rompe la simetría de los tres modos a sabiendas: "Steam".
+   No es una preferencia que quepa en los ajustes — es una pantalla con tres
+   pasos (conectar, ver qué va a entrar, confirmar) a la que se vuelve cada vez
+   que quieres traer horas nuevas, y es del modo Juegos y de ningún otro, que es
+   exactamente lo que una pestaña de aquí significa. Va la última de las de
+   juegos, antes de Amigos: es la que menos se abre de las cinco. En móvil la
+   fila ya scrollea en horizontal, y el TabMenu recoge lo que no quepa. */
+const GAME_TABS = [
+  { path: "/games/tonight", label: "Tonight", icon: Clapperboard },
+  { path: "/games/releases", label: "games: Releases", icon: CalendarClock },
+  { path: "/games/backlog", label: "Backlog", icon: Bookmark },
+  { path: "/games/explore", label: "Explore", icon: Compass },
+  // Link2 y no Gamepad2: el mando ya nombra al MODO en el conmutador de la
+  // barra, y repetirlo en una pestaña de dentro sería decir "juegos" dos veces
+  // y "cuenta enlazada" ninguna.
+  { path: "/games/steam", label: "Steam", icon: Link2 },
+  { path: "/friends", label: "Friends", icon: Users },
+] as const;
+
 /* Las rutas que son de UN medio: cambiar de modo desde ellas te lleva a la
    portada del otro, porque quedarte sería quedarte en una pantalla del modo que
    acabas de dejar. Todo lo demás —Amigos, tu perfil, una persona, el historial—
@@ -53,16 +87,30 @@ const MOVIE_TABS = [
    /friends está en las dos listas de pestañas y por eso se comprueba aparte: es
    la página compartida que además tiene pestaña, y mirar solo TABS la contaba
    como de series. */
-const SHARED_PATHS = MOVIE_TABS.filter((m) => TABS.some((t) => t.path === m.path)).map((t) => t.path);
+const SHARED_PATHS = [...MOVIE_TABS, ...GAME_TABS]
+  .filter((m) => TABS.some((t) => t.path === m.path))
+  .map((t) => t.path);
 
 const ownedByAMedium = (pathname: string): boolean => {
   if (SHARED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return false;
-  if (isMoviePath(pathname)) return true;
+  if (mediumOfPath(pathname)) return true;
   return TABS.some((t) => pathname.startsWith(t.path.split("?")[0]));
 };
 
-/* El conmutador de la barra: TV | Movies, con el modo activo relleno de acento.
-   Cambiar de modo es cambiar de sitio, no solo de color. */
+/** La portada de cada modo, adonde te lleva el conmutador desde una ruta que
+ *  es del medio que dejas. Los tres son ya su "esta noche": es la pantalla que
+ *  responde la pregunta con la que se abre la app. */
+const HOME: Record<Medium, string> = {
+  tv: "/tonight",
+  movie: "/movies/tonight",
+  game: "/games/tonight",
+};
+
+/* El conmutador de la barra: TV | Movies | Games, con el modo activo relleno de
+   acento. Cambiar de modo es cambiar de sitio, no solo de color.
+
+   Tres segmentos caben donde cabían dos porque los rótulos son cortos; en
+   móvil el contenedor ya scrollea en horizontal si hiciera falta. */
 function MediumSwitch() {
   const medium = useMedium();
   const navigate = useNavigate();
@@ -72,12 +120,12 @@ function MediumSwitch() {
     if (next === medium) return;
     setMedium(next);
     if (!ownedByAMedium(pathname)) return;
-    navigate(next === "movie" ? "/movies/tonight" : "/tonight");
+    navigate(HOME[next]);
   };
 
   return (
     <div className="mq-medium" role="radiogroup" aria-label={t("Medium")}>
-      {([["tv", Tv, "TV"], ["movie", Film, "Movies"]] as const).map(([key, Icon, label]) => (
+      {([["tv", Tv, "TV"], ["movie", Film, "Movies"], ["game", Gamepad2, "Games"]] as const).map(([key, Icon, label]) => (
         <button
           key={key}
           role="radio"
@@ -105,8 +153,13 @@ export function Shell() {
   // cuál de las dos abrir — y un enlace compartido acabaría en la otra.
   const movieParam = searchParams.get("movie");
   const movieTmdbId = movieParam && /^\d+$/.test(movieParam) ? Number(movieParam) : null;
+  // Y la de un juego: `?game=` lleva un id de IGDB, que vive en otro espacio de
+  // numeración que los de TMDB (0071). Tres parámetros y no uno por la misma
+  // razón que había dos.
+  const gameParam = searchParams.get("game");
+  const gameIgdbId = gameParam && /^\d+$/.test(gameParam) ? Number(gameParam) : null;
   const medium = useMedium();
-  const tabs = medium === "movie" ? MOVIE_TABS : TABS;
+  const tabs = medium === "movie" ? MOVIE_TABS : medium === "game" ? GAME_TABS : TABS;
 
   /* El conmutador fija el medio, pero no es el único que mueve la ruta: Atrás y
      Adelante también. Sin esto, volver desde /tonight a /movies dejaba la
@@ -115,11 +168,12 @@ export function Shell() {
      compartida (Amigos, tu perfil) el modo se queda como estaba, que es lo que
      hace que teñirlas signifique algo. */
   useEffect(() => {
-    if (isMoviePath(pathname)) setMedium("movie");
+    const owner = mediumOfPath(pathname);
+    if (owner) setMedium(owner);
     else if (ownedByAMedium(pathname)) setMedium("tv");
   }, [pathname]);
 
-  const closeSheet = (param: "title" | "movie") => () =>
+  const closeSheet = (param: "title" | "movie" | "game") => () =>
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete(param);
@@ -138,7 +192,7 @@ export function Shell() {
     setPaletteOpen(false);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set(medium === "movie" ? "movie" : "title", String(tmdbId));
+      next.set(medium === "movie" ? "movie" : medium === "game" ? "game" : "title", String(tmdbId));
       return next;
     });
   };
@@ -264,6 +318,9 @@ export function Shell() {
       )}
       {movieTmdbId != null && (
         <MovieSheet key={movieTmdbId} tmdbId={movieTmdbId} onClose={closeSheet("movie")} />
+      )}
+      {gameIgdbId != null && (
+        <GameSheet key={gameIgdbId} igdbId={gameIgdbId} onClose={closeSheet("game")} />
       )}
 
       <OfflineToast />

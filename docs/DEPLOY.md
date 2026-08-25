@@ -37,8 +37,19 @@ linked hosted DB.
 
 ```bash
 supabase functions deploy tmdb-proxy igdb-proxy episode-refresh alerts importer export \
-  friend-request-email
+  friend-request-email steam-sync
 ```
+
+`steam-sync` es la única función que se despliega **sin la reja de JWT de la
+plataforma**, y no hace falta acordarse: `supabase/config.toml` lleva
+`[functions.steam-sync] verify_jwt = false` y la CLI lo lee. El motivo está
+explicado allí — la vuelta de OpenID es una navegación del navegador y no puede
+llevar cabecera `Authorization` —, y la función comprueba la sesión ella misma
+en todas sus otras rutas.
+
+⚠️ **`steam-sync` e `igdb-proxy` van juntos.** La importación resuelve contra la
+ruta `/by-steam` de `igdb-proxy`, que llega en 0076: desplegar solo `steam-sync`
+deja las importaciones colgadas en `applying` con un 404 en `job_runs`.
 
 Deploy migrations before the functions. `tmdb-proxy` uses the
 `is_current_user_invited()` function introduced in migration 0033 to combine
@@ -66,6 +77,8 @@ until the function lands, which pg_net swallows silently).
 supabase secrets set TMDB_API_KEY=...        # TMDB v4 read access token (or v3 key)
 supabase secrets set IGDB_CLIENT_ID=...       # Twitch app Client ID  (videojuegos)
 supabase secrets set IGDB_CLIENT_SECRET=...   # Twitch app Client Secret
+supabase secrets set STEAM_API_KEY=...        # Steam Web API key   (videojuegos)
+supabase secrets set APP_URL=https://...      # origen público de la app (vuelta de Steam)
 supabase secrets set RESEND_API_KEY=...       # Resend API key
 supabase secrets set RESEND_FROM="Reel <alerts@yourdomain.com>"   # verified domain
 ```
@@ -91,6 +104,50 @@ El límite de IGDB son **4 peticiones por segundo por Client ID**, compartidas
 entre todos los usuarios de la app — no por usuario, como en TMDB. Por eso
 `igdb-proxy` sirve siempre de la caché de `titles` y solo va a la red cuando no
 hay fila o tiene más de 24 h.
+
+**Steam (importar horas, 0076).** Steam va al revés que IGDB en las dos mitades,
+y confundirlas es el error que cuesta una tarde:
+
+- **La identidad es por usuario.** Steam no tiene OAuth: tiene OpenID 2.0, que
+  devuelve un SteamID64 y nada más. Cada persona enlaza la suya desde
+  `/games/steam` y se guarda en `profiles.steam_id`. No hay nada que configurar
+  aquí, ni registro de aplicación, ni URL de redirección que dar de alta —
+  OpenID 2.0 no tiene consola de desarrollador.
+- **La Web API key sí es del proyecto.** `STEAM_API_KEY`, una sola para toda la
+  app, y es la que convierte ese SteamID64 en la lista de juegos con sus horas.
+  Se saca en [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)
+  con una cuenta de Steam que tenga algo comprado (Valve no la da a cuentas sin
+  compras); el dominio que pide el formulario es informativo. Sin este secreto,
+  `/scan` responde 502 y la pantalla dice que Steam no ha contestado.
+
+`APP_URL` es el origen al que Steam devuelve a la persona cuando termina
+(`https://reel-app.com`, sin barra final; en local, `http://localhost:5173` en
+`supabase/.env`). Es un **secreto y no la cabecera `Origin` de quien pidió el
+enlace**, y esa es la diferencia entre una redirección y una redirección
+abierta: `/login` la puede llamar cualquiera con sesión y con `curl`, así que si
+el destino saliera de la petición, lo elegiría quien la fabricó — y encima con
+una pantalla de Steam de por medio dándole apariencia de legítimo. Sin este
+secreto, `/return` responde 500 y el enlace no se completa.
+
+**El enlace de la cuenta son dos pasos, y hay que saberlo si se depura.**
+`/return` NO escribe en `profiles`: solo deja en el pagaré el SteamID64 que
+Valve ha confirmado y devuelve a `/games/steam?steam=confirm&n=…`; quien escribe
+es `/confirm`, que exige el JWT de la sesión y que el pagaré sea suyo. El motivo
+es que quien crea el pagaré elige su `user_id`: con un solo paso bastaría con
+pasarle a alguien el enlace de Steam para que su cuenta acabara enlazada a otro
+perfil. Un enlace que acaba en `steam=mismatch` es exactamente ese caso, y no un
+fallo.
+
+La clave viaja **en la query string**, y no hay alternativa: la Web API no
+acepta cabecera. Es exactamente la situación que con TMDB acabó con el secreto
+escrito en los logs, así que `steam-sync` no registra nunca una URL: todo lo que
+sale por `console.error` pasa antes por su función `redact`.
+
+**El perfil de Steam tiene que ser público.** Si "Detalles del juego" está en
+privado, `GetOwnedGames` responde **200 con `{"response":{}}`** — sin error y sin
+lista. La función lo distingue de una biblioteca vacía de verdad (que sí trae
+`game_count`) y la interfaz lo explica con los pasos exactos, porque leído como
+"no tienes juegos" manda a la persona a buscar una avería en su cuenta.
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected
 automatically. Without `RESEND_FROM` the alerts function **skips email** (it will
@@ -140,8 +197,8 @@ select name from vault.secrets;   -- expect episode_refresh_service_key
 
 ## 5. Schedule the cron jobs
 
-The daily `episode-refresh`, `discover-warm` and `alerts` jobs have **no
-automatic scheduling** — nothing in the migrations sets them up. Provision them
+The daily `episode-refresh`, `discover-warm`, `igdb-warm` and `alerts` jobs have
+**no automatic scheduling** — nothing in the migrations sets them up. Provision them
 once:
 
 1. Open `supabase/deploy/schedule-jobs.sql`.
@@ -153,7 +210,7 @@ once:
 Then confirm:
 
 ```sql
-select jobname, schedule, active from cron.job;   -- expect all three, active
+select jobname, schedule, active from cron.job;   -- expect all four, active
 ```
 
 ### Which service key
@@ -201,6 +258,10 @@ nobody is looking.
 - `tmdb-proxy/warm`, which fills the Explore discovery caches. Skipping it isn't
   harmful, only slow: the first person to open Explore rebuilds them instead,
   and a cold `popular-now` costs ~80 sequential TMDB fetches.
+- `igdb-proxy/warm`, the same thing for the games mode's four grids. Here
+  skipping it costs more than time: IGDB rate-limits the whole project to four
+  requests per second, shared by every user, so a cold Explore competes with
+  everyone else's searches and game sheets.
 
 IMDb ratings are not part of this job at all — they come from the hourly
 `imdb-ratings` GitHub Action (see ARCHITECTURE → Metadata cache), which needs the
@@ -293,6 +354,11 @@ steps: [MIGRATION-CLOUDFLARE.md](MIGRATION-CLOUDFLARE.md).
       # It is also the TMDB credential check: every slot at zero is TMDB
       # rejecting TMDB_API_KEY.
       curl -X POST https://<ref>.supabase.co/functions/v1/tmdb-proxy/warm \
+        -H "Authorization: Bearer $SR"
+      # Y el del modo Videojuegos, que es el mismo informe contra IGDB:
+      # {"ok":true,"summary":{"anticipated":60,"new":60,"popular":60,"top-rated":60}}
+      # Los cuatro a cero es Twitch rechazando IGDB_CLIENT_ID/SECRET.
+      curl -X POST https://<ref>.supabase.co/functions/v1/igdb-proxy/warm \
         -H "Authorization: Bearer $SR"
       ```
 - [ ] After ~a day (or a manual run), `select jobname, status, return_message

@@ -1,12 +1,13 @@
-import { Fragment, useEffect, useMemo, useRef } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { useFriendActivity, type ActivityItem } from "@/lib/explore";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { useAddedBatch, useFriendActivity, type ActivityItem } from "@/lib/explore";
 import { useFriendships } from "@/lib/friends";
 import { useEventReactions } from "@/lib/reactions";
 import { byEvent, type ReactionRow } from "@/domain/reactions";
 import { relativeTime } from "@/domain/time";
-import { showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
-import { tmdbImg } from "@/lib/tmdb";
+import { addedListOf, showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
+import { thumbArt } from "@/lib/artwork";
 import { dateLocale, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useOpenTitle } from "@/lib/useOpenTitle";
@@ -19,6 +20,83 @@ import { ReactionBar } from "@/features/explore/ReactionBar";
 /* One shared empty list, so a row with no reactions doesn't hand ReactionBar a
    fresh array identity on every render. */
 const EMPTY: ReactionRow[] = [];
+
+/** Los títulos que hay detrás de una fila plegada (0077).
+ *
+ *  Se monta al desplegar, así que la consulta sale entonces y no antes: el muro
+ *  trae treinta filas y lo normal es que nadie abra ninguna.
+ *
+ *  Rejilla de carátulas y no una lista de texto: son cuarenta juegos y lo que
+ *  se hace con ellos es reconocerlos de un vistazo, no leerlos. Cada uno abre
+ *  su ficha, que es lo que la fila plegada dejó de poder hacer. */
+function AddedBatch({
+  eventKey,
+  total,
+  onPick,
+}: {
+  eventKey: string;
+  /** Lo que dice la frase de arriba. Si la lista trae menos, es el tope del
+   *  servidor y hay que decirlo: "añadió 300 juegos" con 200 carátulas debajo
+   *  y sin explicación se lee como que faltan cien por una avería. */
+  total: number;
+  onPick: (t: { kind: string; tmdb_id: number }) => void;
+}) {
+  const { data, isPending } = useAddedBatch(eventKey);
+
+  if (isPending) {
+    return (
+      <div className="surface-2" style={{ borderRadius: "var(--r)", padding: 12, margin: "0 0 8px 52px" }}>
+        <div className="skeleton" style={{ height: 64, borderRadius: "var(--r-md)" }} />
+      </div>
+    );
+  }
+  if (!data?.length) return null;
+
+  return (
+    <div
+      className="surface-2"
+      style={{
+        borderRadius: "var(--r)", padding: 12, margin: "0 0 8px 52px",
+        display: "grid", gap: 10,
+        gridTemplateColumns: "repeat(auto-fill, minmax(64px, 1fr))",
+      }}
+    >
+      {data.map((t) => {
+        const art = thumbArt(t.kind, t.poster_path);
+        return (
+          <button
+            key={`${t.kind}:${t.tmdb_id}`}
+            type="button"
+            title={t.name}
+            onClick={(e) => { e.stopPropagation(); onPick(t); }}
+            style={{ all: "unset", cursor: "pointer", minWidth: 0 }}
+          >
+            <div
+              className="mq-row-art"
+              style={{
+                width: "100%", aspectRatio: "2 / 3", borderRadius: "var(--r-sm)",
+                ...(art ? {} : { background: posterBg(t.name) }),
+              }}
+            >
+              {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+            </div>
+            <div
+              className="mute"
+              style={{ fontSize: 11, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
+              {t.name}
+            </div>
+          </button>
+        );
+      })}
+      {data.length < total && (
+        <div className="mute" style={{ gridColumn: "1 / -1", fontSize: 11.5 }}>
+          {tv("+{n} more — the rest are in their library", { n: total - data.length })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* The group's wall (P4-C4, reactions in 0058) — every episode watched, plus
    adds and ratings, yours among them.
@@ -59,27 +137,59 @@ function fill(s: string, nodes: Record<string, React.ReactNode>): React.ReactNod
    away with one verb ("watched"), Spanish does not ("vio" / "viste"). */
 function phrase(a: ActivityItem, titleName: string, isMe: boolean): React.ReactNode {
   const name = <b style={{ fontWeight: 700 }}>{titleName}</b>;
-  // Solo cuando la frase lleva episodios: en cine no hay rango que componer, y
-  // construirlo para tirarlo deja el código afirmando justo encima lo que la
-  // rama de abajo niega.
-  const eps = watchedPhrase(a.kind) === "with-episodes"
+  const shape = watchedPhrase(a.kind);
+  // Solo cuando la frase lleva episodios: ni en cine ni en juegos hay rango que
+  // componer, y construirlo para tirarlo deja el código afirmando justo encima
+  // lo que la rama de abajo niega.
+  const eps = shape === "with-episodes"
     && a.season_number != null && a.episode_number != null && (
       <b style={{ fontWeight: 700 }}>{epRange(a)}</b>
     );
   switch (a.verb) {
     case "rated":
       return fill(tr(isMe ? "self: rated {name}" : "rated {name}"), { name });
-    case "added":
-      return fill(
-        tr(isMe ? "self: added {name} to their watchlist" : "added {name} to their watchlist"),
-        { name },
-      );
+    case "added": {
+      /* La lista tiene otro nombre en cada medio —watchlist para series y cine,
+         PENDIENTES para juegos— y desde 0076 hay una tercera que no la decide
+         el medio sino la fila: lo marcado como "Lo tengo" va a la BIBLIOTECA.
+         Cuál toca lo dice el servidor; domain/mediumCopy pone el respaldo. */
+      const list = addedListOf(a.kind, a.added_list);
+      const n = a.added_count ?? 1;
+
+      /* Plegado (0077). Una importación de Steam mete cuarenta juegos de golpe:
+         sin esto son cuarenta filas idénticas que además se comen el cupo del
+         muro de esa persona y borran su actividad de series. Con uno solo la
+         frase es exactamente la de antes, y por eso son dos ramas y no una
+         frase con "1" dentro: "añadió 1 juego a su biblioteca" es lo que se
+         escribe cuando a nadie le importa cómo suena. */
+      if (n > 1) {
+        const count = <b style={{ fontWeight: 700 }}>{n}</b>;
+        const things = tr(a.kind === "game" ? "games" : a.kind === "movie" ? "movies" : "shows");
+        const key = list === "library"
+          ? (isMe ? "self: added {count} {things} to their library" : "added {count} {things} to their library")
+          : list === "backlog"
+          ? (isMe ? "self: added {count} {things} to their backlog" : "added {count} {things} to their backlog")
+          : (isMe ? "self: added {count} {things} to their watchlist" : "added {count} {things} to their watchlist");
+        return fill(tr(key), { count, things });
+      }
+
+      const key = list === "library"
+        ? (isMe ? "self: added {name} to their library" : "added {name} to their library")
+        : list === "backlog"
+        ? (isMe ? "self: added {name} to their backlog" : "added {name} to their backlog")
+        : (isMe ? "self: added {name} to their watchlist" : "added {name} to their watchlist");
+      return fill(tr(key), { name });
+    }
     case "watched":
-      /* Una película se ve entera y de una vez: no hay un "S1·E1 de" que
-         anteponerle, y el episodio sintético que la sostiene por debajo (0067)
-         no es algo que nadie quiera leer. Cuál de las dos frases toca lo decide
+      /* Una película se ve entera y de una vez, y un juego ni siquiera se ve:
+         se termina. En los dos casos no hay un "S1·E1 de" que anteponerle, y el
+         episodio sintético que los sostiene por debajo (0067, 0071) no es algo
+         que nadie quiera leer. Cuál de las tres frases toca lo decide
          domain/mediumCopy, que es donde está probado. */
-      if (watchedPhrase(a.kind) === "whole-title") {
+      if (shape === "whole-title-finished") {
+        return fill(tr(isMe ? "self: finished {name}" : "finished {name}"), { name });
+      }
+      if (shape === "whole-title") {
         return fill(tr(isMe ? "self: watched {name}" : "watched {name}"), { name });
       }
       return fill(tr(isMe ? "self: watched {eps} of {name}" : "watched {eps} of {name}"), { eps, name });
@@ -143,6 +253,11 @@ export function FriendActivityCard() {
   // The shared opener, which also warms the detail cache — the inline copy this
   // replaced opened every activity row cold.
   const openTitle = useOpenTitle();
+  /* Una fila desplegada cada vez, y no un Set. Cada despliegue es una consulta,
+     y dejar diez abiertas es pedir diez listas que nadie está mirando — la
+     pregunta que responde esta interfaz ("¿cuáles eran esos 39?") se hace de
+     una en una. */
+  const [openKey, setOpenKey] = useState<string | null>(null);
 
   // A reaction notification links straight at its row, which may sit anywhere
   // in the page — so search all of it, not just the first screenful, and reveal
@@ -187,17 +302,20 @@ export function FriendActivityCard() {
   if (items.length === 0) return null;
 
   const openFriend = (id: string) => navigate(`/friend/${id}`);
-  /* Cada medio abre su ficha: ?movie= la de cine, ?title= la de series. Un id de
-     TMDB solo es único dentro del suyo (0067), así que mandar los dos por el
-     mismo parámetro abriría la otra cosa con el mismo número. */
-  const openEvent = (a: ActivityItem) => {
-    if (a.kind !== "movie") return openTitle(a.tmdb_id);
+  /* Cada medio abre su ficha: ?title= la de series, ?movie= la de cine y ?game=
+     la de juegos. Un id solo es único dentro de su medio —y el de un juego ni
+     siquiera es de TMDB, es de IGDB (0071)—, así que mandarlos todos por el
+     mismo parámetro abriría otra cosa con el mismo número. */
+  const openEvent = (a: { kind: string; tmdb_id: number }) => {
+    if (a.kind === "tv") return openTitle(a.tmdb_id);
+    const param = a.kind === "movie" ? "movie" : "game";
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set("movie", String(a.tmdb_id));
+      next.set(param, String(a.tmdb_id));
       return next;
     });
   };
+
 
   return (
     <section className="flex flex-col gap-4">
@@ -208,17 +326,28 @@ export function FriendActivityCard() {
       </div>
       <div className="card" style={{ padding: 6 }}>
         {shown.map((a) => {
-          const art = tmdbImg(a.poster_path, "w92");
+          /* La carátula sale de una fuente distinta según el medio: un juego
+             guarda un hash de IGDB donde series y cine guardan una ruta de
+             TMDB (0071). thumbArt lo resuelve; tmdbImg a secas devolvía una URL
+             que responde 404 en silencio. */
+          const art = thumbArt(a.kind, a.poster_path);
           const titleName = locName(esNames, a.tmdb_id, a.title_name, a.kind);
           const isMe = a.friend_id === me;
           const flashed = Boolean(a.event_key) && a.event_key === flashKey;
           const count = a.ep_count ?? 1;
+          /* Una fila plegada no lleva a ningún sitio: su título es solo el
+             representante del grupo, y abrirlo al tocar la fila sería abrir uno
+             cualquiera de los 39. Lo que hace es abrirse. */
+          const grouped = a.verb === "added" && (a.added_count ?? 1) > 1 && Boolean(a.event_key);
+          const isOpen = grouped && openKey === a.event_key;
+          const rowKey = a.event_key ?? `${a.friend_id}|${a.tmdb_id}|${a.at}`;
           return (
+            <div key={rowKey} className="flex flex-col">
             <div
-              key={a.event_key ?? `${a.friend_id}|${a.tmdb_id}|${a.at}`}
               ref={flashed ? flashRef : undefined}
               className={`fr-activity${flashed ? " fr-flash" : ""}`}
-              onClick={() => openEvent(a)}
+              onClick={() =>
+                grouped ? setOpenKey(isOpen ? null : a.event_key!) : openEvent(a)}
             >
               <span onClick={(e) => { e.stopPropagation(); openFriend(a.friend_id); }} style={{ flex: "0 0 auto" }}>
                 <FriendAvatar f={{ id: a.friend_id, name: a.friend_name, avatarUrl: a.friend_avatar }} size={38} />
@@ -254,9 +383,29 @@ export function FriendActivityCard() {
                   vez de como un adorno suelto en la frase. En las dos, no solo
                   en el cine — ver el par es lo que enseña la convención. */}
               <MediumGlyph kind={a.kind} />
-              <div className="mq-row-art" style={{ width: 34, height: 50, ...(art ? {} : { background: posterBg(titleName) }) }}>
-                {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
-              </div>
+              {/* En una fila plegada la carátula es la del representante, así
+                  que en su sitio va el gesto: el chevrón dice que hay algo
+                  debajo, que es lo que la fila promete. */}
+              {grouped ? (
+                <button
+                  type="button"
+                  className="btn btn-icon btn-ghost"
+                  aria-label={tr("See which ones")}
+                  aria-expanded={isOpen}
+                  style={{ flex: "0 0 auto" }}
+                  onClick={(e) => { e.stopPropagation(); setOpenKey(isOpen ? null : a.event_key!); }}
+                >
+                  {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
+              ) : (
+                <div className="mq-row-art" style={{ width: 34, height: 50, ...(art ? {} : { background: posterBg(titleName) }) }}>
+                  {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+                </div>
+              )}
+            </div>
+            {isOpen && (
+              <AddedBatch eventKey={a.event_key!} total={a.added_count ?? 0} onPick={openEvent} />
+            )}
             </div>
           );
         })}

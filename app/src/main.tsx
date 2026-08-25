@@ -24,6 +24,11 @@ import MoviesPage from "@/features/movies/MoviesPage";
 import MoviesTonightPage from "@/features/movies/MoviesTonightPage";
 import MovieReleasesPage from "@/features/movies/MovieReleasesPage";
 import MoviesExplorePage from "@/features/movies/MoviesExplorePage";
+import GamesPage from "@/features/games/GamesPage";
+import GamesTonightPage from "@/features/games/GamesTonightPage";
+import GameReleasesPage from "@/features/games/GameReleasesPage";
+import GamesExplorePage from "@/features/games/GamesExplorePage";
+import SteamPage from "@/features/games/SteamPage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
@@ -119,6 +124,29 @@ const router = createBrowserRouter([
       { path: "movies/releases", element: <MovieReleasesPage /> },
       { path: "movies/watchlist", element: <MoviesPage /> },
       { path: "movies/explore", element: <MoviesExplorePage /> },
+
+      /* Los juegos cuelgan de /games, el otro prefijo que lib/medium reconoce,
+         y con la misma planta que el cine: una portada, la biblioteca, un
+         calendario y explorar. `/games` a secas redirige a la portada, que ya
+         no es la biblioteca — deja el prefijo del modo sin pantalla propia y
+         evita que la pestaña de la biblioteca se encienda en las otras.
+
+         La biblioteca vive en `/games/backlog` y no en `/games/library` porque
+         la pestaña que lleva a ella se llama Pendientes y abre en ese cubo:
+         la ruta, la pestaña y el chip dicen los tres la misma palabra. */
+      { path: "games", element: <Navigate to="/games/tonight" replace /> },
+      { path: "games/tonight", element: <GamesTonightPage /> },
+      { path: "games/releases", element: <GameReleasesPage /> },
+      { path: "games/backlog", element: <GamesPage /> },
+      // La URL de antes de que la biblioteca tuviera nombre propio, viva como
+      // redirección para que un enlace guardado siga llegando (igual que
+      // /friends/kpis).
+      { path: "games/library", element: <Navigate to="/games/backlog" replace /> },
+      { path: "games/explore", element: <GamesExplorePage /> },
+      /* La vuelta del login de Steam aterriza aquí con ?steam=… — es una URL
+         que escribe la edge function a partir del secreto APP_URL, así que la
+         ruta no puede moverse sin mover también lo que se escribe allí (0076). */
+      { path: "games/steam", element: <SteamPage /> },
       { path: "explore", element: <ExplorePage /> },
       { path: "collection/:slug", element: <CollectionPage /> },
       { path: "calendar", element: <CalendarPage /> },

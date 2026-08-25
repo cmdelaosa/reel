@@ -12,6 +12,17 @@ export const qk = {
   movie: (tmdbId: number) => ["movie", tmdbId] as const,
   movieCredits: (tmdbId: number) => ["movieCredits", tmdbId] as const,
   movieSaga: (tmdbId: number) => ["movieSaga", tmdbId] as const,
+  /* Y las de juegos, por el mismo motivo elevado a tres: el id de un juego es
+     de IGDB, otro espacio de numeración entero (0071). */
+  gameSearch: (q: string) => ["gameSearch", q] as const,
+  game: (igdbId: number) => ["game", igdbId] as const,
+  gamePool: (pool: string) => ["gamePool", pool] as const,
+  /* Steam (0076). Dos claves y no una: la cuenta enlazada cambia una vez cada
+     mucho y el borrador de la importación se sondea cada dos segundos mientras
+     hay trabajo — compartir clave sería refrescar el perfil cuarenta veces por
+     importación. */
+  steamLink: ["steamLink"] as const,
+  steamImport: ["steamImport"] as const,
   title: (tmdbId: number) => ["title", tmdbId] as const,
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,
@@ -26,6 +37,10 @@ export const qk = {
   watchHeatmap: ["watchHeatmap"] as const,
   notifications: ["notifications"] as const,
   friendActivity: (limit: number) => ["friendActivity", limit] as const,
+  /* El detalle de una fila plegada del muro (0077). Por clave de evento, que
+     es lo que identifica esa fila en todo lo demás — las reacciones ya viajan
+     por ella. */
+  addedBatch: (eventKey: string) => ["addedBatch", eventKey] as const,
   /* The whole key list, sorted — the cache key has to BE the query's input.
      Keyed by a digest of it (the newest event + the count) instead, two pages
      that shared a head and a length served each other's reactions, and a row

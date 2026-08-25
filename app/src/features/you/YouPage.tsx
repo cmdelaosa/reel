@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { CalendarClock, ChevronLeft, ChevronRight, Clapperboard, Clock, Eye, Film, History, LayoutGrid, Share2, Star, Tv, Users } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Clapperboard, Clock, Eye, Film, Gamepad2, History, LayoutGrid, Share2, Star, Timer, Trophy, Tv, Users } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useLibrary } from "@/lib/library";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
@@ -164,20 +164,37 @@ export default function YouPage() {
       {stats && (
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
           {[
-            /* Cine y series cuentan por separado (0069): una película no es un
-               episodio, y sumarlas bajo una etiqueta sola es lo que hacía falsa
-               la cifra. Los minutos sí van juntos — son minutos, y no cambian
-               de unidad al cambiar de medio.
-               Las dos de cine solo se pintan si tienes algo: a quien solo ve
-               series, dos ceros permanentes le dicen menos que nada. */
+            /* Cada medio cuenta por separado (0069 el cine, 0074 los juegos):
+               una película no es un episodio y un juego no es ninguno de los
+               dos, y sumarlos bajo una etiqueta sola es lo que hacía falsa la
+               cifra. Los minutos de VER sí van juntos — son minutos, y no
+               cambian de unidad al cambiar de medio—, pero los de JUGAR no:
+               salen de lo que escribiste a mano (0073), no de un runtime, y
+               mezclarlos le habría inventado cuarenta minutos a cada juego.
+               Las de cine y juegos solo se pintan si tienes algo: a quien solo
+               ve series, cinco ceros permanentes le dicen menos que nada. */
             { icon: Eye, label: tr("Episodes watched"), value: stats.episodes_watched.toLocaleString() },
             ...(stats.movies_watched > 0
               ? [{ icon: Film, label: tr("Movies watched"), value: stats.movies_watched.toLocaleString() }]
               : []),
+            ...(stats.games_finished > 0
+              ? [{ icon: Trophy, label: tr("Games finished"), value: stats.games_finished.toLocaleString() }]
+              : []),
             { icon: Clock, label: tr("Time spent"), value: timeSpentLabel(stats.minutes_watched) },
+            /* timeSpentLabel y no formatPlaytime, que es el formateador propio
+               de los juegos: aquí la cifra vive al lado de "Tiempo visto" y las
+               dos tienen que leerse de un vistazo con la misma unidad. El "18 h
+               30 min" fino es de la ficha, donde se compara con lo que tarda en
+               terminarse. */
+            ...(stats.minutes_played > 0
+              ? [{ icon: Timer, label: tr("Time played"), value: timeSpentLabel(stats.minutes_played) }]
+              : []),
             { icon: Tv, label: tr("Shows followed"), value: String(stats.shows_followed) },
             ...(stats.movies_followed > 0
               ? [{ icon: Clapperboard, label: tr("Movies in your list"), value: String(stats.movies_followed) }]
+              : []),
+            ...(stats.games_followed > 0
+              ? [{ icon: Gamepad2, label: tr("Games in your list"), value: String(stats.games_followed) }]
               : []),
             { icon: CalendarClock, label: tr("Coming soon"), value: String(stats.coming_soon) },
             { icon: Users, label: tr("Friends"), value: String(stats.friends) },
