@@ -108,7 +108,37 @@ titles (
                                            -- needs no refetch. Absent country = not available
                                            -- there, and the UI shows no logo. Canonical extraction
                                            -- spec + tests: app/src/domain/watchProviders.ts.
+  original_name text,                      -- 0046: the localisation trio. name/overview stay in
+  name_es text, overview_es text,          -- the app's base language; the _es pair is filled by
+                                           -- the proxy when the language setting asks for it, and
+                                           -- original_name is what the show is called at home —
+                                           -- shown on the sheet, and searchable.
+  imdb_id text, tvmaze_id int,             -- the two bridges out of TMDB: IMDb's datasets are
+                                           -- keyed by imdb_id (0057), air TIMES come from TVmaze
+                                           -- (tvmaze_id) because TMDB only dates an episode.
+  air_time_source text not null            -- 'tvmaze' when the time is real, 'estimated' when it
+    default 'estimated',                   -- was derived. The UI never presents a guess as a fact.
+  release_dates jsonb,                     -- MOVIES (0068): {"ES": {"theatrical": …, "digital": …}}
+                                           -- from /movie/:id?append_to_response=release_dates.
+                                           -- Null on tv. Both dates alert, separately — 0072.
+  collection_id int, collection_name text, -- MOVIES (0069): TMDB's belongs_to_collection, i.e. the
+                                           -- saga. On a movie sheet it replaces the episode list.
+  release_precision text,                  -- GAMES (0071): how much of first_air_date is real —
+                                           -- day | month | q1..q4 | year | tbd. IGDB dates a
+                                           -- "Q4 2027" with a precise timestamp, so without this
+                                           -- the UI would promise a day nobody committed to.
+                                           -- Null on tv and movie.
+  platforms text[] not null default '{}',  -- GAMES: the catalogue filter ("only Switch").
+  platform_releases jsonb,                 -- GAMES: a game ships five times, once per platform.
+                                           -- first_air_date is still the one that sorts and dates;
+                                           -- this is for the sheet ("on PS5 now, Switch in autumn").
+  beat_seconds jsonb,                      -- GAMES: how long it takes to finish — the denominator
+                                           -- for hours played. A catalogue fact, so it lives here.
+  steam_appid int,                         -- GAMES (0071): the bridge to the Steam import (0076).
   episode_run_time int, vote_average numeric, popularity numeric,
+                                           -- vote_average is 0-10 in all three media: IGDB scores
+                                           -- out of 100 and the proxy divides before writing, so
+                                           -- one rating UI serves tv, movie and game alike.
   imdb_rating numeric, imdb_votes int,     -- IMDb score, from IMDb's datasets (0057)
   aired_count int,                         -- authoritative aired regular-season episodes (0028)
   last_refreshed_at timestamptz,           -- the title row's DETAIL was refetched. Written by every
@@ -184,7 +214,22 @@ library_entries (
   followed boolean not null default true,   -- the ONE watchlist bit (prototype's core model)
   favorite boolean not null default false,
   notify boolean not null default false,    -- "Notify me" on upcoming titles
+  stopped boolean not null default false,   -- dropped it without unfollowing. Kept apart from
+                                            -- `followed` so the show stays in your history and
+                                            -- your counts, and stops asking for your attention.
   added_at timestamptz,
+  -- GAMES only. Null/zero on tv and movie; a game is one synthetic episode (0067/0071), so
+  -- FINISHED is not here — that is the watch_event on it, same as everything else.
+  play_state text,                          -- playing | ongoing | dropped (0073)
+  minutes_played int not null default 0,    -- denominator lives in titles.beat_seconds
+  minutes_source text,                      -- manual | steam (0073, meaningful since 0076)
+  owned boolean not null default false,     -- you bought it. Orthogonal to play_state: written by
+                                            -- the Steam import and by hand (console, GOG, physical)
+  played_at timestamptz,                    -- when minutes_played/play_state last moved, set by the
+                                            -- game_progress_touch trigger (0075). NOT "when you
+                                            -- finished it". The Steam import seeds it from Steam's
+                                            -- rtime_last_played so 41 games marked done at once do
+                                            -- not all land on today's wall (0078).
   primary key (user_id, title_id)
 )
 watch_events (
@@ -260,6 +305,76 @@ private. A reaction by someone you are not friends with is still visible to you,
 counts on a shared friend's row would lie; their name and face come from `rpc_event_reactions`
 (`security definer`, same event gate), never from a widened read on `profiles`, and come back
 **null** for a private reactor you have no claim on (rendered as "Someone").
+
+### System, caches and the Steam bridge
+
+None of these hold an opinion of yours — they are plumbing, receipts and warmed reads. They
+are listed because "the schema is in ARCHITECTURE.md" has to stay true, and because two of
+them (`job_runs`, `notifications_sent`) are the first place to look when something silently
+stops happening.
+
+```sql
+job_runs (                                  -- 0029: one row per scheduled run, per exit path
+  id uuid pk, job text not null,            -- episode-refresh | alerts | discover-warm |
+                                            -- igdb-warm | steam-sync | imdb-dataset-import
+  started_at timestamptz, finished_at timestamptz,
+  ok boolean not null default false,
+  summary jsonb not null default '{}'       -- the run's own report: counts, errors, skips
+)
+-- Including the boring zero-pending day and the error exits, ON PURPOSE: a missing recent row
+-- always means the job did not complete, which is a thing you can query. `select job, ok,
+-- started_at, summary from job_runs order by started_at desc` is the health check.
+
+notifications_sent (                        -- 0012: the stamp book that makes alerts idempotent
+  user_id uuid fk, episode_id uuid fk,
+  event text not null default 'episode',    -- episode (tv) | theatrical | digital (movies, 0072)
+  sent_at timestamptz,
+  primary key (user_id, episode_id, event)
+)
+-- `event` joined the key in 0072 because a movie has ONE synthetic episode and TWO releases:
+-- without it the second alert died as a duplicate of the first, silently — the worst ending,
+-- since the system would report as sent something nobody received.
+
+ignored_titles (user_id, title_id)          -- 0022: "stop suggesting this to me" in Explore
+collections (…)                             -- 0020: curated lists, hand-built
+collection_titles (collection_id, title_id) --   and their members
+network_logos (…)                           -- 0023: logo paths per network, so the grid does not
+                                            --   refetch TMDB for a picture that never changes
+trending_cache (…)                          -- 0019 \  warmed by the daily crons, read by Explore.
+popular_now_cache (…)                       -- 0025  }  Public read, service-role write, like the
+discover_cache (…)                          -- 0064 /   rest of the metadata mirror.
+```
+
+The Steam import (0076/0078) is three tables because the flow is three steps — ask Steam, show
+you what it found, then write only what you approved:
+
+```sql
+steam_link_nonces (                         -- the IOU of the OpenID round trip
+  nonce text pk, user_id uuid fk,
+  steam_id text,                            -- null until Steam confirms; set = verified, waiting
+  created_at timestamptz, expires_at timestamptz default now() + interval '10 minutes'
+)
+-- RLS on and NO policy at all: only service_role, which bypasses it, ever touches this. It is
+-- not your data, it is plumbing — and the return leg is a browser navigation that cannot carry
+-- an Authorization header, which is why steam-sync is the one function deployed with
+-- verify_jwt = false (see supabase/config.toml).
+
+steam_imports (                             -- one per import attempt
+  id uuid pk, user_id uuid fk,
+  state text check (state in ('scanning','ready','applying','done','error')),
+  error text,                               -- 'private' is the one the UI explains on its own
+  started_at, finished_at timestamptz, summary jsonb
+)
+steam_import_items (                        -- one per game Steam returned
+  id uuid pk, import_id uuid fk, user_id uuid fk,
+  appid int not null, steam_name text not null,
+  minutes int not null default 0,           -- MINUTES, Steam's own unit (playtime_forever) and
+                                            -- the same one library_entries.minutes_played uses.
+                                            -- There is no conversion anywhere in the path.
+  title_id uuid fk null,                    -- null = not in the catalogue yet; ask IGDB by appid
+  in_library boolean not null default false
+)
+```
 
 ## Core derivations (pure functions in `app/src/domain/`, unit-tested)
 
