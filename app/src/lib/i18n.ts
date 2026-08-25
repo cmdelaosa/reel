@@ -946,6 +946,23 @@ export function tGenre(g: string): string {
  *  La clave lleva el medio porque un id de TMDB solo es único dentro del suyo
  *  (0067): con el número a secas, el título español de una película pisaba el
  *  de la serie del mismo id — y al revés, según cuál llegara última. */
+/** Los desplazamientos que faltan por pedir, sabiendo el total y cuántas filas
+ *  trajo de verdad la primera página.
+ *
+ *  Existe suelta y exportada para poder probarla: es aritmética pura y es donde
+ *  vive el fallo caro de un paginado —pedir de menos deja huecos que nadie ve—,
+ *  mientras que lo que la rodea es una llamada de red que este proyecto no
+ *  simula en ninguna prueba.
+ *
+ *  `step` es lo que VINO, no lo que se pidió: el tope de filas por respuesta lo
+ *  decide el servidor, y calcular los tramos con el tamaño pedido cuando sirve
+ *  menos salta filas en silencio. Un `step` de 0 —una primera página vacía— no
+ *  devuelve nada que pedir, que además evita dividir entre cero. */
+export function restOffsets(total: number, step: number): number[] {
+  if (step <= 0 || total <= step) return [];
+  return Array.from({ length: Math.ceil((total - step) / step) }, (_, i) => step + i * step);
+}
+
 export function useEsNames(): Map<string, string> {
   const { session } = useAuth();
   const { data } = useQuery({
@@ -962,31 +979,57 @@ export function useEsNames(): Map<string, string> {
 
          Silent-fail: contra una base anterior a 0046 la columna no existe y los
          nombres canónicos son un respaldo perfectamente digno. */
+      // Medido en producción el 25-ago-2026: 1.436 filas con traducción, 96 kB,
+      // dos páginas de verdad. Crece con el catálogo cacheado, no con tu
+      // biblioteca, así que la forma de esto importa más de lo que su tamaño de
+      // hoy sugiere.
       const PAGE = 1000;
-      const out: [string, string][] = [];
-      let from = 0;
-      for (;;) {
-        const { data, error } = await supabase
+      const page = (from: number) =>
+        supabase
           .from("titles")
-          .select("tmdb_id, kind, name_es")
+          .select("tmdb_id, kind, name_es", { count: "exact" })
           .not("name_es", "is", null)
           .order("kind")
           .order("tmdb_id")
           .range(from, from + PAGE - 1);
-        if (error) return out;
-        const rows = data ?? [];
-        for (const r of rows) {
-          if (r.name_es) out.push([`${r.kind}:${r.tmdb_id}`, r.name_es]);
+
+      /* La primera página trae ADEMÁS el total, y con el total se sabe cuántas
+         quedan sin preguntarlo. Eso ahorra las dos cosas que costaba encadenar
+         páginas hasta ver una vacía:
+
+           · la petición de más — la que solo servía para descubrir que no
+             quedaba nada (medida: 88 ms de puro peaje);
+           · y sobre todo la ESPERA EN FILA. Las páginas iban una detrás de otra
+             porque hasta que no volvía una no se sabía si había otra, así que el
+             mapa tardaba la suma de todas (~0,86 s hoy). Nada se bloquea
+             esperándolo —los títulos se pintan en su idioma canónico y cambian
+             al llegar—, pero ese cambio a la vista es justo lo que se nota, y
+             dura lo que tarde el mapa.
+
+         Con el total, la primera manda y el resto van a la vez: el reloj es el
+         de la más lenta, no el de la suma, y sigue siendo correcto por muchas
+         páginas que haya. */
+      const first = await page(0);
+      if (first.error) return [];
+
+      const rows = [...(first.data ?? [])];
+      const total = first.count ?? rows.length;
+      /* Por lo que HA VENIDO, no por lo que se pidió: el tope de filas de
+         PostgREST es ajuste suyo, y si sirviera menos de mil, calcular los
+         tramos con PAGE dejaría huecos silenciosos — el mismo truncamiento
+         invisible que este paginado existe para arreglar. */
+      const offsets = restOffsets(total, rows.length);
+      if (offsets.length > 0) {
+        const rest = await Promise.all(offsets.map(page));
+        for (const r of rest) {
+          // Una página caída se salta: medio mapa deja medio catálogo en
+          // español, y eso es estrictamente mejor que ninguno.
+          if (!r.error) rows.push(...(r.data ?? []));
         }
-        /* Se avanza por lo que HA VENIDO, no por lo que se pidió, y se para en
-           la página vacía. Cortar en `rows.length < PAGE` daba por hecho que el
-           servidor sirve mil de una: si su tope fuera más bajo —es un ajuste
-           suyo, no nuestro— la primera respuesta ya vendría corta y el bucle
-           pararía ahí, repitiendo en silencio el mismo truncamiento que esto
-           existe para arreglar. */
-        if (rows.length === 0) return out;
-        from += rows.length;
       }
+      return rows
+        .filter((r) => Boolean(r.name_es))
+        .map((r) => [`${r.kind}:${r.tmdb_id}`, r.name_es as string]);
     },
   });
   return useMemo(() => new Map(data ?? []), [data]);
