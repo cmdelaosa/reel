@@ -80,7 +80,14 @@ export default function MoviesTonightPage() {
   const hero = usePick(movies);
   const heroMark = useMarkWatched(hero?.title_id ?? "");
   const heroEpisodeId = hero ? episodeIds?.get(hero.title_id) ?? null : null;
-  const heroArt = hero ? tmdbImg(hero.poster_path, "w780") : undefined;
+  /* Fotograma apaisado para el banner, y el póster de reserva para las pelis a
+     las que TMDB no les ha puesto uno — la misma regla que el hero de series
+     (TonightPage), que es de donde viene la medida: el banner se dibuja a
+     ~1224px, así que w780 se veía blando en una pantalla 2×, y la escalera de
+     pósters de TMDB no tiene w1280, de ahí que la reserva se quede en w780.
+     Antes aquí solo había póster, y un 2:3 recortado a 21:9 no enseña la
+     carátula: enseña una franja del centro, ampliada. */
+  const heroArt = hero ? (tmdbImg(hero.backdrop_path, "w1280") ?? tmdbImg(hero.poster_path, "w780")) : undefined;
   const heroName = hero ? locName(esNames, hero.tmdb_id, hero.name, "movie") : "";
 
   const open = (tmdbId: number) =>

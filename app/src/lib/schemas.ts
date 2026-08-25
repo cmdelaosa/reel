@@ -187,6 +187,11 @@ export const libraryRowSchema = z.object({
      que Tus pelis no diga un número distinto del que dice Explorar. Opcional
      porque una base anterior a 0080 no la devuelve. */
   imdb_rating: z.number().nullable().optional(),
+  /* El fotograma apaisado (0081). Lo pide el hero de Esta noche, que es un
+     banner 21:9: sin él solo quedaba el póster, y un 2:3 recortado a 21:9 se ve
+     como un zoom al centro de la carátula. Opcional por lo de siempre: una base
+     anterior a 0081 no lo devuelve. */
+  backdrop_path: z.string().nullable().optional(),
 });
 export type LibraryRow = z.infer<typeof libraryRowSchema>;
 
