@@ -953,16 +953,32 @@ export function useEsNames(): Map<string, string> {
     enabled: isEs() && Boolean(session?.user.id),
     staleTime: 60 * 60 * 1000,
     queryFn: async (): Promise<[string, string][]> => {
-      // Silent-fail: against a DB that predates migration 0046 the column is
-      // missing — canonical names are a fine fallback, never toast about it.
-      const { data, error } = await supabase
-        .from("titles")
-        .select("tmdb_id, kind, name_es")
-        .not("name_es", "is", null);
-      if (error) return [];
-      return (data ?? [])
-        .filter((r): r is { tmdb_id: number; kind: string; name_es: string } => Boolean(r.name_es))
-        .map((r) => [`${r.kind}:${r.tmdb_id}`, r.name_es]);
+      /* Paginado, y no por elegancia: PostgREST corta en 1.000 filas y NO lo
+         dice. Con las series de la biblioteca ya rondando ese número, el corte
+         se llevaba entero el cine — el mapa se llenaba de series y ninguna
+         película llegaba, así que el modo Movies salía en español con todos los
+         títulos en inglés. `order` es imprescindible: sin él dos páginas pueden
+         solapar y dejar huecos, porque PostgREST no promete ningún orden.
+
+         Silent-fail: contra una base anterior a 0046 la columna no existe y los
+         nombres canónicos son un respaldo perfectamente digno. */
+      const PAGE = 1000;
+      const out: [string, string][] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from("titles")
+          .select("tmdb_id, kind, name_es")
+          .not("name_es", "is", null)
+          .order("kind")
+          .order("tmdb_id")
+          .range(from, from + PAGE - 1);
+        if (error) return out;
+        const rows = data ?? [];
+        for (const r of rows) {
+          if (r.name_es) out.push([`${r.kind}:${r.tmdb_id}`, r.name_es]);
+        }
+        if (rows.length < PAGE) return out;
+      }
     },
   });
   return useMemo(() => new Map(data ?? []), [data]);
