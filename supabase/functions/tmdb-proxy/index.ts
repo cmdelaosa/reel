@@ -1577,9 +1577,18 @@ async function resolveMovieUpcoming(
   const today = new Date().toISOString().slice(0, 10);
   const future = dedupeVisible(pages)
     .filter((r: Any) => typeof r.release_date === "string" && r.release_date >= today);
-  future.sort((a: Any, b: Any) => String(a.release_date).localeCompare(String(b.release_date)));
+  /* El cap PRIMERO y la fecha DESPUÉS, y este es el único de los resolvedores
+     donde ese orden importa: `capNonWestern` no filtra, RE-ORDENA —mete los
+     títulos no occidentales en los huecos 10, 20, 30…—, así que ordenar por
+     fecha antes y caparlo después dejaba un carril que dice "próximamente" y
+     no está en orden de estreno: una película de dentro de seis meses podía
+     caer en el puesto 10, por encima de la de la semana que viene.
+     Capando antes, el cap sigue decidiendo QUIÉNES son los 40, que es para lo
+     que está, y la cronología —que aquí es el contrato de la sección— la fija
+     el último orden. */
   const uniq = capNonWestern(future);
   uniq.length = Math.min(uniq.length, KEEP);
+  uniq.sort((a: Any, b: Any) => String(a.release_date).localeCompare(String(b.release_date)));
   if (uniq.length === 0) return [];
   await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
   const ids = uniq.map((r) => r.id as number);
@@ -2088,14 +2097,21 @@ Deno.serve(async (req) => {
     // acepta ADEMÁS, como segunda llave, porque un logo cacheado hace meses
     // puede haber cambiado desde entonces y perder una plataforma buena.
     //
-    // Mil filas de muestra, no el catálogo: para enumerar las ~15 plataformas
-    // de un país sobra, y PostgREST corta en mil sin avisar de todas formas.
+    // 300 filas de muestra, y las MÁS POPULARES: para enumerar las ~15
+    // plataformas de un país sobra, y traerse mil `providers` enteros —cada uno
+    // con todos los países dentro— eran megas de jsonb en cada apertura del
+    // panel de ajustes. Con `order`, además, la muestra es la misma en dos
+    // llamadas seguidas; sin él PostgREST no promete ningún orden y el ajuste
+    // podía enseñar una lista distinta cada vez.
     if (path === "/movie/providers") {
       const raw = (url.searchParams.get("region") ?? "ES").toUpperCase();
       const region = /^[A-Z]{2}$/.test(raw) ? raw : "ES";
       const [d, cached] = await Promise.all([
         fetchTmdb(apiKey, `/watch/providers/movie?watch_region=${encodeURIComponent(region)}`),
-        admin.from("titles").select("providers").not("providers", "is", null).limit(1000),
+        admin.from("titles").select("providers")
+          .not("providers", "is", null)
+          .order("popularity", { ascending: false, nullsFirst: false })
+          .limit(300),
       ]);
       const flatrate = new Set<string>();
       const flatrateNames = new Set<string>();

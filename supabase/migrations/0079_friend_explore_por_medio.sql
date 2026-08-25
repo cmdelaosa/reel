@@ -114,3 +114,10 @@ $$;
 
 grant execute on function public.rpc_popular_with_friends(text) to authenticated;
 grant execute on function public.rpc_best_rated_by_friends(text) to authenticated;
+
+-- PostgREST sirve las RPC desde una caché de esquema suya. Cambiar la FIRMA de
+-- una función no es lo mismo que cambiar su cuerpo: hasta que recarga, la
+-- llamada con `p_kind` no encuentra a quién ir y vuelve un 404 que en el
+-- cliente se lee como "no hay nada que enseñar" — un carril vacío en vez de un
+-- error. El aviso es barato y quita esa ventana.
+notify pgrst, 'reload schema';

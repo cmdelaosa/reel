@@ -55,10 +55,14 @@ const RAIL_ITEMS = 20;
 /** Un carril de carátulas, o nada. Los tres de arriba comparten forma y los
  *  tres se esconden vacíos, así que la condición vive aquí una vez y no tres
  *  veces en el JSX. */
-function MovieRail({ title, items, loading, onOpen }: {
+function MovieRail({ title, items, loading, scoreOf, onOpen }: {
   title: string;
   items: TitleRow[];
   loading: boolean;
+  /** La nota que va en la esquina de la carátula, si la hay. El carril de
+   *  amigos la usa para poner LA DE ELLOS: sin esto enseñaba la de TMDB, que
+   *  es justo lo que la sección no está diciendo. */
+  scoreOf?: (t: TitleRow) => number | null | undefined;
   onOpen: (tmdbId: number) => void;
 }) {
   if (!loading && items.length === 0) return null;
@@ -69,7 +73,12 @@ function MovieRail({ title, items, loading, onOpen }: {
           ? <RailCardsSkeleton count={6} />
           : items.map((t) => (
               <div key={t.tmdb_id} style={{ width: "var(--rail-pw)" }}>
-                <TitlePoster t={t} kind="movie" onOpen={() => onOpen(t.tmdb_id)} />
+                <TitlePoster
+                  t={t}
+                  kind="movie"
+                  score={scoreOf?.(t)}
+                  onOpen={() => onOpen(t.tmdb_id)}
+                />
               </div>
             ))}
       </Rail>
@@ -122,7 +131,8 @@ export default function MoviesExplorePage() {
   // Sin amigos no hay carril y no hay consulta: `enabled` lleva las dos cosas.
   const { data: friendships = [] } = useFriendships();
   const hasFriends = friendships.some((f) => f.status === "accepted");
-  const { data: friendRated = [] } = useBestRatedByFriends(hasFriends, "movie");
+  const { data: friendRated = [], isLoading: friendRatedLoading } =
+    useBestRatedByFriends(hasFriends, "movie");
 
   /* La misma criba que la rejilla —fuera lo tuyo y lo que ignoraste—, y por lo
      mismo: un carril de descubrimiento que te enseña lo que ya tienes gasta la
@@ -152,6 +162,14 @@ export default function MoviesExplorePage() {
       popularity: null,
     })),
     [friendRated, keep],
+  );
+  /* La nota MEDIA de tus amigos, por título. Va aparte de `friendPicks` porque
+     TitleRow no tiene dónde meterla: es un dato de esta pantalla, no del
+     catálogo, y colarlo en `vote_average` haría que la carátula presentara la
+     nota del grupo como si fuera la de TMDB. */
+  const friendScores = useMemo(
+    () => new Map(friendRated.map((r) => [r.tmdb_id, r.avg_score])),
+    [friendRated],
   );
 
   /* Fuera lo que ya tienes y lo que dijiste que no quieres ver. El género se
@@ -230,7 +248,8 @@ export default function MoviesExplorePage() {
       <MovieRail
         title={tr("Best rated by your friends")}
         items={friendPicks}
-        loading={false}
+        loading={hasFriends && friendRatedLoading}
+        scoreOf={(t) => friendScores.get(t.tmdb_id)}
         onOpen={open}
       />
       <MovieRail
