@@ -20,6 +20,26 @@ import { tmdbFetch } from "../../supabase/functions/_shared/tmdb.ts";
 type Any = any;
 type Json = Record<string, unknown>;
 
+/** Alias a mano: id de FilmAffinity → id de película de TMDB.
+ *
+ *  Aquí acaban las que ninguna regla puede emparejar, porque el título español
+ *  de FA y el de TMDB no comparten NADA: "Operación Monumento" contra
+ *  "Monuments Men", "El juego de Kobe" contra "Kobe Doin' Work". El parecido no
+ *  es bajo, es cero — no hay umbral que las salve sin colar basura por el mismo
+ *  hueco, así que se fijan una a una y comprobadas por director y año.
+ *
+ *  El precedente es TVDB_ALIASES en scripts/tvtime-import/lib.ts, y la regla es
+ *  la misma: la lista crece cuando el informe enseña una, nunca por adelantado. */
+export const FA_ALIASES: Record<string, number> = {
+  "924781": 848187,  // Juego de roles → Role Play (Thomas Vincent, 2023)
+  "845553": 4552,    // 2 hermanas → Dos hermanas / 장화, 홍련 (Kim Jee-woon, 2003)
+  "313049": 486947,  // The Guilty → El culpable / Den skyldige (Gustav Möller, 2018)
+  "322601": 641483,  // Qué pasa cuando eres adulto → Entre amigos / Holly Slept Over (Joshua Friedlander, 2020)
+  "295663": 152760,  // Operación Monumento → Monuments Men (George Clooney, 2014)
+  "795100": 4787,    // El sueño de Casandra → El sueño de Cassandra (Woody Allen, 2007)
+  "966387": 30599,   // El juego de Kobe → Kobe Doin' Work (Spike Lee, 2009)
+};
+
 /** Una fila del scrape de FilmAffinity, tal cual sale del navegador. */
 export interface FaItem {
   id: string;              // id de FilmAffinity (film<id>.html)
@@ -78,6 +98,26 @@ export function titleVariants(faTitle: string): string[] {
   return [...new Set(out.map((t) => t.trim()).filter(Boolean))];
 }
 
+/** Lo que se le PREGUNTA a TMDB, que no es lo mismo que lo que luego se compara.
+ *
+ *  El buscador de TMDB no tolera un título largo entero: "El Hobbit: La batalla
+ *  de los cinco ejércitos" devuelve CERO resultados, y cualquiera de sus dos
+ *  mitades devuelve la película a la primera. Así que se pregunta por partes —y
+ *  se juzga después con el título completo, que es donde no se afloja nada. */
+export function queryVariants(faTitle: string): string[] {
+  const out: string[] = [];
+  for (const v of titleVariants(faTitle)) {
+    out.push(v);
+    // "Saga. Episodio I: Subtítulo" parte por los dos sitios: unas veces el que
+    // reconoce TMDB es el nombre de la saga y otras el del episodio.
+    for (const part of v.split(/\s*[:.]\s+/)) {
+      const p = part.trim();
+      if (p.length >= 4) out.push(p);
+    }
+  }
+  return [...new Set(out)].slice(0, 5);
+}
+
 /** El primer director de FA, sin el "(Creador)" ni los coautores. */
 export function firstDirector(faDirector: string): string {
   const first = faDirector.split(",")[0] ?? "";
@@ -121,18 +161,61 @@ const yearOf = (c: Candidate): number | null => {
   return Number.isFinite(y) && y > 1800 ? y : null;
 };
 
-/** Cuánto se parecen el título de FA y el de un candidato: 2 exacto, 1 uno
- *  contiene al otro (con cuerpo suficiente para que no sea casualidad), 0 nada.
+/** Números romanos a arábigos, y las abreviaturas que FA y TMDB escriben cada
+ *  una a su manera. Sin esto "Misión imposible 2" y "Misión imposible II" son
+ *  títulos distintos, y lo son en TREINTA de las mil películas de una cuenta
+ *  normal: las sagas son justo lo que se numera. */
+const ROMAN: Record<string, string> = {
+  i: "1", ii: "2", iii: "3", iv: "4", v: "5", vi: "6", vii: "7",
+  viii: "8", ix: "9", x: "10", xi: "11", xii: "12", xiii: "13",
+};
+const ABBREV: Record<string, string> = {
+  dr: "doctor", vol: "volumen", pt: "parte", part: "parte", mr: "mister", st: "saint",
+};
+
+/** El título partido en piezas comparables. `norm` ya quitó acentos y
+ *  puntuación; aquí se unifica lo que sigue escribiéndose de dos formas. */
+export function tokens(s: string): string[] {
+  return norm(s)
+    .split(" ")
+    .filter(Boolean)
+    .map((t) => ROMAN[t] ?? ABBREV[t] ?? t);
+}
+
+/** Dice sobre conjuntos de palabras: 1 si son las mismas, 0 si no comparten
+ *  ninguna. Es la medida que dice que "El padrino. Parte II" (FA) y "El padrino
+ *  II" (TMDB) son la misma película sin decir lo mismo de "El padrino III". */
+export function dice(a: string, b: string): number {
+  const A = new Set(tokens(a));
+  const B = new Set(tokens(b));
+  if (!A.size || !B.size) return 0;
+  let shared = 0;
+  for (const t of A) if (B.has(t)) shared++;
+  return (2 * shared) / (A.size + B.size);
+}
+
+/** El umbral de parecido a partir del cual un título merece que se le pregunte
+ *  al director. Por debajo no se pregunta siquiera: dos películas de la misma
+ *  saga comparten media docena de palabras, y el director TAMBIÉN suele ser el
+ *  mismo, así que un umbral flojo convierte la confirmación en un sello. */
+const DICE_MIN = 0.6;
+
+/** Cuánto se parecen el título de FA y el de un candidato: 2 el mismo título,
+ *  1 lo bastante parecido como para que decida el director, 0 nada.
  *  Se prueban las dos formas del candidato —el título traducido y el original—
  *  contra todas las variantes de FA. */
 export function titleScore(faTitle: string, c: Candidate): number {
-  const wants = titleVariants(faTitle).map(norm).filter(Boolean);
-  const has = [c.title, c.original_title].map(norm).filter(Boolean);
+  const wants = titleVariants(faTitle).filter(Boolean);
+  const has = [c.title, c.original_title].filter(Boolean);
   let best = 0;
   for (const w of wants) {
     for (const h of has) {
-      if (w === h) return 2;
-      if (w.length >= 6 && h.length >= 6 && (w.includes(h) || h.includes(w))) best = Math.max(best, 1);
+      const nw = tokens(w).join(" ");
+      const nh = tokens(h).join(" ");
+      if (!nw || !nh) continue;
+      if (nw === nh) return 2;
+      if (nw.length >= 6 && nh.length >= 6 && (nw.includes(nh) || nh.includes(nw))) best = Math.max(best, 1);
+      if (dice(w, h) >= DICE_MIN) best = Math.max(best, 1);
     }
   }
   return best;
@@ -196,9 +279,21 @@ const toCandidate = (r: Json): Candidate => ({
  *  y la que no lo lleva para no perder nada. Se pide en español porque el
  *  título de FA lo está; `original_title` viene igual en las dos. */
 export async function searchMovies(key: string, fa: FaItem): Promise<Candidate[]> {
-  const queries = titleVariants(fa.title);
   const seen = new Map<number, Candidate>();
-  for (const q of queries) {
+  // Parar en cuanto haya un candidato con el título idéntico y el año a ±1: ya
+  // no hay nada mejor que encontrar, y cada consulta de más son mil peticiones
+  // en una cuenta de mil películas.
+  const yaEsta = () => {
+    const faYear = Number(fa.year);
+    for (const c of seen.values()) {
+      if (titleScore(fa.title, c) !== 2) continue;
+      const y = Number((c.release_date ?? "").slice(0, 4));
+      if (Number.isFinite(faYear) && Number.isFinite(y) && Math.abs(y - faYear) <= 1) return true;
+    }
+    return false;
+  };
+
+  for (const q of queryVariants(fa.title)) {
     const enc = encodeURIComponent(q);
     const paths = [
       `/search/movie?query=${enc}&include_adult=false&language=es-ES&year=${encodeURIComponent(fa.year)}`,
@@ -210,11 +305,8 @@ export async function searchMovies(key: string, fa: FaItem): Promise<Candidate[]
         const c = toCandidate(r);
         if (!seen.has(c.id)) seen.set(c.id, c);
       }
-      // Con un puñado de candidatos ya hay de sobra para decidir; la segunda
-      // búsqueda solo se paga cuando la primera se queda corta.
-      if (seen.size >= 8) break;
+      if (yaEsta()) return [...seen.values()];
     }
-    if (seen.size >= 8) break;
   }
   return [...seen.values()];
 }

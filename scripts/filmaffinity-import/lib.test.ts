@@ -10,14 +10,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  dice,
+  FA_ALIASES,
   faDateToIso,
   firstDirector,
   isFilm,
   keepItem,
   norm,
   pickMatch,
+  queryVariants,
   titleScore,
   titleVariants,
+  tokens,
   type Candidate,
   type FaItem,
 } from "./lib.ts";
@@ -76,6 +80,50 @@ test("faDateToIso: D/M/AAAA a mediodía UTC, para que el día no se corra", () =
   assert.equal(faDateToIso("8/07/2026"), "2026-07-08T12:00:00Z");
   assert.equal(faDateToIso("27/12/2024"), "2024-12-27T12:00:00Z");
   assert.equal(faDateToIso("mañana"), null);
+});
+
+test("queryVariants: el título largo se pregunta también por partes", () => {
+  // TMDB devuelve CERO por el título entero y la película por cualquier mitad.
+  const v = queryVariants("El Hobbit: La batalla de los cinco ejércitos");
+  assert.ok(v.includes("El Hobbit"));
+  assert.ok(v.includes("La batalla de los cinco ejércitos"));
+});
+
+// ── numerales y abreviaturas ────────────────────────────────────────────────
+test("tokens: los romanos pasan a arábigos y las abreviaturas se abren", () => {
+  assert.deepEqual(tokens("Misión imposible II"), ["mision", "imposible", "2"]);
+  assert.deepEqual(tokens("Dr. Strange"), ["doctor", "strange"]);
+  assert.deepEqual(tokens("Guardianes Vol. 3"), ["guardianes", "volumen", "3"]);
+});
+
+test("dice: la misma película con otras palabras se parece; su secuela no", () => {
+  assert.ok(dice("El padrino. Parte II", "El padrino II") >= 0.6);
+  assert.ok(dice("El padrino. Parte II", "El padrino III") < 0.6);
+});
+
+test("titleScore: la redacción distinta del mismo título llega a 1, no a 2", () => {
+  const padrino = cand({ title: "El padrino II", original_title: "The Godfather Part II", release_date: "1974-12-20" });
+  assert.equal(titleScore("El padrino. Parte II", padrino), 1);
+  // Y con el numeral unificado, "2" y "II" son el mismo título: 2 sin más.
+  const mi2 = cand({ title: "Misión imposible II", original_title: "Mission: Impossible II" });
+  assert.equal(titleScore("Misión imposible 2", mi2), 2);
+});
+
+test("titleScore: la secuela de al lado no llega ni a 1", () => {
+  // Lo que salva a la saga es el numeral: sin él, "El padrino. Parte II" se
+  // parecería a las tres. Con él, la III se queda en 0,57 de Dice y fuera.
+  const padrino3 = cand({ title: "El padrino III", original_title: "The Godfather Part III" });
+  assert.equal(titleScore("El padrino. Parte II", padrino3), 0);
+});
+
+test("FA_ALIASES: claves de FA en texto, ids de TMDB en número", () => {
+  // Un id de FA escrito como número no encontraría nunca su fila (las del
+  // scrape son cadenas), y el alias se saltaría en silencio.
+  for (const [faId, tmdbId] of Object.entries(FA_ALIASES)) {
+    assert.match(faId, /^\d+$/);
+    assert.equal(typeof tmdbId, "number");
+    assert.ok(tmdbId > 0);
+  }
 });
 
 // ── el emparejador ──────────────────────────────────────────────────────────

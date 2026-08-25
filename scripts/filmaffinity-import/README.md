@@ -85,6 +85,10 @@ Sin `--dry-run` escribe. Banderas:
 
 - `--sin=Cortometraje,Mediometraje,TV` — deja fuera esos tipos de FA (los cortos
   de animación son los que más ruido meten en el historial).
+- `--desde-informe=match-report.json` — no vuelve a emparejar: coge el resultado
+  del dry run. Son ~2.700 peticiones a TMDB y veinte minutos que no cambian de
+  respuesta, y además garantiza que lo que se escribe es exactamente lo que se
+  revisó. Si el JSON trae filas que aquel informe no tenía, lo avisa.
 
 ## Cómo empareja, y por qué así
 
@@ -99,6 +103,21 @@ una nota tuya sobre una película que no viste y eso no se nota nunca:
 3. Título que solo se **contiene** → hace falta que el **director** de TMDB
    confirme, una llamada más a `/movie/:id/credits`.
 4. Nada de eso → sin match, a la lista de repaso del informe.
+
+Antes de todo eso se mira `FA_ALIASES`, una tabla a mano de `id de FA → id de
+TMDB` para las que no comparten NI UNA palabra con su título español
+(«Operación Monumento» contra «Monuments Men», «El juego de Kobe» contra «Kobe
+Doin' Work»). Ahí el parecido no es bajo: es cero, y no hay umbral que las
+rescate sin colar basura por el mismo hueco. La lista crece cuando el informe
+enseña una, nunca por adelantado — el precedente es `TVDB_ALIASES` en
+`scripts/tvtime-import/lib.ts`.
+
+Los números también se unifican antes de comparar (`II` ↔ `2`, `Vol.` ↔
+`Volumen`, `Dr.` ↔ `Doctor`): las sagas son justo lo que se numera, y sin eso
+«Misión imposible 2» y «Misión imposible II» son títulos distintos. Y a TMDB se
+le pregunta por partes además de por el título entero, porque su buscador
+devuelve **cero** resultados para «El Hobbit: La batalla de los cinco ejércitos»
+y la película a la primera para cualquiera de sus dos mitades.
 
 El título doble de FA («Las vidas de Grace (Short Term 12)») se prueba entero y
 por mitades, porque cuál de las dos es la original cambia de ficha en ficha.

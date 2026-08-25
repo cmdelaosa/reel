@@ -31,6 +31,7 @@ import {
   confirmDirector,
   faDateToIso,
   keepItem,
+  FA_ALIASES,
   pickMatch,
   searchMovies,
   OPTIONAL_TYPES,
@@ -84,6 +85,10 @@ interface Report {
 /** El emparejamiento de una fila: búsqueda, criba y —si el título solo encajaba
  *  a medias— la llamada de más que confirma el director. */
 async function resolveOne(tmdbKey: string, fa: FaItem): Promise<Resolved | { reason: string }> {
+  const alias = FA_ALIASES[fa.id];
+  if (alias) {
+    return { fa, tmdbId: alias, tmdbTitle: fa.title, tmdbYear: fa.year, confidence: "alias", why: "alias a mano" };
+  }
   const candidates = await searchMovies(tmdbKey, fa);
   if (!candidates.length) return { reason: "TMDB no devuelve nada para ese título" };
   const match = pickMatch(fa, candidates);
@@ -192,17 +197,34 @@ async function main() {
   const all = [...votes.map((fa) => ({ fa, kind: "vote" as const })), ...list.map((fa) => ({ fa, kind: "list" as const }))];
   const resolved = new Map<string, Resolved>();
   let done = 0;
-  for (const { fa } of all) {
-    try {
-      const r = await resolveOne(env.tmdbKey, fa);
-      if ("reason" in r) report.unmatched.push({ fa, reason: r.reason });
-      else { resolved.set(fa.id, r); report.matched.push(r); }
-    } catch (err) {
-      report.unmatched.push({ fa, reason: `error: ${(err as Error).message}` });
+
+  // Reaprovechar el informe de un dry run anterior: el emparejamiento son ~2.700
+  // peticiones a TMDB y veinte minutos, y repetirlo no cambia el resultado. Sirve
+  // además para que lo que se escribe sea EXACTAMENTE lo que se revisó.
+  const desde = args.find((a) => a.startsWith("--desde-informe="))?.slice("--desde-informe=".length);
+  if (desde) {
+    const previo = JSON.parse(readFileSync(desde, "utf8")) as Report;
+    for (const m of previo.matched) resolved.set(m.fa.id, m);
+    report.matched = previo.matched;
+    report.unmatched = previo.unmatched;
+    console.log(`emparejamiento leído de ${desde}: ${report.matched.length} con TMDB, ${report.unmatched.length} sin match`);
+    // Una fila que hoy está en el JSON y no en aquel informe se quedaría fuera
+    // sin decir nada: el informe manda, pero la diferencia se canta.
+    const faltan = all.filter(({ fa }) => !resolved.has(fa.id) && !previo.unmatched.some((u) => u.fa.id === fa.id));
+    if (faltan.length) console.log(`  OJO: ${faltan.length} filas del JSON no están en ese informe y no se importarán`);
+  } else {
+    for (const { fa } of all) {
+      try {
+        const r = await resolveOne(env.tmdbKey, fa);
+        if ("reason" in r) report.unmatched.push({ fa, reason: r.reason });
+        else { resolved.set(fa.id, r); report.matched.push(r); }
+      } catch (err) {
+        report.unmatched.push({ fa, reason: `error: ${(err as Error).message}` });
+      }
+      if (++done % 50 === 0) console.log(`  emparejando ${done}/${all.length} — ${report.matched.length} con TMDB`);
     }
-    if (++done % 50 === 0) console.log(`  emparejando ${done}/${all.length} — ${report.matched.length} con TMDB`);
+    console.log(`\nemparejados ${report.matched.length}/${all.length}, sin match ${report.unmatched.length}`);
   }
-  console.log(`\nemparejados ${report.matched.length}/${all.length}, sin match ${report.unmatched.length}`);
 
   if (dryRun) {
     writeFileSync("match-report.json", JSON.stringify(report, null, 2));

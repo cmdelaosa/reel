@@ -1,0 +1,4 @@
+# Los informes que deja cada pasada: son de UNA cuenta y de UN momento, y su
+# sitio es el disco de quien la lanzó, no el repositorio.
+match-report.json
+import-report.json
