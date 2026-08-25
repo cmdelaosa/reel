@@ -85,8 +85,16 @@ export interface CoralConfig {
 
 export interface CoralSession {
   token: string;
-  /** ms desde epoch. Se renueva antes de tiempo, ver `expiredSoon`. */
+  /** ms desde epoch. El isolate la renueva cuando le queda menos de un minuto. */
   expiresAt: number;
+  /** La versión de la app con la que se generó el `f` de ESTA sesión.
+   *
+   *  Viaja con el token y no en una variable de módulo aparte a propósito:
+   *  Nintendo rechaza una petición cuya cabecera `X-ProductVersion` no case con
+   *  la versión que generó el `f`, así que las dos cosas son una sola y
+   *  separarlas permite que una se quede sin la otra — un 9403 sin más pista
+   *  que un número de versión inventado. */
+  version: string;
 }
 
 /** Un juego del registro. Es literalmente lo que devuelve Nintendo, sin
@@ -262,8 +270,25 @@ async function nintendoAccountUser(accessToken: string) {
   };
 }
 
-/** Paso 2 y 3: el token de Coral, el que autoriza todo lo demás. */
+/** Paso 2 y 3: el token de Coral, el que autoriza todo lo demás.
+ *
+ *  Un fallo aquí TIRA LAS CACHÉS del isolate. Las dos cosas cacheadas —la
+ *  versión de la app y el bearer del servicio de `f`— son justo las que se
+ *  quedan viejas solas: Nintendo actualiza la app y el servicio deja de servir
+ *  la anterior, o la credencial se rota. Sin esto, un isolate caliente
+ *  seguiría pidiendo lo viejo hasta que la plataforma lo reciclara, y todo
+ *  devolvería 9403 sin que reintentar arreglara nada. */
 export async function login(cfg: CoralConfig): Promise<CoralSession> {
+  try {
+    return await attemptLogin(cfg);
+  } catch (e) {
+    zncaVersion = null;
+    fToken = null;
+    throw e;
+  }
+}
+
+async function attemptLogin(cfg: CoralConfig): Promise<CoralSession> {
   const version = await appVersion(cfg);
   const { idToken, accessToken } = await nintendoAccountToken(cfg.sessionToken);
   const user = await nintendoAccountUser(accessToken);
@@ -304,13 +329,14 @@ export async function login(cfg: CoralConfig): Promise<CoralSession> {
   return {
     token,
     expiresAt: Date.now() + (Number.isFinite(seconds) && seconds > 0 ? seconds : 7200) * 1000,
+    version,
   };
 }
 
 /* ─────────────────────────── Las dos llamadas ───────────────────────────── */
 
 async function call<T>(session: CoralSession, path: string, parameter: unknown): Promise<T> {
-  const version = zncaVersion ?? "0.0.0";
+  const version = session.version;
   const res = await fetch(`${ZNC}${path}`, {
     method: "POST",
     headers: {

@@ -58,6 +58,14 @@ la ruta `/by-name`. Y la migración 0080 renombra `steam_imports` →
 así que **la 0080 va antes que las dos funciones**, y desplegar las funciones
 sin ella rompe también las importaciones de Steam, no solo las de Nintendo.
 
+⚠️⚠️ **Y la 0080 hay que empujarla EN CUANTO se fusione, no cuando toque.** El
+frontend se despliega solo al fusionar; la migración no. Entre una cosa y la
+otra, la pantalla de Steam —que ya funcionaba y no la ha pedido nadie— consulta
+`game_imports`, una tabla que en producción todavía no existe: 404 de PostgREST
+y una pantalla rota para todo el mundo. Es la única ventana de esta rama en la
+que algo que ya iba deja de ir, y se cierra con un `supabase db push` de treinta
+segundos. Ese `db push` va **antes** de dar la PR por cerrada, no después.
+
 Deploy migrations before the functions. `tmdb-proxy` uses the
 `is_current_user_invited()` function introduced in migration 0033 to combine
 JWT/invite validation into one database round trip. Deploying the function

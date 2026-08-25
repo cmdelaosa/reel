@@ -350,10 +350,19 @@ function ReviewList({
     )
   );
 
-  const set = (id: string, patch: Partial<Choice>) =>
-    setChoices((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+  /* El defecto para una fila que el estado inicial no vio. No debería pasar
+     —`key={run.id}` remonta la lista en cada escaneo— pero el estado se siembra
+     UNA vez con los items de entonces, y si la consulta trajera una fila más
+     después, `choices[id]` sería undefined y la tarjeta reventaría al leer
+     `choice.on`. Una lista de importar que se cae en blanco es peor que una que
+     enseña una fila sin marcar. */
+  const fallback: Choice = { on: false, state: null, rating: 0, overwrite: false };
+  const choiceOf = (id: string) => choices[id] ?? fallback;
 
-  const chosen = items.filter((i) => choices[i.id]?.on);
+  const set = (id: string, patch: Partial<Choice>) =>
+    setChoices((prev) => ({ ...prev, [id]: { ...choiceOf(id), ...patch } }));
+
+  const chosen = items.filter((i) => choiceOf(i.id).on);
 
   return (
     <>
@@ -379,9 +388,9 @@ function ReviewList({
             onClick={() =>
               onApply(chosen.map((i) => ({
                 id: i.id,
-                overwrite: choices[i.id].overwrite,
-                state: choices[i.id].state,
-                rating: choices[i.id].rating || null,
+                overwrite: choiceOf(i.id).overwrite,
+                state: choiceOf(i.id).state,
+                rating: choiceOf(i.id).rating || null,
               })))}
           >
             {pending ? <Loader2 size={16} className="spin" /> : null}
@@ -395,7 +404,7 @@ function ReviewList({
           <GameRow
             key={item.id}
             item={item}
-            choice={choices[item.id]}
+            choice={choiceOf(item.id)}
             onChange={(patch) => set(item.id, patch)}
           />
         ))}

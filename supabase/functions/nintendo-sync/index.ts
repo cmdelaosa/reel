@@ -64,6 +64,16 @@ type Any = any;
  *  (NAME_MAX allí); pasarse devuelve un 400 en vez de resolver menos. */
 const RESOLVE_CHUNK = 30;
 
+/** Cuántos NOMBRES caben en un filtro `in.(…)` de PostgREST.
+ *
+ *  Aparte de ID_PAGE y más bajo que él a propósito: aquel está dimensionado
+ *  para uuids, que ocupan 37 bytes contados. Un título de juego puede pasar de
+ *  sesenta caracteres y encima viaja urlencodeado, así que los mismos 100
+ *  elementos que con uuids dan 4 KB aquí pueden acercarse a los 8 KB que
+ *  aceptan la pasarela y Cloudflare — y lo que se ve entonces no es un error de
+ *  nombres, es un 414. */
+const NAME_PAGE = 40;
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -156,7 +166,7 @@ async function titlesByName(
   names: string[],
 ): Promise<Map<string, string>> {
   const byName = new Map<string, string>();
-  for (const part of chunk(names, ID_PAGE)) {
+  for (const part of chunk(names, NAME_PAGE)) {
     const { data, error } = await admin
       .from("titles")
       .select("id, name")
@@ -168,22 +178,37 @@ async function titlesByName(
   return byName;
 }
 
-/** Lo que la biblioteca de esa persona dice hoy de esos juegos. */
+/** Lo que la biblioteca de esa persona dice hoy de esos juegos.
+ *
+ *  `followed` viaja también, y no es decoración: quitar un juego de la
+ *  biblioteca no borra su fila, la deja con `followed = false` (así se
+ *  conservan tus horas y tu nota si lo vuelves a añadir). Quien escriba tiene
+ *  que mirarlo — ver /refresh. */
+interface Entry {
+  minutes: number | null;
+  source: string | null;
+  followed: boolean;
+}
+
 async function entriesOf(
   admin: SupabaseClient,
   userId: string,
   titleIds: string[],
-): Promise<Map<string, { minutes: number | null; source: string | null }>> {
-  const entries = new Map<string, { minutes: number | null; source: string | null }>();
+): Promise<Map<string, Entry>> {
+  const entries = new Map<string, Entry>();
   for (const part of chunk(titleIds, ID_PAGE)) {
     const { data, error } = await admin
       .from("library_entries")
-      .select("title_id, minutes_played, minutes_source")
+      .select("title_id, minutes_played, minutes_source, followed")
       .eq("user_id", userId)
       .in("title_id", part);
     if (error) throw new Error(`library_entries: ${error.message}`);
     for (const row of data ?? []) {
-      entries.set(row.title_id, { minutes: row.minutes_played, source: row.minutes_source });
+      entries.set(row.title_id, {
+        minutes: row.minutes_played,
+        source: row.minutes_source,
+        followed: Boolean(row.followed),
+      });
     }
   }
   return entries;
@@ -245,13 +270,18 @@ interface Scanned {
 }
 
 /** Pide el registro de juego y lo cruza con lo que ya hay. Ni una petición a
- *  IGDB: el nombre, las horas y la carátula los da Nintendo. */
+ *  IGDB: el nombre, las horas y la carátula los da Nintendo.
+ *
+ *  La sesión llega de fuera y no se pide aquí: entrar en Coral y leer el
+ *  registro fallan por motivos DISTINTOS —el nuestro y el de la otra persona— y
+ *  quien llama tiene que poder contarlos aparte. Ver /scan. */
 async function scanned(
   admin: SupabaseClient,
   userId: string,
   nsaId: string,
+  session: CoralSession,
 ): Promise<Scanned[]> {
-  const games = parsePlayLog(await playLog(await coral(), nsaId));
+  const games = parsePlayLog(await playLog(session, nsaId));
   if (!games.length) return [];
 
   const byName = await titlesByName(admin, games.map((g) => g.name));
@@ -372,17 +402,31 @@ Deno.serve(async (req) => {
         return json({ import_id: run.id, error: reason }, 200);
       };
 
+      /* Entrar en Coral va PRIMERO y en su propio try, y esto es la diferencia
+         entre culpar a quien toca y culpar a quien no. Un login que falla es
+         cosa nuestra —el session_token de la cuenta bot caducado, el servicio
+         de `f` caído— y también sale con un `status` de Nintendo, o sea también
+         es un CoralError. Metido en el mismo try que la lectura del registro,
+         una avería de Reel se le enseñaría a la persona como "ve a tu consola y
+         cambia la privacidad": mandarla a tocar ajustes por algo que ella no ha
+         roto y que no va a arreglar. */
+      let session: CoralSession;
+      try {
+        session = await coral();
+      } catch (e) {
+        console.error("nintendo-sync login", String(e));
+        return await fail("upstream");
+      }
+
       let items: Scanned[];
       try {
-        items = await scanned(admin, userId, profile.nintendo_nsa_id);
+        items = await scanned(admin, userId, profile.nintendo_nsa_id, session);
       } catch (e) {
         console.error("nintendo-sync scan", String(e));
-        /* El registro cerrado es EL error que hay que distinguir: significa
-           "ve a la consola y pon la privacidad del registro en Todos", y leído
-           como una avería genérica manda a la persona a buscar un fallo que no
-           existe. Nintendo lo dice con un `status` suyo dentro de un 200, así
-           que cualquier CoralError en esta llamada se cuenta como eso: es lo
-           único que puede fallar aquí que dependa de la otra persona. */
+        /* Aquí sí: el registro cerrado significa "ve a la consola y pon la
+           privacidad del registro en Todos". Nintendo lo dice con un `status`
+           suyo dentro de un 200, y con la sesión ya en la mano es lo único que
+           puede fallar en esta llamada por decisión de la otra persona. */
         return await fail(e instanceof CoralError ? "private" : "upstream");
       }
 
@@ -533,9 +577,19 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!profile?.nintendo_nsa_id) return json({ error: "not_linked" }, 400);
 
+      // Login y lectura por separado, por lo mismo que en /scan: los dos fallan
+      // con un CoralError y solo uno es culpa de quien mira la pantalla.
+      let session: CoralSession;
+      try {
+        session = await coral();
+      } catch (e) {
+        console.error("nintendo-sync login", String(e));
+        return json({ error: "upstream" }, 502);
+      }
+
       let games;
       try {
-        games = parsePlayLog(await playLog(await coral(), profile.nintendo_nsa_id));
+        games = parsePlayLog(await playLog(session, profile.nintendo_nsa_id));
       } catch (e) {
         console.error("nintendo-sync refresh", String(e));
         return json({ error: e instanceof CoralError ? "private" : "upstream" }, 502);
@@ -549,8 +603,13 @@ Deno.serve(async (req) => {
         .map((g) => ({ g, titleId: byName.get(g.name) }))
         .filter((x): x is { g: typeof games[number]; titleId: string } => Boolean(x.titleId))
         .map(({ g, titleId }) => ({ g, titleId, before: entries.get(titleId) }))
-        // Solo lo que ya sigues y cuyas horas no escribiste tú.
-        .filter((x) => x.before && x.before.source !== "manual")
+        /* Solo lo que ya sigues y cuyas horas no escribiste tú.
+           `followed` es la mitad que no se ve: quitar un juego de la biblioteca
+           deja su fila con `followed = false`, y `writeEntries` escribe siempre
+           `followed = true`. Sin este filtro, actualizar las horas RESUCITARÍA
+           los juegos que alguien quitó a propósito — y encima en silencio, un
+           juego cada vez, cada vez que le diera al botón. */
+        .filter((x) => x.before && x.before.followed && x.before.source !== "manual")
         // Y solo lo que ha cambiado: un upsert que escribe lo mismo es una fila
         // tocada sin motivo, y `played_at` no se aprende de una cifra igual.
         .filter((x) => (x.before!.minutes ?? 0) !== x.g.minutes);
