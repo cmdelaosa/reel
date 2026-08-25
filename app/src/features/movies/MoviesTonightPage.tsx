@@ -193,6 +193,7 @@ export default function MoviesTonightPage() {
                     genres: m.genres.length ? m.genres : ["—"],
                     posterPath: tmdbImg(m.poster_path),
                     voteAverage: m.vote_average ?? 0,
+                    imdbRating: m.imdb_rating,
                   }}
                   onClick={() => open(m.tmdb_id)}
                 />

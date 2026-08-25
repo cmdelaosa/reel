@@ -14,6 +14,7 @@ import { useFriendsRatings } from "@/lib/taste";
 import { useMarkWatched, useUnmarkWatched } from "@/lib/watch";
 import { useWatched } from "@/features/detail/data";
 import type { TitleRow } from "@/lib/schemas";
+import { externalScore, scoreColor, scoreLabel } from "@/domain/externalScore";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 import { CastRail } from "@/ui/CastRail";
 import { RatingStars } from "@/ui/RatingStars";
@@ -35,9 +36,12 @@ import { useFocusTrap } from "@/ui/useFocusTrap";
      · la saga (belongs_to_collection de TMDB) con tu estado por entrega, que es
        el sustituto natural de la lista de episodios: por ahí se navega.
 
-   La fila de notas es idéntica a la de series (tuya | TMDB | IMDb | amigos):
-   las notas son de `titles`, que no distingue medio, y OMDb puntúa películas
-   igual que series. */
+   La fila de notas se parece a la de series pero no es la misma: en cine la
+   nota ajena es UNA —la de IMDb, con la de TMDB de reserva— en vez de las dos
+   en paralelo. Es la nota que se cita de una película, y dos números que casi
+   nunca coinciden en el mismo renglón no informan, obligan a elegir. La regla
+   vive en domain/externalScore y la comparte con las carátulas, para que la
+   miniatura y la ficha no puedan decir cosas distintas de la misma peli. */
 
 export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () => void }) {
   const trapRef = useFocusTrap<HTMLDivElement>();
@@ -94,6 +98,9 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
   const friendsAvg = friendRaters.length
     ? friendRaters.reduce((sum, r) => sum + r.score, 0) / friendRaters.length
     : null;
+  /* La nota ajena de esta película: IMDb, o TMDB de reserva. Null mientras la
+     ficha carga y en la peli que nadie ha puntuado en ninguna de las dos. */
+  const score = externalScore(title);
 
   const { data: credits } = useQuery({
     queryKey: qk.movieCredits(tmdbId),
@@ -239,31 +246,36 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                 )}
               </div>
 
-              {/* Notas — idénticas a las de una serie */}
-              <div className={`ratings-row${2 + (title.imdb_rating != null ? 1 : 0) + (friendsAvg != null ? 1 : 0) >= 4 ? " ratings-row-grid" : ""}`}>
+              {/* Notas. A diferencia de una serie, aquí la nota ajena es UNA:
+                  la de IMDb, que en cine es la que la gente cita, y la de TMDB
+                  solo cuando IMDb no puntúa esta película (recién estrenada,
+                  con cuatro votos, o sin tconst en TMDB). La regla y el color
+                  salen de domain/externalScore; la etiqueta dice cuál de las
+                  dos estás leyendo, que es lo que hace honesta la reserva.
+
+                  Con una sola celda ajena la fila tiene tres como mucho, así
+                  que no necesita la rejilla 2×2 que la de series usa cuando
+                  tiene cuatro. */}
+              <div className="ratings-row">
                 <div className="ratings-cell">
                   <div className="eyebrow">{tr("Your rating")}</div>
                   <RatingStars value={rating} onRate={(v) => rateTitle.mutate(v)} />
                 </div>
-                <div className="ratings-divider" />
-                <div className="ratings-cell">
-                  <div className="eyebrow">TMDB</div>
-                  <div className="ratings-value">
-                    <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                    {(title.vote_average ?? 0).toFixed(1)}
-                  </div>
-                </div>
-                {title.imdb_rating != null && (
+                {score && (
                   <>
                     <div className="ratings-divider" />
                     <div className="ratings-cell">
-                      <div className="eyebrow">IMDb</div>
+                      <div className="eyebrow">{scoreLabel(score.source)}</div>
                       <div
                         className="ratings-value"
-                        title={title.imdb_votes ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : undefined}
+                        title={
+                          score.source === "imdb" && title.imdb_votes
+                            ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) })
+                            : undefined
+                        }
                       >
-                        <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--imdb)" }} />
-                        {title.imdb_rating.toFixed(1)}
+                        <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
+                        {score.value.toFixed(1)}
                       </div>
                     </div>
                   </>

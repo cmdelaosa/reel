@@ -182,6 +182,11 @@ export const libraryRowSchema = z.object({
     })
     .nullable()
     .optional(),
+  /* La nota de IMDb (0080). Es la que la carátula de una película enseña —con
+     la de TMDB de reserva, ver domain/externalScore—, y viaja en el rollup para
+     que Tus pelis no diga un número distinto del que dice Explorar. Opcional
+     porque una base anterior a 0080 no la devuelve. */
+  imdb_rating: z.number().nullable().optional(),
 });
 export type LibraryRow = z.infer<typeof libraryRowSchema>;
 

@@ -345,7 +345,6 @@ export default function MoviesExplorePage() {
               key={t.tmdb_id}
               t={t}
               kind="movie"
-              score={effectiveTab === "rated" ? t.vote_average : null}
               onOpen={() => open(t.tmdb_id)}
             />
           ))}
