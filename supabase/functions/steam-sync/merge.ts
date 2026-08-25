@@ -18,7 +18,23 @@
  *
  *   4. Lo que marcas como terminado se fecha con `rtime_last_played` y no con
  *      hoy. Ver `finishedAt`.
+ *
+ * ── Lo que ya no vive aquí ───────────────────────────────────────────────
+ * Las reglas 1 a 3 no son de Steam: son de importar juegos, y desde 0080 hay
+ * dos proveedores que las cumplen igual. Se mudaron a
+ * `_shared/game-import.ts` y se reexportan desde aquí, que es lo que deja
+ * intactos a index.ts y a merge_test.ts — este fichero sigue siendo el sitio
+ * donde se busca "las reglas de la importación de Steam", y ahora además dice
+ * cuáles no son suyas.
  */
+
+export {
+  type CurrentEntry,
+  isConflict,
+  minutesToWrite,
+  type Pick,
+  parsePick,
+} from "../_shared/game-import.ts";
 
 /** Lo que devuelve GetOwnedGames por juego, ya limpio. */
 export interface OwnedGame {
@@ -99,79 +115,3 @@ export function finishedAt(lastPlayed: string | null | undefined, now = new Date
   return lastPlayed ?? now.toISOString();
 }
 
-/** Lo que la pantalla de confirmar manda por juego, ya limpio.
- *
- *  Llega del navegador, así que aquí no se fía nada: un `state` que no sea uno
- *  de los cinco se queda en null —o sea, "lo tengo y no he dicho nada", el
- *  defecto de 0076— y una nota que no sea un entero de 1 a 10 no se escribe.
- *  Sin esto, un cliente cualquiera podría meter un play_state que la comprueba
- *  de la tabla rechaza y tirar la importación entera por una fila. */
-export interface Pick {
-  id: string;
-  /** La casilla de la fila en conflicto: ceder ESA fila a las horas de Steam. */
-  overwrite: boolean;
-  /** Lo que se escribe en `library_entries.play_state`. Null es no tocarlo. */
-  playState: "backlog" | "playing" | "ongoing" | "dropped" | null;
-  /** Terminado NO es un play_state: es el watch_event (0073). Por eso viaja
-   *  aparte y no dentro de `playState`. */
-  finished: boolean;
-  /** 1..10, o null para no puntuar. */
-  rating: number | null;
-}
-
-const PLAY_STATES = ["backlog", "playing", "ongoing", "dropped"] as const;
-
-export function parsePick(raw: Any): Pick | null {
-  if (typeof raw?.id !== "string" || !raw.id) return null;
-  const state = typeof raw?.state === "string" ? raw.state : null;
-  /* La nota tiene que llegar como NÚMERO. Un "9" de texto es un cliente roto,
-     y aceptarlo con un Number() por medio esconde la avería en vez de que se
-     vea el día que aparece. */
-  const score = typeof raw?.rating === "number" ? raw.rating : NaN;
-  return {
-    id: raw.id,
-    overwrite: Boolean(raw?.overwrite),
-    playState: (PLAY_STATES as readonly string[]).includes(state ?? "")
-      ? (state as Pick["playState"])
-      : null,
-    finished: state === "finished",
-    rating: Number.isInteger(score) && score >= 1 && score <= 10 ? score : null,
-  };
-}
-
-/** El estado de una fila de tu biblioteca frente a lo que dice Steam. */
-export interface CurrentEntry {
-  minutes: number | null | undefined;
-  source: string | null | undefined;
-}
-
-/** ¿Esta fila es un conflicto — horas tuyas que Steam contradice?
- *
- *  Solo lo es si las escribiste TÚ (`minutes_source = 'manual'`), si hay algo
- *  que perder (> 0) y si las cifras difieren. Una fila que ya venía de Steam se
- *  reescribe sin preguntar: eso es lo que hace que volver a sincronizar sirva
- *  para algo. */
-export function isConflict(current: CurrentEntry | null | undefined, steamMinutes: number): boolean {
-  if (!current) return false;
-  const mine = current.minutes ?? 0;
-  return current.source === "manual" && mine > 0 && mine !== steamMinutes;
-}
-
-/** Los minutos que hay que escribir, o null para no tocar las horas de la fila.
- *
- *  `overwrite` es la casilla de ESA fila en la pantalla de confirmar, no un
- *  ajuste global: los conflictos son pocos y cada uno tiene su motivo.
- *
- *  Cuando sí escribe, escribe aunque la cifra coincida con la que había. No es
- *  un desperdicio: lo que cambia en ese caso es `minutes_source`, que pasa a
- *  'steam' y es lo que hace que la PRÓXIMA sincronización pueda actualizar esa
- *  fila sin volver a preguntar. Dejarla en 'manual' por casualidad la
- *  convertiría en un conflicto permanente. */
-export function minutesToWrite(
-  current: CurrentEntry | null | undefined,
-  steamMinutes: number,
-  overwrite: boolean,
-): number | null {
-  if (isConflict(current, steamMinutes) && !overwrite) return null;
-  return steamMinutes;
-}

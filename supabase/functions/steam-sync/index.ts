@@ -51,8 +51,23 @@
 // índice, no una petición. Lo que NO está se resuelve por la ruta `/by-steam`
 // de igdb-proxy, y solo para lo que la persona haya marcado: en segundo plano,
 // por lotes, y con su fila en `job_runs` como los crons.
+//
+// ── Las tablas del borrador ya no son solo de Steam ──────────────────────
+// Desde 0080 se llaman `game_imports` y `game_import_items`, las comparte con
+// `nintendo-sync`, y cada fila dice de quién es (`provider`). El appid vive en
+// `external_id` como texto, porque Nintendo no tiene ningún número que poner
+// ahí. Las escrituras comunes —biblioteca, notas, finales— viven en
+// `_shared/game-import.ts`; aquí solo queda lo que es de Steam.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  chunk,
+  ID_PAGE,
+  PAGE,
+  writeEntries,
+  writeFinished,
+  writeRatings,
+} from "../_shared/game-import.ts";
 import { authUrl, checkReturn, isValid, STEAM_OPENID, verifyBody } from "./openid.ts";
 import {
   finishedAt,
@@ -75,20 +90,6 @@ const UPSTREAM_TIMEOUT_MS = 15_000;
    (STEAM_MAX allí); pasarse devuelve un 400 en vez de resolver menos. */
 const RESOLVE_CHUNK = 200;
 
-/* PostgREST corta en 1.000 filas sin avisar (config.toml → max_rows). Ninguna
-   consulta de aquí pide más que esto de golpe: una biblioteca de Steam de mil
-   y pico juegos existe, y una lectura truncada en silencio se leería como
-   "esos juegos no los tienes". */
-const PAGE = 500;
-
-/* Y el otro tope, que no es de filas sino de CARACTERES: un filtro `in.(…)` de
-   PostgREST viaja en la query string, y un uuid ocupa 37 bytes con su coma. 500
-   uuids son 18 KB de URL, muy por encima de los 8 KB que aceptan la pasarela y
-   Cloudflare — o sea un 414 que aquí se vería como "la importación falla si
-   marcas muchos juegos", que es justo el caso que esta rama tiene que aguantar.
-   Con enteros (los appid) no hace falta: ocupan seis. */
-const ID_PAGE = 100;
-
 // deno-lint-ignore no-explicit-any
 type Any = any;
 
@@ -103,12 +104,6 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...cors, "content-type": "application/json" },
   });
-
-function chunk<T>(xs: T[], n: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
-  return out;
-}
 
 /** Lanza trabajo sin que la respuesta lo espere. Idéntico al de tmdb-proxy y
  *  igdb-proxy: sin waitUntil la plataforma mata la invocación con la promesa a
@@ -188,8 +183,11 @@ async function userOf(req: Request): Promise<string | null> {
 /* ─────────────────────────── El escaneo ─────────────────────────────────── */
 
 interface Scanned {
-  appid: number;
-  steam_name: string;
+  /** El appid, como TEXTO: desde 0080 la columna es `external_id` y la
+   *  comparten los dos proveedores. La conversión vive aquí y en
+   *  `resolvePending`, que son los dos únicos sitios que cruzan la frontera. */
+  external_id: string;
+  name: string;
   minutes: number;
   title_id: string | null;
   in_library: boolean;
@@ -240,8 +238,8 @@ async function crossReference(
     const titleId = titleByAppid.get(g.appid) ?? null;
     const current = titleId ? entries.get(titleId) ?? null : null;
     return {
-      appid: g.appid,
-      steam_name: g.name,
+      external_id: String(g.appid),
+      name: g.name,
       minutes: g.minutes,
       title_id: titleId,
       in_library: Boolean(current),
@@ -255,145 +253,6 @@ async function crossReference(
 }
 
 /* ─────────────────────────── La confirmación ────────────────────────────── */
-
-/** Lo que se escribe de un juego en la biblioteca. */
-interface EntryWrite {
-  titleId: string;
-  minutes: number | null;
-  /** Lo que la persona marcó, o null para no tocar `play_state`.
-   *
-   *  Null es NO TOCARLO y no "quitarlo", y la diferencia importa: un juego que
-   *  ya tenías en "Jugando" y que confirmas sin marcarle nada no puede salir de
-   *  la importación sin estado. Aquí no hay forma de borrarlo — para eso está
-   *  la ficha, que es donde se puso. */
-  playState: Pick["playState"];
-}
-
-/** Escribe en la biblioteca las filas que ya tienen `title_id`. */
-async function writeEntries(
-  admin: SupabaseClient,
-  userId: string,
-  rows: EntryWrite[],
-): Promise<number> {
-  /* Un upsert POR JUEGO DE COLUMNAS, y esto no es manía: la lista del
-     `on conflict do update` de PostgREST sale de la UNIÓN de claves del lote.
-     Si una fila lleva `minutes_played` y otra no, la que no lo lleva recibe un
-     null — o sea, borrar las horas que esa persona escribió a mano, que es
-     justo lo que esta rama existe para no hacer. Con `play_state` (0078) el
-     lote se parte en cuatro en vez de en dos, pero el criterio es el mismo:
-     agrupar por QUÉ columnas se escriben, nunca por sus valores.
-
-     `play_state` no aparece en el grupo que no lo lleva, y por eso importar sin
-     marcar nada no puede pisar el estado que ya tenías. */
-  const groups = new Map<string, EntryWrite[]>();
-  for (const r of rows) {
-    const key = `${r.minutes !== null ? "m" : ""}${r.playState ? "s" : ""}`;
-    const group = groups.get(key);
-    if (group) group.push(r);
-    else groups.set(key, [r]);
-  }
-
-  let written = 0;
-  for (const [key, part] of groups) {
-    const { error } = await admin.from("library_entries").upsert(
-      part.map((r) => ({
-        user_id: userId,
-        title_id: r.titleId,
-        followed: true,
-        owned: true,
-        ...(r.minutes !== null ? { minutes_played: r.minutes, minutes_source: "steam" } : {}),
-        ...(r.playState ? { play_state: r.playState } : {}),
-      })),
-      { onConflict: "user_id,title_id" },
-    );
-    if (error) throw new Error(`library upsert (${key || "owned"}): ${error.message}`);
-    written += part.length;
-  }
-
-  return written;
-}
-
-/** Las notas que la persona puso en la pantalla de confirmar.
- *
- *  Un upsert como el de la ficha (`app/src/lib/ratings.ts`), con la misma clave
- *  única: puntuar dos veces el mismo juego es corregir la nota, no apilar dos.
- *  Se cuenta lo escrito porque el recibo lo enseña. */
-async function writeRatings(
-  admin: SupabaseClient,
-  userId: string,
-  rows: { titleId: string; rating: number }[],
-): Promise<number> {
-  if (!rows.length) return 0;
-  const now = new Date().toISOString();
-  for (const part of chunk(rows, PAGE)) {
-    const { error } = await admin.from("ratings").upsert(
-      part.map((r) => ({ user_id: userId, title_id: r.titleId, score: r.rating, updated_at: now })),
-      { onConflict: "user_id,title_id" },
-    );
-    if (error) throw new Error(`ratings upsert: ${error.message}`);
-  }
-  return rows.length;
-}
-
-/** Lo marcado como terminado, con la fecha de tu última partida.
- *
- *  Terminado no es un `play_state`: es el `watch_event` del episodio sintético
- *  (0071), que es lo que hace que un juego acabado entre en el historial, en el
- *  muro y en las notas sin que nada de eso sepa que existen los videojuegos.
- *
- *  Dos detalles que no son opcionales:
- *
- *    · `watched_at` sale de `last_played_at` (0078). Con `now()` por defecto,
- *      confirmar cuarenta juegos publicaría cuarenta finales esta tarde.
- *    · `ignoreDuplicates`, contra la clave única (user_id, episode_id): si ya
- *      lo tenías terminado, volver a importar NO puede mover la fecha del
- *      evento que ya estaba — esa la pusiste tú. */
-async function writeFinished(
-  admin: SupabaseClient,
-  userId: string,
-  rows: { titleId: string; at: string }[],
-): Promise<number> {
-  if (!rows.length) return 0;
-
-  // title_id → episodio sintético. El de un juego es siempre el 1x01 (0071).
-  const episodeOf = new Map<string, string>();
-  for (const part of chunk(rows.map((r) => r.titleId), ID_PAGE)) {
-    const { data, error } = await admin
-      .from("episodes")
-      .select("id, title_id")
-      .eq("season_number", 1)
-      .eq("episode_number", 1)
-      .in("title_id", part);
-    if (error) throw new Error(`episodes: ${error.message}`);
-    for (const row of data ?? []) episodeOf.set(row.title_id, row.id);
-  }
-
-  const events = rows
-    .filter((r) => episodeOf.has(r.titleId))
-    .map((r) => ({
-      user_id: userId,
-      episode_id: episodeOf.get(r.titleId)!,
-      watched_at: r.at,
-      source: "steam",
-    }));
-  if (!events.length) return 0;
-
-  /* El `select` no es decoración: con `ignoreDuplicates` PostgREST devuelve
-     solo las filas que ha INSERTADO, así que es la única forma de que el recibo
-     diga cuántos finales entraron de verdad. Contar los intentos diría "5
-     terminados" cuando tres ya lo estaban desde antes — la misma mentira que la
-     nota de los que IGDB no encuentra existe para no contar. */
-  let written = 0;
-  for (const part of chunk(events, PAGE)) {
-    const { data, error } = await admin
-      .from("watch_events")
-      .upsert(part, { onConflict: "user_id,episode_id", ignoreDuplicates: true })
-      .select("id");
-    if (error) throw new Error(`watch_events: ${error.message}`);
-    written += (data ?? []).length;
-  }
-  return written;
-}
 
 /** Le pregunta a igdb-proxy por los appids que el catálogo no conocía.
  *
@@ -622,15 +481,15 @@ Deno.serve(async (req) => {
       if (!profile?.steam_id) return json({ error: "not_linked" }, 400);
 
       const { data: run, error: runError } = await admin
-        .from("steam_imports")
-        .insert({ user_id: userId })
+        .from("game_imports")
+        .insert({ user_id: userId, provider: "steam" })
         .select()
         .single();
-      if (runError) throw new Error(`steam_imports: ${runError.message}`);
+      if (runError) throw new Error(`game_imports: ${runError.message}`);
 
       const fail = async (reason: string) => {
         await admin
-          .from("steam_imports")
+          .from("game_imports")
           .update({ state: "error", error: reason, finished_at: new Date().toISOString() })
           .eq("id", run.id);
         return json({ import_id: run.id, error: reason }, 200);
@@ -650,14 +509,14 @@ Deno.serve(async (req) => {
 
       const items = await crossReference(admin, userId, result.games);
       for (const part of chunk(items, PAGE)) {
-        const { error } = await admin.from("steam_import_items").insert(
+        const { error } = await admin.from("game_import_items").insert(
           part.map((i) => ({ ...i, import_id: run.id, user_id: userId })),
         );
-        if (error) throw new Error(`steam_import_items: ${error.message}`);
+        if (error) throw new Error(`game_import_items: ${error.message}`);
       }
 
       await admin
-        .from("steam_imports")
+        .from("game_imports")
         .update({
           state: "ready",
           summary: {
@@ -692,17 +551,21 @@ Deno.serve(async (req) => {
       if (!importId || !picks.size) return json({ error: "nothing selected" }, 400);
 
       const { data: run } = await admin
-        .from("steam_imports")
+        .from("game_imports")
         .select("*")
         .eq("id", importId)
         .eq("user_id", userId)
+        // Desde 0080 la tabla la comparten dos proveedores: confirmar aquí un
+        // borrador de Nintendo escribiría `minutes_source = 'steam'` en horas
+        // que no son de Steam.
+        .eq("provider", "steam")
         .maybeSingle();
       if (!run) return json({ error: "not found" }, 404);
 
       const chosen: Any[] = [];
       for (const part of chunk([...picks.keys()], ID_PAGE)) {
         const { data, error } = await admin
-          .from("steam_import_items")
+          .from("game_import_items")
           .select("*")
           .eq("import_id", importId)
           .eq("user_id", userId)
@@ -736,6 +599,7 @@ Deno.serve(async (req) => {
           minutes: minutesFor(i),
           playState: pickFor(i).playState,
         })),
+        "steam",
       );
       /* La nota y el terminado van DESPUÉS de la biblioteca, y en ese orden: la
          fila de `library_entries` es lo que hace que el juego exista en tu
@@ -754,15 +618,16 @@ Deno.serve(async (req) => {
         ready
           .filter((i) => pickFor(i).finished)
           .map((i) => ({ titleId: i.title_id as string, at: finishedAt(i.last_played_at) })),
+        "steam",
       );
       if (ready.length) {
         for (const part of chunk(ready.map((i) => i.id), ID_PAGE)) {
-          await admin.from("steam_import_items").update({ state: "applied" }).in("id", part);
+          await admin.from("game_import_items").update({ state: "applied" }).in("id", part);
         }
       }
 
       await admin
-        .from("steam_imports")
+        .from("game_imports")
         .update({
           state: pending.length ? "applying" : "done",
           finished_at: pending.length ? null : new Date().toISOString(),
@@ -814,14 +679,19 @@ async function resolvePending(
   let ok = false;
   let note: string | null = null;
 
+  /* Las filas vienen de la base, donde el appid vive como TEXTO desde 0080
+     (`external_id`, compartida con Nintendo). Una sola conversión aquí en vez
+     de un `Number()` suelto en cada uso, que es como se cuelan los NaN. */
+  const appidOf = (i: Any) => Number(i.external_id);
+
   try {
     const { found: byAppid, failedChunks } = await resolveAppids(
       auth,
-      pending.map((i) => i.appid),
+      pending.map(appidOf),
     );
 
-    const found = pending.filter((i) => byAppid.has(i.appid));
-    const lost = pending.filter((i) => !byAppid.has(i.appid));
+    const found = pending.filter((i) => byAppid.has(appidOf(i)));
+    const lost = pending.filter((i) => !byAppid.has(appidOf(i)));
 
     if (found.length) {
       /* El title_id descubierto se guarda en la fila del borrador antes de
@@ -834,16 +704,16 @@ async function resolvePending(
          porque un upsert que insertara —no debería, la fila existe— no puede
          quedarse a medias. */
       for (const part of chunk(found, PAGE)) {
-        const { error } = await admin.from("steam_import_items").upsert(
+        const { error } = await admin.from("game_import_items").upsert(
           part.map((i) => ({
             id: i.id,
             import_id: i.import_id,
             user_id: i.user_id,
-            appid: i.appid,
-            steam_name: i.steam_name,
+            external_id: i.external_id,
+            name: i.name,
             minutes: i.minutes,
             last_played_at: i.last_played_at,
-            title_id: byAppid.get(i.appid),
+            title_id: byAppid.get(appidOf(i)),
             state: "applied",
           })),
           { onConflict: "id" },
@@ -854,16 +724,17 @@ async function resolvePending(
         admin,
         userId,
         found.map((i) => ({
-          titleId: byAppid.get(i.appid)!,
+          titleId: byAppid.get(appidOf(i))!,
           minutes: minutesFor(i),
           playState: pickFor(i).playState,
         })),
+        "steam",
       );
       rated = await writeRatings(
         admin,
         userId,
         found
-          .map((i) => ({ titleId: byAppid.get(i.appid)!, rating: pickFor(i).rating }))
+          .map((i) => ({ titleId: byAppid.get(appidOf(i))!, rating: pickFor(i).rating }))
           .filter((r): r is { titleId: string; rating: number } => r.rating !== null),
       );
       finished = await writeFinished(
@@ -871,7 +742,8 @@ async function resolvePending(
         userId,
         found
           .filter((i) => pickFor(i).finished)
-          .map((i) => ({ titleId: byAppid.get(i.appid)!, at: finishedAt(i.last_played_at) })),
+          .map((i) => ({ titleId: byAppid.get(appidOf(i))!, at: finishedAt(i.last_played_at) })),
+        "steam",
       );
     }
 
@@ -880,7 +752,7 @@ async function resolvePending(
     // entrado 38 es mentir en la única pantalla que la persona va a mirar.
     if (lost.length) {
       for (const part of chunk(lost.map((i) => i.id), ID_PAGE)) {
-        await admin.from("steam_import_items").update({ state: "unresolved" }).in("id", part);
+        await admin.from("game_import_items").update({ state: "unresolved" }).in("id", part);
       }
       note = failedChunks
         ? `${lost.length} sin resolver (${failedChunks} lote(s) fallaron; vuelve a sincronizar)`
@@ -893,13 +765,13 @@ async function resolvePending(
   }
 
   const { data: current } = await admin
-    .from("steam_imports")
+    .from("game_imports")
     .select("summary")
     .eq("id", importId)
     .maybeSingle();
 
   await admin
-    .from("steam_imports")
+    .from("game_imports")
     .update({
       state: ok ? "done" : "error",
       error: ok ? null : "resolve",

@@ -348,7 +348,7 @@ const STATES: { key: ImportState; label: string }[] = [
  *  Steam, servido por su CDN: ni una fila en la base, ni una petición a IGDB.
  *  Lo que no la tiene —demos, herramientas, juegos retirados— cae al degradado
  *  de siempre por el `onError`. */
-const coverUrl = (appid: number) =>
+const coverUrl = (appid: string) =>
   `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`;
 
 const playedOn = (iso: string) =>
@@ -616,17 +616,17 @@ function GameRow({
 
   return (
     <article className={`card st-card ${on ? "" : "off"}`}>
-      <div className="st-cover" style={{ background: posterBg(item.steam_name) }}>
+      <div className="st-cover" style={{ background: posterBg(item.name) }}>
         {!noArt && (
-          <img src={coverUrl(item.appid)} alt="" loading="lazy" onError={() => setNoArt(true)} />
+          <img src={coverUrl(item.external_id)} alt="" loading="lazy" onError={() => setNoArt(true)} />
         )}
-        {noArt && <span className="st-cover-name">{item.steam_name}</span>}
+        {noArt && <span className="st-cover-name">{item.name}</span>}
         <input
           type="checkbox"
           className="st-tick"
           checked={on}
           onChange={onToggle}
-          aria-label={tv("Import {name}", { name: item.steam_name })}
+          aria-label={tv("Import {name}", { name: item.name })}
         />
       </div>
 
@@ -634,7 +634,7 @@ function GameRow({
         <div className="flex items-start gap-3">
           <div style={{ minWidth: 0 }}>
             <h3 style={{ fontSize: 16, fontWeight: 750, letterSpacing: "-0.01em", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {item.steam_name}
+              {item.name}
             </h3>
             <div className="mute" style={{ fontSize: 12.5, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {item.in_library && (

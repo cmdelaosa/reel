@@ -37,7 +37,7 @@ linked hosted DB.
 
 ```bash
 supabase functions deploy tmdb-proxy igdb-proxy episode-refresh alerts importer export \
-  friend-request-email steam-sync
+  friend-request-email steam-sync nintendo-sync
 ```
 
 `steam-sync` es la única función que se despliega **sin la reja de JWT de la
@@ -50,6 +50,13 @@ en todas sus otras rutas.
 ⚠️ **`steam-sync` e `igdb-proxy` van juntos.** La importación resuelve contra la
 ruta `/by-steam` de `igdb-proxy`, que llega en 0076: desplegar solo `steam-sync`
 deja las importaciones colgadas en `applying` con un 404 en `job_runs`.
+
+⚠️ **`nintendo-sync` e `igdb-proxy` van juntos, y con la 0080.** Lo mismo, con
+la ruta `/by-name`. Y la migración 0080 renombra `steam_imports` →
+`game_imports` (y `steam_import_items` → `game_import_items`, con `appid` →
+`external_id`): `steam-sync` y el frontend nuevos hablan de las tablas nuevas,
+así que **la 0080 va antes que las dos funciones**, y desplegar las funciones
+sin ella rompe también las importaciones de Steam, no solo las de Nintendo.
 
 Deploy migrations before the functions. `tmdb-proxy` uses the
 `is_current_user_invited()` function introduced in migration 0033 to combine
@@ -78,6 +85,9 @@ supabase secrets set TMDB_API_KEY=...        # TMDB v4 read access token (or v3 
 supabase secrets set IGDB_CLIENT_ID=...       # Twitch app Client ID  (videojuegos)
 supabase secrets set IGDB_CLIENT_SECRET=...   # Twitch app Client Secret
 supabase secrets set STEAM_API_KEY=...        # Steam Web API key   (videojuegos)
+supabase secrets set NINTENDO_SESSION_TOKEN=...      # cuenta de Nintendo de Reel (0080)
+supabase secrets set NINTENDO_F_CLIENT_ID=...        # cliente del servicio de f
+supabase secrets set NINTENDO_F_CLIENT_SECRET=...
 supabase secrets set APP_URL=https://...      # origen público de la app (vuelta de Steam)
 supabase secrets set RESEND_API_KEY=...       # Resend API key
 supabase secrets set RESEND_FROM="Reel <alerts@yourdomain.com>"   # verified domain
@@ -148,6 +158,59 @@ privado, `GetOwnedGames` responde **200 con `{"response":{}}`** — sin error y 
 lista. La función lo distingue de una biblioteca vacía de verdad (que sí trae
 `game_count`) y la interfaz lo explica con los pasos exactos, porque leído como
 "no tienes juegos" manda a la persona a buscar una avería en su cuenta.
+
+**Nintendo (importar horas, 0080).** Es el caso más raro de los tres, y hay que
+entenderlo antes de tocar un secreto: **Nintendo no tiene API de bibliotecas ni
+login por usuario**. La única forma de saber a qué ha jugado alguien es
+preguntárselo a la API de la app Nintendo Switch Online desde dentro de esa app,
+con una cuenta de Nintendo. Así que Reel tiene **una cuenta propia** que hace la
+pregunta, y de cada persona solo guarda su **código de amigo** — que es público
+— más el NSA ID que Nintendo devuelve al resolverlo. Es exactamente el mismo
+montaje que usa Exophase.
+
+Cuatro secretos, y el primero es el único que cuesta trabajo:
+
+- **`NINTENDO_SESSION_TOKEN`** — el de la cuenta bot. Dura unos **dos años** y se
+  saca **una sola vez y a mano**, porque el ida y vuelta del login de Nintendo
+  termina en una redirección a `npf71b963c1b7b6d119://auth#session_token_code=…`
+  que ningún navegador puede seguir; se copia el enlace y se cambia el código por
+  el token. La forma cómoda es
+  [nxapi](https://github.com/samuelthomas2774/nxapi) (`nxapi nso auth`), que
+  guarda el token en su fichero de datos. Sin este secreto, todas las rutas
+  responden 502.
+- **`NINTENDO_F_CLIENT_ID`** y **`NINTENDO_F_CLIENT_SECRET`** — para el servicio
+  que calcula el parámetro `f`. Se registran en
+  [nxapi-auth.fancy.org.uk/oauth/clients](https://nxapi-auth.fancy.org.uk/oauth/clients)
+  con el ámbito `ca:gf ca:er ca:dr`. Si el servicio de `f` se aloja en casa y no
+  pide credenciales, se dejan sin poner y se llama sin cabecera.
+- **`NINTENDO_USER_AGENT`** (opcional, con defecto) — nombre, versión y forma de
+  contactar. Lo exige el servicio de `f` en su README, y no es cortesía: es cómo
+  su dueño sabe a quién avisar cuando algo se rompe.
+
+`NINTENDO_F_API_URL` y `NINTENDO_F_TOKEN_URL` existen para poder cambiar de
+servicio sin tocar código, y sus defectos son los públicos.
+
+⚠️ **El servicio de `f` es un tercero y ve un token nuestro.** Entrar en la API
+de Coral exige un HMAC que solo sabe calcular la app de Nintendo de verdad
+corriendo en un Android; `nxapi-znca-api` la ejecuta en un móvil con Frida y la
+calcula a partir del `id_token` que se le manda. Ese token es el de la **cuenta
+bot de Reel** — nadie del grupo tiene cuenta de Nintendo enlazada aquí, solo un
+código de amigo — pero conviene saber que sale de nuestra infraestructura. El
+servicio se puede autoalojar; el README de `nxapi-znca-api` explica cómo.
+
+⚠️ **La versión de la app de Nintendo no se escribe a mano.** Nintendo rechaza un
+`f` generado con una versión distinta de la que dice la cabecera
+`X-ProductVersion`, y la app se actualiza sola. `coral.ts` la pregunta al
+`/config` del servicio de `f` y la cachea por isolate: si un día todo devuelve
+9403, mirar ahí antes que a los secretos.
+
+**El registro de juego de cada persona tiene que estar en "Todos".** En la
+Switch: Configuración de la consola → Usuario → su cuenta → Ajustes del registro
+de juego. Sin eso Nintendo no se lo enseña a nadie más que a ella, y `/scan`
+termina con `error = 'private'` — que la pantalla explica con esos pasos exactos,
+porque leído como "no has jugado a nada" manda a alguien a buscar una avería que
+no existe. Y un aviso que no es avería: **Nintendo solo lista el registro
+reciente**, no todo lo jugado; lo que falte aparece en cuanto se juegue.
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected
 automatically. Without `RESEND_FROM` the alerts function **skips email** (it will

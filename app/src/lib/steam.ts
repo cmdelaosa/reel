@@ -112,8 +112,11 @@ export type SteamImport = z.infer<typeof steamImportSchema>;
 
 export const steamItemSchema = z.object({
   id: z.string().uuid(),
-  appid: z.number().int(),
-  steam_name: z.string(),
+  /* El appid, como TEXTO: desde 0080 la columna la comparten Steam y Nintendo,
+     y Nintendo no tiene ningún número que poner ahí. La pantalla lo vuelve a
+     número para armar la URL de la carátula, que es lo único que lo usa. */
+  external_id: z.string(),
+  name: z.string(),
   minutes: z.number().int(),
   title_id: z.string().uuid().nullable(),
   in_library: z.boolean(),
@@ -146,8 +149,12 @@ export function useSteamImport() {
     },
     queryFn: async () => {
       const { data: runs, error } = await supabase
-        .from("steam_imports")
+        .from("game_imports")
         .select("*")
+        // Desde 0080 la tabla la comparten dos proveedores. Sin este filtro,
+        // importar de Nintendo dejaría el último borrador arriba y esta
+        // pantalla enseñaría juegos de Switch como si vinieran de Steam.
+        .eq("provider", "steam")
         .order("started_at", { ascending: false })
         .limit(1);
       if (error) throw new Error(error.message);
@@ -162,11 +169,11 @@ export function useSteamImport() {
       const PAGE = 1000;
       for (let from = 0; ; from += PAGE) {
         const { data, error: e } = await supabase
-          .from("steam_import_items")
+          .from("game_import_items")
           .select("*")
           .eq("import_id", run.id)
           .order("minutes", { ascending: false })
-          .order("appid", { ascending: true })
+          .order("external_id", { ascending: true })
           .range(from, from + PAGE - 1);
         if (e) throw new Error(e.message);
         const page = (data ?? []).map((r) => steamItemSchema.parse(r));
