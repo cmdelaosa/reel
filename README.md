@@ -64,6 +64,11 @@ open invite codes so every flow is walkable without real data. `npm run check`
 (typecheck + lint + unit tests) is the gate CI runs on every push; `npm run test:e2e` drives
 the Playwright suite against the local stack.
 
+`./verificar.sh` at the repo root runs everything CI checks — `npm run check`, the Deno
+type-check and tests for the edge functions, and the guard against two migrations claiming
+the same number — in about ten seconds, before you push. It only runs the sections your
+change touches; `--todo` forces all three.
+
 The production instance is invite-only and its API keys are not in this repo — see
 [docs/DEPLOY.md](docs/DEPLOY.md) for what a real deployment needs.
 
