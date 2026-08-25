@@ -1,5 +1,9 @@
 -- 0080_imdb_rating_en_la_biblioteca.sql
--- La nota de IMDb viaja en el rollup de la biblioteca.
+-- Dos cosas para que el cine tenga nota de IMDb: la marca de "ya pregunté por
+-- este id" que hace sostenible el repaso horario, y la nota en el rollup de la
+-- biblioteca.
+--
+-- ── 1. La nota viaja en el rollup ───────────────────────────────────────────
 --
 -- POR QUÉ. La carátula de una película enseña ahora la nota de IMDb (y la de
 -- TMDB solo de reserva; ver app/src/domain/externalScore.ts). Las rejillas de
@@ -23,6 +27,30 @@
 -- la trae también. Quien la pinta es quien decide, y hoy la carátula de series
 -- sigue con la de TMDB a propósito.
 
+-- ============================================================
+-- 2. Cuándo se preguntó por última vez por el imdb_id de un título
+-- ============================================================
+-- El repaso de ids (episode-refresh?backfillImdbIds=1) pasa a correr CADA HORA
+-- por cron, y sin esta columna esa frecuencia se convierte en trabajo perpetuo:
+-- los títulos que TMDB sencillamente no tiene vinculados a IMDb no se resuelven
+-- nunca, se quedan en la cola para siempre, y cada ronda gasta su presupuesto
+-- volviendo a preguntar por los mismos. Con la pasada a mano eso era una
+-- molestia; con un cron horario son cientos de peticiones a TMDB cada hora, a
+-- perpetuidad, para recibir la misma negativa.
+--
+-- Se sella en CADA respuesta de TMDB —resuelto o "no tengo id"—, pero NO cuando
+-- la petición falla: un 429 o un corte de red no son una respuesta, y sellarlos
+-- escondería el título durante un mes por un fallo de un segundo.
+--
+-- El mes de espera antes de repreguntar (RECHECK_DAYS en la función) no es
+-- pesimismo: TMDB añade ids con el tiempo, sobre todo en estrenos que aún no
+-- están en IMDb cuando los cacheamos. Reintentar es correcto; reintentar cada
+-- hora, no.
+alter table public.titles add column if not exists imdb_id_checked_at timestamptz;
+
+-- ============================================================
+-- 3. El rollup de la biblioteca
+-- ============================================================
 -- La definición completa, copiada de 0076 y con una sola línea más en cada
 -- sitio. Quien la toque después: `grep -n "create function public.rpc_library_rollup"
 -- supabase/migrations/*.sql` y parte del número más alto, que es este.

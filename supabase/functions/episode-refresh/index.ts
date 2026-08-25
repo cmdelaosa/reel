@@ -847,7 +847,10 @@ async function refreshTitle(
  *
  * external_ids es el endpoint más barato de TMDB (una docena de ids, sin
  * appends). The pass is idempotent and meant to be run in rounds: rows resolved
- * by an earlier round drop out of the query, so repeat until the count of titles
+ * by an earlier round drop out of the query — y desde 0080 también salen, un
+ * mes, aquellos por los que TMDB ya contestó que no tiene id (RECHECK_DAYS), que
+ * es lo que impide que el cron horario se pase la vida repreguntando por los
+ * mismos imposibles. So repeat until the count of titles
  * with a null imdb_id stops falling. Drive it by that count, NOT by this run's
  * `remaining` — these rounds are killed on the runtime's CPU limit long before
  * the wall guard, so the job_runs row often never gets written.
@@ -867,11 +870,21 @@ async function refreshTitle(
  * titles into a whole evening of rounds.
  */
 const BACKFILL_BATCH = 8;
+/* Cuánto tarda un título en volver a la cola después de que TMDB dijera que no
+   tiene id para él (0080). Sin esta espera el cron horario se pasaría la vida
+   repreguntando por los mismos: lo que no se resuelve nunca se sale de la cola,
+   así que sería la cola entera al cabo de unas semanas. Un mes porque TMDB SÍ
+   añade ids con el tiempo —los estrenos que aún no estaban en IMDb cuando los
+   cacheamos son el caso normal—, y repreguntar cada hora por eso es tirar el
+   presupuesto de peticiones. */
+const RECHECK_DAYS = 30;
 
 async function backfillImdbIds(admin: SupabaseClient, key: string, maxMs: number) {
   const started = Date.now();
   const PAGE = 1000;
   const rows: Any[] = [];
+  // Lo que TMDB ya contestó hace poco no se vuelve a preguntar: ver RECHECK_DAYS.
+  const recheckBefore = new Date(started - RECHECK_DAYS * 86_400_000).toISOString();
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await admin
       .from("titles")
@@ -881,6 +894,7 @@ async function backfillImdbIds(admin: SupabaseClient, key: string, maxMs: number
       // TMDB por él — pedirlo devolvería el título que lleve ese número.
       .in("kind", ["tv", "movie"])
       .is("imdb_id", null)
+      .or(`imdb_id_checked_at.is.null,imdb_id_checked_at.lt.${recheckBefore}`)
       .order("id")
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`titles: ${error.message}`);
@@ -908,9 +922,15 @@ async function backfillImdbIds(admin: SupabaseClient, key: string, maxMs: number
         const medium = t.kind === "movie" ? "movie" : "tv";
         const d = await tmdb(key, `/${medium}/${t.tmdb_id}/external_ids`);
         const imdbId = d?.imdb_id || null;
-        if (!imdbId) return "none"; // TMDB has no IMDb id for this title
-        const { error } = await admin.from("titles").update({ imdb_id: imdbId }).eq("id", t.id);
+        // El sello va en las DOS salidas, porque las dos son una respuesta de
+        // TMDB. Lo que no se sella es el catch de abajo: un 429 no es un "no".
+        const checked = new Date().toISOString();
+        const { error } = await admin
+          .from("titles")
+          .update(imdbId ? { imdb_id: imdbId, imdb_id_checked_at: checked } : { imdb_id_checked_at: checked })
+          .eq("id", t.id);
         if (error) throw new Error(error.message);
+        if (!imdbId) return "none"; // TMDB has no IMDb id for this title
         return medium === "movie" ? "resolved-movie" : "resolved";
       } catch (err) {
         errors.push(`${t.kind}/${t.tmdb_id}: ${redactCredential(String(err))}`);

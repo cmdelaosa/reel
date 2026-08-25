@@ -156,7 +156,10 @@ select cron.schedule(
 --     tiempo de CPU del runtime, no por la cola (~260 títulos por ronda), así
 --     que el atraso acumulado solo se come a base de rondas. Una vez vacía la
 --     cola el trabajo es una consulta y cero peticiones a TMDB — se queda
---     dormida sola, sin apagarla.
+--     dormida sola, sin apagarla. Lo que la deja vaciarse de verdad es
+--     `titles.imdb_id_checked_at` (0080): un título por el que TMDB ya dijo que
+--     no tiene id se aparta un mes, en vez de volver a la cola cada hora para
+--     siempre.
 --
 --     Puede solaparse con episode-refresh-daily (05:00): comparten el límite de
 --     TMDB, un 429 se cuenta como error de la ronda y la siguiente lo reintenta.

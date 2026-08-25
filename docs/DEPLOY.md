@@ -313,7 +313,15 @@ select count(*) from episodes where season_number > 0 and tmdb_vote_average is n
    ~260 títulos por ronda, así que unos cuantos miles llevan varias. Desde 0080
    hay un cron horario (`imdb-id-backfill-hourly`) que las va dando solo; estas
    llamadas a mano sirven para acelerarlo. Lo que se queda en null es real:
-   títulos sin id en TMDB, más algún tmdb_id borrado (un 404).
+   títulos sin id en TMDB, más algún tmdb_id borrado (un 404) — y esos llevan
+   sello (`imdb_id_checked_at`), así que salen de la cola un mes en vez de
+   comerse cada ronda. Para ver lo que queda DE VERDAD por preguntar:
+
+   ```sql
+   select count(*) from titles
+    where imdb_id is null and kind in ('tv','movie')
+      and (imdb_id_checked_at is null or imdb_id_checked_at < now() - interval '30 days');
+   ```
 2. **`?force=1&allSeasons=1`** — per-episode TMDB scores on the older seasons the
    daily run never touches. The heavier of the two.
 
