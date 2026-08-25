@@ -154,8 +154,8 @@ const plan = (over: Partial<PlannedGame> = {}): PlannedGame => ({
 });
 
 const entry = (over: Partial<CurrentEntry> = {}): CurrentEntry => ({
-  play_state: null, minutes_played: 0, minutes_source: null, owned: false,
-  added_at: "2026-08-24T10:00:00.000Z", ...over,
+  followed: true, play_state: null, minutes_played: 0, minutes_source: null,
+  owned: false, added_at: "2026-08-24T10:00:00.000Z", ...over,
 });
 
 test("decideEntry: fila nueva se escribe entera", () => {
@@ -220,4 +220,33 @@ test("decideEntry: added_at no se adelanta si la de la cuenta ya es más antigua
 test("decideEntry: owned solo sube", () => {
   assert.equal(decideEntry(plan({ owned: true }), entry({ owned: false })).patch.owned, true);
   assert.equal(decideEntry(plan({ owned: false }), entry({ owned: true })).patch.owned, undefined);
+});
+
+test("decideEntry: lo que quitaste de la biblioteca no vuelve solo", () => {
+  // La avería que esto tapa: `followed: true` iba en el parche pero el que
+  // llamaba solo lo mandaba si ADEMÁS cambiaba otra columna, así que un juego
+  // quitado volvía o no según si de paso se le escribían horas.
+  const quitado = decideEntry(plan({ minutes: 0 }), entry({ followed: false }));
+  assert.equal(quitado.patch.followed, undefined);
+  assert.equal(quitado.conflicts.length, 1);
+  assert.match(quitado.conflicts[0], /lo quitaste de la biblioteca/);
+
+  const conHoras = decideEntry(plan({ minutes: 600 }), entry({ followed: false }));
+  assert.equal(conHoras.patch.followed, undefined);   // tampoco por la puerta de atrás
+  assert.equal(conHoras.patch.minutes_played, 600);
+});
+
+test("decideEntry: una fila que ya está y no cambia nada no genera parche", () => {
+  const igual = entry({
+    followed: true, play_state: "ongoing", minutes_played: 600,
+    minutes_source: "manual", owned: true, added_at: "2024-12-21T14:12:07.000Z",
+  });
+  const { patch, conflicts } = decideEntry(plan({ playState: "ongoing" }), igual);
+  assert.deepEqual(patch, {});   // el que llama lo lee como "no hay nada que escribir"
+  assert.deepEqual(conflicts, []);
+});
+
+test("parseCsv: un campo de varias líneas en un fichero CRLF no arrastra \\r", () => {
+  const rows = parseCsv('a,b\r\n1,"dos\r\nlíneas"\r\n');
+  assert.equal(rows[0].b, "dos\nlíneas");
 });

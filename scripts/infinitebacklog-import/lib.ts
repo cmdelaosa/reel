@@ -64,7 +64,12 @@ export function parseCsv(text: string): Row[] {
       if (c === '"') {
         if (src[i + 1] === '"') { field += '"'; i++; }
         else quoted = false;
-      } else field += c;
+      } else if (c !== "\r") {
+        // Igual que fuera de las comillas: un fichero CRLF con un campo de
+        // varias líneas —una nota larga— dejaría un \r pegado al final de cada
+        // una, y eso viaja hasta la base.
+        field += c;
+      }
       continue;
     }
     if (c === '"') { quoted = true; continue; }
@@ -271,6 +276,9 @@ export function buildPlan(collectionCsv: string, listsCsv: string, wishlistCsv: 
 
 /** La fila que ya existe en `library_entries`, en lo que a esto le importa. */
 export interface CurrentEntry {
+  /** false es "lo quitaste de la biblioteca" (library.ts no borra la fila, la
+   *  marca), y por eso hay que leerlo: es una decisión tuya, no un hueco. */
+  followed: boolean | null;
   play_state: string | null;
   minutes_played: number | null;
   minutes_source: string | null;
@@ -299,21 +307,36 @@ export interface EntryDecision {
  *      un export no lo mencione.
  *    · `added_at` se queda con la MÁS ANTIGUA. Es la fecha que ordena la
  *      biblioteca y la que publica el muro; adelantarla al día de hoy sería
- *      republicar como nuevo algo que llevas un año teniendo. */
+ *      republicar como nuevo algo que llevas un año teniendo.
+ *    · lo que QUITASTE de la biblioteca sigue quitado. `followed` solo se
+ *      escribe al dar de alta; una fila con `followed = false` es una decisión
+ *      tuya (library.ts marca, no borra), y volver a seguirla porque un CSV la
+ *      mencione es exactamente pisar. Se cuenta en el informe para que se vea.
+ *
+ *  Ese último no estaba dicho y el código lo hacía a medias: `followed: true`
+ *  iba en el parche pero el que llama solo lo mandaba si ADEMÁS había otra
+ *  columna que cambiar, así que un juego que habías quitado volvía o no volvía
+ *  según si de paso se le escribían horas. Cualquiera de las dos respuestas es
+ *  defendible; que dependa de eso, no. */
 export function decideEntry(
   planned: PlannedGame,
   current: CurrentEntry | null,
 ): EntryDecision {
   const conflicts: string[] = [];
-  const patch: Record<string, unknown> = { followed: true };
+  const patch: Record<string, unknown> = {};
 
   if (!current) {
+    patch.followed = true;
     patch.owned = planned.owned;
     patch.play_state = planned.playState;
     patch.minutes_played = planned.minutes;
     if (planned.minutes > 0) patch.minutes_source = "manual";
     if (planned.addedAt) patch.added_at = planned.addedAt;
     return { patch, conflicts };
+  }
+
+  if (current.followed === false) {
+    conflicts.push(`${planned.name}: lo quitaste de la biblioteca; el CSV lo trae y se queda fuera`);
   }
 
   if (planned.owned && !current.owned) patch.owned = true;

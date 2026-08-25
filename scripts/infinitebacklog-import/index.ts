@@ -80,7 +80,9 @@ function readEnv(): Env {
 
 /* ─────────────────────────── PostgREST ─────────────────────────────────── */
 
-// deno-lint-ignore-file
+/** Lo que devuelve PostgREST, que aquí no se tipa: son filas de tablas que ya
+ *  están descritas en las migraciones y copiarlas en interfaces sería una
+ *  segunda descripción que envejece sola. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
@@ -97,12 +99,21 @@ function headers(env: Env, prefer?: string): Record<string, string> {
 /** Una petición con reintentos. Lo que se reintenta son los 429 y los 5xx: un
  *  400 es un cuerpo mal formado y repetirlo veinte veces solo tarda más en
  *  contarlo. El mensaje de error incluye el cuerpo de la respuesta, que es donde
- *  PostgREST dice cuál es la comprobación que ha fallado. */
-async function req(url: string, init: RequestInit, intentos = 4): Promise<Response> {
+ *  PostgREST dice cuál es la comprobación que ha fallado.
+ *
+ *  `aceptar` son los estados que quien llama sabe leer — el 404 de un juego que
+ *  IGDB no conoce, por ejemplo: es la respuesta buena a una pregunta legítima y
+ *  no un fallo que reintentar. */
+async function req(
+  url: string,
+  init: RequestInit,
+  intentos = 4,
+  aceptar: number[] = [],
+): Promise<Response> {
   let last = "";
   for (let i = 0; i < intentos; i++) {
     const res = await fetch(url, init);
-    if (res.ok) return res;
+    if (res.ok || aceptar.includes(res.status)) return res;
     const body = await res.text().catch(() => "");
     last = `${res.status} ${body.slice(0, 400)}`;
     if (res.status !== 429 && res.status < 500) break;
@@ -165,13 +176,22 @@ async function cachedTitles(env: Env, igdbIds: number[]): Promise<Map<number, Re
 
 /** La ficha por la misma ruta que usa la app. Devuelve null si IGDB no conoce
  *  ese id — pasa con ediciones retiradas y con filas que el export arrastra de
- *  una versión vieja del catálogo. */
+ *  una versión vieja del catálogo.
+ *
+ *  El 404 se distingue ANTES de reintentar: es la respuesta buena a "ese juego
+ *  no existe" y repetirla cuatro veces solo tarda más en decir lo mismo. Todo
+ *  lo demás pasa por `req`, que reintenta los 429 y los 5xx — y aquí eso no es
+ *  cosmético: IGDB da 4 req/s al proyecto ENTERO, así que un pico de otra
+ *  persona usando la app devuelve un 502 pasajero, y sin reintento ese juego se
+ *  quedaba fuera de la importación con una línea en el informe. */
 async function resolveOne(env: Env, igdbId: number): Promise<Resolved | null> {
-  const res = await fetch(`${env.url}/functions/v1/igdb-proxy/game/${igdbId}`, {
-    headers: { apikey: env.key, Authorization: `Bearer ${env.key}` },
-  });
+  const res = await req(
+    `${env.url}/functions/v1/igdb-proxy/game/${igdbId}`,
+    { headers: { apikey: env.key, Authorization: `Bearer ${env.key}` } },
+    4,
+    [404],
+  );
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`igdb-proxy /game/${igdbId} → ${res.status} ${(await res.text()).slice(0, 200)}`);
   const body = await res.json() as Any;
   if (!body?.title?.id) return null;
   return { titleId: body.title.id, episodeId: body.episode_id ?? null };
@@ -247,7 +267,7 @@ async function main() {
   const entradas = new Map<string, CurrentEntry>();
   for (const r of await getByIds(
     env,
-    `library_entries?user_id=eq.${env.userId}&select=title_id,play_state,minutes_played,minutes_source,owned,added_at`,
+    `library_entries?user_id=eq.${env.userId}&select=title_id,followed,play_state,minutes_played,minutes_source,owned,added_at`,
     "title_id",
     titleIds,
   )) entradas.set(r.title_id, r);
@@ -286,7 +306,7 @@ async function main() {
       nuevas.push({
         user_id: env.userId,
         title_id: titleId,
-        followed: true,
+        followed: patch.followed ?? true,
         owned: patch.owned ?? false,
         play_state: patch.play_state ?? null,
         minutes_played: patch.minutes_played ?? 0,
@@ -298,7 +318,7 @@ async function main() {
         // match"), así que omitirla en 115 de las 349 tira el lote entero.
         added_at: patch.added_at ?? ahora,
       });
-    } else if (Object.keys(patch).length > 1) {
+    } else if (Object.keys(patch).length > 0) {
       parches.push({ titleId, patch });
     }
 
@@ -313,7 +333,15 @@ async function main() {
     // nada, así que con la condición atada al patch se habrían quedado con el
     // now() que les puso el disparador la primera vez. Es idempotente, que es
     // justo lo que un importador que se puede reintentar necesita.
-    if (g.playedAt) {
+    //
+    // Solo donde hay PROGRESO, que es lo que la columna significa: 0075 la
+    // define como "cuándo cambiaste las horas o el estado" y deja a propósito
+    // en null lo que solo sigues, porque seguir un juego no es haberlo jugado.
+    // Un "Not Started" del export tiene `Last updated` igual que los demás, y
+    // escribirlo aquí sería fechar una partida que no existe — y colar ese
+    // juego por delante en la caída de Esta noche (domain/gameTonight).
+    const hayProgreso = g.minutes > 0 || g.playState !== null || g.finished;
+    if (g.playedAt && hayProgreso) {
       const lista = playedAt.get(g.playedAt) ?? [];
       lista.push(titleId);
       playedAt.set(g.playedAt, lista);
@@ -325,7 +353,7 @@ async function main() {
         terminados.push({
           user_id: env.userId,
           episode_id: episodeId,
-          watched_at: g.finishedAt ?? new Date().toISOString(),
+          watched_at: g.finishedAt ?? ahora,
           source: SOURCE,
         });
       }
