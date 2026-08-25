@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { EyeOff, Star, X } from "lucide-react";
 import type { TitleRow } from "@/lib/schemas";
+import { externalScore, scoreColor, scoreLabel } from "@/domain/externalScore";
 import { tmdbImg } from "@/lib/tmdb";
 import { useTitleIntent } from "@/lib/useOpenTitle";
 import { isEs, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
@@ -40,10 +41,14 @@ function YearField({ value, onChange, label }: { value: number | null; onChange:
 export function TitlePoster({ t, rank, score, kind = "tv", onOpen, onIgnore }: {
   t: TitleRow;
   rank?: number;
+  /** Una nota que MANDA sobre la del catálogo, para el carril que enseña otra
+   *  cosa: hoy la media de tus amigos. Sin ella, una carátula de cine saca la
+   *  suya (IMDb, o TMDB de reserva) y una de series no saca ninguna, que es lo
+   *  que las dos hacían antes de que el cine tuviera nota propia. */
   score?: number | null;
-  /** El medio de `t` — decide de dónde sale su título en español (0067) y si
-   *  tiene sentido precargar: la precarga trae temporadas y episodios, que en
-   *  una película no existen. */
+  /** El medio de `t` — decide de dónde sale su título en español (0067), si
+   *  tiene sentido precargar (la precarga trae temporadas y episodios, que en
+   *  una película no existen) y si la carátula saca nota por su cuenta. */
   kind?: "tv" | "movie";
   onOpen: () => void;
   onIgnore?: () => void;
@@ -52,6 +57,11 @@ export function TitlePoster({ t, rank, score, kind = "tv", onOpen, onIgnore }: {
   const intent = useTitleIntent(kind === "tv" ? t.tmdb_id : undefined);
   const esNames = useEsNames();
   const name = (isEs() && t.name_es) || locName(esNames, t.tmdb_id, t.name, kind);
+  /* La nota del propio catálogo, solo en cine: IMDb manda y TMDB queda de
+     reserva (domain/externalScore). La de fuera gana cuando la hay porque
+     significa otra cosa —lo que puntuaron tus amigos— y se pinta con el acento
+     de la app, no con el amarillo de IMDb. */
+  const own = score == null && kind === "movie" ? externalScore(t) : null;
   return (
     <div className="poster" style={{ background: posterBg(name) }} onClick={onOpen} {...intent}>
       {art && <img className="poster-img" src={art} alt="" loading="lazy" />}
@@ -60,6 +70,11 @@ export function TitlePoster({ t, rank, score, kind = "tv", onOpen, onIgnore }: {
       {score != null && score > 0 && (
         <span className="badge badge-glass absolute" style={{ top: 8, left: 8, zIndex: 3 }}>
           <Star size={11} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} /> {score.toFixed(1)}
+        </span>
+      )}
+      {own && (
+        <span className="badge badge-glass absolute" style={{ top: 8, left: 8, zIndex: 3 }} title={scoreLabel(own.source)}>
+          <Star size={11} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(own.source) }} /> {own.value.toFixed(1)}
         </span>
       )}
       {onIgnore && (

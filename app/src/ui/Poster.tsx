@@ -1,5 +1,6 @@
 import { Pause, Star } from "lucide-react";
 import type { TitleCard } from "@/domain/types";
+import { externalScore, scoreColor, scoreLabel } from "@/domain/externalScore";
 import type { Medium } from "@/lib/medium";
 import { posterBg } from "@/ui/posterBg";
 import { WatchOn } from "@/ui/WatchOn";
@@ -34,6 +35,17 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
   // name_es lo llena tmdb-proxy (0046) y IGDB no tiene traducciones.
   const esNames = useEsNames();
   const name = kind === "game" ? t.name : locName(esNames, t.id, t.name, kind);
+
+  /* La insignia: la nota de IMDb si la fila la trae, la de TMDB si no. La regla
+     y el color viven en domain/externalScore — aquí no se decide nada, solo se
+     pinta. Una carátula sin `imdbRating` (series y juegos) sale igual que
+     siempre, porque sin nota de IMDb la reserva ES la de TMDB.
+
+     La etiqueta se calla en los juegos: ahí `voteAverage` no es de TMDB sino de
+     IGDB, y decir "TMDB" sobre la nota de otro catálogo sería mentir en el
+     único sitio donde nadie puede comprobarlo. */
+  const score = externalScore({ imdb_rating: t.imdbRating, vote_average: t.voteAverage });
+  const scoreFrom = score && kind !== "game" ? scoreLabel(score.source) : undefined;
 
   return (
     <div
@@ -70,10 +82,10 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
               <Pause size={11} fill="currentColor" strokeWidth={0} />
             </span>
           )}
-          {t.voteAverage > 0 && (
-            <span className="badge badge-glass">
-              <Star size={11} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-              {t.voteAverage.toFixed(1)}
+          {score && (
+            <span className="badge badge-glass" title={scoreFrom}>
+              <Star size={11} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
+              {score.value.toFixed(1)}
             </span>
           )}
         </span>

@@ -828,16 +828,29 @@ async function refreshTitle(
 
 /* Resolve titles.imdb_id for every cached title that lacks one — ?backfillImdbIds=1.
  *
- * The ratings importer (scripts/imdb-ratings) matches our shows to IMDb's
+ * The ratings importer (scripts/imdb-ratings) matches our titles to IMDb's
  * datasets by imdb_id and nothing else, so a title without one is invisible to
  * it: no episode graph, no IMDb score on the sheet. Only the followed set ever
  * had one filled, because this cron and /title's refresh path are the only
  * writers and neither covers a title nobody follows — which left the other ~80%
  * of the cache unrateable.
  *
- * /tv/:id/external_ids is the cheapest endpoint TMDB has (a dozen ids, no
+ * CINE INCLUIDO, y no es un añadido cosmético: en las películas el agujero era
+ * total. Una peli entra en la caché por las rejillas de Explorar y por la
+ * búsqueda, y las dos escriben `movieSearchRow` (tmdb-proxy), que no lleva
+ * imdb_id — solo el detalle completo lo trae, o sea solo las pelis que alguien
+ * ha ABIERTO. Con la nota de IMDb como nota de referencia del cine
+ * (app/src/domain/externalScore.ts), eso dejaba Explorar entero sin número.
+ * Cada medio se resuelve por su ruta: /tv/:id/external_ids y
+ * /movie/:id/external_ids. Los juegos no entran — su id es de IGDB y en IMDb no
+ * existen.
+ *
+ * external_ids es el endpoint más barato de TMDB (una docena de ids, sin
  * appends). The pass is idempotent and meant to be run in rounds: rows resolved
- * by an earlier round drop out of the query, so repeat until the count of titles
+ * by an earlier round drop out of the query — y desde 0080 también salen, un
+ * mes, aquellos por los que TMDB ya contestó que no tiene id (RECHECK_DAYS), que
+ * es lo que impide que el cron horario se pase la vida repreguntando por los
+ * mismos imposibles. So repeat until the count of titles
  * with a null imdb_id stops falling. Drive it by that count, NOT by this run's
  * `remaining` — these rounds are killed on the runtime's CPU limit long before
  * the wall guard, so the job_runs row often never gets written.
@@ -857,17 +870,31 @@ async function refreshTitle(
  * titles into a whole evening of rounds.
  */
 const BACKFILL_BATCH = 8;
+/* Cuánto tarda un título en volver a la cola después de que TMDB dijera que no
+   tiene id para él (0080). Sin esta espera el cron horario se pasaría la vida
+   repreguntando por los mismos: lo que no se resuelve nunca se sale de la cola,
+   así que sería la cola entera al cabo de unas semanas. Un mes porque TMDB SÍ
+   añade ids con el tiempo —los estrenos que aún no estaban en IMDb cuando los
+   cacheamos son el caso normal—, y repreguntar cada hora por eso es tirar el
+   presupuesto de peticiones. */
+const RECHECK_DAYS = 30;
 
 async function backfillImdbIds(admin: SupabaseClient, key: string, maxMs: number) {
   const started = Date.now();
   const PAGE = 1000;
   const rows: Any[] = [];
+  // Lo que TMDB ya contestó hace poco no se vuelve a preguntar: ver RECHECK_DAYS.
+  const recheckBefore = new Date(started - RECHECK_DAYS * 86_400_000).toISOString();
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await admin
       .from("titles")
-      .select("id, tmdb_id")
-      .eq("kind", "tv") // resuelve por /tv/:id — una película iría a 404
+      .select("id, tmdb_id, kind")
+      // Series y cine, cada uno por su ruta (abajo). Los juegos quedan fuera:
+      // su tmdb_id es en realidad el id de IGDB y no hay nada que preguntarle a
+      // TMDB por él — pedirlo devolvería el título que lleve ese número.
+      .in("kind", ["tv", "movie"])
       .is("imdb_id", null)
+      .or(`imdb_id_checked_at.is.null,imdb_id_checked_at.lt.${recheckBefore}`)
       .order("id")
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`titles: ${error.message}`);
@@ -882,6 +909,7 @@ async function backfillImdbIds(admin: SupabaseClient, key: string, maxMs: number
   }
 
   let resolved = 0, none = 0, done = 0, hitGuard = false;
+  let movies = 0; // de los resueltos, cuántos son cine — la mitad nueva del repaso
   const errors: string[] = [];
   for (let i = 0; i < rows.length; i += BACKFILL_BATCH) {
     // Checked between batches, like the refresh loop above: throttle() already
@@ -891,26 +919,35 @@ async function backfillImdbIds(admin: SupabaseClient, key: string, maxMs: number
     const batch = rows.slice(i, i + BACKFILL_BATCH);
     const outcomes = await Promise.all(batch.map(async (t: Any) => {
       try {
-        const d = await tmdb(key, `/tv/${t.tmdb_id}/external_ids`);
+        const medium = t.kind === "movie" ? "movie" : "tv";
+        const d = await tmdb(key, `/${medium}/${t.tmdb_id}/external_ids`);
         const imdbId = d?.imdb_id || null;
-        if (!imdbId) return "none"; // TMDB has no IMDb id for this show
-        const { error } = await admin.from("titles").update({ imdb_id: imdbId }).eq("id", t.id);
+        // El sello va en las DOS salidas, porque las dos son una respuesta de
+        // TMDB. Lo que no se sella es el catch de abajo: un 429 no es un "no".
+        const checked = new Date().toISOString();
+        const { error } = await admin
+          .from("titles")
+          .update(imdbId ? { imdb_id: imdbId, imdb_id_checked_at: checked } : { imdb_id_checked_at: checked })
+          .eq("id", t.id);
         if (error) throw new Error(error.message);
-        return "resolved";
+        if (!imdbId) return "none"; // TMDB has no IMDb id for this title
+        return medium === "movie" ? "resolved-movie" : "resolved";
       } catch (err) {
-        errors.push(`${t.tmdb_id}: ${redactCredential(String(err))}`);
+        errors.push(`${t.kind}/${t.tmdb_id}: ${redactCredential(String(err))}`);
         return "error";
       }
     }));
     for (const o of outcomes) {
-      if (o === "resolved") resolved++;
-      else if (o === "none") none++;
+      if (o === "resolved" || o === "resolved-movie") resolved++;
+      if (o === "resolved-movie") movies++;
+      if (o === "none") none++;
     }
     done += batch.length;
   }
   return {
     missing: rows.length,
     resolved,
+    resolvedMovies: movies,
     noImdbId: none,
     errors: errors.length,
     hitGuard,

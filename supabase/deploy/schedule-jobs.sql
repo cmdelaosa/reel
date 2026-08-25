@@ -138,7 +138,53 @@ select cron.schedule(
   $$
 );
 
--- 3e. One-time backfill: fire episode-refresh NOW with ?force=1 so every
+-- 3e. imdb-id-backfill — cada hora, al :25. Resuelve `titles.imdb_id` de una
+--     tanda de títulos que no lo tienen, series y películas
+--     (episode-refresh?backfillImdbIds=1). Sin ese id, el importador horario de
+--     notas de IMDb (.github/workflows/imdb-ratings.yml) no ve el título: no
+--     hay nota que enseñar en la carátula ni en la ficha.
+--
+--     ERA UNA PASADA A MANO, y por eso está aquí ahora. En series casi daba
+--     igual: /title's refresh path escribe el id de todo lo que alguien abre,
+--     así que el hueco se cerraba solo. En cine no se cierra NUNCA — una peli
+--     entra en la caché desde Explorar y desde la búsqueda, y ninguna de las
+--     dos escribe imdb_id (movieSearchRow, en tmdb-proxy) — de modo que las
+--     rejillas de Explorar se quedaban enteras sin nota. Con la nota de IMDb
+--     como la de referencia del cine, eso pasó de detalle a agujero.
+--
+--     POR QUÉ CADA HORA y no una vez al día: la ronda está limitada por el
+--     tiempo de CPU del runtime, no por la cola (~260 títulos por ronda), así
+--     que el atraso acumulado solo se come a base de rondas. Una vez vacía la
+--     cola el trabajo es una consulta y cero peticiones a TMDB — se queda
+--     dormida sola, sin apagarla. Lo que la deja vaciarse de verdad es
+--     `titles.imdb_id_checked_at` (0080): un título por el que TMDB ya dijo que
+--     no tiene id se aparta un mes, en vez de volver a la cola cada hora para
+--     siempre.
+--
+--     Puede solaparse con episode-refresh-daily (05:00): comparten el límite de
+--     TMDB, un 429 se cuenta como error de la ronda y la siguiente lo reintenta.
+--     Es idempotente por construcción: lo resuelto sale de la cola.
+--
+--     Mírala como las demás — y por los CONTEOS, que estas rondas mueren en el
+--     límite de CPU antes de escribir su fila de job_runs:
+--       select count(*) from titles where imdb_id is null and kind in ('tv','movie');
+--       select count(*) from titles where kind = 'movie' and imdb_rating is not null;
+select cron.schedule(
+  'imdb-id-backfill-hourly',
+  '25 * * * *',
+  $$
+    select net.http_post(
+      url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/episode-refresh?backfillImdbIds=1',
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'episode_refresh_service_key'),
+        'Content-Type', 'application/json'
+      ),
+      body    := '{}'::jsonb
+    );
+  $$
+);
+
+-- 3f. One-time backfill: fire episode-refresh NOW with ?force=1 so every
 --     followed title gets its derivations (aired_count, upcoming_season_number)
 --     recomputed immediately, bypassing the staleness gate — instead of waiting
 --     up to ~a day for the daily cron to reach it. Safe to omit or re-run.
@@ -151,7 +197,7 @@ select net.http_post(
   body    := '{}'::jsonb
 );
 
--- 3f. Fill the discovery caches NOW rather than waiting for tomorrow's 04:40 —
+-- 3g. Fill the discovery caches NOW rather than waiting for tomorrow's 04:40 —
 --     right after a deploy they are empty, which is exactly the cold-start this
 --     job exists to prevent. Safe to re-run.
 select net.http_post(
@@ -164,7 +210,7 @@ select net.http_post(
   timeout_milliseconds := 120000
 );
 
--- 3g. Y las cuatro rejillas de juegos, por lo mismo.
+-- 3h. Y las cuatro rejillas de juegos, por lo mismo.
 select net.http_post(
   url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/igdb-proxy/warm',
   headers := jsonb_build_object(
@@ -175,7 +221,7 @@ select net.http_post(
   timeout_milliseconds := 120000
 );
 
--- 4. Verify. All four jobs should be listed; after the first fire,
+-- 4. Verify. All five scheduled jobs should be listed; after the first fire,
 --    job_run_details shows status='succeeded'.
 --   select jobname, schedule, active from cron.job;
 --   select jobname, status, return_message, start_time
