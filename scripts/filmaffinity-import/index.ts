@@ -116,14 +116,26 @@ async function warmMovie(
   env: Env,
   tmdbId: number,
 ): Promise<{ titleId: string; episodeId: string | null }> {
-  const res = await fetch(`${env.supabaseUrl}/functions/v1/tmdb-proxy/movie/${tmdbId}`, {
-    headers: { Authorization: `Bearer ${env.serviceKey}`, apikey: env.serviceKey },
-  });
-  if (!res.ok) throw new Error(`tmdb-proxy /movie/${tmdbId}: ${res.status} ${(await res.text()).slice(0, 200)}`);
-  const body = (await res.json()) as { title?: { id?: string }; episode_id?: string | null };
-  const titleId = body.title?.id;
-  if (!titleId) throw new Error(`tmdb-proxy /movie/${tmdbId}: respuesta sin título`);
-  return { titleId, episodeId: body.episode_id ?? null };
+  // Tres intentos con espera creciente ante un 5xx. En mil trescientas llamadas
+  // seguidas, el aislado de la función se cae alguna vez sola —un 555 suelto en
+  // la primera pasada, y la película se quedó fuera por eso y por nada más—.
+  // Un 4xx no se reintenta: eso no mejora esperando.
+  let last = "";
+  for (let intento = 1; intento <= 3; intento++) {
+    const res = await fetch(`${env.supabaseUrl}/functions/v1/tmdb-proxy/movie/${tmdbId}`, {
+      headers: { Authorization: `Bearer ${env.serviceKey}`, apikey: env.serviceKey },
+    });
+    if (res.ok) {
+      const body = (await res.json()) as { title?: { id?: string }; episode_id?: string | null };
+      const titleId = body.title?.id;
+      if (!titleId) throw new Error(`tmdb-proxy /movie/${tmdbId}: respuesta sin título`);
+      return { titleId, episodeId: body.episode_id ?? null };
+    }
+    last = `${res.status} ${(await res.text()).slice(0, 200)}`;
+    if (res.status < 500) break;
+    await new Promise((r) => setTimeout(r, intento * 1500));
+  }
+  throw new Error(`tmdb-proxy /movie/${tmdbId}: ${last}`);
 }
 
 /** Que la llave sea la que tmdb-proxy reconoce, ANTES de escribir nada.
@@ -234,8 +246,17 @@ async function main() {
 
   // ── 2. Cachear fichas y escribir el perfil ───────────────────────────────
   await preflight(env);
+  // `--solo=<id de FA,…>` reescribe unas pocas filas y nada más. Existe por lo
+  // que pasó en la primera pasada de verdad: una película se perdió por un 5xx
+  // suelto, y repetir las mil trescientas para recuperar UNA es media hora de
+  // peticiones que ya estaban bien.
+  const soloArg = args.find((a) => a.startsWith("--solo="))?.slice("--solo=".length);
+  const solo = soloArg ? new Set(soloArg.split(",").map((s) => s.trim()).filter(Boolean)) : null;
+  if (solo) console.log(`--solo: ${solo.size} filas`);
+
   done = 0;
   for (const { fa, kind } of all) {
+    if (solo && !solo.has(fa.id)) continue;
     const r = resolved.get(fa.id);
     if (!r) continue;
     try {
