@@ -66,3 +66,33 @@ describe("country on load", () => {
     expect(COUNTRIES.map((c) => c.code)).toContain(getSettings().country);
   });
 });
+
+/* `services` sale de localStorage y entra en una URL que se le manda a TMDB
+   (with_watch_providers). Es la misma frontera que el país, así que se sanea
+   igual: lo que no sea una lista de enteros no pasa. */
+describe("services on load", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.resetModules();
+  });
+
+  it("starts empty, which means 'everything in my country'", async () => {
+    const { getSettings } = await bootWith({ country: "ES" });
+    expect(getSettings().services).toEqual([]);
+  });
+
+  it("keeps the ids the viewer picked", async () => {
+    const { getSettings } = await bootWith({ country: "ES", services: [8, 337] });
+    expect(getSettings().services).toEqual([8, 337]);
+  });
+
+  it("drops the whole list when storage holds something that isn't one", async () => {
+    const { getSettings } = await bootWith({ country: "ES", services: "8,337" });
+    expect(getSettings().services).toEqual([]);
+  });
+
+  it("drops a list with a non-integer rather than passing it to TMDB", async () => {
+    const { getSettings } = await bootWith({ country: "ES", services: [8, "337); drop"] });
+    expect(getSettings().services).toEqual([]);
+  });
+});

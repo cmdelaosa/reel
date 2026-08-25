@@ -12,6 +12,9 @@
 //   GET /movie/search?q=           → { results: TitleRow[] }
 //   GET /movie/trending            → { results: TitleRow[] }
 //   GET /movie/now-playing?region= → { results: TitleRow[] }
+//   GET /movie/upcoming?region=    → { results: TitleRow[] }
+//   GET /movie/new-to-stream?region=&providers= → { results: TitleRow[] }
+//   GET /movie/providers?region=   → { results: [{ id, name, logo_path }] }
 //   GET /movie/popular?from=&to=   → { results: TitleRow[] }
 //   GET /movie/top-rated?from=&to=&genres= → { results: TitleRow[] }
 //   GET /movie/:tmdbId             → { title: TitleRow, episode_id: uuid|null }
@@ -1547,6 +1550,95 @@ async function resolveMovieNowPlaying(
   return ids;
 }
 
+/** Próximamente en cines: lo que TMDB dice que se estrena en salas, por fecha.
+ *
+ *  Gemela de la cartelera y por país por la misma razón —un estreno es de un
+ *  sitio—, pero ordenada por FECHA y no por popularidad: la pregunta aquí no es
+ *  "¿qué está petando?" sino "¿qué viene y cuándo?", y una lista de futuro
+ *  ordenada por otra cosa que el tiempo no se puede leer.
+ *
+ *  TMDB mete en /movie/upcoming cosas ya estrenadas —su ventana empieza unos
+ *  días atrás—, así que se filtra por fecha aquí. Sin eso, la primera fila de
+ *  "próximamente" sería algo que lleva una semana en cartel. */
+async function resolveMovieUpcoming(
+  admin: SupabaseClient, apiKey: string, region: string, force = false,
+): Promise<number[]> {
+  const key = `movie-upcoming:${region}`;
+  if (!force) {
+    const hit = await readDiscoverCache(admin, key);
+    if (hit) return hit;
+  }
+  const PAGES = 3;
+  const KEEP = 40;
+  const pages = await Promise.all(
+    Array.from({ length: PAGES }, (_, i) =>
+      fetchTmdb(apiKey, `/movie/upcoming?region=${encodeURIComponent(region)}&page=${i + 1}`)),
+  );
+  const today = new Date().toISOString().slice(0, 10);
+  const future = dedupeVisible(pages)
+    .filter((r: Any) => typeof r.release_date === "string" && r.release_date >= today);
+  future.sort((a: Any, b: Any) => String(a.release_date).localeCompare(String(b.release_date)));
+  const uniq = capNonWestern(future);
+  uniq.length = Math.min(uniq.length, KEEP);
+  if (uniq.length === 0) return [];
+  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  const ids = uniq.map((r) => r.id as number);
+  await writeDiscoverCache(admin, key, ids);
+  return ids;
+}
+
+/** Nuevo en streaming: lo que acaba de entrar en SUSCRIPCIÓN en tu país.
+ *
+ *  `with_watch_monetization_types=flatrate` es la línea que importa y la que
+ *  distingue esta rejilla de un catálogo cualquiera: sin ella TMDB cuenta
+ *  también el alquiler y la compra, y "ya está disponible" pasaría a significar
+ *  "puedes pagar 4,99 por verla" — que es justo la promesa que 0055 decidió no
+ *  hacer cuando quitó rent/buy de los proveedores de la ficha. Se mantiene la
+ *  misma frontera aquí.
+ *
+ *  La ventana es de 60 días hacia atrás sobre la fecha de estreno digital, no
+ *  sobre la de sala: `with_release_type=4` es la digital de TMDB. Una peli de
+ *  2011 que aterrizó ayer en Netflix ES es NUEVA para ti, y ordenar por año la
+ *  escondería; ordenar por popularidad, en cambio, la pone donde debe.
+ *
+ *  `providers` es opcional. Vacío = todo lo que haya entrado en suscripción en
+ *  el país; con lista = solo tus plataformas. Es la misma consulta, y por eso
+ *  comparten resolvedor: la personalización es un filtro, no otra pregunta. */
+async function resolveMovieNewToStream(
+  admin: SupabaseClient, apiKey: string, region: string, providers: number[], force = false,
+): Promise<number[]> {
+  const key = `movie-new-stream:${region}:${providers.join(",")}`;
+  if (!force) {
+    const hit = await readDiscoverCache(admin, key);
+    if (hit) return hit;
+  }
+  const from = new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const to = new Date().toISOString().slice(0, 10);
+  const withProviders = providers.length > 0
+    ? `&with_watch_providers=${providers.join("|")}`
+    : "";
+  const PAGES = 3;
+  const KEEP = 40;
+  const pages = await Promise.all(
+    Array.from({ length: PAGES }, (_, i) =>
+      fetchTmdb(
+        apiKey,
+        `/discover/movie?sort_by=popularity.desc&include_adult=false` +
+        `&watch_region=${encodeURIComponent(region)}` +
+        `&with_watch_monetization_types=flatrate${withProviders}` +
+        `&with_release_type=4` +
+        `&release_date.gte=${from}&release_date.lte=${to}&page=${i + 1}`,
+      )),
+  );
+  const uniq = capNonWestern(boostSpanish(dedupeVisible(pages)));
+  uniq.length = Math.min(uniq.length, KEEP);
+  if (uniq.length === 0) return [];
+  await upsertReturning(admin, "titles", uniq.map(movieSearchRow), "kind,tmdb_id");
+  const ids = uniq.map((r) => r.id as number);
+  await writeDiscoverCache(admin, key, ids);
+  return ids;
+}
+
 async function resolveMoviePopular(
   admin: SupabaseClient, apiKey: string, from: string | null, to: string | null, force = false,
 ): Promise<number[]> {
@@ -1761,6 +1853,13 @@ Deno.serve(async (req) => {
         ["movie-now-playing", () => resolveMovieNowPlaying(admin, apiKey, "ES", true)],
         ["movie-popular", () => resolveMoviePopular(admin, apiKey, null, null, true)],
         ["movie-top-rated", () => resolveMovieTopRated(admin, apiKey, null, null, [], true)],
+        // Las dos nuevas, también solo ES y por lo mismo. La de streaming se
+        // calienta SIN plataformas: esa es la variante que ve quien no ha
+        // marcado ninguna, o sea todo el mundo hasta que la marque, y es la
+        // única cuya clave se puede adivinar desde aquí — la personalizada
+        // depende de una lista que vive en el navegador de cada uno.
+        ["movie-upcoming", () => resolveMovieUpcoming(admin, apiKey, "ES", true)],
+        ["movie-new-stream", () => resolveMovieNewToStream(admin, apiKey, "ES", [], true)],
       ];
       // Sequentially: these are the heaviest TMDB consumers in the codebase and
       // running them at once is how a rate limit turns four warm caches into
@@ -1947,6 +2046,85 @@ Deno.serve(async (req) => {
       const region = /^[A-Z]{2}$/.test(raw) ? raw : "ES";
       const ids = await resolveMovieNowPlaying(admin, apiKey, region);
       return json({ results: await titlesInOrder(admin, ids, "movie") });
+    }
+    if (path === "/movie/upcoming") {
+      const raw = (url.searchParams.get("region") ?? "ES").toUpperCase();
+      const region = /^[A-Z]{2}$/.test(raw) ? raw : "ES";
+      const ids = await resolveMovieUpcoming(admin, apiKey, region);
+      return json({ results: await titlesInOrder(admin, ids, "movie") });
+    }
+    if (path === "/movie/new-to-stream") {
+      const raw = (url.searchParams.get("region") ?? "ES").toUpperCase();
+      const region = /^[A-Z]{2}$/.test(raw) ? raw : "ES";
+      // Mismo saneado que los géneros: son ids que acaban dentro de una URL de
+      // TMDB, así que solo pasan dígitos. Se ordenan y se recortan para que la
+      // clave de caché de dos personas con las mismas plataformas sea la misma
+      // — el orden en que las marcaron no es información.
+      const providers = (url.searchParams.get("providers") ?? "")
+        .split(",").map((p) => p.trim()).filter((p) => /^\d+$/.test(p))
+        .map(Number).sort((a, b) => a - b).slice(0, 12);
+      const ids = await resolveMovieNewToStream(admin, apiKey, region, providers);
+      return json({ results: await titlesInOrder(admin, ids, "movie") });
+    }
+    // GET /movie/providers?region= — las plataformas DE SUSCRIPCIÓN de un país,
+    // para que Ajustes pinte la lista en vez de llevarla escrita.
+    //
+    // TMDB no marca cuáles son de suscripción: /watch/providers/movie devuelve
+    // en la misma lista Netflix y la tienda de Apple TV. Ofrecer las tiendas
+    // aquí sería una trampa silenciosa — el único sitio donde se usa esta
+    // elección es una consulta `with_watch_monetization_types=flatrate`, así
+    // que marcar "Apple TV Store" no estrecha el carril: lo VACÍA, y sin decir
+    // por qué.
+    //
+    // El filtro sale de datos que ya tenemos: `titles.providers` (0055) guarda
+    // solo lo de suscripción, porque esa migración tiró alquiler y compra al
+    // escribir. Cruzar las dos listas da la buena sin una petición de más.
+    //
+    // Y se cruzan por LOGO, no por nombre, aunque las dos vengan de TMDB: los
+    // dos endpoints escriben el mismo servicio con nombres distintos —
+    // /watch/providers/movie dice "Amazon Prime Video" y "Disney Plus" donde el
+    // de un título dice "Prime Video" y "Disney+"—, así que cruzar por nombre
+    // dejaba fuera casi todo. El `logo_path` sí es idéntico. El nombre se
+    // acepta ADEMÁS, como segunda llave, porque un logo cacheado hace meses
+    // puede haber cambiado desde entonces y perder una plataforma buena.
+    //
+    // Mil filas de muestra, no el catálogo: para enumerar las ~15 plataformas
+    // de un país sobra, y PostgREST corta en mil sin avisar de todas formas.
+    if (path === "/movie/providers") {
+      const raw = (url.searchParams.get("region") ?? "ES").toUpperCase();
+      const region = /^[A-Z]{2}$/.test(raw) ? raw : "ES";
+      const [d, cached] = await Promise.all([
+        fetchTmdb(apiKey, `/watch/providers/movie?watch_region=${encodeURIComponent(region)}`),
+        admin.from("titles").select("providers").not("providers", "is", null).limit(1000),
+      ]);
+      const flatrate = new Set<string>();
+      const flatrateNames = new Set<string>();
+      for (const row of (cached.data ?? []) as Any[]) {
+        for (const p of (row.providers?.[region] ?? []) as Any[]) {
+          if (p?.logo_path) flatrate.add(String(p.logo_path));
+          if (p?.name) flatrateNames.add(String(p.name));
+        }
+      }
+      /* El filtro solo se aplica si la caché sabe lo bastante como para que su
+         silencio signifique algo. Con la base local recién levantada esto
+         devolvía UNA plataforma —la única que asomaba en el puñado de títulos
+         sembrados—, que es peor que no filtrar: una lista de una parece un
+         fallo y esconde la que el lector paga. Cinco es el suelo: por debajo,
+         lo que hay no es "el país no tiene más", es "aún no hemos mirado". */
+      const CREDIBLE = 5;
+      const results = ((d.results ?? []) as Any[])
+        .filter((p) =>
+          flatrate.size < CREDIBLE ||
+          flatrate.has(String(p.logo_path)) ||
+          flatrateNames.has(String(p.provider_name)))
+        .sort((a, b) => (a.display_priority ?? 999) - (b.display_priority ?? 999))
+        .slice(0, 24)
+        .map((p) => ({
+          id: p.provider_id as number,
+          name: String(p.provider_name),
+          logo_path: (p.logo_path ?? null) as string | null,
+        }));
+      return json({ results });
     }
     if (path === "/movie/popular") {
       const ids = await resolveMoviePopular(admin, apiKey, url.searchParams.get("from"), url.searchParams.get("to"));

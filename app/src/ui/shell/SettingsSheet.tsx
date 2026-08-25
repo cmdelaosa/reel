@@ -12,6 +12,8 @@ import {
   NOTIFICATION_TYPES, prefFor, useNotificationPrefs, useSetPref,
 } from "@/lib/notificationPrefs";
 import { COUNTRIES, countryName } from "@/lib/region";
+import { useProviderOptions } from "@/lib/movies";
+import { tmdbImg } from "@/lib/tmdb";
 import { t } from "@/lib/i18n";
 
 /* Settings sheet — the prototype's DesignLab stripped to production scope:
@@ -79,6 +81,53 @@ function NotificationsSection() {
             </div>
           );
         })}
+      </div>
+    </Row>
+  );
+}
+
+/* Tus plataformas. Solo afecta a un carril —"Nuevo en streaming" del modo
+   cine—, y por eso su texto de ayuda dice exactamente eso en vez de prometer
+   una personalización que no existe en el resto de la app.
+
+   Sin nada marcado el carril NO se queda vacío: enseña todo lo que entra en
+   suscripción en tu país. Marcar es estrechar, no encender, así que este ajuste
+   nunca es un requisito para que algo funcione. */
+function ServicesSection() {
+  const { services } = useSettings();
+  const { data: options = [], isLoading } = useProviderOptions(true);
+  if (!isLoading && options.length === 0) return null;
+  const toggle = (id: number) =>
+    setSetting("services", services.includes(id) ? services.filter((s) => s !== id) : [...services, id]);
+  return (
+    <Row label={t("Your services")}>
+      <div className="flex flex-wrap gap-2">
+        {options.map((p) => {
+          const on = services.includes(p.id);
+          const logo = tmdbImg(p.logo_path, "w92");
+          return (
+            <button
+              key={p.id}
+              className={`chip ${on ? "chip-active" : ""}`}
+              aria-pressed={on}
+              onClick={() => toggle(p.id)}
+            >
+              {logo && (
+                <img
+                  src={logo}
+                  alt=""
+                  width={16}
+                  height={16}
+                  style={{ borderRadius: 4, objectFit: "cover" }}
+                />
+              )}
+              {p.name}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mute" style={{ fontSize: 12 }}>
+        {t("Narrows \"New to stream\" in Movies to the platforms you pay for. Leave it empty to see everything new in your country.")}
       </div>
     </Row>
   );
@@ -169,6 +218,8 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
               {t("Sets where you can stream each show, and the timezone airing times are shown in.")}
             </div>
           </Row>
+
+          <ServicesSection />
 
           <NotificationsSection />
 

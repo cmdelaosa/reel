@@ -238,6 +238,16 @@ const ES: Record<string, string> = {
   "Your watchlist": "Tu lista",
   "New to stream": "Nuevo en streaming",
   "In theatres soon": "Pronto en cines",
+  // Explorar de cine: los tres carriles nuevos y el ajuste de plataformas.
+  // "New on your services" es la variante del primero cuando has marcado
+  // plataformas — dos cadenas y no una interpolada, porque el título cambia de
+  // sujeto ("lo que hay" contra "lo que hay para ti"), no de dato.
+  "New on your services": "Nuevo en tus plataformas",
+  "Coming to cinemas": "Próximamente en cines",
+  "Best rated by your friends": "Lo mejor valorado por tus amigos",
+  "Your services": "Tus plataformas",
+  "Narrows \"New to stream\" in Movies to the platforms you pay for. Leave it empty to see everything new in your country.":
+    "Ajusta \"Nuevo en streaming\" de Películas a las plataformas que pagas. Déjalo vacío para ver todo lo que llega a tu país.",
   "Nothing new on your services.": "Nada nuevo en tus plataformas.",
   "No dated releases yet.": "Aún no hay estrenos con fecha.",
   "Nothing pending — hit {key} and add a movie.": "Nada pendiente — pulsa {key} y añade una película.",

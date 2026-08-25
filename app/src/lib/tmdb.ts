@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { trackedFetch } from "@/lib/connection";
 import { isEs } from "@/lib/i18n";
@@ -116,6 +117,43 @@ export async function getMovieNowPlaying(region: string): Promise<TitleRow[]> {
   return searchResponseSchema.parse(
     await call(`/movie/now-playing?region=${encodeURIComponent(region)}`),
   ).results;
+}
+
+export async function getMovieUpcoming(region: string): Promise<TitleRow[]> {
+  return searchResponseSchema.parse(
+    await call(`/movie/upcoming?region=${encodeURIComponent(region)}`),
+  ).results;
+}
+
+/** Lo que acaba de entrar en suscripción. Con `providers` vacío es "en tu
+ *  país"; con lista, "en tus plataformas". Una sola ruta para las dos porque en
+ *  el proxy es una sola consulta con un filtro de más. */
+export async function getMovieNewToStream(
+  region: string, providers: number[] = [],
+): Promise<TitleRow[]> {
+  const qs = new URLSearchParams({ region });
+  if (providers.length) qs.set("providers", providers.join(","));
+  return searchResponseSchema.parse(await call(`/movie/new-to-stream?${qs}`)).results;
+}
+
+const providerOptionSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  logo_path: z.string().nullable(),
+});
+export type ProviderOption = z.infer<typeof providerOptionSchema>;
+
+/** Las plataformas de suscripción que existen en un país, para pintarlas en
+ *  Ajustes. Silent-fail a lista vacía: si esto no responde, el ajuste enseña su
+ *  estado vacío y el resto del cine sigue funcionando — la personalización es
+ *  una mejora, no un requisito. */
+export async function getMovieProviders(region: string): Promise<ProviderOption[]> {
+  try {
+    const raw = await call(`/movie/providers?region=${encodeURIComponent(region)}`);
+    return z.object({ results: z.array(providerOptionSchema) }).parse(raw).results;
+  } catch {
+    return [];
+  }
 }
 
 export async function getMoviePopular(from?: number | null, to?: number | null): Promise<TitleRow[]> {

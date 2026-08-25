@@ -22,6 +22,17 @@ export interface Settings {
    *  "follow my device" value: a zone doesn't name a country, and providers
    *  need a country. The device only seeds the initial guess. */
   country: string;
+  /** Ids de proveedor de TMDB de las plataformas a las que estás suscrito, en
+   *  el país de arriba. Vacío = no lo has dicho, que es el estado de salida y
+   *  un estado válido para siempre: sin lista, "Nuevo en streaming" enseña todo
+   *  lo que entra en suscripción en tu país en vez de nada.
+   *
+   *  Vive SOLO aquí, no en `profiles`, al revés que el país. El país subió al
+   *  servidor porque un cron lo necesita para decidir a quién avisa; esto no lo
+   *  lee nadie salvo la pantalla que lo pinta, y una lista de a qué te has
+   *  suscrito es de las cosas que es mejor no guardar en un sitio donde no hace
+   *  falta. Si algún día un aviso dice "ya está en TU Netflix", entonces sube. */
+  services: number[];
 }
 
 const BASE: Omit<Settings, "country"> = {
@@ -29,6 +40,7 @@ const BASE: Omit<Settings, "country"> = {
   accent: "coral",
   density: "comfortable",
   language: "en",
+  services: [],
 };
 
 const defaults = (): Settings => ({ ...BASE, country: deviceCountry() });
@@ -57,6 +69,13 @@ function load(): Settings {
       // longer means anything — resolve it once from the device and keep it.
       // Same path catches a hand-edited or retired code.
       if (!isCountryCode(stored.country)) stored.country = base.country;
+      // Lo mismo para las plataformas: llega de localStorage, o sea de fuera, y
+      // acaba dentro de una URL que se le manda a TMDB. Un `services` que no sea
+      // una lista de números —storage editado a mano, o de una versión anterior
+      // que guardaba otra cosa— se descarta entero en vez de propagarse.
+      if (!Array.isArray(stored.services) || stored.services.some((s) => !Number.isInteger(s))) {
+        stored.services = [];
+      }
       return stored;
     }
   } catch {

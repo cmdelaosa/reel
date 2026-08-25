@@ -3,8 +3,10 @@ import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { regionCode } from "@/lib/region";
 import { movieReleaseSchema, type MovieRelease } from "@/lib/schemas";
+import { useSettings } from "@/lib/settings";
 import {
-  getMovieNowPlaying, getMoviePopular, getMovieTopRated, getMovieTrending,
+  getMovieNewToStream, getMovieNowPlaying, getMoviePopular, getMovieProviders,
+  getMovieTopRated, getMovieTrending, getMovieUpcoming,
 } from "@/lib/tmdb";
 import type { TitleRow } from "@/lib/schemas";
 
@@ -69,6 +71,35 @@ export function useMovieNowPlaying(enabled: boolean) {
   // cartelera del país anterior.
   const region = regionCode();
   return useQuery(grid(["movieNowPlaying", region], enabled, () => getMovieNowPlaying(region)));
+}
+
+export function useMovieUpcoming(enabled: boolean) {
+  const region = regionCode();
+  return useQuery(grid(["movieUpcoming", region], enabled, () => getMovieUpcoming(region)));
+}
+
+/** Nuevo en streaming. Las plataformas entran en la CLAVE además de en la
+ *  petición: marcar una en Ajustes tiene que repintar el carril, y con la clave
+ *  fija seguiría sirviendo la lista de antes hasta que caducara la hora. */
+export function useMovieNewToStream(enabled: boolean) {
+  const region = regionCode();
+  const services = [...useSettings().services].sort((a, b) => a - b);
+  return useQuery(
+    grid(["movieNewToStream", region, services], enabled,
+      () => getMovieNewToStream(region, services)),
+  );
+}
+
+/** Las plataformas que ofrece tu país, para el selector de Ajustes. Un día de
+ *  frescura: esta lista cambia cuando nace o muere un servicio de streaming. */
+export function useProviderOptions(enabled: boolean) {
+  const region = regionCode();
+  return useQuery({
+    queryKey: ["providerOptions", region],
+    enabled,
+    staleTime: 24 * 60 * 60 * 1000,
+    queryFn: () => getMovieProviders(region),
+  });
 }
 
 export function useMoviePopular(from: number | null, to: number | null, enabled: boolean) {

@@ -1,7 +1,13 @@
 import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { SlidersHorizontal, X } from "lucide-react";
-import { useMovieNowPlaying, useMoviePopular, useMovieTopRated, useMovieTrending } from "@/lib/movies";
+import {
+  useMovieNewToStream, useMovieNowPlaying, useMoviePopular, useMovieTopRated,
+  useMovieTrending, useMovieUpcoming,
+} from "@/lib/movies";
+import { useBestRatedByFriends } from "@/lib/explore";
+import { useFriendships } from "@/lib/friends";
+import { useSettings } from "@/lib/settings";
 import { useMovieLibrary } from "@/lib/library";
 import { useIgnored } from "@/lib/ignore";
 import { FilterPanel, TitlePoster } from "@/features/explore/DiscoverPieces";
@@ -44,6 +50,32 @@ const TABS: { key: Tab; label: string }[] = [
 
 const PAGE_SIZE = 18;
 const MAX_ITEMS = 3 * PAGE_SIZE;
+const RAIL_ITEMS = 20;
+
+/** Un carril de carátulas, o nada. Los tres de arriba comparten forma y los
+ *  tres se esconden vacíos, así que la condición vive aquí una vez y no tres
+ *  veces en el JSX. */
+function MovieRail({ title, items, loading, onOpen }: {
+  title: string;
+  items: TitleRow[];
+  loading: boolean;
+  onOpen: (tmdbId: number) => void;
+}) {
+  if (!loading && items.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-4">
+      <Rail title={title}>
+        {loading
+          ? <RailCardsSkeleton count={6} />
+          : items.map((t) => (
+              <div key={t.tmdb_id} style={{ width: "var(--rail-pw)" }}>
+                <TitlePoster t={t} kind="movie" onOpen={() => onOpen(t.tmdb_id)} />
+              </div>
+            ))}
+      </Rail>
+    </section>
+  );
+}
 
 export default function MoviesExplorePage() {
   const [, setSearchParams] = useSearchParams();
@@ -79,6 +111,48 @@ export default function MoviesExplorePage() {
     : rated.isLoading;
 
   const followed = useMemo(() => new Set(movies.map((m) => m.tmdb_id)), [movies]);
+
+  /* Los tres carriles de arriba. Van SIN puerta, al revés que las pestañas: se
+     ven siempre y a la vez, así que condicionarlos solo retrasaría lo que de
+     todas formas hay que pedir. Son tres peticiones a un edge que el cron ya
+     dejó caliente (dos de ellas) y una RPC, no las tres rejillas grandes. */
+  const { services } = useSettings();
+  const { data: newToStreamRaw = [], isLoading: newToStreamLoading } = useMovieNewToStream(true);
+  const { data: upcomingRaw = [], isLoading: upcomingLoading } = useMovieUpcoming(true);
+  // Sin amigos no hay carril y no hay consulta: `enabled` lleva las dos cosas.
+  const { data: friendships = [] } = useFriendships();
+  const hasFriends = friendships.some((f) => f.status === "accepted");
+  const { data: friendRated = [] } = useBestRatedByFriends(hasFriends, "movie");
+
+  /* La misma criba que la rejilla —fuera lo tuyo y lo que ignoraste—, y por lo
+     mismo: un carril de descubrimiento que te enseña lo que ya tienes gasta la
+     fila más visible de la pantalla en decirte algo que ya sabes. */
+  const keep = useMemo(
+    () => (t: { tmdb_id: number }) => !followed.has(t.tmdb_id) && !isIgnored(t.tmdb_id),
+    [followed, isIgnored],
+  );
+  const newToStream = useMemo(
+    () => newToStreamRaw.filter(keep).slice(0, RAIL_ITEMS),
+    [newToStreamRaw, keep],
+  );
+  const upcoming = useMemo(
+    () => upcomingRaw.filter(keep).slice(0, RAIL_ITEMS),
+    [upcomingRaw, keep],
+  );
+  /* La RPC de amigos no devuelve filas de `titles` enteras —es un jsonb armado
+     a mano—, así que se completa con lo que TitlePoster necesita y nada más.
+     `id` va vacío a propósito: esa carátula abre por tmdb_id como todas las de
+     esta pantalla, y inventarse un uuid sería peor que no tenerlo. */
+  const friendPicks: TitleRow[] = useMemo(
+    () => friendRated.filter(keep).slice(0, RAIL_ITEMS).map((r) => ({
+      id: "", tmdb_id: r.tmdb_id, kind: "movie" as const, name: r.name,
+      overview: null, poster_path: r.poster_path, backdrop_path: null,
+      first_air_date: r.first_air_date, status: null, genres: [],
+      network: null, episode_run_time: null, vote_average: r.vote_average,
+      popularity: null,
+    })),
+    [friendRated, keep],
+  );
 
   /* Fuera lo que ya tienes y lo que dijiste que no quieres ver. El género se
      filtra aquí en las pestañas que no lo mandan al servidor (solo Mejor
@@ -140,6 +214,31 @@ export default function MoviesExplorePage() {
           </Rail>
         </section>
       )}
+
+      {/* Los tres carriles de "qué hay ahora", entre el carrusel y la rejilla.
+          El orden no es decorativo, va de lo más accionable a lo menos:
+          lo que ya puedes poner esta noche, lo que te van a recomendar los
+          tuyos, y lo que aún no ha salido. Cada uno desaparece entero si no
+          tiene nada — un carril vacío con su título puesto es peor que su
+          ausencia, porque promete algo que no hay. */}
+      <MovieRail
+        title={services.length > 0 ? tr("New on your services") : tr("New to stream")}
+        items={newToStream}
+        loading={newToStreamLoading}
+        onOpen={open}
+      />
+      <MovieRail
+        title={tr("Best rated by your friends")}
+        items={friendPicks}
+        loading={false}
+        onOpen={open}
+      />
+      <MovieRail
+        title={tr("Coming to cinemas")}
+        items={upcoming}
+        loading={upcomingLoading}
+        onOpen={open}
+      />
 
       <section className="flex flex-col gap-4">
         <div className="disc-toolbar">
