@@ -964,7 +964,8 @@ export function useEsNames(): Map<string, string> {
          nombres canónicos son un respaldo perfectamente digno. */
       const PAGE = 1000;
       const out: [string, string][] = [];
-      for (let from = 0; ; from += PAGE) {
+      let from = 0;
+      for (;;) {
         const { data, error } = await supabase
           .from("titles")
           .select("tmdb_id, kind, name_es")
@@ -977,7 +978,14 @@ export function useEsNames(): Map<string, string> {
         for (const r of rows) {
           if (r.name_es) out.push([`${r.kind}:${r.tmdb_id}`, r.name_es]);
         }
-        if (rows.length < PAGE) return out;
+        /* Se avanza por lo que HA VENIDO, no por lo que se pidió, y se para en
+           la página vacía. Cortar en `rows.length < PAGE` daba por hecho que el
+           servidor sirve mil de una: si su tope fuera más bajo —es un ajuste
+           suyo, no nuestro— la primera respuesta ya vendría corta y el bucle
+           pararía ahí, repitiendo en silencio el mismo truncamiento que esto
+           existe para arreglar. */
+        if (rows.length === 0) return out;
+        from += rows.length;
       }
     },
   });

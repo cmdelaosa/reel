@@ -1245,8 +1245,16 @@ async function fetchMoviePages(
     /* El español, tolerante a fallos: si esta mitad se cae, la rejilla sale en
        el idioma canónico en vez de no salir. Un título sin traducir es un mal
        menor; una portada vacía porque TMDB tuvo un mal minuto, no. */
-    Promise.all(Array.from({ length: pages }, (_, i) =>
-      fetchTmdb(apiKey, `${pathFor(i + 1)}&language=es-ES`).catch(() => ({ results: [] })))),
+    Promise.all(Array.from({ length: pages }, (_, i) => {
+      // `?` o `&` según lo que traiga la ruta. Hoy las seis la traen con query,
+      // así que un `&` a pelo funcionaría; el día que alguien pase una ruta
+      // limpia, `&language=es-ES` no sería un error visible sino un parámetro
+      // que TMDB ignora — o sea, el idioma dejaría de aplicarse en silencio y
+      // volveríamos a los títulos en inglés sin nada que lo delate.
+      const p = pathFor(i + 1);
+      return fetchTmdb(apiKey, `${p}${p.includes("?") ? "&" : "?"}language=es-ES`)
+        .catch(() => ({ results: [] }));
+    })),
   ]);
   const esTitle = new Map<number, string>();
   for (const p of es) {
