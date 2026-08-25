@@ -71,12 +71,51 @@ function decorate(row: LibraryRow): LibraryShow {
    id de TMDB solo es único dentro de su medio (0067). Sin el filtro, la
    película 1399 aparecería como seguida porque lo está la serie 1399. El
    filtro vive aquí, en el único sitio por el que pasan todas. */
+/** El tope de filas que PostgREST devuelve de una tacada, y que no avisa de que
+ *  ha aplicado: la respuesta es un 200 con mil filas y un `content-range` que
+ *  nadie mira. */
+export const ROLLUP_PAGE = 1000;
+
+/** Toda la biblioteca, ventana a ventana.
+ *
+ *  Sin esto, una biblioteca de más de mil títulos se lee a medias y la pantalla
+ *  que la pinta no tiene forma de saberlo. Medido el 25-08-2026, importando el
+ *  cine de FilmAffinity: 2.107 filas en `library_entries`, y "Tu cine" enseñaba
+ *  220 películas de 1.325 — las que cabían en el trozo que PostgREST decidió
+ *  mandar. No hubo error, ni aviso, ni hueco visible: la rejilla estaba llena.
+ *
+ *  El `.order("title_id")` no es cosmético. Sin un orden TOTAL, dos ventanas
+ *  consecutivas pueden repetir filas y saltarse otras — Postgres no promete un
+ *  orden estable entre consultas—, y eso es justo lo que este bucle provoca. Es
+ *  la misma regla que documenta `supabase/functions/episode-refresh/paging.ts`,
+ *  que es este mismo bucle del lado del servidor.
+ *
+ *  Se exporta para su matriz de pruebas (library.test.ts), que es donde se
+ *  comprueba que la segunda página se pide y que una página corta termina. */
+export async function fetchRollupPaged(
+  page: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }> = (from, to) =>
+    supabase.rpc("rpc_library_rollup").order("title_id").range(from, to),
+): Promise<unknown[]> {
+  const all: unknown[] = [];
+  for (let from = 0; ; from += ROLLUP_PAGE) {
+    const { data, error } = await page(from, from + ROLLUP_PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (data?.length) all.push(...data);
+    // Una página corta es el final. Una llena puede serlo o no, y averiguarlo
+    // cuesta una petición más — incluida la página vacía con la que acaba un
+    // total que cae justo en un múltiplo del tamaño.
+    if (!data || data.length < ROLLUP_PAGE) return all;
+  }
+}
+
 function useLibraryRows() {
   return useQuery({
     queryKey: qk.library,
     queryFn: async (): Promise<LibraryRow[]> => {
-      const { data, error } = await supabase.rpc("rpc_library_rollup");
-      if (error) throw error;
+      const data = await fetchRollupPaged();
       return rollupSchema.parse(data);
     },
   });
