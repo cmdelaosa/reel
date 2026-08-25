@@ -311,21 +311,30 @@ export async function searchMovies(key: string, fa: FaItem): Promise<Candidate[]
   return [...seen.values()];
 }
 
-/** ¿Dirige esta película el director que dice FA? Se compara por apellido
- *  normalizado: FA escribe "Denis Villeneuve" y TMDB también, pero los nombres
- *  con partícula, los dos apellidos españoles y las transliteraciones asiáticas
- *  divergen lo justo para que la igualdad estricta descarte matches buenos. */
-export async function confirmDirector(key: string, tmdbId: number, faDirector: string): Promise<boolean> {
+/** ¿Dirige esta película el director que dice FA?
+ *
+ *  El nombre entero igual vale, y si no, el APELLIDO —la última palabra— tiene
+ *  que aparecer entre las de algún director de TMDB. Los dos apellidos
+ *  españoles, las partículas y las transliteraciones asiáticas divergen lo justo
+ *  para que la igualdad estricta descarte emparejamientos buenos.
+ *
+ *  Lo que NO vale es cualquier palabra compartida, que es como estaba escrito
+ *  primero: "Bill Lawrence" y "Bill Murray" comparten "bill", y con eso una
+ *  película de uno confirmaba la del otro. El nombre de pila no distingue a
+ *  nadie; el apellido casi siempre sí. */
+export function directorMatches(faDirector: string, tmdbNames: string[]): boolean {
   const want = norm(firstDirector(faDirector));
   if (!want) return false;
+  const wantTokens = want.split(" ").filter((t) => t.length >= 3);
+  const surname = wantTokens[wantTokens.length - 1];
+  if (!surname) return false;
+  return tmdbNames.map(norm).some((d) => d === want || d.split(" ").includes(surname));
+}
+
+export async function confirmDirector(key: string, tmdbId: number, faDirector: string): Promise<boolean> {
   const data = (await tmdbFetch(key, `/movie/${tmdbId}/credits`).then((r: Any) => r.json())) as Json;
   const directors = ((data.crew as Json[]) ?? [])
     .filter((c) => c.job === "Director")
-    .map((c) => norm((c.name as string) ?? ""));
-  const wantTokens = want.split(" ").filter((t) => t.length >= 3);
-  return directors.some((d) => {
-    if (d === want) return true;
-    const tokens = d.split(" ").filter((t) => t.length >= 3);
-    return wantTokens.some((t) => tokens.includes(t));
-  });
+    .map((c) => (c.name as string) ?? "");
+  return directorMatches(faDirector, directors);
 }

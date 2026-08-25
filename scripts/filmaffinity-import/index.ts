@@ -79,6 +79,7 @@ interface Report {
   ratings: number;
   library: number;
   skippedRatings: number;
+  skippedWatches: number;
   errors: string[];
 }
 
@@ -162,6 +163,43 @@ async function preflight(env: Env): Promise<void> {
   );
 }
 
+/** Deja la película seguida, con la MISMA regla que la app.
+ *
+ *  `ensureFollowed` en app/src/lib/watch.ts marca `followed` al ver algo de un
+ *  título no seguido, y respeta una sola cosa: `stopped`. Un simple upsert con
+ *  `ignoreDuplicates` no hace eso — una fila vieja con `followed = false` se
+ *  queda como está, y entonces la nota y la marca se escriben sobre un título
+ *  que la biblioteca no enseña (rpc_library_rollup filtra por `followed`).
+ *  Vista y sin aparecer en "Tu cine": el peor de los dos mundos.
+ *
+ *  Devuelve si la fila se ha tocado, para que el informe cuente escrituras. */
+async function ensureFollowed(
+  admin: SupabaseClient,
+  userId: string,
+  titleId: string,
+  addedAt: string,
+): Promise<boolean> {
+  const { data: previa, error: le } = await admin
+    .from("library_entries")
+    .select("followed, stopped")
+    .eq("user_id", userId)
+    .eq("title_id", titleId)
+    .maybeSingle();
+  if (le) throw new Error(`library_entries (lectura): ${le.message}`);
+  if (previa?.stopped || previa?.followed) return false;
+
+  const { error } = await admin.from("library_entries").upsert(
+    // `added_at` solo cuando la fila nace: en una que ya existía, la fecha en
+    // que se añadió a Reel es un hecho anterior a esta importación.
+    previa
+      ? { user_id: userId, title_id: titleId, followed: true }
+      : { user_id: userId, title_id: titleId, followed: true, added_at: addedAt },
+    { onConflict: "user_id,title_id" },
+  );
+  if (error) throw new Error(`library_entries: ${error.message}`);
+  return true;
+}
+
 /** Los ids de episodio de una película, para cuando tmdb-proxy devuelve el
  *  título ya cacheado pero sin `episode_id` (fila escrita antes del trigger). */
 async function episodeOf(admin: SupabaseClient, titleId: string): Promise<string | null> {
@@ -176,9 +214,18 @@ async function main() {
   if (!file) throw new Error("uso: tsx index.ts <fa-export.json> [--dry-run] [--sin corto,medio,tv]");
 
   const sinArg = args.find((a) => a.startsWith("--sin="));
-  const exclude = (sinArg ? sinArg.slice("--sin=".length).split(",") : [])
-    .map((s) => s.trim())
-    .filter((s): s is OptionalType => (OPTIONAL_TYPES as readonly string[]).includes(s));
+  const pedidos = (sinArg ? sinArg.slice("--sin=".length).split(",") : []).map((s) => s.trim()).filter(Boolean);
+  // Un valor que no existe se descartaba en silencio, y `--sin=cortos` (que no
+  // es ninguno de los tipos de FA) importaba los cortos igual mientras quien lo
+  // escribió creía haberlos dejado fuera. Una exclusión que no excluye tiene que
+  // doler en el momento, no en el informe.
+  const desconocidos = pedidos.filter((s) => !(OPTIONAL_TYPES as readonly string[]).includes(s));
+  if (desconocidos.length) {
+    throw new Error(
+      `--sin: no conozco ${desconocidos.join(", ")}. Los tipos opcionales son: ${OPTIONAL_TYPES.join(", ")}`,
+    );
+  }
+  const exclude = pedidos as OptionalType[];
 
   const env = readEnv();
   const admin = createClient(env.supabaseUrl, env.serviceKey, { auth: { persistSession: false } });
@@ -202,7 +249,8 @@ async function main() {
   );
 
   const report: Report = {
-    matched: [], unmatched: [], titles: 0, watchEvents: 0, ratings: 0, library: 0, skippedRatings: 0, errors: [],
+    matched: [], unmatched: [], titles: 0, watchEvents: 0, ratings: 0, library: 0,
+    skippedRatings: 0, skippedWatches: 0, errors: [],
   };
 
   // ── 1. Emparejar todo contra TMDB ────────────────────────────────────────
@@ -253,6 +301,9 @@ async function main() {
   const soloArg = args.find((a) => a.startsWith("--solo="))?.slice("--solo=".length);
   const solo = soloArg ? new Set(soloArg.split(",").map((s) => s.trim()).filter(Boolean)) : null;
   if (solo) console.log(`--solo: ${solo.size} filas`);
+  // El denominador del progreso es lo que ESTA pasada va a escribir, no el
+  // emparejamiento entero: con --solo decía "12/1325" sobre una sola fila.
+  const porEscribir = all.filter(({ fa }) => resolved.has(fa.id) && (!solo || solo.has(fa.id))).length;
 
   done = 0;
   for (const { fa, kind } of all) {
@@ -264,26 +315,24 @@ async function main() {
       report.titles++;
 
       const addedAt = (fa.date && faDateToIso(fa.date)) || new Date().toISOString();
-      const { error: le } = await admin
-        .from("library_entries")
-        .upsert({ user_id: env.targetUserId, title_id: titleId, followed: true, added_at: addedAt }, {
-          onConflict: "user_id,title_id",
-          ignoreDuplicates: true,
-        });
-      if (le) throw new Error(`library_entries: ${le.message}`);
-      report.library++;
+      if (await ensureFollowed(admin, env.targetUserId, titleId, addedAt)) report.library++;
 
       if (kind === "vote") {
         const episodeId = fromProxy ?? (await episodeOf(admin, titleId));
         if (!episodeId) throw new Error("la película no tiene episodio sintético");
-        const { error: we } = await admin
+        // `.select()` con ignoreDuplicates devuelve SOLO lo insertado, así que
+        // el contador cuenta escrituras y no intentos: sin él el informe decía
+        // "1.005 vistas" tanto si eran nuevas como si ya estaban marcadas.
+        const { data: nuevas, error: we } = await admin
           .from("watch_events")
           .upsert({ user_id: env.targetUserId, episode_id: episodeId, watched_at: addedAt, source: SOURCE }, {
             onConflict: "user_id,episode_id",
             ignoreDuplicates: true,
-          });
+          })
+          .select("id");
         if (we) throw new Error(`watch_events: ${we.message}`);
-        report.watchEvents++;
+        if (nuevas?.length) report.watchEvents++;
+        else report.skippedWatches++;
 
         if (fa.rating != null) {
           const { data: had } = await admin
@@ -306,7 +355,7 @@ async function main() {
       report.errors.push(`${fa.title} (${fa.year}): ${(err as Error).message}`);
     }
     if (++done % 25 === 0) {
-      console.log(`  escribiendo ${done}/${resolved.size} — ${report.watchEvents} vistas, ${report.ratings} notas`);
+      console.log(`  escribiendo ${done}/${porEscribir} — ${report.watchEvents} vistas, ${report.ratings} notas`);
     }
   }
 
@@ -315,8 +364,8 @@ async function main() {
   console.log(`  emparejados    : ${report.matched.length}`);
   console.log(`  sin match      : ${report.unmatched.length}`);
   console.log(`  fichas cacheadas: ${report.titles}`);
-  console.log(`  en biblioteca  : ${report.library}`);
-  console.log(`  vistas         : ${report.watchEvents}`);
+  console.log(`  en biblioteca  : ${report.library} (nuevas o vueltas a seguir)`);
+  console.log(`  vistas         : ${report.watchEvents} (${report.skippedWatches} ya estaban marcadas)`);
   console.log(`  notas          : ${report.ratings} (${report.skippedRatings} ya tenían nota en Reel)`);
   console.log(`  errores        : ${report.errors.length}`);
   console.log("  informe        : import-report.json");

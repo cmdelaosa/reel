@@ -11,6 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   dice,
+  directorMatches,
   FA_ALIASES,
   faDateToIso,
   firstDirector,
@@ -114,6 +115,23 @@ test("titleScore: la secuela de al lado no llega ni a 1", () => {
   // parecería a las tres. Con él, la III se queda en 0,57 de Dice y fuera.
   const padrino3 = cand({ title: "El padrino III", original_title: "The Godfather Part III" });
   assert.equal(titleScore("El padrino. Parte II", padrino3), 0);
+});
+
+// ── la confirmación del director ────────────────────────────────────────────
+test("directorMatches: el apellido confirma; el nombre de pila solo, no", () => {
+  assert.equal(directorMatches("Denis Villeneuve", ["Denis Villeneuve"]), true);
+  // Acentos y grafías: por eso no vale la igualdad estricta.
+  assert.equal(directorMatches("Emilio Martínez-Lázaro", ["Emilio Martinez Lazaro"]), true);
+  assert.equal(directorMatches("Kim Jee-woon", ["Kim Jee-woon"]), true);
+  // El fallo que esto cierra: dos personas distintas con el mismo nombre.
+  assert.equal(directorMatches("Bill Lawrence", ["Bill Murray"]), false);
+  assert.equal(directorMatches("Steve Oedekerk", ["Steve McQueen"]), false);
+});
+
+test("directorMatches: el rol y los coautores no estorban, y sin director es que no", () => {
+  assert.equal(directorMatches("Bill Lawrence (Creador), Matt Tarses (Creador) ...", ["Bill Lawrence"]), true);
+  assert.equal(directorMatches("", ["Quien sea"]), false);
+  assert.equal(directorMatches("Denis Villeneuve", []), false);
 });
 
 test("FA_ALIASES: claves de FA en texto, ids de TMDB en número", () => {
