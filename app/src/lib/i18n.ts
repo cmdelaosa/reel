@@ -938,14 +938,6 @@ export function tGenre(g: string): string {
 
 /* ---- Localized show names ---------------------------------------------- */
 
-/** "medio:tmdb_id" → Spanish title, for every cached title that has one.
- *  Loaded once per session (and only in Spanish); RLS: titles are
- *  authenticated-readable. Errors degrade to an empty map — canonical names
- *  render instead.
- *
- *  La clave lleva el medio porque un id de TMDB solo es único dentro del suyo
- *  (0067): con el número a secas, el título español de una película pisaba el
- *  de la serie del mismo id — y al revés, según cuál llegara última. */
 /** Los desplazamientos que faltan por pedir, sabiendo el total y cuántas filas
  *  trajo de verdad la primera página.
  *
@@ -958,11 +950,27 @@ export function tGenre(g: string): string {
  *  decide el servidor, y calcular los tramos con el tamaño pedido cuando sirve
  *  menos salta filas en silencio. Un `step` de 0 —una primera página vacía— no
  *  devuelve nada que pedir, que además evita dividir entre cero. */
+/** Las filas tal como vienen → las parejas del mapa. Los dos caminos de
+ *  {@link useEsNames} —con total y sin él— acaban aquí, y tenerlo escrito una
+ *  vez es lo que evita que uno de los dos se quede con la clave de antes. */
+const entries = (rows: { tmdb_id: number; kind: string; name_es: string | null }[]) =>
+  rows
+    .filter((r) => Boolean(r.name_es))
+    .map((r): [string, string] => [`${r.kind}:${r.tmdb_id}`, r.name_es as string]);
+
 export function restOffsets(total: number, step: number): number[] {
   if (step <= 0 || total <= step) return [];
   return Array.from({ length: Math.ceil((total - step) / step) }, (_, i) => step + i * step);
 }
 
+/** "medio:tmdb_id" → Spanish title, for every cached title that has one.
+ *  Loaded once per session (and only in Spanish); RLS: titles are
+ *  authenticated-readable. Errors degrade to an empty map — canonical names
+ *  render instead.
+ *
+ *  La clave lleva el medio porque un id de TMDB solo es único dentro del suyo
+ *  (0067): con el número a secas, el título español de una película pisaba el
+ *  de la serie del mismo id — y al revés, según cuál llegara última. */
 export function useEsNames(): Map<string, string> {
   const { session } = useAuth();
   const { data } = useQuery({
@@ -984,10 +992,14 @@ export function useEsNames(): Map<string, string> {
       // biblioteca, así que la forma de esto importa más de lo que su tamaño de
       // hoy sugiere.
       const PAGE = 1000;
-      const page = (from: number) =>
+      /* El total se pide SOLO en la primera. `count: "exact"` no es gratis —es
+         un COUNT sobre el conjunto filtrado—, y pedirlo también en las páginas
+         que van en paralelo es pagarlo tantas veces como páginas haya para
+         tirar todas las respuestas menos una. */
+      const page = (from: number, withCount = false) =>
         supabase
           .from("titles")
-          .select("tmdb_id, kind, name_es", { count: "exact" })
+          .select("tmdb_id, kind, name_es", withCount ? { count: "exact" } : undefined)
           .not("name_es", "is", null)
           .order("kind")
           .order("tmdb_id")
@@ -1009,27 +1021,44 @@ export function useEsNames(): Map<string, string> {
          Con el total, la primera manda y el resto van a la vez: el reloj es el
          de la más lenta, no el de la suma, y sigue siendo correcto por muchas
          páginas que haya. */
-      const first = await page(0);
+      const first = await page(0, true);
       if (first.error) return [];
 
       const rows = [...(first.data ?? [])];
-      const total = first.count ?? rows.length;
+      /* Sin total no se adivina: se vuelve a encadenar hasta la página vacía,
+         que es lento pero completo. `count ?? rows.length` parecía razonable y
+         era una trampa — daría "no queda nada" ante un total desconocido y
+         truncaría en silencio justo lo que este paginado arregla. */
+      if (first.count == null) {
+        let from = rows.length;
+        for (;;) {
+          const more = await page(from);
+          const got = more.error ? [] : (more.data ?? []);
+          if (got.length === 0) break;
+          rows.push(...got);
+          from += got.length;
+        }
+        return entries(rows);
+      }
+      const total = first.count;
       /* Por lo que HA VENIDO, no por lo que se pidió: el tope de filas de
          PostgREST es ajuste suyo, y si sirviera menos de mil, calcular los
          tramos con PAGE dejaría huecos silenciosos — el mismo truncamiento
          invisible que este paginado existe para arreglar. */
       const offsets = restOffsets(total, rows.length);
       if (offsets.length > 0) {
-        const rest = await Promise.all(offsets.map(page));
+        // La flecha explícita no es adorno: `.map(page)` le pasaría el ÍNDICE
+        // como segundo argumento, que aquí es `withCount` — y volvería a pedir
+        // el COUNT en todas las páginas menos la primera. Es la misma trampa
+        // que el compilador cazó ayer en movieSearchRow.
+        const rest = await Promise.all(offsets.map((from) => page(from)));
         for (const r of rest) {
           // Una página caída se salta: medio mapa deja medio catálogo en
           // español, y eso es estrictamente mejor que ninguno.
           if (!r.error) rows.push(...(r.data ?? []));
         }
       }
-      return rows
-        .filter((r) => Boolean(r.name_es))
-        .map((r) => [`${r.kind}:${r.tmdb_id}`, r.name_es as string]);
+      return entries(rows);
     },
   });
   return useMemo(() => new Map(data ?? []), [data]);
