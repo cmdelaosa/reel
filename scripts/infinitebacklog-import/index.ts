@@ -195,6 +195,11 @@ async function main() {
   const dir = args.find((a) => !a.startsWith("--"));
   if (!dir) throw new Error("uso: tsx index.ts <directorio-del-export> [--dry-run]");
   const env = readEnv();
+  /* Una sola marca para toda la ejecución, y no un `new Date()` por fila: lo
+     que no trae fecha en el export se añade "ahora", y que ese ahora sea el
+     mismo para las 115 filas es lo que deja que 0077 las pliegue en una sola
+     frase del muro en vez de en 115. */
+  const ahora = new Date().toISOString();
 
   const { games, skipped } = buildPlan(
     findCsv(dir, "GameCollection"),
@@ -286,9 +291,12 @@ async function main() {
         play_state: patch.play_state ?? null,
         minutes_played: patch.minutes_played ?? 0,
         minutes_source: patch.minutes_source ?? null,
-        // Sin fecha del export se deja que la ponga la base: inventar una sería
-        // publicar en el muro un "añadido" con fecha falsa.
-        ...(patch.added_at ? { added_at: patch.added_at } : {}),
+        // Sin fecha en el export —los CSV de listas no traen `Date added`— va
+        // la de ahora, que es literalmente lo que pondría el default de la
+        // columna. Y va EXPLÍCITA, no omitida: PostgREST rechaza un POST cuyas
+        // filas no tengan todas las mismas claves ("All object keys must
+        // match"), así que omitirla en 115 de las 349 tira el lote entero.
+        added_at: patch.added_at ?? ahora,
       });
     } else if (Object.keys(patch).length > 1) {
       parches.push({ titleId, patch });
@@ -298,7 +306,14 @@ async function main() {
     // lo machacan con now() en cuanto la fila nace o cambia con progreso. Un
     // update que solo toque esta columna no los despierta (su WHEN mira
     // minutes_played y play_state), así que la segunda pasada sí se queda.
-    if (g.playedAt && (!actual || Object.keys(patch).length > 1)) {
+    //
+    // Se hace SIEMPRE que el export traiga fecha, y no solo cuando esta pasada
+    // escriba algo. La diferencia se vio al reintentar una ejecución que había
+    // dejado 200 filas a medias: en el segundo intento esas filas ya no cambian
+    // nada, así que con la condición atada al patch se habrían quedado con el
+    // now() que les puso el disparador la primera vez. Es idempotente, que es
+    // justo lo que un importador que se puede reintentar necesita.
+    if (g.playedAt) {
       const lista = playedAt.get(g.playedAt) ?? [];
       lista.push(titleId);
       playedAt.set(g.playedAt, lista);
@@ -319,11 +334,13 @@ async function main() {
     if (g.rating !== null) {
       if (yaPuntuados.has(titleId)) notasQueYaEstaban++;
       else {
+        // Las mismas claves en todas las filas, por lo mismo que en las altas.
         notas.push({
           user_id: env.userId,
           title_id: titleId,
           score: g.rating,
-          ...(g.ratedAt ? { created_at: g.ratedAt, updated_at: g.ratedAt } : {}),
+          created_at: g.ratedAt ?? ahora,
+          updated_at: g.ratedAt ?? ahora,
         });
       }
     }
