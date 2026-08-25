@@ -156,7 +156,7 @@ export const libraryRowSchema = z.object({
   /* Videojuegos (0073). `play_state` es lo que la persona dijo a mano;
      TERMINADO no está aquí — es watched_count, el mismo watch_event que en los
      otros dos medios. Ver domain/gameStatus.ts. */
-  play_state: z.enum(["playing", "ongoing", "dropped"]).nullable().optional(),
+  play_state: z.enum(["backlog", "playing", "ongoing", "dropped"]).nullable().optional(),
   minutes_played: z.number().int().nullable().optional(),
   /* Cuándo tocaste el juego por última vez (0075) — lo escribe un disparador
      cuando cambian las horas o el estado. NO es "cuándo lo terminaste", que es

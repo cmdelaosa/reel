@@ -1571,3 +1571,58 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   .mq-index { display: none; }
   .mq-index.sm { display: none; }
 }
+
+/* ============================================================
+   IMPORTAR DE STEAM (.st-*) — la pantalla de confirmar (0076, 0078)
+   ============================================================
+   Su forma sale de que son CIENTOS de juegos y de que en cada uno hay tres
+   decisiones (marcarlo, en qué punto estás, qué nota): un montón a la
+   izquierda para trabajar por tandas, y una tarjeta ancha que quepa dos veces
+   por fila. Las dos columnas y la carátula grande son lo mismo que pide el
+   ojo — reconocer un juego por su arte va diez veces más rápido que leer 312
+   nombres. */
+
+/* El raíl y las tarjetas. Por debajo de 1040px el raíl se pliega arriba: dos
+   columnas de tarjeta ya no caben, y una lista de montones de 200px al lado de
+   una sola columna se come un tercio de la pantalla. */
+.st-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 18px; align-items: start; }
+.st-rail { position: sticky; top: calc(var(--bar-h) + 12px); display: flex; flex-direction: column; gap: 7px; padding: 12px; }
+@media (max-width: 1040px) {
+  .st-layout { grid-template-columns: minmax(0, 1fr); }
+  .st-rail { position: static; flex-direction: row; flex-wrap: wrap; }
+  .st-rail .st-rail-tail { display: none; }
+}
+
+/* Un montón: pastilla de ancho completo con su recuento a la derecha. Hereda de
+   .chip para que "el montón que miras" sea el mismo acento que cualquier otro
+   filtro encendido (.chip-active), y no un quinto lenguaje de selección. */
+.st-bucket { width: 100%; justify-content: space-between; height: 38px; border-radius: var(--r-sm); }
+
+/* Dos por fila mientras quepan 470px; una en cuanto no. Es literalmente la
+   pregunta que esta pantalla tenía que responder: aprovechar el ancho sin
+   partir la tarjeta. */
+.st-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(470px, 1fr)); }
+@media (max-width: 560px) {
+  /* A 470px de mínimo, un móvil de 375 deja la tarjeta desbordando la rejilla:
+     auto-fit no encoge por debajo del mínimo. */
+  .st-cards { grid-template-columns: minmax(0, 1fr); }
+}
+
+.st-card { display: flex; align-items: stretch; gap: 0; overflow: hidden; padding: 0; min-height: 158px; }
+/* Sin marcar sigue leyéndose, pero no compite: la lista llega con lo que ya
+   sigues marcado y el resto es lo que estás decidiendo. */
+.st-card.off { opacity: .55; }
+.st-card-body { flex: 1 1 auto; min-width: 0; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+/* La carátula, a sangre y a todo el alto. La casilla va ENCIMA porque la
+   carátula es el objeto que marcas: sacarla al margen dejaba una columna de
+   22px de aire a la izquierda de cada tarjeta. */
+.st-cover { position: relative; flex: 0 0 auto; width: 104px; align-self: stretch; background: var(--surface-2); }
+.st-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.st-cover-name {
+  position: absolute; inset: auto 0 0 0; z-index: 1; padding: 6px 7px;
+  font-size: 10px; font-weight: 800; line-height: 1.15; color: rgba(255, 255, 255, .94);
+  text-shadow: 0 1px 5px rgba(0, 0, 0, .6);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, .66));
+}
+.st-tick { position: absolute; top: 10px; left: 10px; z-index: 2; width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; }

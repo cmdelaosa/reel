@@ -32,6 +32,13 @@ import { useFocusTrap } from "@/ui/useFocusTrap";
    medio— ni IMDb, que no puntúa juegos. */
 
 const PLAY_STATES: { key: PlayState; label: string }[] = [
+  /* "Pendiente" está aquí desde 0078, y es el único de los cuatro que también
+     se deriva: seguir un juego sin decir nada es tenerlo pendiente. Se puede
+     DECIR porque un juego tuyo con 0 h sale como "lo tengo" —la regla que
+     impide que una importación de Steam se coma esta lista— y sin poder
+     decirlo no habría forma de sacarlo de ahí. Pulsarlo cuando ya está puesto
+     lo quita, como los otros tres: vuelves a no haber dicho nada. */
+  { key: "backlog", label: "Backlog" },
   { key: "playing", label: "Playing" },
   { key: "ongoing", label: "Ongoing" },
   { key: "dropped", label: "Dropped" },

@@ -1,6 +1,6 @@
 // Tests de las reglas de la importación. Los corre el job `edge` de CI.
 import { assertEquals } from "jsr:@std/assert@1";
-import { isConflict, minutesToWrite, parseOwnedGames } from "./merge.ts";
+import { finishedAt, isConflict, lastPlayedOf, minutesToWrite, parseOwnedGames, parsePick } from "./merge.ts";
 
 /* ── El perfil privado, que es el fallo silencioso ───────────────────────── */
 
@@ -26,8 +26,8 @@ Deno.test("lee appid, nombre y minutos tal cual llegan", () => {
     response: {
       game_count: 2,
       games: [
-        { appid: 570, name: "Dota 2", playtime_forever: 1234 },
-        { appid: 730, name: "Counter-Strike 2", playtime_forever: 0 },
+        { appid: 570, name: "Dota 2", playtime_forever: 1234, rtime_last_played: 1755000000 },
+        { appid: 730, name: "Counter-Strike 2", playtime_forever: 0, rtime_last_played: 0 },
       ],
     },
   });
@@ -36,8 +36,9 @@ Deno.test("lee appid, nombre y minutos tal cual llegan", () => {
   assertEquals(r, {
     kind: "ok",
     games: [
-      { appid: 570, name: "Dota 2", minutes: 1234 },
-      { appid: 730, name: "Counter-Strike 2", minutes: 0 },
+      { appid: 570, name: "Dota 2", minutes: 1234, lastPlayed: "2025-08-12T12:00:00.000Z" },
+      // rtime_last_played = 0 es "nunca", no el 1 de enero de 1970.
+      { appid: 730, name: "Counter-Strike 2", minutes: 0, lastPlayed: null },
     ],
   });
 });
@@ -59,8 +60,8 @@ Deno.test("una fila rota no tira la lista entera", () => {
   assertEquals(r, {
     kind: "ok",
     games: [
-      { appid: 570, name: "Dota 2", minutes: 60 },
-      { appid: 999, name: "App 999", minutes: 0 },
+      { appid: 570, name: "Dota 2", minutes: 60, lastPlayed: null },
+      { appid: 999, name: "App 999", minutes: 0, lastPlayed: null },
     ],
   });
 });
@@ -98,4 +99,57 @@ Deno.test("cifras iguales: se escribe igual, y eso cambia el origen", () => {
   // para siempre.
   assertEquals(isConflict(manual(720), 720), false);
   assertEquals(minutesToWrite(manual(720), 720, false), 720);
+});
+
+/* ── La última partida, que es la fecha del "terminado" (0078) ───────────── */
+
+const AHORA = Date.parse("2026-08-25T10:00:00.000Z");
+
+Deno.test("rtime_last_played son SEGUNDOS unix", () => {
+  assertEquals(lastPlayedOf(1755000000, AHORA), "2025-08-12T12:00:00.000Z");
+});
+
+Deno.test("0, basura y el futuro no son fechas", () => {
+  // El 0 lo trae todo lo que nunca has abierto. Pasarlo tal cual fecharía un
+  // juego terminado en 1970 y lo colaría el primero en el historial.
+  assertEquals(lastPlayedOf(0, AHORA), null);
+  assertEquals(lastPlayedOf(undefined, AHORA), null);
+  assertEquals(lastPlayedOf("ayer", AHORA), null);
+  assertEquals(lastPlayedOf(-5, AHORA), null);
+  // Un reloj que va mal no puede meter un evento donde ninguna lista lo enseña.
+  assertEquals(lastPlayedOf(Math.round(AHORA / 1000) + 90000, AHORA), null);
+});
+
+Deno.test("terminado se fecha con tu última partida, no con hoy", () => {
+  const hoy = new Date(AHORA);
+  assertEquals(finishedAt("2024-03-12T21:05:00.000Z", hoy), "2024-03-12T21:05:00.000Z");
+  // Y solo cuando no la hay cae a hoy: un juego con 0 h que marcas terminado a
+  // mano lo estás terminando ahora.
+  assertEquals(finishedAt(null, hoy), "2026-08-25T10:00:00.000Z");
+});
+
+/* ── Lo que manda la pantalla de confirmar ───────────────────────────────── */
+
+Deno.test("terminado viaja aparte de play_state", () => {
+  // Porque no es una etiqueta: es el watch_event (0073). Si fuera un
+  // play_state habría dos formas de decir lo mismo.
+  const p = parsePick({ id: "a", state: "finished", rating: 9 });
+  assertEquals(p, { id: "a", overwrite: false, playState: null, finished: true, rating: 9 });
+});
+
+Deno.test("un estado inventado se queda en 'no ha dicho nada'", () => {
+  // Llega del navegador. Un play_state que la comprobación de la tabla rechaza
+  // tiraría la importación entera por una fila.
+  assertEquals(parsePick({ id: "a", state: "terminadísimo" })?.playState, null);
+  assertEquals(parsePick({ id: "a", state: "backlog" })?.playState, "backlog");
+  assertEquals(parsePick({ id: "a" })?.playState, null);
+  assertEquals(parsePick({ state: "playing" }), null);
+});
+
+Deno.test("la nota es un entero de 1 a 10 o no es nada", () => {
+  assertEquals(parsePick({ id: "a", rating: 10 })?.rating, 10);
+  assertEquals(parsePick({ id: "a", rating: 0 })?.rating, null);
+  assertEquals(parsePick({ id: "a", rating: 11 })?.rating, null);
+  assertEquals(parsePick({ id: "a", rating: 7.5 })?.rating, null);
+  assertEquals(parsePick({ id: "a", rating: "9" })?.rating, null);
 });

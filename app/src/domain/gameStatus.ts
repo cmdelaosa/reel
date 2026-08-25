@@ -65,9 +65,16 @@ export type GameStatus =
   | "owned";
 
 /** Lo que la persona puede fijar a mano. "Terminado" no está: es el
- *  watch_event, no una etiqueta. "Pendiente" y "Próximo" tampoco: se derivan de
- *  no haber dicho nada, igual que la watchlist de una película. */
-export type PlayState = "playing" | "ongoing" | "dropped";
+ *  watch_event, no una etiqueta. "Próximo" tampoco: sale de la fecha.
+ *
+ *  "Pendiente" SÍ está desde 0078, y es la excepción que conviene entender:
+ *  sigue derivándose de no haber dicho nada —seguir un juego y callarse es
+ *  tenerlo pendiente— pero además se puede DECIR. Hizo falta al importar de
+ *  Steam: un juego tuyo con 0 h sale como 'owned' (ver abajo), y esa regla mira
+ *  antes que 'backlog', así que sin poder decirlo, marcar "Pendiente" en la
+ *  importación no se habría visto en ningún sitio. Null y 'backlog' no son lo
+ *  mismo: null es "no he dicho nada", 'backlog' es "me lo he propuesto". */
+export type PlayState = "backlog" | "playing" | "ongoing" | "dropped";
 
 export interface GameStatusInput {
   /** 1 cuando la fecha de lanzamiento ya pasó, 0 mientras no. */
