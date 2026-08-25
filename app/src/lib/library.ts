@@ -160,6 +160,10 @@ function optimisticRow(t: TitleRow): LibraryRow {
     kind: t.kind,
     name: t.name,
     poster_path: t.poster_path,
+    // La fila de búsqueda ya la trae cuando existe (en un juego recién buscado
+    // es null: `gameSearchRow` no pide artworks). Null aquí solo significa que
+    // el banner usa la carátula hasta que el refetch traiga la fila de verdad.
+    backdrop_path: t.backdrop_path,
     first_air_date: t.first_air_date,
     tmdb_status: t.status,
     genres: t.genres,

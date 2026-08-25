@@ -106,7 +106,15 @@ export default function GamesTonightPage() {
     [games],
   );
 
-  const heroArt = hero ? igdbImg(hero.poster_path, "cover_big") : undefined;
+  /* El artwork apaisado, y la carátula solo como respaldo. Al revés —que es lo
+     que había— el banner enseñaba una carátula de 264×374 estirada a ~1200 de
+     ancho y recortada por `object-fit: cover`: la franja del medio del dibujo,
+     ampliada. `1080p` y no `screenshot_big` (889×500) por lo mismo que Series
+     pide w1280: el banner mide ~1224 y en una pantalla 2× la de 889 se ve
+     blanda. Ver la migración 0080, que es la que trae la columna. */
+  const heroArt = hero
+    ? (igdbImg(hero.backdrop_path, "1080p") ?? igdbImg(hero.poster_path, "cover_big"))
+    : undefined;
   const heroMinutes = hero?.minutes_played ?? 0;
 
   return (

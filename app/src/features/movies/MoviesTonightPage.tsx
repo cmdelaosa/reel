@@ -80,7 +80,13 @@ export default function MoviesTonightPage() {
   const hero = usePick(movies);
   const heroMark = useMarkWatched(hero?.title_id ?? "");
   const heroEpisodeId = hero ? episodeIds?.get(hero.title_id) ?? null : null;
-  const heroArt = hero ? tmdbImg(hero.poster_path, "w780") : undefined;
+  /* Mismo arreglo que en Videojuegos y por lo mismo: el póster estirado a un
+     banner apaisado es un recorte del centro. Los tamaños son los de Series
+     —w1280 para el fotograma, w780 para el póster de respaldo, que no tiene
+     rung w1280 y devolvería un 404—. Ver la migración 0080. */
+  const heroArt = hero
+    ? (tmdbImg(hero.backdrop_path, "w1280") ?? tmdbImg(hero.poster_path, "w780"))
+    : undefined;
   const heroName = hero ? locName(esNames, hero.tmdb_id, hero.name, "movie") : "";
 
   const open = (tmdbId: number) =>
