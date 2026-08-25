@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { ChevronRight } from "lucide-react";
 import { useGameLibrary, type LibraryGame } from "@/lib/library";
 import { igdbImg, useSetGameProgress } from "@/lib/igdb";
+import { heroArt } from "@/lib/artwork";
 import { formatPlaytime } from "@/domain/gameStatus";
 import { formatRelease } from "@/domain/gameRelease";
 import { orderByTouched, pickResume } from "@/domain/gameTonight";
@@ -106,15 +107,9 @@ export default function GamesTonightPage() {
     [games],
   );
 
-  /* El artwork apaisado, y la carátula solo como respaldo. Al revés —que es lo
-     que había— el banner enseñaba una carátula de 264×374 estirada a ~1200 de
-     ancho y recortada por `object-fit: cover`: la franja del medio del dibujo,
-     ampliada. `1080p` y no `screenshot_big` (889×500) por lo mismo que Series
-     pide w1280: el banner mide ~1224 y en una pantalla 2× la de 889 se ve
-     blanda. Ver la migración 0080, que es la que trae la columna. */
-  const heroArt = hero
-    ? (igdbImg(hero.backdrop_path, "1080p") ?? igdbImg(hero.poster_path, "cover_big"))
-    : undefined;
+  /* El artwork apaisado, con la carátula de respaldo. La regla y sus tamaños
+     viven en lib/artwork; la columna la trae la migración 0080. */
+  const art = hero ? heroArt("game", hero.backdrop_path, hero.poster_path) : undefined;
   const heroMinutes = hero?.minutes_played ?? 0;
 
   return (
@@ -126,7 +121,7 @@ export default function GamesTonightPage() {
       {hero && (
         <div className="mq-bento">
           <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} style={{ background: posterBg(hero.name) }}>
-            {heroArt && <img className="mq-hero-still" src={heroArt} alt="" />}
+            {art && <img className="mq-hero-still" src={art} alt="" />}
             <div className="mq-hero-body">
               <div className="mq-hero-eyebrow">
                 {tr(hero.status === "playing" ? "Pick up where you left off" : "Start something")}
