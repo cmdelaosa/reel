@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { trackedFetch } from "@/lib/connection";
 import { qk } from "@/lib/queryKeys";
+import type { PlayState } from "@/domain/gameStatus";
 
 /* Cliente de la edge function steam-sync (0076). Hermano de lib/igdb.ts, con
    dos diferencias que vienen de que el login de Steam es POR USUARIO:
@@ -120,6 +121,10 @@ export const steamItemSchema = z.object({
      "no hay nada que decidir aquí"; un número es la fila que la pantalla
      destaca con las dos cifras y su propia casilla. */
   manual_minutes: z.number().int().nullable(),
+  /* La última vez que lo jugaste según Steam (0078). Es lo que fecha el
+     "terminado" que marques aquí, en vez del día de la importación. Null es
+     que Steam dice que nunca lo has abierto. */
+  last_played_at: z.string().nullable().default(null),
   state: z.enum(["pending", "applied", "skipped", "unresolved"]),
 });
 export type SteamItem = z.infer<typeof steamItemSchema>;
@@ -187,12 +192,24 @@ export function useScanSteam() {
   });
 }
 
+/** Lo que se puede decir de un juego en la pantalla de confirmar.
+ *
+ *  Son los cuatro `play_state` más "terminado", que NO es un play_state sino el
+ *  watch_event (0073) — viaja por el mismo campo porque para quien mira la
+ *  pantalla es una opción más de la misma fila, y la función lo separa. */
+export type ImportState = PlayState | "finished";
+
 export interface ApplyPick {
   id: string;
   /** Solo importa en las filas en conflicto: ceder ESA fila a la cifra de
    *  Steam. Por fila y no un ajuste global — los conflictos son pocos y cada
    *  uno tiene su motivo. */
   overwrite: boolean;
+  /** En qué punto estás. Null es lo que hacía 0076 y sigue siendo el defecto:
+   *  entra como tuyo y sin estado. */
+  state?: ImportState | null;
+  /** 1..10, o nada. */
+  rating?: number | null;
 }
 
 export function useApplySteamImport() {
@@ -209,6 +226,11 @@ export function useApplySteamImport() {
       qc.invalidateQueries({ queryKey: qk.steamImport });
       qc.invalidateQueries({ queryKey: qk.library });
       qc.invalidateQueries({ queryKey: qk.stats });
+      /* Y las notas y el historial, que desde 0078 esta pantalla también
+         escribe: sin esto, la nota que acabas de poner a treinta juegos no
+         aparece hasta que algo más invalide su caché. */
+      qc.invalidateQueries({ queryKey: qk.ratings });
+      qc.invalidateQueries({ queryKey: qk.history });
     },
   });
 }

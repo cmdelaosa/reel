@@ -133,3 +133,29 @@ describe("formatPlaytime", () => {
     expect(formatPlaytime(-5)).toBe("0 h");
   });
 });
+
+describe("'backlog' dicho a mano (0078)", () => {
+  /* La importación de Steam deja marcar "Pendiente" juego a juego. Sin poder
+     DECIRLO no se vería: un juego tuyo con 0 h cae en 'owned', que mira después
+     de lo dicho a mano pero antes de 'backlog'. */
+  it("un juego tuyo sin tocar que marcas Pendiente sale de 'lo tengo'", () => {
+    expect(
+      deriveGameStatus({
+        airedCount: 1, watchedCount: 0, playState: null, owned: true, minutesPlayed: 0,
+      }),
+    ).toBe("owned");
+    expect(
+      deriveGameStatus({
+        airedCount: 1, watchedCount: 0, playState: "backlog", owned: true, minutesPlayed: 0,
+      }),
+    ).toBe("backlog");
+  });
+
+  it("y terminado sigue mandando sobre lo dicho", () => {
+    expect(
+      deriveGameStatus({
+        airedCount: 1, watchedCount: 1, playState: "backlog", owned: true, minutesPlayed: 0,
+      }),
+    ).toBe("finished");
+  });
+});

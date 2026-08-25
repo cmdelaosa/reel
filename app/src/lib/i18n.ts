@@ -185,6 +185,40 @@ const ES: Record<string, string> = {
   "{n} games have hours you typed yourself. They're kept as they are unless you tick \"use Steam's\".":
     "{n} juegos tienen horas escritas por ti. Se quedan como están salvo que marques «usar la de Steam».",
   "Import {n} games": "Importar {n} juegos",
+  /* La pantalla de confirmar de 0078: montones, tandas y lo que se dice de cada
+     juego. "Finished it" es su propia clave y no "Finished" porque esa dice
+     "Terminadas" — la de las series. */
+  "Piles": "Montones",
+  "Every game": "Todos",
+  "Already in Reel": "Ya en Reel",
+  "More than 10 hours": "Con más de 10 h",
+  "Never opened": "Sin tocar nunca",
+  "Hours in conflict": "Horas en conflicto",
+  "Decided so far": "Ya decidido",
+  "{n} ticked": "{n} marcados",
+  "{n} with a state": "{n} con estado",
+  "{n} with a rating": "{n} con nota",
+  "To the {n} ticked in this pile:": "A los {n} marcados de este montón:",
+  "and a rating": "y nota",
+  "Apply to the ticked ones": "Aplicar a los marcados",
+  "Finished it": "Terminado",
+  "Import {name}": "Importar {name}",
+  "in Reel": "en Reel",
+  "last played {date}": "última partida {date}",
+  "never opened": "sin tocar nunca",
+  "use Steam's {hours}": "usar las {hours} de Steam",
+  "you typed {hours}": "tú escribiste {hours}",
+  "saved as finished on {date}, your last session": "se guardará como terminado el {date}, tu última partida",
+  "Steam has no last session for this one, so it'll be saved with today's date":
+    "Steam no sabe cuándo lo jugaste por última vez, así que se guardará con la fecha de hoy",
+  "Anything without a state comes in as yours, undecided.":
+    "Lo que no lleve estado entra como tuyo y sin decidir.",
+  "Marked finished": "Marcados terminados",
+  "Given a rating": "Con nota",
+  "Anything you didn't give a state to arrives marked as owned and undecided: Steam's hours are lifetime totals and say nothing about what you're playing now.":
+    "Lo que no marcaste con un estado entra como «lo tengo» y sin decidir: las horas de Steam son de por vida y no dicen nada sobre lo que estás jugando ahora.",
+  "What you marked as finished is dated with your last session on Steam, not with today.":
+    "Lo que marcaste como terminado lleva la fecha de tu última partida en Steam, no la de hoy.",
   "Looking up {n} games IGDB didn't have yet…": "Buscando {n} juegos que IGDB aún no tenía…",
   "Added or updated": "Añadidos o actualizados",
   "Conflicts kept as yours": "Conflictos que se quedan como tuyos",
