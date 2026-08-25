@@ -1,0 +1,17 @@
+{
+  "name": "infinitebacklog-import",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Importador de una sola vez: export de InfiniteBacklog → biblioteca de juegos de Reel.",
+  "scripts": {
+    "start": "tsx index.ts",
+    "test": "node --import tsx --test lib.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^6.0.3"
+  }
+}
