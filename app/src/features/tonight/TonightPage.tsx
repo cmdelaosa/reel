@@ -7,6 +7,7 @@ import { CalEpRow } from "@/features/calendar/CalEpRow";
 import { useUpNext, type UpNextRow } from "@/lib/upnext";
 import { useMarkWatched } from "@/lib/watch";
 import { tmdbImg } from "@/lib/tmdb";
+import { heroArt } from "@/lib/artwork";
 import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { Poster, Rail, WatchOn } from "@/ui";
 import { HeroSkeleton, RailCardsSkeleton, RowsSkeleton } from "@/ui/Skeleton";
@@ -73,10 +74,10 @@ export default function TonightPage() {
   const heroAir = hero ? airLabel(hero.air_datetime) : null;
   // Landscape still for the banner; the portrait poster is the fallback for the
   // ~3% of titles TMDB has no backdrop for (cropped hard, but never a blank box).
-  // w1280 for the still — the banner renders ~1224px wide, so w780 was visibly
-  // soft on a 2× display. The fallback stays at w780: TMDB's poster ladder has
-  // no w1280 rung and would 404.
-  const heroArt = hero ? (tmdbImg(hero.backdrop_path, "w1280") ?? tmdbImg(hero.poster_path, "w780")) : undefined;
+  // The sizes and the reasoning behind them now live in lib/artwork — this was
+  // the only one of the three Tonight screens that got it right, and the other
+  // two were copies of the line above it instead.
+  const art = hero ? heroArt("tv", hero.backdrop_path, hero.poster_path) : undefined;
 
   return (
     <div className="screen mq-page">
@@ -96,7 +97,7 @@ export default function TonightPage() {
       {hero && (
         <div className="mq-bento">
           <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} {...heroIntent} style={{ background: posterBg(hero.name) }}>
-            {heroArt && <img className="mq-hero-still" src={heroArt} alt="" />}
+            {art && <img className="mq-hero-still" src={art} alt="" />}
             {heroAir && <span className="mq-hero-flag">{heroAir}</span>}
             <div className="mq-hero-body">
               <div className="mq-hero-eyebrow">{tr("Up next for you")}</div>

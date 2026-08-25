@@ -12,6 +12,7 @@ import { loadMovieProviders } from "@/lib/providers";
 import { qk } from "@/lib/queryKeys";
 import { regionCode } from "@/lib/region";
 import { tmdbImg } from "@/lib/tmdb";
+import { heroArt } from "@/lib/artwork";
 import { locName, t as tr, useEsNames } from "@/lib/i18n";
 import { Poster, Rail, WatchOn } from "@/ui";
 import { HeroSkeleton, RailCardsSkeleton, RowsSkeleton } from "@/ui/Skeleton";
@@ -80,7 +81,9 @@ export default function MoviesTonightPage() {
   const hero = usePick(movies);
   const heroMark = useMarkWatched(hero?.title_id ?? "");
   const heroEpisodeId = hero ? episodeIds?.get(hero.title_id) ?? null : null;
-  const heroArt = hero ? tmdbImg(hero.poster_path, "w780") : undefined;
+  /* El fotograma apaisado, con el póster de respaldo. La regla y sus tamaños
+     viven en lib/artwork; la columna la trae la migración 0081. */
+  const art = hero ? heroArt("movie", hero.backdrop_path, hero.poster_path) : undefined;
   const heroName = hero ? locName(esNames, hero.tmdb_id, hero.name, "movie") : "";
 
   const open = (tmdbId: number) =>
@@ -136,7 +139,7 @@ export default function MoviesTonightPage() {
       {hero && (
         <div className="mq-bento">
           <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} style={{ background: posterBg(hero.name) }}>
-            {heroArt && <img className="mq-hero-still" src={heroArt} alt="" />}
+            {art && <img className="mq-hero-still" src={art} alt="" />}
             <div className="mq-hero-body">
               <div className="mq-hero-eyebrow">{tr("Movie night pick")}</div>
               <h2 className="mq-hero-title">{heroName}</h2>

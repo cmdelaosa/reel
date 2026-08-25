@@ -20,3 +20,33 @@ import { tmdbImg } from "@/lib/tmdb";
 export function thumbArt(kind: Medium, path: string | null | undefined): string | undefined {
   return kind === "game" ? igdbImg(path, "cover_small") : tmdbImg(path, "w92");
 }
+
+/* El banner de "Esta noche": la imagen apaisada, con la carátula de respaldo.
+ *
+ * Esto SÍ vive aquí, y el párrafo de arriba explica por qué parece una
+ * contradicción y no lo es. Allí se rechaza un diccionario de los seis tamaños
+ * de cada fuente, que sería inventar equivalencias sin comprobar. Aquí hay UN
+ * hueco concreto —~1224 px de ancho, `object-fit: cover`— y para ese hueco las
+ * equivalencias sí están medidas: w1280 y 1080p para el apaisado, w780 y
+ * cover_big para el respaldo.
+ *
+ * Y hace falta tenerlo en un sitio porque la regla estaba escrita tres veces,
+ * una por pantalla, y solo una era correcta: Series pedía el fotograma, Cine
+ * copió la línea y se dejó el póster, Videojuegos copió y se dejó la carátula.
+ * El resultado era un banner que enseñaba la franja del medio del dibujo
+ * ampliada. La cuarta pantalla que quiera un banner ya no tiene de dónde
+ * copiarlo mal.
+ *
+ * Los respaldos NO son el mismo tamaño que el apaisado a propósito: el póster
+ * de TMDB no tiene rung `w1280` y devolvería un 404, y la carátula de IGDB no
+ * gana nada pidiéndola en 1080p — no hay más píxeles que traer.
+ */
+export function heroArt(
+  kind: Medium,
+  backdropPath: string | null | undefined,
+  posterPath: string | null | undefined,
+): string | undefined {
+  return kind === "game"
+    ? (igdbImg(backdropPath, "1080p") ?? igdbImg(posterPath, "cover_big"))
+    : (tmdbImg(backdropPath, "w1280") ?? tmdbImg(posterPath, "w780"));
+}

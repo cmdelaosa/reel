@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { ChevronRight } from "lucide-react";
 import { useGameLibrary, type LibraryGame } from "@/lib/library";
 import { igdbImg, useSetGameProgress } from "@/lib/igdb";
+import { heroArt } from "@/lib/artwork";
 import { formatPlaytime } from "@/domain/gameStatus";
 import { formatRelease } from "@/domain/gameRelease";
 import { orderByTouched, pickResume } from "@/domain/gameTonight";
@@ -106,7 +107,9 @@ export default function GamesTonightPage() {
     [games],
   );
 
-  const heroArt = hero ? igdbImg(hero.poster_path, "cover_big") : undefined;
+  /* El artwork apaisado, con la carátula de respaldo. La regla y sus tamaños
+     viven en lib/artwork; la columna la trae la migración 0081. */
+  const art = hero ? heroArt("game", hero.backdrop_path, hero.poster_path) : undefined;
   const heroMinutes = hero?.minutes_played ?? 0;
 
   return (
@@ -118,7 +121,7 @@ export default function GamesTonightPage() {
       {hero && (
         <div className="mq-bento">
           <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} style={{ background: posterBg(hero.name) }}>
-            {heroArt && <img className="mq-hero-still" src={heroArt} alt="" />}
+            {art && <img className="mq-hero-still" src={art} alt="" />}
             <div className="mq-hero-body">
               <div className="mq-hero-eyebrow">
                 {tr(hero.status === "playing" ? "Pick up where you left off" : "Start something")}
