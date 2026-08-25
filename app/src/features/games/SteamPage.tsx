@@ -55,10 +55,10 @@ import { t as tr, tv } from "@/lib/i18n";
 
    ── Las horas son DE POR VIDA ────────────────────────────────────────────
    `playtime_forever` cuenta desde que abriste la cuenta. De ahí las dos reglas
-   que esta pantalla hace visibles: lo importado no toca "en qué punto estás"
-   —entra como "lo tengo", que es lo único que las horas de por vida
-   demuestran— y una cifra que escribiste a mano no se pisa sola. Las filas en
-   conflicto se destacan con las dos cifras y su propia casilla.
+   que esta pantalla hace visibles: de las horas no se DEDUCE ningún estado
+   —entra como "lo tengo", que es lo único que las horas de por vida demuestran,
+   y el estado lo pones tú— y una cifra que escribiste a mano no se pisa sola.
+   Las filas en conflicto se destacan con las dos cifras y su propia casilla.
 
    ── Terminado se fecha con tu última partida ─────────────────────────────
    "Terminado" no es un estado sino el watch_event del episodio sintético
@@ -279,12 +279,14 @@ export default function SteamPage() {
             </div>
           </div>
           <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))" }}>
+            {/* Solo lo que pasó: una importación sin notas ni finales —el caso
+                normal— no tiene por qué enseñar dos ceros. */}
             {[
               { label: tr("Added or updated"), value: num("applied") + num("resolved") },
               { label: tr("Marked finished"), value: num("finished") },
               { label: tr("Given a rating"), value: num("rated") },
               { label: tr("Conflicts kept as yours"), value: num("conflicts") },
-            ].map((s) => (
+            ].filter((s) => s.value > 0).map((s) => (
               <div key={s.label} className="surface-2" style={{ borderRadius: "var(--r)", padding: 14 }}>
                 <div style={{ fontSize: 20, fontWeight: 800 }}>{s.value}</div>
                 <div className="mute" style={{ fontSize: 12 }}>{s.label}</div>
@@ -401,6 +403,13 @@ function ReviewList({
 
   const bucketOf = (key: string) => BUCKETS.find((b) => b.key === key) ?? BUCKETS[0];
   const shown = useMemo(() => items.filter(bucketOf(bucket).keep), [items, bucket]);
+  /* Los recuentos del raíl, una vez por lista y no una por render: son cinco
+     pasadas sobre los mil y pico juegos de una biblioteca grande, y esto se
+     vuelve a pintar con cada casilla que marcas. */
+  const counts = useMemo(
+    () => new Map(BUCKETS.map((b) => [b.key, items.filter(b.keep).length])),
+    [items],
+  );
 
   /* Las tres pastillas de marcar trabajan sobre el montón que miras y no sobre
      los 312: "Nada" en "sin tocar nunca" es justo la tanda que se quiere quitar
@@ -455,7 +464,7 @@ function ReviewList({
               onClick={() => setBucket(b.key)}
             >
               <span>{tr(b.label)}</span>
-              <span style={{ fontVariantNumeric: "tabular-nums" }}>{items.filter(b.keep).length}</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{counts.get(b.key) ?? 0}</span>
             </button>
           ))}
 

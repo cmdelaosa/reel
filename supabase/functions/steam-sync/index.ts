@@ -256,17 +256,7 @@ async function crossReference(
 
 /* ─────────────────────────── La confirmación ────────────────────────────── */
 
-/** Escribe en la biblioteca las filas que ya tienen `title_id`.
- *
- *  DOS upserts y no uno, y la razón es de PostgREST: la lista de columnas del
- *  `on conflict do update` sale de la UNIÓN de claves de todo el lote. Si una
- *  fila lleva `minutes_played` y otra no, la que no lo lleva recibe un null —
- *  o sea, borrar las horas que esa persona escribió a mano, que es justo lo
- *  que esta rama existe para no hacer. Separadas por juego de claves, cada
- *  lote actualiza exactamente sus columnas.
- *
- *  `play_state` no aparece en ninguno de los dos: importar horas no dice en qué
- *  punto estás. */
+/** Lo que se escribe de un juego en la biblioteca. */
 interface EntryWrite {
   titleId: string;
   minutes: number | null;
@@ -279,6 +269,7 @@ interface EntryWrite {
   playState: Pick["playState"];
 }
 
+/** Escribe en la biblioteca las filas que ya tienen `title_id`. */
 async function writeEntries(
   admin: SupabaseClient,
   userId: string,
@@ -387,13 +378,21 @@ async function writeFinished(
     }));
   if (!events.length) return 0;
 
+  /* El `select` no es decoración: con `ignoreDuplicates` PostgREST devuelve
+     solo las filas que ha INSERTADO, así que es la única forma de que el recibo
+     diga cuántos finales entraron de verdad. Contar los intentos diría "5
+     terminados" cuando tres ya lo estaban desde antes — la misma mentira que la
+     nota de los que IGDB no encuentra existe para no contar. */
+  let written = 0;
   for (const part of chunk(events, PAGE)) {
-    const { error } = await admin
+    const { data, error } = await admin
       .from("watch_events")
-      .upsert(part, { onConflict: "user_id,episode_id", ignoreDuplicates: true });
+      .upsert(part, { onConflict: "user_id,episode_id", ignoreDuplicates: true })
+      .select("id");
     if (error) throw new Error(`watch_events: ${error.message}`);
+    written += (data ?? []).length;
   }
-  return events.length;
+  return written;
 }
 
 /** Le pregunta a igdb-proxy por los appids que el catálogo no conocía.
