@@ -108,7 +108,7 @@ export default function GamesTonightPage() {
   );
 
   /* El artwork apaisado, con la carátula de respaldo. La regla y sus tamaños
-     viven en lib/artwork; la columna la trae la migración 0080. */
+     viven en lib/artwork; la columna la trae la migración 0081. */
   const art = hero ? heroArt("game", hero.backdrop_path, hero.poster_path) : undefined;
   const heroMinutes = hero?.minutes_played ?? 0;
 

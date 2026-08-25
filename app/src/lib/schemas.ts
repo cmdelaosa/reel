@@ -137,7 +137,7 @@ export const libraryRowSchema = z.object({
   kind: z.enum(["tv", "movie", "game"]).optional().default("tv"),
   name: z.string(),
   poster_path: z.string().nullable(),
-  /* La imagen apaisada del banner de Esta noche (0080). Opcional con respaldo a
+  /* La imagen apaisada del banner de Esta noche (0081). Opcional con respaldo a
      null por lo mismo que `kind`: una base anterior a esa migración devuelve la
      fila sin este campo, y un `nullable()` a secas la haría fallar entera — o
      sea, biblioteca vacía en vez de banner con la carátula. */

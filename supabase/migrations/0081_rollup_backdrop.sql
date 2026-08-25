@@ -1,4 +1,4 @@
--- 0080_rollup_backdrop.sql
+-- 0081_rollup_backdrop.sql
 -- `backdrop_path` viaja en la biblioteca. Una columna, y todo lo demás es
 -- explicar por qué faltaba.
 --
@@ -27,15 +27,33 @@
 -- que ya está leyendo. Y viaja para los tres medios aunque el banner sea de
 -- uno: en series y cine es el mismo campo con el mismo significado.
 --
--- ── El precio, dicho ──────────────────────────────────────────────────────
--- Una columna más en la fila que el navegador se descarga entera. Son ~30
--- caracteres por título; en una biblioteca de 400, unos 12 KB. Frente a
--- descargar el banner equivocado y volver a pedir el bueno, no hay discusión.
+-- El precio, dicho: una columna más en la fila que el navegador se descarga
+-- entera. Son ~30 caracteres por título; en una biblioteca de 400, unos 12 KB.
+-- Frente a descargar el banner equivocado, no hay discusión.
+--
+-- ── Esta migración nació siendo la 0080, y ahí está la lección ────────────
+-- Se escribió sobre el cuerpo de 0076, que era el último que recreaba esta
+-- función. Mientras estaba en revisión se fusionó 0080_imdb_rating_en_la_
+-- biblioteca, que recrea la MISMA función para añadir `imdb_rating`. Dos
+-- migraciones con el mismo número y, mucho peor, dos cuerpos completos de la
+-- misma función escritos cada uno sobre una base distinta: la que se aplicara
+-- segunda habría borrado en silencio la columna de la otra. Con la de IMDb ya
+-- aplicada y esta después, la biblioteca habría perdido las notas de IMDb sin
+-- que ningún fichero lo dijera — el fichero de la 0080 seguiría ahí, con su
+-- columna, y nadie sospecharía de él.
+--
+-- Lo que lo cazó fue la comprobación de números repetidos de verificar.sh, no
+-- una lectura atenta. Y lo que evita la próxima es lo que la propia 0080 ya
+-- decía en su cabecera y esta repite:
+--
+--   **grep -n "create function public.rpc_library_rollup" supabase/migrations/*.sql**
+--   **y COPIA EL ÚLTIMO, no el que tenías abierto.**
+--
+-- El cuerpo de abajo es el de 0080 —con `imdb_rating`— más `t.backdrop_path`.
+-- Ni una línea más.
 --
 -- `drop` y `create` y no `create or replace`: cambia el RETURNS TABLE, y
--- Postgres no deja reemplazar una función cuyo tipo de retorno cambia. El
--- cuerpo es el de 0076 con `t.backdrop_path` añadido detrás de `t.poster_path`;
--- ni una línea más.
+-- Postgres no deja reemplazar una función cuyo tipo de retorno cambia.
 
 drop function if exists public.rpc_library_rollup();
 create function public.rpc_library_rollup()
@@ -72,7 +90,8 @@ returns table (
   platforms text[],
   beat_seconds jsonb,
   owned boolean,
-  minutes_source text
+  minutes_source text,
+  imdb_rating numeric
 )
 language sql
 security invoker
@@ -108,7 +127,8 @@ as $$
     t.platforms,
     t.beat_seconds,
     le.owned,
-    le.minutes_source
+    le.minutes_source,
+    t.imdb_rating
   from public.library_entries le
   join public.titles t on t.id = le.title_id
   left join lateral (

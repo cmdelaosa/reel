@@ -82,7 +82,7 @@ export default function MoviesTonightPage() {
   const heroMark = useMarkWatched(hero?.title_id ?? "");
   const heroEpisodeId = hero ? episodeIds?.get(hero.title_id) ?? null : null;
   /* El fotograma apaisado, con el póster de respaldo. La regla y sus tamaños
-     viven en lib/artwork; la columna la trae la migración 0080. */
+     viven en lib/artwork; la columna la trae la migración 0081. */
   const art = hero ? heroArt("movie", hero.backdrop_path, hero.poster_path) : undefined;
   const heroName = hero ? locName(esNames, hero.tmdb_id, hero.name, "movie") : "";
 
