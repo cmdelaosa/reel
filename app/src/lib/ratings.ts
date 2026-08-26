@@ -90,6 +90,13 @@ export function useRatedAt(): RatedAt {
   const { data } = useQuery({
     queryKey: qk.ratedAt,
     enabled: Boolean(userId),
+    /* Cinco minutos en vez de los 30 s de la casa: esto se monta en las TRES
+       bibliotecas y casi siempre para no usarse —solo uno de los cinco órdenes
+       lo mira—, así que con el valor por omisión un paseo por series, cine y
+       juegos se baja mil y pico notas tres veces. Puede ser tan largo porque no
+       depende del reloj: lo que cambia estas fechas es que TÚ puntúes, y todo lo
+       que escribe una nota invalida ya esta clave por prefijo (queryKeys). */
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       // Acotado al usuario: la política RLS de amigos también deja ver SUS
       // notas, y sin el filtro ordenaríamos tu biblioteca por cuándo las
