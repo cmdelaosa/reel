@@ -113,6 +113,15 @@ Sin `--dry-run` escribe. Banderas:
   defecto, ahora). Se pasa a mano para **reparar** una pasada anterior.
 - `--fechas-lista` — no importa nada: solo recoloca el `added_at` de las filas de
   lista según su posición. Ni TMDB ni tmdb-proxy, así que tarda segundos.
+- `--fechas-notas` — le pone a cada nota la fecha de su voto en `created_at`.
+  **No necesita el JSON**: la saca de los `watch_events` que escribió la propia
+  importación (`source = 'filmaffinity_import'`), así que se puede lanzar meses
+  después, cuando el export ya no esté en ningún disco. Idempotente.
+- `--desde=<ISO>` — con `--fechas-notas`, solo toca las notas escritas a partir
+  de ese instante. **Ponlo si ya habías puntuado películas en Reel a mano**:
+  `ratings` no tiene columna de origen, así que una nota tuya anterior se
+  reconoce por el mismo título que la de FA y sin este filtro se le movería la
+  fecha años atrás. El instante es el de la importación que hay que reparar.
 
 ## Cómo empareja, y por qué así
 
@@ -155,15 +164,20 @@ Por cada película emparejada, en este orden:
 | `titles` + `episodes` | **no a mano**: se pide `tmdb-proxy /movie/:id`, el mismo camino que abre una ficha en la app, y el trigger de 0067 pone el episodio sintético |
 | `library_entries` | `followed = true`; `added_at` = la fecha del voto, o —en las de lista— el momento de la importación con los segundos repartidos por posición |
 | `watch_events` | solo los votos: `watched_at` = fecha del voto, `source = 'filmaffinity_import'` |
-| `ratings` | la nota de FA tal cual — las dos escalas son 1..10 |
+| `ratings` | la nota de FA tal cual —las dos escalas son 1..10— con `created_at` = la fecha del voto, que es la que fecha el muro |
 
 Idempotente: los `upsert` van con `ignoreDuplicates`, y una nota que ya existiera
 en Reel **no se pisa** (sale contada aparte en el informe). Volver a lanzarlo no
 duplica nada.
 
-**Las fechas.** Un voto trae la suya y esa es la que se usa, en `watched_at` y en
-`added_at`: el historial y el mapa de calor cuentan cuándo lo viste de verdad, no
-cuándo se importó. Una fila de lista **no tiene fecha que traer** —FA no la
+**Las fechas.** Un voto trae la suya y esa es la que se usa, en `watched_at`, en
+`added_at` **y en el `created_at` de la propia nota**: el historial, el mapa de
+calor y el muro de amigos cuentan cuándo lo viste de verdad, no cuándo se
+importó. Esa tercera no es papeleo — es con la que `rpc_friend_activity` fecha el
+verbo *rated* (0077), y dejarla en su `now()` por omisión pone mil notas de
+quince años en el día de hoy: en un muro compartido eso no es un detalle tuyo,
+es una avalancha que entierra la actividad de todos tus amigos bajo algo que
+nunca ocurrió. Pasó en la pasada del 25-08-2026 y se reparó con `--fechas-notas`. Una fila de lista **no tiene fecha que traer** —FA no la
 guarda— así que lleva el momento real de la importación, con los segundos
 repartidos por su posición para que ordenar por "fecha de adición" en Reel
 devuelva el orden de la lista en FA. No se inventa un pasado que nadie registró.

@@ -63,6 +63,9 @@ function readEnv(): Env {
 
 const SOURCE = "filmaffinity_import";
 
+/** Lo que PostgREST devuelve de una tacada, y que no avisa de haberlo aplicado. */
+const PAGE = 1000;
+
 interface Resolved {
   fa: FaItem;
   tmdbId: number;
@@ -201,6 +204,73 @@ async function ensureFollowed(
   return true;
 }
 
+/** Le pone a cada nota importada la fecha del voto en su propio `created_at`.
+ *
+ *  Hace falta porque esa columna NO es papeleo: es con la que el muro de amigos
+ *  fecha el verbo "rated" (0077_added_agrupado.sql). Dejarla en el `now()` por
+ *  omisión pone mil notas de quince años en el día de hoy — y en un muro
+ *  compartido eso no es un detalle tuyo, es una avalancha que entierra la
+ *  actividad de todos tus amigos bajo algo que nunca ocurrió.
+ *
+ *  La fecha NO se saca del JSON ni del informe: se saca de los `watch_events`
+ *  que escribió la propia importación, que ya la llevan. Así la reparación no
+ *  depende de conservar ficheros, arregla exactamente lo que este guión escribió
+ *  (`source = 'filmaffinity_import'`) y no puede fechar la nota en un día
+ *  distinto del que dice la marca de vista.
+ *
+ *  `desde` acota a las notas escritas a partir de ese instante, y existe por lo
+ *  único que esto NO puede distinguir solo: `ratings` no tiene columna de
+ *  origen, así que una nota que TÚ pusiste en Reel antes de importar —esa que el
+ *  importador respetó a propósito— se reconoce por el mismo título que la de FA
+ *  y se le movería la fecha quince años atrás. Pasando el instante de la
+ *  importación solo se tocan las suyas.
+ *
+ *  Idempotente: dos pasadas dejan lo mismo. Con `desde`, la segunda no toca
+ *  nada, porque las fechas ya no caen dentro de la ventana. */
+async function fecharNotas(admin: SupabaseClient, userId: string, desde?: string): Promise<void> {
+  // Paginado, porque son mil y pico y PostgREST devuelve mil sin decirlo.
+  const vistas: { watched_at: string; episodes: { title_id: string } | null }[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin
+      .from("watch_events")
+      .select("watched_at, episodes!inner(title_id)")
+      .eq("user_id", userId)
+      .eq("source", SOURCE)
+      .order("watched_at", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`watch_events: ${error.message}`);
+    vistas.push(...((data ?? []) as unknown as typeof vistas));
+    if (!data || data.length < PAGE) break;
+  }
+  console.log(`${vistas.length} vistas de ${SOURCE} con su fecha${desde ? ` (solo notas desde ${desde})` : ""}`);
+
+  let tocadas = 0;
+  let sinNota = 0;
+  let sinTitulo = 0;
+  for (const v of vistas) {
+    // El `!inner` obliga a que haya episodio, pero la forma de la relación la
+    // decide PostgREST: si algún día viniera como lista, `title_id` sería
+    // undefined y el filtro saldría sin condición. Mejor contarlo que filtrar
+    // por nada sobre una tabla de notas.
+    const titleId = v.episodes?.title_id;
+    if (!titleId) { sinTitulo++; continue; }
+    let q = admin
+      .from("ratings")
+      .update({ created_at: v.watched_at, updated_at: v.watched_at })
+      .eq("user_id", userId)
+      .eq("title_id", titleId);
+    if (desde) q = q.gte("created_at", desde);
+    const { data: filas, error } = await q.select("id");
+    if (error) throw new Error(`ratings: ${error.message}`);
+    if (!filas?.length) { sinNota++; continue; }
+    if (++tocadas % 100 === 0) console.log(`  notas ${tocadas}/${vistas.length}`);
+  }
+  console.log(
+    `\n--fechas-notas: ${tocadas} notas fechadas con su voto, ${sinNota} vistas sin nota que tocar` +
+      `${sinTitulo ? `, ${sinTitulo} sin título legible` : ""}`,
+  );
+}
+
 /** Los ids de episodio de una película, para cuando tmdb-proxy devuelve el
  *  título ya cacheado pero sin `episode_id` (fila escrita antes del trigger). */
 async function episodeOf(admin: SupabaseClient, titleId: string): Promise<string | null> {
@@ -211,6 +281,21 @@ async function episodeOf(admin: SupabaseClient, titleId: string): Promise<string
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
+
+  // `--fechas-notas` se resuelve entero contra la base y no lee el JSON: la
+  // fecha la sacan de los watch_events que la propia importación escribió. Por
+  // eso va antes de exigir el fichero — pedirlo sería pedir un fichero que
+  // nadie va a abrir, y esa reparación tiene que poder lanzarse meses después,
+  // cuando el export ya no esté en ningún disco.
+  if (args.includes("--fechas-notas")) {
+    const desde = args.find((a) => a.startsWith("--desde="))?.slice("--desde=".length);
+    if (desde && Number.isNaN(Date.parse(desde))) throw new Error(`--desde: "${desde}" no es una fecha`);
+    const envNotas = readEnv();
+    const adminNotas = createClient(envNotas.supabaseUrl, envNotas.serviceKey, { auth: { persistSession: false } });
+    await fecharNotas(adminNotas, envNotas.targetUserId, desde);
+    return;
+  }
+
   const file = args.find((a) => !a.startsWith("--"));
   if (!file) throw new Error("uso: tsx index.ts <fa-export.json> [--dry-run] [--sin corto,medio,tv]");
 
@@ -394,9 +479,19 @@ async function main() {
             .maybeSingle();
           if (had) report.skippedRatings++;
           else {
-            const { error: re } = await admin
-              .from("ratings")
-              .insert({ user_id: env.targetUserId, title_id: titleId, score: fa.rating });
+            // `created_at` es la fecha del voto, no la de la importación: es la
+            // columna con la que el muro de amigos fecha el verbo "rated"
+            // (0077_added_agrupado.sql), así que dejarla por omisión pone mil
+            // notas de quince años en el día de hoy y sepulta la actividad de
+            // todo el mundo. `updated_at` va con ella porque la fila se escribe
+            // una vez: decir que se tocó después sería falso.
+            const { error: re } = await admin.from("ratings").insert({
+              user_id: env.targetUserId,
+              title_id: titleId,
+              score: fa.rating,
+              created_at: addedAt,
+              updated_at: addedAt,
+            });
             if (re) throw new Error(`ratings: ${re.message}`);
             report.ratings++;
           }
