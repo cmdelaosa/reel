@@ -9,6 +9,7 @@ import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
 import { useNotifications, useNotificationsRealtime } from "@/lib/notifications";
 import { mediumOfPath, setMedium, useMedium, type Medium } from "@/lib/medium";
+import { routeForMedium } from "@/domain/mediumRoute";
 import { MovieSheet } from "@/features/movies/MovieSheet";
 import { GameSheet } from "@/features/games/GameSheet";
 import { NotifPanel } from "@/ui/shell/NotifPanel";
@@ -32,6 +33,10 @@ import { t } from "@/lib/i18n";
    siquiera en Cine acertaba, porque esta pestaña no es "una película", es la
    portada del modo. El destello dice lo único que las tres portadas tienen en
    común: esto es lo elegido para ti, ahora. */
+/* ⚠️ Las rutas de estas tres listas están escritas también en la tabla de
+   domain/mediumRoute, que es por donde cruza el conmutador. Se tocan juntas:
+   main.tsx no tiene ruta comodín, así que renombrar una ruta en un solo sitio
+   no da error — deja la pantalla en blanco bajo la barra. */
 const TABS = [
   { path: "/tonight", label: "Tonight", icon: Sparkles },
   { path: "/calendar", label: "Calendar", icon: CalendarClock },
@@ -105,15 +110,6 @@ const ownedByAMedium = (pathname: string): boolean => {
   return TABS.some((t) => pathname.startsWith(t.path.split("?")[0]));
 };
 
-/** La portada de cada modo, adonde te lleva el conmutador desde una ruta que
- *  es del medio que dejas. Los tres son ya su "esta noche": es la pantalla que
- *  responde la pregunta con la que se abre la app. */
-const HOME: Record<Medium, string> = {
-  tv: "/tonight",
-  movie: "/movies/tonight",
-  game: "/games/tonight",
-};
-
 /* El conmutador de la barra: TV | Movies | Games, con el modo activo relleno de
    acento. Cambiar de modo es cambiar de sitio, no solo de color.
 
@@ -124,11 +120,15 @@ function MediumSwitch() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
+  /* Y cambiar de sitio es cruzar a la MISMA sección del otro medio, no volver
+     siempre a su portada: si estabas explorando juegos y pulsas Series, sigues
+     explorando. La tabla de equivalencias —y qué pasa con lo que solo existe en
+     un medio, como Steam— vive en domain/mediumRoute, con sus pruebas. */
   const pick = (next: Medium) => {
     if (next === medium) return;
     setMedium(next);
     if (!ownedByAMedium(pathname)) return;
-    navigate(HOME[next]);
+    navigate(routeForMedium(pathname, next));
   };
 
   return (
