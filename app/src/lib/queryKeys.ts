@@ -33,6 +33,14 @@ export const qk = {
   calendarFeed: (fromIso: string, toIso: string) => ["calendarFeed", fromIso, toIso] as const,
   history: ["history"] as const,
   ratings: ["ratings"] as const,
+  /* Cuándo puntuaste cada título, sin el título colgando — lo que necesitan las
+     tres bibliotecas para ordenar por «última puntuada» (domain/ratedSort).
+     Cuelga de `ratings` A PROPÓSITO: TanStack invalida por prefijo, así que
+     todo lo que ya invalida qk.ratings al escribir una nota —puntuar desde una
+     ficha, la importación de Steam— tira también de esta sin acordarse de ella.
+     Una clave hermana habría que ir añadiéndola a mano en cada escritor, y la
+     que se olvidara dejaría la rejilla ordenada por notas de ayer. */
+  ratedAt: ["ratings", "ratedAt"] as const,
   stats: ["stats"] as const,
   watchHeatmap: ["watchHeatmap"] as const,
   notifications: ["notifications"] as const,

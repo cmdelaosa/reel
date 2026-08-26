@@ -1,7 +1,10 @@
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { qk } from "@/lib/queryKeys";
+import { fetchPaged } from "@/lib/paging";
+import { byRatedAt, type RatedAt, type SortDir } from "@/domain/ratedSort";
 import { useAuth } from "@/features/auth/AuthProvider";
 
 /* Show-level ratings (episode ratings stay schema-only until post-Phase 5). */
@@ -52,6 +55,88 @@ export function useRateTitle(titleId: string) {
       qc.invalidateQueries({ queryKey: qk.stats });
     },
   });
+}
+
+const ratedAtRowSchema = z.object({
+  title_id: z.string().uuid(),
+  created_at: z.string(),
+  updated_at: z.string().nullable(),
+});
+
+/** Cuándo puntuaste cada título: title_id → instante, para ordenar las tres
+ *  bibliotecas por «última puntuada» (domain/ratedSort).
+ *
+ *  Es una lectura aparte de useMyRatings y no un `select` más de aquella: esta
+ *  la piden las rejillas de biblioteca, que solo necesitan dos columnas, y
+ *  aquella arrastra el título entero de cada nota —póster, géneros, fecha— para
+ *  pintarlo. Con mil y pico notas importadas, la diferencia entre las dos
+ *  respuestas es de dos órdenes de magnitud.
+ *
+ *  `updated_at` es la fecha buena, con `created_at` de reserva: puntuar de
+ *  nuevo reescribe la primera y no la segunda, así que es la que responde
+ *  «cuándo le puse ESTA nota». Y quien importa de FilmAffinity pone las dos a
+ *  la fecha del voto a propósito (scripts/filmaffinity-import), o sea que una
+ *  nota de 2015 se ordena en 2015 y no en el día de la importación.
+ *
+ *  Paginada, como todo lo que puede pasar de mil filas: PostgREST corta ahí sin
+ *  avisar (lib/paging), y la biblioteca importada del usuario ya está por
+ *  encima. Sin esto, las notas más antiguas simplemente no existirían para el
+ *  orden y sus películas caerían al fondo como «sin puntuar». El `.order()`
+ *  va por title_id porque hace falta un orden TOTAL —`unique (user_id,
+ *  title_id)` lo garantiza— y no por fecha, que empata a cientos. */
+export function useRatedAt(): RatedAt {
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  const { data } = useQuery({
+    queryKey: qk.ratedAt,
+    enabled: Boolean(userId),
+    /* Cinco minutos en vez de los 30 s de la casa: esto se monta en las TRES
+       bibliotecas y casi siempre para no usarse —solo uno de los cinco órdenes
+       lo mira—, así que con el valor por omisión un paseo por series, cine y
+       juegos se baja mil y pico notas tres veces. Puede ser tan largo porque no
+       depende del reloj: lo que cambia estas fechas es que TÚ puntúes, y todo lo
+       que escribe una nota invalida ya esta clave por prefijo (queryKeys). */
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      // Acotado al usuario: la política RLS de amigos también deja ver SUS
+      // notas, y sin el filtro ordenaríamos tu biblioteca por cuándo las
+      // puntuó otro.
+      const rows = await fetchPaged((from, to) =>
+        supabase
+          .from("ratings")
+          .select("title_id, created_at, updated_at")
+          .eq("user_id", userId!)
+          .not("title_id", "is", null)
+          .order("title_id")
+          .range(from, to));
+      return z.array(ratedAtRowSchema).parse(rows);
+    },
+  });
+  return useMemo(
+    () => new Map((data ?? []).map((r) => [r.title_id, new Date(r.updated_at ?? r.created_at).getTime()])),
+    [data],
+  );
+}
+
+/** El orden «última puntuada» de una rejilla de biblioteca: el comparador ya
+ *  montado, el sentido y el gesto que lo voltea.
+ *
+ *  Vive aquí y no en cada página porque las tres bibliotecas —series, cine y
+ *  juegos— son gemelas a propósito, y este orden tiene una regla de interacción
+ *  propia: volver a pulsar la opción ya activa cambia el sentido en vez de no
+ *  hacer nada. Tres copias de esa regla es como se acaba con tres gestos
+ *  ligeramente distintos. `arrow` es lo que la etiqueta enseña para que el
+ *  sentido se vea sin pulsar. */
+export function useRatedSort() {
+  const ratedAt = useRatedAt();
+  const [dir, setDir] = useState<SortDir>("desc");
+  const cmp = useMemo(() => byRatedAt(ratedAt, dir), [ratedAt, dir]);
+  return {
+    dir,
+    cmp,
+    arrow: dir === "desc" ? "↓" : "↑",
+    flip: () => setDir((d) => (d === "desc" ? "asc" : "desc")),
+  };
 }
 
 const ratedRowSchema = z.object({

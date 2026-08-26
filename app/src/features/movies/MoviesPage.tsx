@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { useMovieLibrary, type LibraryMovie } from "@/lib/library";
+import { useRatedSort } from "@/lib/ratings";
 import type { MovieStatus } from "@/domain/movieStatus";
 import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { tmdbImg } from "@/lib/tmdb";
@@ -25,12 +26,13 @@ const FILTERS: { key: Bucket; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-type SortKey = "lastreleased" | "added" | "az" | "rating";
+type SortKey = "lastreleased" | "added" | "az" | "rating" | "rated";
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "lastreleased", label: "Last released" },
   { key: "added", label: "Date added" },
   { key: "az", label: "A–Z" },
   { key: "rating", label: "Top rated" },
+  { key: "rated", label: "Last rated" },
 ];
 
 /* "Último estrenado" por defecto, por lo mismo que en "Sin empezar" de series:
@@ -38,7 +40,9 @@ const SORTS: { key: SortKey; label: string }[] = [
    Aquí vale para todos los cubos, porque ninguno tiene un "último visto" que
    ordene mejor — verlas es un solo acto y la mitad de la lista no lo tiene. */
 const ms = (s: string | null) => (s ? new Date(s).getTime() : 0);
-const COMPARATORS: Record<SortKey, (a: LibraryMovie, b: LibraryMovie) => number> = {
+/* «Última puntuada» no está aquí: es el único orden que no se lee de la fila de
+   la biblioteca sino de tus notas, que son otra tabla — ver domain/ratedSort. */
+const COMPARATORS: Record<Exclude<SortKey, "rated">, (a: LibraryMovie, b: LibraryMovie) => number> = {
   lastreleased: (a, b) => (b.first_air_date ?? "").localeCompare(a.first_air_date ?? ""),
   added: (a, b) => ms(b.added_at) - ms(a.added_at),
   az: (a, b) => a.name.localeCompare(b.name),
@@ -50,6 +54,12 @@ export default function MoviesPage() {
   const [sort, setSort] = useState<SortKey>("lastreleased");
   const [searchParams, setSearchParams] = useSearchParams();
   const esNames = useEsNames();
+  const rated = useRatedSort();
+  /* Pulsar «Última puntuada» estando ya activa voltea el sentido, igual que en
+     las otras dos bibliotecas; la flecha de la etiqueta dice cuál está puesto. */
+  const pickSort = (key: SortKey) => (key === "rated" && sort === "rated" ? rated.flip() : setSort(key));
+  const sortLabel = (s: { key: SortKey; label: string }) =>
+    s.key === "rated" ? `${tr(s.label)} ${rated.arrow}` : tr(s.label);
 
   /* El cubo vive en la URL, igual que en ShowsPage y por el mismo motivo: la
      pestaña de la barra enlaza a un cubo concreto, y desde la propia página eso
@@ -70,7 +80,7 @@ export default function MoviesPage() {
     key === "all" ? movies.length : movies.filter((m) => m.status === key).length;
   const items = movies
     .filter((m) => f === "all" || m.status === f)
-    .sort(COMPARATORS[sort]);
+    .sort(sort === "rated" ? rated.cmp : COMPARATORS[sort]);
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -100,15 +110,15 @@ export default function MoviesPage() {
         />
         <div className="segmented scroll no-scrollbar">
           {SORTS.map((s) => (
-            <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => setSort(s.key)}>
-              {tr(s.label)}
+            <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => pickSort(s.key)}>
+              {sortLabel(s)}
             </div>
           ))}
         </div>
         <TabMenu
           value={sort}
-          options={SORTS.map((s) => ({ key: s.key, label: tr(s.label) }))}
-          onPick={setSort}
+          options={SORTS.map((s) => ({ key: s.key, label: sortLabel(s) }))}
+          onPick={pickSort}
           menuLabel={tr("Sort")}
           align="end"
         />

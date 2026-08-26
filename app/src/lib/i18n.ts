@@ -363,6 +363,10 @@ const ES: Record<string, string> = {
   "Last released": "Último emitido",
   "A–Z": "A–Z",
   "Top rated": "Mejor nota",
+  /* El orden por la fecha de TU nota, en las tres bibliotecas. La flecha (↓ más
+     reciente primero, ↑ al revés) la pone la página fuera de la cadena: es
+     estado, no idioma. */
+  "Last rated": "Última puntuada",
   "Loading your shows…": "Cargando tus series…",
   "shows in your library.": "series en tu biblioteca.",
   "Watched everything that's aired — just waiting on the next season.":
