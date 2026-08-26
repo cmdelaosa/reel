@@ -10,7 +10,7 @@ import { useFriendships } from "@/lib/friends";
 import { useSettings } from "@/lib/settings";
 import { useMovieLibrary } from "@/lib/library";
 import { useIgnored } from "@/lib/ignore";
-import { FilterPanel, TitlePoster } from "@/features/explore/DiscoverPieces";
+import { FilterPanel, HiddenTitles, TitlePoster } from "@/features/explore/DiscoverPieces";
 import { t as tr, tGenre } from "@/lib/i18n";
 import { Rail, TabMenu, useShowMore } from "@/ui";
 import { PosterGridSkeleton, RailCardsSkeleton } from "@/ui/Skeleton";
@@ -138,7 +138,7 @@ export default function MoviesExplorePage() {
      mismo: un carril de descubrimiento que te enseña lo que ya tienes gasta la
      fila más visible de la pantalla en decirte algo que ya sabes. */
   const keep = useMemo(
-    () => (t: { tmdb_id: number }) => !followed.has(t.tmdb_id) && !isIgnored(t.tmdb_id),
+    () => (t: { tmdb_id: number }) => !followed.has(t.tmdb_id) && !isIgnored(t.tmdb_id, "movie"),
     [followed, isIgnored],
   );
   const newToStream = useMemo(
@@ -187,7 +187,7 @@ export default function MoviesExplorePage() {
     const byGenre = (t: TitleRow) =>
       selectedGenres.length === 0 || selectedGenres.some((g) => t.genres.includes(g));
     return pool
-      .filter((t) => !followed.has(t.tmdb_id) && !isIgnored(t.tmdb_id))
+      .filter((t) => !followed.has(t.tmdb_id) && !isIgnored(t.tmdb_id, "movie"))
       .filter((t) => effectiveTab === "rated" || byGenre(t))
       .slice(0, MAX_ITEMS);
   }, [playingData, popularData, ratedData, followed, isIgnored, selectedGenres, effectiveTab]);
@@ -351,6 +351,8 @@ export default function MoviesExplorePage() {
         </div>
 
         {more}
+
+        <HiddenTitles medium="movie" />
       </section>
     </div>
   );

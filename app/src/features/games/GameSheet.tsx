@@ -333,10 +333,10 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                 </button>
                 {!added && (
                   <button
-                    className={`btn ${isIgnored(title.tmdb_id) ? "btn-accent" : "btn-outline"}`}
-                    onClick={() => (isIgnored(title.tmdb_id) ? unignore.mutate(title.id) : ignore.mutate(title.id))}
+                    className={`btn ${isIgnored(title.tmdb_id, "game") ? "btn-accent" : "btn-outline"}`}
+                    onClick={() => (isIgnored(title.tmdb_id, "game") ? unignore.mutate(title.id) : ignore.mutate(title.id))}
                   >
-                    {isIgnored(title.tmdb_id) ? <><Eye size={16} />{tr("Un-ignore")}</> : <><EyeOff size={16} />{tr("Ignore")}</>}
+                    {isIgnored(title.tmdb_id, "game") ? <><Eye size={16} />{tr("Un-ignore")}</> : <><EyeOff size={16} />{tr("Ignore")}</>}
                   </button>
                 )}
               </div>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addedList,
   addedListOf,
+  hiddenLabel,
   historyLines,
   mediumLabel,
   showsEpisodeCount,
@@ -115,5 +116,22 @@ describe("historyLines", () => {
     // `network` en un juego es el estudio que lo hizo (normalize.ts), así que
     // la misma caption vale sin cambiar de columna.
     expect(historyLines("game")).toEqual({ headline: "title", caption: "studio" });
+  });
+});
+
+describe("hiddenLabel", () => {
+  it("cada medio nombra lo suyo, en singular y en plural", () => {
+    expect(hiddenLabel("tv", 1)).toBe("hidden show");
+    expect(hiddenLabel("tv", 3)).toBe("hidden shows");
+    expect(hiddenLabel("movie", 1)).toBe("hidden movie");
+    expect(hiddenLabel("movie", 3)).toBe("hidden movies");
+    expect(hiddenLabel("game", 1)).toBe("hidden game");
+    expect(hiddenLabel("game", 3)).toBe("hidden games");
+  });
+
+  it("ninguna clave se repite entre medios", () => {
+    // Compartirla es publicar "series ocultas" sobre una rejilla de juegos.
+    const todas = (["tv", "movie", "game"] as const).flatMap((m) => [hiddenLabel(m, 1), hiddenLabel(m, 2)]);
+    expect(new Set(todas).size).toBe(todas.length);
   });
 });

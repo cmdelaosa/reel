@@ -1,11 +1,13 @@
 import { useMemo } from "react";
 import { Award, Star, ThumbsDown, TrendingUp } from "lucide-react";
-import { useLibrary } from "@/lib/library";
+import { useLibraryRows } from "@/lib/library";
 import { useMyRatings } from "@/lib/ratings";
 import { useFriendships } from "@/lib/friends";
 import { useFriendsRatings, type FriendRatingRow } from "@/lib/taste";
 import { useIgnored } from "@/lib/ignore";
-import { useOpenTitle } from "@/lib/useOpenTitle";
+import { useMedium } from "@/lib/medium";
+import { useOpenSheet } from "@/lib/useOpenTitle";
+import { ofMedium, tasteCopy, type Medium } from "@/domain/tasteScope";
 import { locName, t as tr, useEsNames } from "@/lib/i18n";
 import { tmdbImg } from "@/lib/tmdb";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
@@ -15,10 +17,16 @@ import { posterBg } from "@/ui/posterBg";
 /* Group stats (route /friends/stats) — the friend-group scoreboard Krauser asked
    for: what to watch next (unseen, loved by friends), the full you-vs-friends
    score comparison, and the stinkers the group sat through anyway. All three
-   derive from the same one-round-trip friends-ratings query as /friends/taste. */
+   derive from the same one-round-trip friends-ratings query as /friends/taste.
+
+   Y como en la afinidad, todo lo de aquí es de UN medio: el del conmutador. Un
+   id solo es único dentro del suyo, así que mezclar los tres marcadores en uno
+   cruzaría la película 1399 con la serie 1399 (domain/tasteScope). */
 
 interface StatTitle {
   tmdb_id: number;
+  /** El medio de la fila — el del modo, y con qué parámetro se abre su ficha. */
+  kind: Medium;
   name: string;
   poster_path: string | null;
   raters: FriendLike[];
@@ -32,16 +40,25 @@ function useStats() {
   const friendIds = useMemo(() => friends.map((f) => f.other_id), [friends]);
   const { data: friendRatings = [], isPending: ratingsPending } = useFriendsRatings(friendIds);
   const { data: myRatings = [] } = useMyRatings();
-  const { data: library = [] } = useLibrary();
+  const { data: libraryRows = [] } = useLibraryRows();
   const { isIgnored } = useIgnored();
+  const medium = useMedium();
 
   return useMemo(() => {
     const friendMeta = new Map(friends.map((f) => [f.other_id, { id: f.other_id, name: f.display_name, avatarUrl: f.avatar_url }]));
-    const myScore = new Map(myRatings.map((r) => [r.titles.tmdb_id, r.score]));
-    const inLibrary = new Set(library.map((s) => s.tmdb_id));
+    const myScore = new Map(
+      ofMedium(
+        myRatings.map((r) => ({ kind: r.titles.kind, tmdb_id: r.titles.tmdb_id, score: r.score })),
+        medium,
+      ).map((r) => [r.tmdb_id, r.score]),
+    );
+    /* La biblioteca cruda y filtrada aquí, no `useLibrary()`: esa es la de
+       series, y en modo Cine o Juegos daba por NO tenido todo lo que sí tienes,
+       llenando "Recomendadas" de cosas que ya están en tu lista. */
+    const inLibrary = new Set(ofMedium(libraryRows, medium).map((s) => s.tmdb_id));
 
     const byTitle = new Map<number, { meta: Omit<FriendRatingRow, "user_id" | "score">; scores: { who: FriendLike; score: number }[] }>();
-    for (const r of friendRatings) {
+    for (const r of ofMedium(friendRatings, medium)) {
       const who = friendMeta.get(r.user_id);
       if (!who) continue;
       let t = byTitle.get(r.tmdb_id);
@@ -51,6 +68,7 @@ function useStats() {
 
     const all: StatTitle[] = [...byTitle.entries()].map(([tmdb_id, t]) => ({
       tmdb_id,
+      kind: medium,
       name: t.meta.name,
       poster_path: t.meta.poster_path,
       raters: t.scores.map((s) => s.who),
@@ -61,7 +79,7 @@ function useStats() {
     // (a) Unseen by you, recommended by friends: not in your library, best
     // friend average first (rater count breaks ties).
     const recommended = all
-      .filter((t) => !inLibrary.has(t.tmdb_id) && t.mine == null && !isIgnored(t.tmdb_id))
+      .filter((t) => !inLibrary.has(t.tmdb_id) && t.mine == null && !isIgnored(t.tmdb_id, medium))
       .sort((a, b) => b.friendAvg - a.friendAvg || b.raters.length - a.raters.length);
 
     // (b) Head-to-head: every show you and at least one friend both rated.
@@ -84,11 +102,12 @@ function useStats() {
     return {
       loading: friendsPending || (friendIds.length > 0 && ratingsPending),
       hasFriends: friends.length > 0,
+      medium,
       recommended,
       compared,
       worst,
     };
-  }, [friends, friendIds, friendRatings, myRatings, library, isIgnored, friendsPending, ratingsPending]);
+  }, [friends, friendIds, friendRatings, myRatings, libraryRows, medium, isIgnored, friendsPending, ratingsPending]);
 }
 
 function fmt(n: number): string {
@@ -96,9 +115,10 @@ function fmt(n: number): string {
 }
 
 function StatRow({ t, groupAvg, onOpen }: { t: StatTitle; groupAvg?: number; onOpen: () => void }) {
+  const copy = tasteCopy(t.kind);
   const art = tmdbImg(t.poster_path, "w92");
   const esNames = useEsNames();
-  const name = locName(esNames, t.tmdb_id, t.name);
+  const name = locName(esNames, t.tmdb_id, t.name, t.kind);
   return (
     <div className="card mq-row" onClick={onOpen}>
       <div className="mq-row-art" style={art ? undefined : { background: posterBg(name) }}>
@@ -110,7 +130,9 @@ function StatRow({ t, groupAvg, onOpen }: { t: StatTitle; groupAvg?: number; onO
         <div className="flex items-center gap-2" style={{ marginTop: 3 }}>
           <FriendStack fans={t.raters} size={20} />
           <span className="mute" style={{ fontSize: 12 }}>
-            {t.raters.length === 1 ? `1 ${tr("friend rated it")}` : `${t.raters.length} ${tr("friends rated it")}`}
+            {t.raters.length === 1
+              ? `1 ${tr(copy.friendRatedIt)}`
+              : `${t.raters.length} ${tr(copy.friendsRatedIt)}`}
           </span>
         </div>
       </div>
@@ -143,7 +165,8 @@ const GRID = { display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill,
 
 export default function StatsPage() {
   const stats = useStats();
-  const open = useOpenTitle();
+  const open = useOpenSheet();
+  const copy = tasteCopy(stats.medium);
 
   const recommended = useShowMore(stats.recommended, 12);
   const compared = useShowMore(stats.compared, 12);
@@ -166,17 +189,17 @@ export default function StatsPage() {
               <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("Nothing to recommend — you've seen everything your friends rated.")}</p>
             ) : (
               <div style={GRID}>
-                {recommended.shown.map((t) => <StatRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
+                {recommended.shown.map((t) => <StatRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id, t.kind)} />)}
               </div>
             )}
           </Section>
 
           <Section icon={Award} title={tr("Your scores vs theirs")} more={compared.more}>
             {stats.compared.length === 0 ? (
-              <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No overlap yet — rate a few shows your friends also scored.")}</p>
+              <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr(copy.noOverlap)}</p>
             ) : (
               <div style={GRID}>
-                {compared.shown.map((t) => <StatRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id)} />)}
+                {compared.shown.map((t) => <StatRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id, t.kind)} />)}
               </div>
             )}
           </Section>
@@ -186,7 +209,7 @@ export default function StatsPage() {
               <p className="dim" style={{ fontSize: 13.5, margin: 0 }}>{tr("No shared stinkers yet — lucky you.")}</p>
             ) : (
               <div style={GRID}>
-                {worst.shown.map((t) => <StatRow key={t.tmdb_id} t={t} groupAvg={t.groupAvg} onOpen={() => open(t.tmdb_id)} />)}
+                {worst.shown.map((t) => <StatRow key={t.tmdb_id} t={t} groupAvg={t.groupAvg} onOpen={() => open(t.tmdb_id, t.kind)} />)}
               </div>
             )}
           </Section>

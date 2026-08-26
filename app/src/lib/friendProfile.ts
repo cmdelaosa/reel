@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import type { Medium } from "@/domain/tasteScope";
 
 /* Rich friend-profile data for the friend page (/friend/:id): the friend's full
    follow list (with metadata + when they added it) and every show rating,
@@ -15,6 +16,10 @@ const followRowSchema = z.object({
   titles: z.object({
     id: z.string().uuid(),
     tmdb_id: z.number().int(),
+    /* El medio de la fila. La biblioteca de un amigo es de los tres desde 0071,
+       y el `tmdb_id` solo es único dentro del suyo (0067): sin esto, su película
+       1399 contaba como "en común" con tu serie 1399. */
+    kind: z.enum(["tv", "movie", "game"]).optional().default("tv"),
     name: z.string(),
     poster_path: z.string().nullable(),
     first_air_date: z.string().nullable(),
@@ -32,6 +37,9 @@ const ratingRowSchema = z.object({
   titles: z.object({
     id: z.string().uuid(),
     tmdb_id: z.number().int(),
+    /** El medio de lo puntuado — la afinidad de esta ficha se calcula con el
+     *  del modo, igual que la de /friends/taste (domain/tasteScope). */
+    kind: z.enum(["tv", "movie", "game"]).optional().default("tv"),
     name: z.string(),
     poster_path: z.string().nullable(),
     first_air_date: z.string().nullable(),
@@ -42,6 +50,7 @@ const ratingRowSchema = z.object({
 export interface FriendFollow {
   id: string;
   tmdb_id: number;
+  kind: Medium;
   name: string;
   poster_path: string | null;
   first_air_date: string | null;
@@ -56,6 +65,7 @@ export interface FriendFollow {
 export interface FriendRating {
   id: string;
   tmdb_id: number;
+  kind: Medium;
   name: string;
   poster_path: string | null;
   first_air_date: string | null;
@@ -76,12 +86,21 @@ const watchRowSchema = z.object({
   episodes: z.object({
     season_number: z.number().int(),
     episode_number: z.number().int(),
-    titles: z.object({ tmdb_id: z.number().int(), name: z.string(), poster_path: z.string().nullable() }),
+    titles: z.object({
+      tmdb_id: z.number().int(),
+      /* El medio de lo visto. Cine y juegos arrastran un episodio sintético
+         S1E1 (0067, 0071) que llega aquí como cualquier otro, así que sin esto
+         el muro de la ficha no puede ni separarlos ni abrir su ficha. */
+      kind: z.enum(["tv", "movie", "game"]).optional().default("tv"),
+      name: z.string(),
+      poster_path: z.string().nullable(),
+    }),
   }),
 });
 
 export interface FriendWatch {
   watched_at: string;
+  kind: Medium;
   season_number: number;
   episode_number: number;
   tmdb_id: number;
@@ -89,15 +108,21 @@ export interface FriendWatch {
   poster_path: string | null;
 }
 
-export function useFriendWatchHistory(friendId: string, limit = 60) {
+/** El muro de la ficha de un amigo, ya recortado al medio que se está mirando.
+ *
+ *  El recorte va en SQL y no después: `limit` corta las 60 más recientes de
+ *  todas, y filtrar por medio al recibirlas dejaba el muro de cine vacío en
+ *  cuanto un amigo llevaba sesenta episodios seguidos de series. */
+export function useFriendWatchHistory(friendId: string, medium: Medium, limit = 60) {
   return useQuery({
-    queryKey: ["friendWatchHistory", friendId, limit],
+    queryKey: ["friendWatchHistory", friendId, medium, limit],
     enabled: Boolean(friendId),
     queryFn: async (): Promise<FriendWatch[]> => {
       const { data, error } = await supabase
         .from("watch_events")
-        .select("watched_at, episodes!inner(season_number, episode_number, titles!inner(tmdb_id, name, poster_path))")
+        .select("watched_at, episodes!inner(season_number, episode_number, titles!inner(tmdb_id, kind, name, poster_path))")
         .eq("user_id", friendId)
+        .eq("episodes.titles.kind", medium)
         .order("watched_at", { ascending: false })
         .limit(limit);
       if (error) throw error;
@@ -147,12 +172,12 @@ export function useFriendProfile(friendId: string) {
       const [followsRes, ratingsRes] = await Promise.all([
         supabase
           .from("library_entries")
-          .select("added_at, titles(id, tmdb_id, name, poster_path, first_air_date, genres, network, vote_average, episode_run_time, status)")
+          .select("added_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres, network, vote_average, episode_run_time, status)")
           .eq("user_id", friendId)
           .eq("followed", true),
         supabase
           .from("ratings")
-          .select("score, created_at, titles(id, tmdb_id, name, poster_path, first_air_date, genres)")
+          .select("score, created_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres)")
           .eq("user_id", friendId)
           .not("title_id", "is", null),
       ]);

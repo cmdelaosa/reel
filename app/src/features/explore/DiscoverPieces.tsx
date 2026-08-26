@@ -1,16 +1,20 @@
-import { useEffect } from "react";
-import { EyeOff, Star, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
+import { ChevronDown, ChevronUp, Eye, EyeOff, Star, X } from "lucide-react";
 import type { TitleRow } from "@/lib/schemas";
 import { externalScore, scoreColor, scoreLabel } from "@/domain/externalScore";
 import { tmdbImg } from "@/lib/tmdb";
 import { useTitleIntent } from "@/lib/useOpenTitle";
 import { isEs, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 import { posterBg } from "@/ui/posterBg";
+import { useIgnored, useUnignore } from "@/lib/ignore";
+import { hiddenLabel } from "@/domain/mediumCopy";
+import { ofMedium, sheetParam, type Medium } from "@/domain/tasteScope";
 import { useFocusTrap } from "@/ui/useFocusTrap";
 
-/* Las piezas que comparten las dos pantallas de Explorar, la de series y la de
-   cine: la carátula de una rejilla de descubrimiento, el panel de filtros y su
-   selector de años.
+/* Las piezas que comparten las pantallas de Explorar —series, cine y juegos—:
+   la carátula de una rejilla de descubrimiento, el panel de filtros con su
+   selector de años, y el cajón de lo que ocultaste.
 
    Vivían dentro de DiscoverSections hasta que hubo una segunda pantalla que
    quería exactamente lo mismo. Lo único que se parametrizó al sacarlas es lo que
@@ -143,5 +147,70 @@ export function FilterPanel({ genres, selected, onToggleGenre, fromYear, toYear,
         </div>
       </div>
     </>
+  );
+}
+
+/** El cajón de lo oculto de una pantalla de Explorar: cuántos hay, y sus
+ *  carátulas con un ojo para devolverlos a las sugerencias.
+ *
+ *  Vive aquí y no en la pantalla de series porque lo oculto ya no es solo de
+ *  series: desde los sheets de cine y de juegos también se oculta, y hasta
+ *  ahora esas fichas iban a parar a un cajón que solo existía en Explorar de
+ *  series, titulado "series ocultas" y que las abría con `?title=` — o sea, un
+ *  sitio donde no se podían ni reconocer ni recuperar. Cada modo enseña LO
+ *  SUYO. */
+export function HiddenTitles({ medium }: { medium: Medium }) {
+  const { ignored } = useIgnored();
+  const unignore = useUnignore();
+  const [, setSearchParams] = useSearchParams();
+  const [open, setOpen] = useState(false);
+  const mine = ofMedium(ignored, medium);
+  if (mine.length === 0) return null;
+
+  const openSheet = (tmdbId: number) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set(sheetParam(medium), String(tmdbId));
+      return next;
+    });
+
+  return (
+    <div className="flex flex-col gap-3">
+      <button
+        className="chip"
+        style={{ alignSelf: "flex-start" }}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <EyeOff size={13} />
+        {mine.length} {tr(hiddenLabel(medium, mine.length))}
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+      {open && (
+        <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))" }}>
+          {mine.map((t) => {
+            const art = tmdbImg(t.posterPath);
+            return (
+              <div key={t.titleId} className="poster" style={{ background: posterBg(t.name) }} onClick={() => openSheet(t.tmdbId)}>
+                {art && <img className="poster-img" src={art} alt="" loading="lazy" />}
+                <div className="poster-sheen" />
+                <button
+                  className="btn btn-icon badge-glass absolute"
+                  style={{ top: 8, right: 8, color: "#fff", zIndex: 3 }}
+                  title={tr("Restore to suggestions")}
+                  aria-label={tv("Restore {name} to suggestions", { name: t.name })}
+                  onClick={(e) => { e.stopPropagation(); unignore.mutate(t.titleId); }}
+                >
+                  <Eye size={15} />
+                </button>
+                <div className="poster-body">
+                  <div className="poster-title">{t.name}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
