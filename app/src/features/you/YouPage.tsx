@@ -167,10 +167,28 @@ export default function YouPage() {
     game: library.filter((l) => l.kind === "game").length,
   }), [library]);
 
+  /* Cada tarjeta apunta a la BIBLIOTECA de su medio, no al prefijo del modo.
+     `/movies` y `/games` a secas no son pantallas: redirigen a la portada de su
+     modo (main.tsx), así que "Mi cine" llevaba a Esta noche — la única de las
+     tres que acertaba era Series, porque su biblioteca sí vive en la raíz.
+
+     Y por eso van escritas enteras: la ruta de cada biblioteca no se deduce del
+     medio. La de series es `/shows`, la de cine `/movies/watchlist` y la de
+     juegos `/games/backlog` —que se llama así, y no `library`, porque la
+     pestaña que lleva a ella se llama Pendientes—. Tres nombres que no siguen
+     un patrón son tres nombres que hay que decir.
+
+     El `?filter=all` tampoco sobra, y es lo que separa a estas tarjetas de las
+     pestañas de la barra: las tres bibliotecas abren en un CUBO cuando la URL
+     no lo dice —Viendo, Sin empezar, Pendientes—, y aquí la tarjeta acaba de
+     prometer un número que es la biblioteca ENTERA. Sin él, "386 en tu
+     biblioteca" lleva a unos Pendientes con doce, porque los otros 374 entraron
+     por Steam marcados "Lo tengo". La pestaña de la barra sí abre en su cubo, y
+     hace bien: se llama como él. */
   const links = [
-    { icon: LayoutGrid, label: tr("My Shows"), sub: tv("{n} in your library", { n: counts.tv }), path: "/shows", show: counts.tv > 0 },
-    { icon: Clapperboard, label: tr("My Movies"), sub: tv("{n} in your library", { n: counts.movie }), path: "/movies", show: counts.movie > 0 },
-    { icon: Gamepad2, label: tr("My Games"), sub: tv("{n} in your library", { n: counts.game }), path: "/games", show: counts.game > 0 },
+    { icon: LayoutGrid, label: tr("My Shows"), sub: tv("{n} in your library", { n: counts.tv }), path: "/shows?filter=all", show: counts.tv > 0 },
+    { icon: Clapperboard, label: tr("My Movies"), sub: tv("{n} in your library", { n: counts.movie }), path: "/movies/watchlist?filter=all", show: counts.movie > 0 },
+    { icon: Gamepad2, label: tr("My Games"), sub: tv("{n} in your library", { n: counts.game }), path: "/games/backlog?filter=all", show: counts.game > 0 },
     { icon: History, label: tr("History"), sub: tr("Everything you've watched"), path: "/history", show: true },
   ].filter((l) => l.show);
 
