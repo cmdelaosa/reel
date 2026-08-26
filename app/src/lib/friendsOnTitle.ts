@@ -29,11 +29,18 @@ import type { Medium } from "@/domain/tasteScope";
    una tercera para series: el "visto" de una serie son N episodios y contarlos
    por amigo es otra cosa (ver domain/friendTitleStatus). */
 
-const entryRowSchema = z.object({
+/* El `.catch(null)` del estado no es prudencia de más: es la avería de
+   lib/kindEnums.test.ts en su otra columna. `play_state` ya creció una vez
+   —'backlog' entró en 0078— y zod no ignora un valor que no esté en la lista:
+   tira el parseo ENTERO. O sea que el día que se añada un quinto estado, el
+   bloque de amigos de todas las fichas se cae de golpe porque UN amigo lo usó.
+   Con el `catch`, un estado que este cliente no conoce se lee como "no ha dicho
+   nada", que es exactamente lo que era antes de que existiera. */
+export const friendEntryRowSchema = z.object({
   user_id: z.string().uuid(),
   followed: z.boolean(),
   owned: z.boolean().nullable().optional(),
-  play_state: z.enum(["backlog", "playing", "ongoing", "dropped"]).nullable().optional(),
+  play_state: z.enum(["backlog", "playing", "ongoing", "dropped"]).nullable().optional().catch(null),
   minutes_played: z.number().int().nullable().optional(),
 });
 
@@ -85,7 +92,7 @@ export function useFriendsOnTitle({
         .in("user_id", ids);
       if (error) throw error;
       return new Map(
-        z.array(entryRowSchema).parse(data ?? []).map((r) => [
+        z.array(friendEntryRowSchema).parse(data ?? []).map((r) => [
           r.user_id,
           {
             followed: r.followed,
