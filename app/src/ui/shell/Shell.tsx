@@ -15,6 +15,7 @@ import { GameSheet } from "@/features/games/GameSheet";
 import { NotifPanel } from "@/ui/shell/NotifPanel";
 import { Palette } from "@/ui/shell/Palette";
 import { SettingsSheet } from "@/ui/shell/SettingsSheet";
+import { TopTabs } from "@/ui/shell/TopTabs";
 import { OfflineToast } from "@/ui/shell/OfflineToast";
 import { QueryErrorToast } from "@/ui/shell/QueryErrorToast";
 import { t } from "@/lib/i18n";
@@ -77,8 +78,17 @@ const MOVIE_TABS = [
    exactamente lo que una pestaña de aquí significa. Va la última de las de
    juegos, antes de Amigos: es la que menos se abre de las cinco. En móvil la
    fila ya scrollea en horizontal, y el TabMenu recoge lo que no quepa. */
+/* Y "A jugar" donde los otros dos modos dicen "Esta noche". Clave con prefijo,
+   como "games: Releases", así que solo cambia aquí.
+
+   "Esta noche" es la pregunta de los otros dos, no la de este: la portada de
+   Juegos no elige nada —su héroe sale de pickResume y su antetítulo ya dice
+   "Por dónde ibas"—, y para elegir está Pendientes. Y una partida no cabe en
+   una noche: son treinta horas repartidas en semanas, así que la hora del día
+   no es la unidad. Lo que queda dicho es la invitación, que es lo que "Esta
+   noche" hace en los otros dos: no nombra la pantalla, propone el rato. */
 const GAME_TABS = [
-  { path: "/games/tonight", label: "Tonight", icon: Sparkles },
+  { path: "/games/tonight", label: "games: Tonight", icon: Sparkles },
   { path: "/games/releases", label: "games: Releases", icon: CalendarClock },
   { path: "/games/backlog", label: "Backlog", icon: Bookmark },
   { path: "/games/explore", label: "Explore", icon: Compass },
@@ -256,14 +266,11 @@ export function Shell() {
 
           <MediumSwitch />
 
-          <nav className="mq-tabs">
-            {tabs.map((tab) => (
-              <NavLink key={tab.path} to={tab.path} className={({ isActive }) => `mq-tab ${isActive ? "on" : ""}`}>
-                <tab.icon size={16} />
-                <span>{t(tab.label)}</span>
-              </NavLink>
-            ))}
-          </nav>
+          {/* El carril se mide a sí mismo y recoge en un menú lo que no quepa:
+              ui/shell/TopTabs. Cambiar de modo cambia la identidad de `tabs`, y
+              eso es lo que le dice que vuelva a medir — los rótulos de Juegos
+              son seis y más largos que los cinco de Series. */}
+          <TopTabs tabs={tabs} />
 
           <div className="mq-top-actions">
             <button className="mq-searchbtn" onClick={() => setPaletteOpen(true)}>
@@ -271,11 +278,15 @@ export function Shell() {
               <span className="mq-searchbtn-label">{t("Search")}</span>
               <kbd className="mq-kbd">⌘K</kbd>
             </button>
-            {/* The panel hangs off this wrapper, not off the window: the bar's
-                content is centred in a 1280px column, so a viewport-anchored
-                panel drifted further from its own bell the wider the screen
-                got. Its scrim stays down in Overlays — fixed positioning inside
-                the bar would be trapped by the bar's backdrop-filter. */}
+            {/* The panel hangs off this wrapper, not off the window: back when
+                the bar's content sat in a centred 1280px column, a
+                viewport-anchored panel drifted further from its own bell the
+                wider the screen got. That column is gone —the bar spans the
+                window now— so today the two land in the same place; the anchor
+                stays because the panel belongs to ITS bell, which is what has
+                to keep being true the next time the bar moves. Its scrim stays
+                down in Overlays — fixed positioning inside the bar would be
+                trapped by the bar's backdrop-filter. */}
             <span className="mq-bell-wrap">
               <button className="btn btn-ghost btn-icon relative" title={t("Notifications")} onClick={() => setNotifOpen((v) => !v)}>
                 <Bell size={18} />

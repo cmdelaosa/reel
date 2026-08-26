@@ -40,6 +40,8 @@ const ES: Record<string, string> = {
   // on say the same thing.
   "Watchlist": "Sin empezar",
   "Friends": "Amigos",
+  /* El botón «···» del carril de pestañas, que guarda las que no caben. */
+  "More tabs": "Más pestañas",
   "My Shows": "Mis series",
   "History": "Historial",
   "Search": "Buscar",
@@ -132,6 +134,11 @@ const ES: Record<string, string> = {
   "games: Releases": "Lanzamientos",
   "games: My releases": "Mis lanzamientos",
   "games: Announced": "Anunciados",
+  /* La portada del modo. "Esta noche" es la pregunta de series y de cine, no la
+     de esta pantalla: aquí no se elige nada —el héroe sale de pickResume— y una
+     partida no cabe en una noche. "A jugar" conserva lo único que "Esta noche"
+     hacía bien, que es invitar en vez de nombrar la pantalla. */
+  "games: Tonight": "A jugar",
   "No date yet": "Sin fecha",
   "No releases in the games you follow.": "Ningún lanzamiento en los juegos que sigues.",
   /* Explorar, en juegos. "Más esperados" y no "Tendencias": IGDB no publica
@@ -947,6 +954,7 @@ const EN: Record<string, string> = {
   "games: Releases": "Releases",
   "games: My releases": "My releases",
   "games: Announced": "Announced",
+  "games: Tonight": "Play",
   "self: watched {eps} of {name}": "watched {eps} of {name}",
   "self: finished {name}": "finished {name}",
   "self: added {name} to their backlog": "added {name} to your backlog",
