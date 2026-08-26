@@ -32,6 +32,24 @@
   --bar-pad-y: 12px;
   --bar-h: calc(var(--ctl-h) + 2 * var(--bar-pad-y));
 
+  /* Y lo ancho que la barra llega a ser. NO es el ancho del contenido —esa es la
+     columna de 1280 de .mq-main— sino esa columna más lo que la barra necesita
+     por encima de ella, que es un dato medido: marca, conmutador y acciones se
+     comen 705px hagas lo que hagas, el carril de pestañas pide 657 con las seis
+     de Juegos en español, y con su margen suman 1.370.
+
+     Los 70 que sobran hasta 1.440 son holgura, y son POCA a propósito: cuanto
+     más se aleja este número de los 1.280 del contenido, más se despegan la
+     marca y el avatar de la columna que enmarcan. A 1.440 sobresalen 80px por
+     cada lado y se leen como el marco de lo de abajo; sin tope ninguno —que es
+     como estuvo un rato— en un monitor ultrapanorámico de 2.752 la marca acaba
+     a 700px del contenido y la barra se lee rota, con un vacío en medio más
+     ancho que todo lo que tiene dentro.
+     Y la holgura corta no es un riesgo: lo que no quepa se va al menú «···»
+     (ui/shell/TopTabs) en vez de desbordar, así que este número se elige por
+     cómo se ve y no por cuánto tiene que aguantar. */
+  --bar-max: 1440px;
+
   --font: "Inter Variable", Inter, system-ui, -apple-system, sans-serif;
 
   /* IMDb's brand gold — its own identity, held constant across themes and the

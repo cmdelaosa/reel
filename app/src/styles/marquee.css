@@ -766,19 +766,31 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    de barra horizontal, con el buscador, la campana, los ajustes y el avatar
    fuera de la pantalla. En inglés pasaba lo mismo, 1300, solo que menos. El
    único que puede encoger es el nav. */
-/* Y SIN tope de ancho, que es lo que la distingue de .mq-main. La barra estuvo
-   topada a 1280px, los mismos que la rejilla de carátulas, y eso hacía que un
-   monitor de 27 pulgadas le dejara al carril de pestañas exactamente los mismos
-   575px que un portátil: el ancho de más no llegaba a la única fila que lo
-   necesitaba. Medido el 26-08-2026 en Juegos y en español, el carril pedía 706
-   y se quedaban fuera 131 —"Amigos" entero y un tercio de Steam— igual a 1280
-   que a 1920.
-   La barra no es contenido: es el marco, y el marco puede ocupar la ventana
-   aunque lo que enmarca no lo haga. El precio, sabido y aceptado: la marca y el
-   avatar dejan de alinearse con la columna del contenido y se van a los bordes
-   de la pantalla. */
+/* Con un tope PROPIO, más ancho que el del contenido pero tope al fin. Los tres
+   estados por los que ha pasado esto, porque los dos primeros se equivocaron en
+   direcciones opuestas:
+
+   1. Topada a 1280, los mismos que la rejilla de carátulas. Un monitor de 27
+      pulgadas le dejaba al carril de pestañas exactamente los mismos 575px que
+      un portátil, así que el ancho de más no llegaba nunca a la única fila que
+      lo necesitaba: medido en Juegos y en español, el carril pedía 706 y se
+      quedaban fuera 131 —"Amigos" entera y un tercio de Steam— igual a 1280 que
+      a 1920.
+   2. Sin tope, a todo el ancho. Arregla lo anterior y rompe otra cosa: en un
+      ultrapanorámico de 2.752 la marca queda a 700px del contenido, las
+      acciones a 700 por el otro lado, y entre las pestañas y el buscador se
+      abre un vacío de 1.450px — más ancho que todo lo que la barra tiene
+      dentro. Visto en el monitor del usuario el 26-08-2026.
+   3. Topada a --bar-max, que es la columna del contenido MÁS lo que la barra
+      necesita por encima de ella (el porqué del número, en tokens.css). La
+      barra sigue siendo el marco y no el contenido, pero un marco que sobresale
+      80px por lado se lee como marco; uno que sobresale 700, como una avería.
+
+   `margin: 0 auto` la centra sobre la misma vertical que .mq-main: que las dos
+   cajas sean concéntricas es lo que hace que el desbordamiento se lea simétrico
+   en vez de descolgado, y hay una prueba e2e que lo sostiene. */
 .mq-top-inner {
-  min-width: 0;
+  max-width: var(--bar-max); margin: 0 auto; min-width: 0;
   display: flex; align-items: center; gap: 14px;
   padding: var(--bar-pad-y) clamp(16px, 3vw, 28px);
 }
