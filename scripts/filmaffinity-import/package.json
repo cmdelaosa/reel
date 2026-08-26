@@ -1,0 +1,20 @@
+{
+  "name": "filmaffinity-import",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Importador de un solo uso: votos y lista 'quiero ver' de FilmAffinity → perfil de Reel.",
+  "scripts": {
+    "start": "tsx index.ts",
+    "test": "node --test --experimental-strip-types lib.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^6.0.3"
+  }
+}
