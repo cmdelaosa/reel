@@ -810,6 +810,25 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    from the settings. Closing the row gap between adjacent icon buttons spends
    only invisible padding; both keep their full 40px hit target. */
 .mq-top-actions .btn-icon + .btn-icon { margin-left: -6px; }
+
+/* En un teléfono estrecho la barra ya no cabe, y el modo en que no cabe es el
+   peor posible: el móvil NO recorta ni saca barra horizontal, ENCOGE la página
+   entera para que quepa (0,87 en un iPhone de 390), y con ella se va el dock
+   flotante fuera del área táctil. O sea que un botón del menú de abajo deja de
+   poder pulsarse por culpa de un adorno de la barra de arriba, sin que se vea
+   nada roto. Medido el 26-08-2026: 449px de contenido en 390 de pantalla, y la
+   tercera pastilla del conmutador —Juegos— fue la que colmó el vaso.
+   Lo que se cae es el NOMBRE de la marca, que es lo único ahí que no informa:
+   el glifo sigue siendo el botón de inicio, y el conmutador conserva su
+   etiqueta activa, que es lo que dice en qué mitad de la app estás. */
+@media (max-width: 430px) {
+  .mq-brand-name { display: none; }
+  .mq-medium-seg { padding: 0 8px; }
+  /* Los cuatro botones de la derecha mantienen sus 40px de área táctil: lo que
+     se cierra es el aire ENTRE ellos, que en un icono sin borde ya viene de
+     sobra por su propio padding. */
+  .mq-top-actions { gap: 2px; }
+}
 .mq-searchbtn {
   display: inline-flex; align-items: center; gap: 8px;
   height: var(--ctl-h); padding: 0 14px;
@@ -1060,7 +1079,13 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   padding: 10px 12px; border-radius: var(--r-md);
 }
 .fr-activity:hover { background: var(--surface-2); }
-.fr-activity + .fr-activity { margin-top: 2px; }
+/* Dos selectores para una sola separación, y los dos hacen falta: el esqueleto
+   pinta las filas sueltas dentro de la tarjeta, y el muro de verdad envuelve
+   cada una en `.fr-row` para poder desplegar el grupo debajo (0077). Sin el
+   segundo, las filas reales se quedan pegadas y el esqueleto mide 18px más
+   —nueve huecos— que el contenido que lo sustituye. */
+.fr-activity + .fr-activity,
+.fr-row + .fr-row { margin-top: 2px; }
 
 /* ---- Reactions on an activity row ---- */
 /* The strip sits inside the row's text column, so it must never inherit the

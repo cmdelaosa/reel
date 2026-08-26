@@ -304,7 +304,15 @@ async function upsertTitle(admin: DbClient, d: Json): Promise<string> {
         aired_count: airedCount(d.seasons as Json[] | undefined, d.last_episode_to_air as Json | null),
         last_refreshed_at: new Date().toISOString(),
       },
-      { onConflict: "tmdb_id" },
+      // La identidad de un título es (kind, tmdb_id) desde 0067: aquella
+      // migración tiró `titles_tmdb_id_key` porque /tv/1399 y /movie/1399 son
+      // dos películas distintas. Este upsert se quedó nombrando la restricción
+      // muerta, y PostgREST no lo perdona: 42P10 «there is no unique or
+      // exclusion constraint matching the ON CONFLICT specification», en el
+      // PRIMER título de cualquier importación. Lo veía el e2e nocturno desde
+      // el 25-08-2026 y nadie más, porque en la app esto vive detrás del
+      // importador de TV Time, que no se lanza todos los días.
+      { onConflict: "kind,tmdb_id" },
     )
     .select("id")
     .single();

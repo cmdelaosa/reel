@@ -64,7 +64,7 @@ test("RLS: cross-tenant isolation + invite gate", async () => {
   // A shared title to write against (public metadata, service-role write).
   const { data: title, error: tErr } = await admin
     .from("titles")
-    .upsert({ tmdb_id: 3999001, kind: "tv", name: "RLS Test Show" }, { onConflict: "tmdb_id" })
+    .upsert({ tmdb_id: 3999001, kind: "tv", name: "RLS Test Show" }, { onConflict: "kind,tmdb_id" })
     .select("id")
     .single();
   expect(tErr, `seed title: ${tErr?.message}`).toBeNull();
