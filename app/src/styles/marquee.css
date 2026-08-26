@@ -837,6 +837,10 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   position: absolute; left: 0; top: 0; width: 0; height: 0;
   overflow: hidden; visibility: hidden; pointer-events: none;
 }
+/* El `gap` está para que la fila fantasma se parezca a la de verdad si alguien
+   la mira con el inspector, y para NADA más: la cuenta suma el ancho de cada
+   hijo por separado y el hueco lo lee del carril real, así que este valor no
+   entra en ningún cálculo y no hay que mantenerlo sincronizado con .mq-tabs. */
 .mq-tabs-ghost { display: flex; align-items: center; gap: 4px; width: max-content; }
 .mq-tabmore { position: relative; display: inline-flex; flex: 0 0 auto; }
 .mq-tabmore-btn { padding: 0 10px; }

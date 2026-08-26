@@ -68,8 +68,12 @@ export function TopTabs({ tabs }: { tabs: readonly TopTab[] }) {
   }, []);
 
   /* Antes de pintar, no después: con un `useEffect` normal se ve un fotograma
-     con las seis pestañas desbordadas antes de que el menú se las lleve. */
-  useLayoutEffect(measure, [measure, tabs]);
+     con las seis pestañas desbordadas antes de que el menú se las lleve.
+     Envuelto y no `useLayoutEffect(measure, …)` a secas: pasándolo tal cual,
+     lo que `measure` devuelva pasa a ser la función de limpieza del efecto, y
+     `measure` está lleno de `return;` sueltos — el día que uno devuelva algo,
+     React revienta al desmontar y el error no señala aquí. */
+  useLayoutEffect(() => { measure(); }, [measure, tabs]);
 
   useEffect(() => {
     const nav = navRef.current;
