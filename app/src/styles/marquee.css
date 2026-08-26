@@ -765,9 +765,20 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    seis pestañas pedía 682px en español y la página se iba a 1385 de ancho —115
    de barra horizontal, con el buscador, la campana, los ajustes y el avatar
    fuera de la pantalla. En inglés pasaba lo mismo, 1300, solo que menos. El
-   único que puede encoger es el nav, y encoge deslizándose (abajo). */
+   único que puede encoger es el nav. */
+/* Y SIN tope de ancho, que es lo que la distingue de .mq-main. La barra estuvo
+   topada a 1280px, los mismos que la rejilla de carátulas, y eso hacía que un
+   monitor de 27 pulgadas le dejara al carril de pestañas exactamente los mismos
+   575px que un portátil: el ancho de más no llegaba a la única fila que lo
+   necesitaba. Medido el 26-08-2026 en Juegos y en español, el carril pedía 706
+   y se quedaban fuera 131 —"Amigos" entero y un tercio de Steam— igual a 1280
+   que a 1920.
+   La barra no es contenido: es el marco, y el marco puede ocupar la ventana
+   aunque lo que enmarca no lo haga. El precio, sabido y aceptado: la marca y el
+   avatar dejan de alinearse con la columna del contenido y se van a los bordes
+   de la pantalla. */
 .mq-top-inner {
-  max-width: 1280px; margin: 0 auto; min-width: 0;
+  min-width: 0;
   display: flex; align-items: center; gap: 14px;
   padding: var(--bar-pad-y) clamp(16px, 3vw, 28px);
 }
@@ -799,37 +810,44 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
      part of the brand lockup. No hairline between the two — this direction is
      the one that deleted the nav's container and the bar's bottom border, and
      putting a divider back into the same bar would argue with both. */
-  /* El nav es el ÚNICO que cede cuando la barra no cabe, y cede deslizándose en
-     vez de empujar a los demás fuera de la ventana. El desvanecido de la
-     derecha es lo que dice que hay más: sin él, un nav cortado a hueso se lee
-     como un nav que termina ahí. La barra de desplazamiento se esconde — con
-     seis pestañas el recorte es de unas pocas decenas de píxeles y un carril
-     gris debajo de las píldoras pesaría más que lo que resuelve. */
-  min-width: 0; overflow-x: auto;
-  scrollbar-width: none; -ms-overflow-style: none;
-  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
-  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
-  /* El relleno paga dos cosas, y las dos son consecuencia de que esto sea ahora
-     una caja con scroll:
+  /* Ni desplazamiento lateral ni desvanecido: lo que no cabe se va al menú
+     «···» (ui/shell/TopTabs). El degradado decía "hay más" y no decía dónde;
+     con seis pestañas en Juegos se tragaba "Amigos" entera y no había forma de
+     llegar a ella desde la barra, ni con el ratón ni con el teclado.
+     Sin `overflow`, además, el anillo de `:focus-visible` deja de recortarse
+     por arriba y por abajo, que era lo que pagaba el relleno de antes — y el
+     menú puede salirse del carril, que es justo lo que un menú tiene que hacer.
 
-     1. `overflow-x: auto` arrastra `overflow-y` a `auto` — lo dice la
-        especificación, no hay forma de pedir uno sin el otro—, y el carril mide
-        exactamente lo que mide una pestaña. Sin holgura vertical, el anillo de
-        `:focus-visible` (2px de grosor a 2px de separación) se recortaba
-        entero: el nav quedaba navegable con el teclado y sin decir dónde estás.
-     2. Los 20px de la derecha son los mismos que dura el desvanecido. Cuando el
-        nav CABE, la máscara cae sobre el relleno en vez de sobre la última
-        pestaña, que si no se veía medio apagada sin haber nada que descubrir; y
-        cuando no cabe, al llegar al final del scroll el relleno entra en cuadro
-        y la última pestaña se lee limpia.
-
-     El margen negativo devuelve lo que el relleno ocupa, así que la fila de la
-     barra se ve exactamente igual que antes. Y `margin-left` baja de 12 a 8
-     porque los otros 4 los pone ya el relleno. */
-  padding: 4px 20px 4px 4px;
-  margin: -4px 0 -4px 8px;
+     `flex: 1 1 auto` y no `0 1 auto`: el carril se queda con TODO el hueco
+     libre de la fila, aunque sus pestañas no lo llenen. Es lo que hace que la
+     cuenta de TopTabs no oscile — si el carril midiera lo que miden sus
+     pestañas, esconder una lo encogería, y encogerlo escondería la siguiente.
+     Las acciones siguen a la derecha por su `margin-left: auto`, que ahora no
+     reparte nada porque ya no sobra espacio que repartir. */
+  min-width: 0; flex: 1 1 auto;
+  position: relative;
+  margin-left: 8px;
 }
-.mq-tabs::-webkit-scrollbar { display: none; }
+/* La fila fantasma con la que TopTabs mide los rótulos enteros. La caja de
+   fuera mide 0×0 y recorta: así la fila no pinta, no se pulsa y —lo que
+   importa— no cuenta para el ancho de la página, que es lo que mide
+   e2e/topbar-fit. `visibility: hidden` y no `display: none`, porque lo que hace
+   falta de ella es precisamente que tenga medidas. */
+.mq-tabs-probe {
+  position: absolute; left: 0; top: 0; width: 0; height: 0;
+  overflow: hidden; visibility: hidden; pointer-events: none;
+}
+.mq-tabs-ghost { display: flex; align-items: center; gap: 4px; width: max-content; }
+.mq-tabmore { position: relative; display: inline-flex; flex: 0 0 auto; }
+.mq-tabmore-btn { padding: 0 10px; }
+/* Las pestañas guardadas se pintan con el menú que ya existe (.filter-menu),
+   pero sus filas son enlaces, no opciones de un radio: llevan su icono y su
+   rótulo, y la activa se marca con el mismo relleno que la píldora del carril
+   para que el menú y la barra digan lo mismo. */
+.mq-tabmore .filter-opt { color: var(--text-dim); font-weight: 600; }
+.mq-tabmore .filter-opt svg { flex: 0 0 auto; }
+.mq-tabmore .filter-opt:hover { color: var(--text); }
+.mq-tabmore .filter-opt.mq-tabmore-on { background: var(--surface-3); color: var(--text); }
 .mq-tab {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; gap: 7px;
@@ -1532,11 +1550,15 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    it. Opaque glass mix instead, the same fix .filter-menu and .friends-pop
    already carry for the same reason. Top follows the bar, never a literal. */
 /* The bell owns the panel. Anchoring it to the viewport instead parked it at
-   the window's right edge while the bar's controls sit inside a centred 1280px
+   the window's right edge while the bar's controls sat inside a centred 1280px
    column — on an ultrawide the panel opened a screen away from the bell that
    spawned it. The offset reproduces the old gap exactly: the bar is one control
    plus --bar-pad-y above and below, so bell-bottom + pad + 4px is where the
-   viewport-anchored version used to land. */
+   viewport-anchored version used to land.
+   Esa columna centrada ya no existe —la barra ocupa la ventana entera— y el
+   anclaje se queda igualmente: ahora las dos formas coinciden, pero el panel
+   sigue colgando de SU campana, que es lo que hay que mantener cierto si la
+   barra vuelve a moverse. */
 .mq-bell-wrap { position: relative; display: inline-flex; }
 /* Over everything the page can put on screen — including the floating bottom
    nav at 45, which would otherwise swallow the tap meant to dismiss this —

@@ -77,10 +77,24 @@ const MODOS = [
    Juegos, que son las que rompían la barra, no existían en ninguna de las dos
    medidas que este fichero tomaba. Una prueba de que la barra cabe que solo
    mira los anchos donde la barra no lleva el nav no prueba gran cosa. */
-const ANCHOS = [1280, 390, 320] as const;
+/* Y 1440, que es el otro lado de la misma pregunta: a 1280 el carril no da para
+   las seis de Juegos y el menú «···» se lleva dos, mientras que a 1440 caben
+   todas y el menú no tiene que existir. Las dos ramas del reparto tienen que
+   estar medidas, porque la que se rompe sola es siempre la que no se mira. */
+const ANCHOS = [1440, 1280, 390, 320] as const;
 
 /** Por debajo de esto manda el dock; por encima, el nav de la barra. */
 const ESCRITORIO = 1024;
+
+/* Los rótulos de cada modo, en español y escritos a mano. Son la lista contra
+   la que se comprueba que no falta ninguno: leerlos de la propia barra haría
+   que una pestaña desaparecida se diera por buena, que es exactamente el fallo
+   que esta prueba existe para cazar. */
+const ROTULOS: Record<string, readonly string[]> = {
+  tv: ["Esta noche", "Calendario", "Sin empezar", "Explorar", "Amigos"],
+  movie: ["Esta noche", "Estrenos", "Sin empezar", "Explorar", "Amigos"],
+  game: ["A jugar", "Lanzamientos", "Pendientes", "Explorar", "Steam", "Amigos"],
+};
 
 for (const ancho of ANCHOS) {
   test.describe(`a ${ancho}px`, () => {
@@ -116,6 +130,57 @@ for (const ancho of ANCHOS) {
           `el avatar llega a ${medida.avatar}px sobre ${medida.clientWidth} de pantalla`,
         ).toBeLessThanOrEqual(medida.clientWidth);
       });
+
+      /* Que la barra QUEPA no es que se pueda usar. Antes cabía —el carril se
+         deslizaba— y aun así "Amigos" no se veía nunca en modo Juegos: estaba
+         detrás de un desvanecido, sin scrollbar que lo dijera y sin forma de
+         llegar con el teclado. La prueba de arriba daba verde sobre eso.
+
+         Esto es lo que aquella no miraba: que todas las pestañas del modo
+         siguen ALCANZABLES, o pintadas en el carril o dentro del menú «···».
+         Solo en escritorio: por debajo de 1024 el carril está oculto y quien
+         responde por esto es el dock, que tiene su propia prueba abajo. */
+      if (ancho >= ESCRITORIO) {
+        test(`ninguna pestaña queda inalcanzable en modo ${medium}`, async ({ page }) => {
+          await authenticate(page, medium);
+          await page.goto(ruta);
+          await expect(page.locator(".mq-medium-seg.on")).toBeVisible();
+
+          const pildoras = page.locator(".mq-tabs > a.mq-tab");
+          await expect(pildoras.first()).toBeVisible();
+          const enCarril = (await pildoras.allTextContents()).map((s) => s.trim());
+
+          /* `.mq-tabmore >`, y no `.mq-tabmore-btn` a secas: la fila fantasma
+             con la que TopTabs mide lleva una COPIA del botón con las mismas
+             clases —tiene que llevarla, o mediría otra caja— y un selector sin
+             acotar la encuentra a ella, que es invisible. */
+          const mas = page.locator(".mq-tabmore > .mq-tabmore-btn");
+          let enMenu: string[] = [];
+          if (await mas.count()) {
+            await mas.click();
+            enMenu = (await page.locator(".mq-tabmore .filter-opt").allTextContents()).map((s) => s.trim());
+          }
+
+          /* Concatenadas y en orden: el menú se lleva SIEMPRE la cola, así que
+             comparar los conjuntos dejaría pasar un reparto que barajara la
+             fila —y una barra que cambia de orden con el ancho deja de ser un
+             sitio donde se sabe dónde está cada cosa. */
+          expect(
+            [...enCarril, ...enMenu],
+            `carril: [${enCarril.join(", ")}] · menú: [${enMenu.join(", ")}]`,
+          ).toEqual(ROTULOS[medium]);
+
+          /* Y las del carril, dentro del carril: sin esto, una cuenta que se
+             pasara de largo pintaría la última pestaña por debajo de la campana
+             y esta prueba seguiría viéndola en la lista. */
+          const carril = await page.locator(".mq-tabs").evaluate((n) => n.getBoundingClientRect().right);
+          for (const [i, caja] of (await pildoras.all()).entries()) {
+            const der = await caja.evaluate((n) => n.getBoundingClientRect().right);
+            expect(Math.ceil(der), `"${enCarril[i]}" acaba en ${Math.ceil(der)} y el carril en ${Math.floor(carril)}`)
+              .toBeLessThanOrEqual(Math.floor(carril));
+          }
+        });
+      }
 
       /* El dock es la otra mitad del mismo problema, y tiene su propia forma de
          romperse: no empuja la página —es `position: fixed`, así que no cuenta

@@ -114,7 +114,10 @@ export default function GamesTonightPage() {
 
   return (
     <div className="screen mq-page">
-      <h1 className="sr-only">{tr("Tonight")}</h1>
+      {/* La misma clave que la pestaña: el título que solo oye un lector de
+          pantalla no puede llamarse distinto de la pestaña que se acaba de
+          pulsar, o la pantalla se anuncia con un nombre que no está en la barra. */}
+      <h1 className="sr-only">{tr("games: Tonight")}</h1>
 
       {isPending && <div className="mq-bento"><HeroSkeleton /></div>}
 
