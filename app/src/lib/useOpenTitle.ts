@@ -9,6 +9,7 @@ import {
 } from "@/features/detail/data";
 import type { TitleResponse } from "@/lib/schemas";
 import { tmdbImg } from "@/lib/tmdb";
+import { sheetParam, type Medium } from "@/domain/tasteScope";
 
 export function usePrefetchTitle() {
   const queryClient = useQueryClient();
@@ -64,6 +65,26 @@ export function useOpenTitle() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("title", String(tmdbId));
+      return next;
+    });
+  };
+}
+
+/** Lo mismo, pero para las pantallas COMPARTIDAS —afinidad, estadísticas del
+ *  grupo, tu perfil—, cuyas filas pueden ser de cualquiera de los tres medios.
+ *
+ *  El parámetro sale del medio de la fila (`sheetParam`) y no del modo: una
+ *  nota tuya de cine abierta con `?title=` mandaba a la ficha de la SERIE con
+ *  ese número, o a ninguna. El precalentado se queda solo en series: es el que
+ *  pide temporadas y progreso, cosas que ni una película ni un juego tienen. */
+export function useOpenSheet() {
+  const [, setSearchParams] = useSearchParams();
+  const prefetch = usePrefetchTitle();
+  return (tmdbId: number, kind: Medium) => {
+    if (kind === "tv") void prefetch(tmdbId);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set(sheetParam(kind), String(tmdbId));
       return next;
     });
   };

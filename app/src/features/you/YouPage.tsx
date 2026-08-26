@@ -4,6 +4,7 @@ import { CalendarClock, ChevronLeft, ChevronRight, Clapperboard, Clock, Eye, Fil
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useLibrary } from "@/lib/library";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
+import { sheetParam, type Medium } from "@/domain/tasteScope";
 import { useUserStats, timeSpentLabel } from "@/lib/stats";
 import { tmdbImg } from "@/lib/tmdb";
 import { dateLocale, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
@@ -72,10 +73,14 @@ export default function YouPage() {
   const start = clamped * RATE_PAGE;
   const shown = rated.slice(start, start + RATE_PAGE);
 
-  const open = (tmdbId: number) =>
+  /* Tus notas son de los tres medios, así que cada fila se abre con el
+     parámetro del suyo: `?title=` sobre una película llevaba a la ficha de la
+     serie con ese número —o a ninguna—, porque el id solo es único dentro de su
+     medio (domain/tasteScope, `sheetParam`). */
+  const open = (tmdbId: number, kind: Medium) =>
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set("title", String(tmdbId));
+      next.set(sheetParam(kind), String(tmdbId));
       return next;
     });
 
@@ -266,7 +271,7 @@ export default function YouPage() {
 
         <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
           {shown.map((r) => (
-            <RatingRow key={r.id} r={r} onOpen={() => open(r.titles.tmdb_id)} />
+            <RatingRow key={r.id} r={r} onOpen={() => open(r.titles.tmdb_id, r.titles.kind)} />
           ))}
         </div>
 

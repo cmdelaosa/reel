@@ -70,7 +70,12 @@ function decorate(row: LibraryRow): LibraryShow {
    pantallas preguntan "¿sigo este tmdb_id?" comparando el número a secas, y un
    id de TMDB solo es único dentro de su medio (0067). Sin el filtro, la
    película 1399 aparecería como seguida porque lo está la serie 1399. El
-   filtro vive aquí, en el único sitio por el que pasan todas. */
+   filtro vive aquí, en el único sitio por el que pasan todas.
+
+   Se exporta la cruda para las pantallas COMPARTIDAS —las de amigos—, que no
+   son de un medio sino del que tengas puesto: allí el filtro lo pone quien lee,
+   con el `medium` del conmutador. Llamar a `useLibrary()` desde ellas daba por
+   no seguido todo tu cine y todos tus juegos. */
 /** El tope de filas que PostgREST devuelve de una tacada, y que no avisa de que
  *  ha aplicado: la respuesta es un 200 con mil filas y un `content-range` que
  *  nadie mira. */
@@ -111,7 +116,7 @@ export async function fetchRollupPaged(
   }
 }
 
-function useLibraryRows() {
+export function useLibraryRows() {
   return useQuery({
     queryKey: qk.library,
     queryFn: async (): Promise<LibraryRow[]> => {

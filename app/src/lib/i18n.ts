@@ -706,6 +706,35 @@ const ES: Record<string, string> = {
     "Ningún amigo ha puntuado una serie que tú hayas puntuado — aún. Anímalos a puntuar algo.",
   "Based on the shows you both rated — the more you share, the more the score trusts it.":
     "Basado en las series que ambos puntuasteis — cuantas más compartáis, más fiable es el porcentaje.",
+  /* Las mismas frases en cine y en juegos. Tres y no una con el medio
+     interpolado porque el género arrastra: "puntuadas" no vale para juegos y
+     "la puntuó" dicho de uno habla de otra cosa (domain/tasteScope). */
+  "Rate a few movies first — your taste match is built from the movies you and your friends both scored.":
+    "Puntúa algunas películas primero — la afinidad se calcula con las películas que habéis puntuado tú y tus amigos.",
+  "None of your friends rated a movie you rated — yet. Nudge them to score something.":
+    "Ningún amigo ha puntuado una película que tú hayas puntuado — aún. Anímalos a puntuar algo.",
+  "Based on the movies you both rated — the more you share, the more the score trusts it.":
+    "Basado en las películas que ambos puntuasteis — cuantas más compartáis, más fiable es el porcentaje.",
+  "movies rated in common": "puntuadas en común",
+  "movies in common": "películas en común",
+  "rated the movie": "la puntuó",
+  "friends rated the movie": "amigos la puntuaron",
+  "friend rated the movie": "amigo la puntuó",
+  "No overlap yet — rate a few movies your friends also scored.":
+    "Sin coincidencias aún — puntúa películas que tus amigos también hayan puntuado.",
+  "Rate a few games first — your taste match is built from the games you and your friends both scored.":
+    "Puntúa algunos juegos primero — la afinidad se calcula con los juegos que habéis puntuado tú y tus amigos.",
+  "None of your friends rated a game you rated — yet. Nudge them to score something.":
+    "Ningún amigo ha puntuado un juego que tú hayas puntuado — aún. Anímalos a puntuar algo.",
+  "Based on the games you both rated — the more you share, the more the score trusts it.":
+    "Basado en los juegos que ambos puntuasteis — cuantos más compartáis, más fiable es el porcentaje.",
+  "games rated in common": "puntuados en común",
+  "games in common": "juegos en común",
+  "rated the game": "lo puntuó",
+  "friends rated the game": "amigos lo puntuaron",
+  "friend rated the game": "amigo lo puntuó",
+  "No overlap yet — rate a few games your friends also scored.":
+    "Sin coincidencias aún — puntúa juegos que tus amigos también hayan puntuado.",
   "rated in common": "puntuadas en común",
   "you basically agree": "básicamente coincidís",
   "clash on": "chocáis en",

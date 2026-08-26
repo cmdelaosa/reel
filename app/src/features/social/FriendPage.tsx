@@ -17,7 +17,9 @@ import {
   useFriendProfile, useFriendProgress, useFriendWatchHistory,
   type FriendFollow, type FriendProgress,
 } from "@/lib/friendProfile";
-import { useLibrary, useFollow } from "@/lib/library";
+import { useLibraryRows, useFollow } from "@/lib/library";
+import { useMedium } from "@/lib/medium";
+import { ofMedium, sheetParam, tasteCopy } from "@/domain/tasteScope";
 import { useMyRatings } from "@/lib/ratings";
 import { tasteAffinity } from "@/lib/taste";
 import { timeSpentLabel } from "@/lib/stats";
@@ -161,11 +163,25 @@ export default function FriendPage() {
     },
   });
 
-  const { data: fp } = useFriendProfile(friendId);
+  const { data: fpAll } = useFriendProfile(friendId);
   const { data: progressMap } = useFriendProgress(friendId);
-  const { data: watchHistory = [] } = useFriendWatchHistory(friendId);
-  const { data: library = [] } = useLibrary();
+  const { data: watchHistoryAll = [] } = useFriendWatchHistory(friendId);
+  const { data: libraryRows = [] } = useLibraryRows();
   const { data: myRatings = [] } = useMyRatings();
+  const medium = useMedium();
+  const copy = tasteCopy(medium);
+
+  /* La ficha de un amigo habla del medio en el que estás, como la afinidad de
+     /friends/taste: un `tmdb_id` solo es único dentro del suyo (0067, 0071), y
+     comparar los tres en un saco inventa coincidencias entre tu serie 1399 y su
+     película 1399. Se filtra UNA vez, aquí, y todo lo de abajo hereda el
+     recorte: la afinidad, lo que tenéis en común, los géneros y el muro. */
+  const fp = useMemo(
+    () => (fpAll ? { follows: ofMedium(fpAll.follows, medium), ratings: ofMedium(fpAll.ratings, medium) } : undefined),
+    [fpAll, medium],
+  );
+  const watchHistory = useMemo(() => ofMedium(watchHistoryAll, medium), [watchHistoryAll, medium]);
+  const library = useMemo(() => ofMedium(libraryRows, medium), [libraryRows, medium]);
   const follow = useFollow();
 
   const [section, setSection] = useState<SectionKey>("overview");
@@ -174,16 +190,28 @@ export default function FriendPage() {
   const [showSort, setShowSort] = useState<ShowSort>("their");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
+  /* Todo lo que se pinta aquí es ya del medio del modo, así que su ficha se
+     abre con el parámetro de ESE medio: `?title=` sobre una película llevaba a
+     la serie con ese número, o a ninguna (domain/tasteScope, `sheetParam`). */
   const openTitle = (tmdbId: number) =>
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set("title", String(tmdbId));
+      next.set(sheetParam(medium), String(tmdbId));
       return next;
     });
 
   const myFollowIds = useMemo(() => new Set(library.map((r) => r.tmdb_id)), [library]);
   const myGenres = useMemo(() => new Set(library.flatMap((r) => r.genres)), [library]);
-  const myScoreByTmdb = useMemo(() => new Map(myRatings.map((r) => [r.titles.tmdb_id, r.score])), [myRatings]);
+  const myScoreByTmdb = useMemo(
+    () =>
+      new Map(
+        ofMedium(
+          myRatings.map((r) => ({ kind: r.titles.kind, tmdb_id: r.titles.tmdb_id, score: r.score })),
+          medium,
+        ).map((r) => [r.tmdb_id, r.score]),
+      ),
+    [myRatings, medium],
+  );
   const theirScoreByTmdb = useMemo(() => new Map((fp?.ratings ?? []).map((r) => [r.tmdb_id, r.score])), [fp]);
 
   // Everything derived from the friend's follows + ratings.
@@ -425,8 +453,8 @@ export default function FriendPage() {
                       : tr("No taste match yet")}
                   </div>
                   <span className="mute" style={{ fontSize: 12.5 }}>
-                    {derived.affinity ? `${derived.affinity.common} ${tr("rated in common")} · ` : ""}
-                    {derived.sharedFollows.length} {tr("shows in common")}
+                    {derived.affinity ? `${derived.affinity.common} ${tr(copy.ratedInCommon)} · ` : ""}
+                    {derived.sharedFollows.length} {tr(copy.inCommon)}
                   </span>
                 </div>
                 <div className="fr-matchbar"><i style={{ width: `${derived.affinity?.pct ?? 0}%` }} /></div>

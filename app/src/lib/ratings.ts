@@ -61,9 +61,16 @@ const ratedRowSchema = z.object({
   titles: z.object({
     id: z.string().uuid(),
     tmdb_id: z.number().int(),
-    /* El medio de lo puntuado. Tus notas son de los dos, y cruzarlas por el
-       número a secas confunde la película 1399 con la serie 1399 (0067). */
-    kind: z.enum(["tv", "movie"]),
+    /* El medio de lo puntuado. Tus notas son de los TRES —los juegos también se
+       puntúan desde 0071, y la importación de InfiniteBacklog escribe cientos
+       de golpe—, y cruzarlas por el número a secas confunde la película 1399
+       con la serie 1399 (0067).
+
+       Los tres nombres, y no solo los dos con los que nació esto: un `kind`
+       fuera de la lista no lo ignora zod, lo hace estallar, y con él caía la
+       consulta ENTERA de tus notas — es decir la afinidad, las estadísticas del
+       grupo y la lista de puntuadas de tu perfil, todas a la vez. */
+    kind: z.enum(["tv", "movie", "game"]),
     name: z.string(),
     poster_path: z.string().nullable(),
     first_air_date: z.string().nullable(),
