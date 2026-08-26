@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 // Sliders, not lucide's Settings gear: this has to match the shell button that
 // opens the sheet, or the icon changes under you on click.
@@ -105,12 +105,52 @@ function ServicesSection() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
+  /* Dónde cabe el menú. Los demás .filter-menu de la app viven en barras de
+     herramientas que no scrollean, así que les basta con colgar del disparador;
+     este vive dentro del cuerpo de la hoja, que es `overflow-y: auto`, y ahí un
+     absoluto se recorta contra el contenedor. Medido: con la fila cerca del
+     fondo, el menú se salía 223px por abajo — dos tercios de las plataformas
+     inalcanzables, sin nada que dijera que estaban ahí.
+
+     Así que se mide el hueco antes de pintar: se limita el alto a lo que queda
+     libre y, si abajo no caben ni 200px y arriba hay más sitio, se abre hacia
+     arriba. */
+  const [arriba, setArriba] = useState(false);
+  const [altoMax, setAltoMax] = useState<number | undefined>();
+  useLayoutEffect(() => {
+    if (!open || !ref.current) return;
+    /* El carril se busca por su comportamiento, no por su clase: preguntar por
+       `.overflow-y-auto` ataría esto al nombre de una utilidad de Tailwind que
+       nadie está obligado a conservar, y el día que cambiara la medida se haría
+       contra el viewport sin que nada fallara — el menú volvería a recortarse y
+       la cuenta seguiría dando números creíbles. */
+    let carril: Element = document.documentElement;
+    for (let el = ref.current.parentElement; el; el = el.parentElement) {
+      const oy = getComputedStyle(el).overflowY;
+      if (oy === "auto" || oy === "scroll") { carril = el; break; }
+    }
+    const c = carril.getBoundingClientRect();
+    const t = ref.current.getBoundingClientRect();
+    const hueco = { abajo: c.bottom - t.bottom - 12, arriba: t.top - c.top - 12 };
+    const haciaArriba = hueco.abajo < 200 && hueco.arriba > hueco.abajo;
+    setArriba(haciaArriba);
+    setAltoMax(Math.max(140, Math.floor(haciaArriba ? hueco.arriba : hueco.abajo)));
+  }, [open]);
+
   /* Mismo idioma de cierre que TabMenu y que el popover de Filtros: fuera o
-     Escape. Es lo que hace que un desplegable se comporte como el resto. */
+     Escape. Es lo que hace que un desplegable se comporte como el resto.
+
+     El `stopPropagation` no es adorno: la hoja de Ajustes escucha Escape en
+     `window` para cerrarse entera, y sin cortar aquí una sola tecla cerraba el
+     menú Y la hoja detrás. Escape cierra lo de encima, no todo. */
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setOpen(false);
+    };
     document.addEventListener("mousedown", away);
     document.addEventListener("keydown", esc);
     return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
@@ -125,9 +165,13 @@ function ServicesSection() {
   /* Dos nombres y un contador para el resto. El contador es un número, así que
      no hay plural que traducir ni cadena que se alargue al cambiar de idioma —
      que es justo lo que rompía la fila de chips que había aquí. */
-  const summary = picked.length === 0
-    ? t("All platforms")
-    : picked.slice(0, 2).map((p) => p.name).join(", ") + (picked.length > 2 ? ` +${picked.length - 2}` : "");
+  const summary = picked.length > 0
+    ? picked.slice(0, 2).map((p) => p.name).join(", ") + (picked.length > 2 ? ` +${picked.length - 2}` : "")
+    /* Mientras el catálogo no ha llegado, `picked` está vacío aunque haya
+       plataformas guardadas — y decir "Todas las plataformas" entonces no es
+       callarse, es afirmar lo contrario de lo que pasa. Los puntos suspensivos
+       no prometen nada y no hay que traducirlos. */
+    : isLoading && services.length > 0 ? "…" : t("All platforms");
 
   return (
     <Row label={t("Your services")}>
@@ -155,7 +199,15 @@ function ServicesSection() {
           <ChevronDown size={15} className="shrink-0" />
         </button>
         {open && (
-          <div className="filter-menu" role="menu" aria-label={t("Your services")} style={{ right: 0, minWidth: 0 }}>
+          <div
+            className="filter-menu"
+            role="menu"
+            aria-label={t("Your services")}
+            style={{
+              right: 0, minWidth: 0, maxHeight: altoMax,
+              ...(arriba ? { top: "auto", bottom: "calc(100% + 6px)" } : null),
+            }}
+          >
             {options.map((p) => {
               const on = services.includes(p.id);
               const logo = logoOf(p);
