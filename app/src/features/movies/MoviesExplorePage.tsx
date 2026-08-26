@@ -339,7 +339,7 @@ export default function MoviesExplorePage() {
           <p className="dim" style={{ fontSize: 14, margin: 0 }}>{tr("No movies match these filters.")}</p>
         )}
 
-        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))", gap: "var(--gap)" }}>
+        <div className="poster-grid">
           {shown.map((t) => (
             <TitlePoster
               key={t.tmdb_id}

@@ -90,13 +90,15 @@ export function GameReleaseRow({ g, now, periodNamedAbove = false }: {
              información por la que está en esta lista. */
           <div className="cal-time">{formatPlaytime(g.minutes_played ?? 0)}</div>
         ) : exactDay && g.first_air_date ? (
-          <>
-            <div className="cal-days">
-              {dayOffset(`${g.first_air_date}T00:00:00Z`, now, airTimeZone())}
-              <span>{tr("days")}</span>
-            </div>
-            <div className="cal-when mute">{label}</div>
-          </>
+          (() => {
+            const days = dayOffset(`${g.first_air_date}T00:00:00Z`, now, airTimeZone());
+            return (
+              <>
+                <div className="cal-days">{days}<span>{tr(days === 1 ? "day" : "days")}</span></div>
+                <div className="cal-when mute">{label}</div>
+              </>
+            );
+          })()
         ) : periodNamedAbove ? null : (
           /* Sin día exacto no hay número. "Q4 2027" a secas dice todo lo que la
              fuente dijo, y ni un día más. */

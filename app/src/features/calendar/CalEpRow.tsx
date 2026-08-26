@@ -56,7 +56,7 @@ export function CalEpRow({ ep, now, later = false, sub = false }: { ep: FeedRow;
       <div className="cal-ep-right">
         {sub && !past ? null : later ? (
           <>
-            <div className="cal-days">{days}<span>{tr("days")}</span></div>
+            <div className="cal-days">{days}<span>{tr(days === 1 ? "day" : "days")}</span></div>
             <div className="cal-when mute">
               {fmtAirDate(ep.air_datetime)}{timed && ` · ${fmtAirTime(ep.air_datetime)}`}
             </div>

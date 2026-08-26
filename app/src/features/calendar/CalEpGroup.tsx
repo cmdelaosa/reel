@@ -76,7 +76,7 @@ export function CalEpGroup({
         <div className="cal-ep-right">
           {later ? (
             <>
-              <div className="cal-days">{days}<span>{tr("days")}</span></div>
+              <div className="cal-days">{days}<span>{tr(days === 1 ? "day" : "days")}</span></div>
               <div className="cal-when mute">
                 {fmtAirDate(lead.air_datetime)}{timed && ` · ${fmtAirTime(lead.air_datetime)}`}
               </div>

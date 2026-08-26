@@ -351,7 +351,7 @@ export default function YouPage() {
           </div>
         )}
 
-        <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+        <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))" }}>
           {shown.map((r) => (
             <RatingRow key={r.id} r={r} onOpen={() => open(r.titles.tmdb_id, r.titles.kind)} />
           ))}

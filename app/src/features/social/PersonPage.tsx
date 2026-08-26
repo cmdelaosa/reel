@@ -251,7 +251,7 @@ export default function PersonPage() {
                 <h2 className="section-title">{tr("Filmography")}</h2>
               </div>
             </div>
-            <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+            <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
               {shows.map(({ s, status, myScore }) => (
                 <ShowRow key={s.tmdb_id} s={s} status={status} myScore={myScore} onOpen={() => open(s.tmdb_id)} />
               ))}

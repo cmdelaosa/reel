@@ -404,7 +404,7 @@ export function DiscoverSections() {
             ))}
           </div>
         ) : (
-          <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))" }}>
+          <div className="poster-grid">
             {visible.map((it) => (
               <div key={it.t.tmdb_id} className="flex flex-col gap-1.5">
                 <TitlePoster t={it.t} score={it.score} onOpen={() => open(it.t.tmdb_id)} onIgnore={() => ignore.mutate(it.t.id)} />

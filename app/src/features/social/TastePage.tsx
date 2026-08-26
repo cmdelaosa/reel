@@ -128,7 +128,7 @@ export default function TastePage() {
                 <p className="dim" style={{ margin: 0, fontSize: 14 }}>{tr(copy.noShared)}</p>
               </div>
             ) : (
-              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
                 {ranked.shown.map((f, i) => (
                   <FriendRow key={f.id} rank={i + 1} f={f} medium={taste.medium} onOpen={() => navigate(`/friend/${f.id}`)} />
                 ))}
@@ -150,7 +150,7 @@ export default function TastePage() {
           {taste.clash.length > 0 && (
             <section className="flex flex-col gap-2.5">
               <div className="eyebrow flex items-center gap-1.5"><Flame size={13} />{tr("Where you clash")}</div>
-              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
                 {clash.shown.map((t) => <TitleRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id, t.kind)} />)}
               </div>
               {clash.more}
@@ -160,7 +160,7 @@ export default function TastePage() {
           {taste.agree.length > 0 && (
             <section className="flex flex-col gap-2.5">
               <div className="eyebrow flex items-center gap-1.5"><ThumbsUp size={13} />{tr("Where you agree")}</div>
-              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
                 {agree.shown.map((t) => <TitleRow key={t.tmdb_id} t={t} onOpen={() => open(t.tmdb_id, t.kind)} />)}
               </div>
               {agree.more}

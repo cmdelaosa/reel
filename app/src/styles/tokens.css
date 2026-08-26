@@ -235,7 +235,7 @@ body {
 
 /* Respect reduced-motion: drop the rise/fade/shimmer/spin animations */
 @media (prefers-reduced-motion: reduce) {
-  .sheet, .sheet-center, .screen, .backdrop { animation: none !important; }
+  .sheet, .sheet-center, .sheet-x, .screen, .backdrop { animation: none !important; }
   * { scroll-behavior: auto !important; }
 }
 

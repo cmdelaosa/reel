@@ -64,7 +64,7 @@ export default function KitPage() {
       </header>
 
       <Section title="Posters">
-        <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))" }}>
+        <div className="poster-grid">
           {FIXTURES.map((t) => (
             <Poster key={t.id} t={t} />
           ))}

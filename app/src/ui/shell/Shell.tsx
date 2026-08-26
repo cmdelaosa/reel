@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import {
-  Bell, Bookmark, CalendarClock, Clapperboard, Compass, Film, Gamepad2, Link2, Play, Search,
-  Sliders, Tv, Users,
+  Bell, Bookmark, CalendarClock, Compass, Film, Gamepad2, Play, Search,
+  Sliders, Sparkles, Tv, Users,
 } from "lucide-react";
+import { SteamIcon } from "@/ui/icons/SteamIcon";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { DetailSheet } from "@/features/detail/DetailSheet";
 import { useNotifications, useNotificationsRealtime } from "@/lib/notifications";
@@ -26,8 +27,13 @@ import { t } from "@/lib/i18n";
    state is the plain pathname one: switching buckets from there is filtering,
    not leaving, and a tab that went dark the moment you touched a chip would say
    otherwise. */
+/* El destello y no la claqueta. La claqueta estaba en las tres listas, o sea
+   que decía "cine" en la portada de las series y en la de los juegos — y ni
+   siquiera en Cine acertaba, porque esta pestaña no es "una película", es la
+   portada del modo. El destello dice lo único que las tres portadas tienen en
+   común: esto es lo elegido para ti, ahora. */
 const TABS = [
-  { path: "/tonight", label: "Tonight", icon: Clapperboard },
+  { path: "/tonight", label: "Tonight", icon: Sparkles },
   { path: "/calendar", label: "Calendar", icon: CalendarClock },
   { path: "/shows?filter=watchlist", label: "Watchlist", icon: Bookmark },
   { path: "/explore", label: "Explore", icon: Compass },
@@ -39,7 +45,7 @@ const TABS = [
    modos (solo cambia el acento), así que apunta a la misma ruta — y por eso
    aparece en las dos listas, que es lo que SHARED_PATHS detecta abajo. */
 const MOVIE_TABS = [
-  { path: "/movies/tonight", label: "Tonight", icon: Clapperboard },
+  { path: "/movies/tonight", label: "Tonight", icon: Sparkles },
   { path: "/movies/releases", label: "Releases", icon: CalendarClock },
   { path: "/movies/watchlist", label: "Watchlist", icon: Bookmark },
   { path: "/movies/explore", label: "Explore", icon: Compass },
@@ -67,14 +73,16 @@ const MOVIE_TABS = [
    juegos, antes de Amigos: es la que menos se abre de las cinco. En móvil la
    fila ya scrollea en horizontal, y el TabMenu recoge lo que no quepa. */
 const GAME_TABS = [
-  { path: "/games/tonight", label: "Tonight", icon: Clapperboard },
+  { path: "/games/tonight", label: "Tonight", icon: Sparkles },
   { path: "/games/releases", label: "games: Releases", icon: CalendarClock },
   { path: "/games/backlog", label: "Backlog", icon: Bookmark },
   { path: "/games/explore", label: "Explore", icon: Compass },
-  // Link2 y no Gamepad2: el mando ya nombra al MODO en el conmutador de la
-  // barra, y repetirlo en una pestaña de dentro sería decir "juegos" dos veces
-  // y "cuenta enlazada" ninguna.
-  { path: "/games/steam", label: "Steam", icon: Link2 },
+  // El logotipo de Steam, y no el eslabón de cadena que decía "cuenta
+  // enlazada": el mando ya nombra al MODO en el conmutador de la barra, así que
+  // la pestaña no tiene que decir "juegos" otra vez — pero tampoco tiene que
+  // decir "enlace" en abstracto pudiendo decir de QUÉ enlace se trata, que es
+  // lo único que la marca hace mejor que cualquier pictograma.
+  { path: "/games/steam", label: "Steam", icon: SteamIcon },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 

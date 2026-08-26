@@ -90,7 +90,12 @@ const ES: Record<string, string> = {
   "Medium": "Medio",
   "TV": "Series",
   "Movies": "Cine",
-  "My Movies": "Mi cine",
+  /* "Mis películas" y no "Mi cine", aunque el MODO se llame Cine. El modo es
+     un sitio —una sección de la app— y ahí "Cine" funciona; esto es una lista
+     de cosas tuyas, y lo que hay en ella son películas, igual que en "Mis
+     series" y "Mis juegos" hay series y juegos. "Mi cine" nombraba el sitio
+     otra vez en vez de nombrar lo que guardas. */
+  "My Movies": "Mis películas",
   /* Videojuegos. "Sin final" y no "En curso" para 'ongoing': lo que dice no es
      que lo estés jugando ahora —eso es "Jugando"— sino que el juego no se
      acaba. Un CS que llevas un año sin tocar sigue sin tener final. */
@@ -246,6 +251,10 @@ const ES: Record<string, string> = {
   "Coming to cinemas": "Próximamente en cines",
   "Best rated by your friends": "Lo mejor valorado por tus amigos",
   "Your services": "Tus plataformas",
+  // Lo que dice el desplegable de Tus plataformas cuando no hay ninguna
+  // marcada. "Todas" y no "Ninguna", porque sin marcar nada el carril enseña
+  // todo lo que entra en tu país: el ajuste estrecha, no enciende.
+  "All platforms": "Todas las plataformas",
   "Narrows \"New to stream\" in Movies to the platforms you pay for. Leave it empty to see everything new in your country.":
     "Ajusta \"Nuevo en streaming\" de Películas a las plataformas que pagas. Déjalo vacío para ver todo lo que llega a tu país.",
   "Nothing new on your services.": "Nada nuevo en tus plataformas.",
@@ -420,6 +429,16 @@ const ES: Record<string, string> = {
   "Series premiere": "Estreno de la serie",
   "Season premiere": "Estreno de temporada",
   "Season finale": "Final de temporada",
+  /* Dos formas y quien llama coge la suya, como en "heat: {n} episode(s)". Una
+     sola cadena imprimía "1 días" y "1 days" en la cuenta atrás de un estreno de
+     mañana, en el calendario, en los lanzamientos de juegos y en el tiempo
+     total del perfil — cinco sitios diciendo lo mismo mal.
+
+     No hay helper de plural y no lo hay a propósito: con dos idiomas cuyo
+     plural funciona igual, un `Intl.PluralRules` sería maquinaria para una
+     regla de dos casos. El día que entre un idioma con más formas, el helper
+     entra con él. */
+  "day": "día",
   "days": "días",
   "Watched": "Visto",
   "Loading more…": "Cargando más…",
@@ -778,7 +797,9 @@ const ES: Record<string, string> = {
   // ---- Search palette ----
   "Search TV shows…": "Busca series…",
   "Search movies…": "Busca películas…",
+  "Search games…": "Busca juegos…",
   "Search movies": "Buscar películas",
+  "Search games": "Buscar juegos",
   "No results.": "Sin resultados.",
   "Searching…": "Buscando…",
   "Type to search TMDB.": "Escribe para buscar en TMDB.",

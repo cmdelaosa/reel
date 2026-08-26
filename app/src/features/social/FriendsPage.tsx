@@ -24,7 +24,7 @@ export default function FriendsPage() {
           everything else on the page, so appearing late shoved the whole thing
           down a beat after it painted. */}
       {(isLoading || hasFriends) && (
-        <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+        <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))" }}>
           {isLoading ? (
             <>
               <div className="skeleton" style={{ height: 64 }} />

@@ -93,7 +93,12 @@ export function useWatchHeatmap(days: number, userId?: string) {
 /** "77 days" style label for a minute total. */
 export function timeSpentLabel(minutes: number): string {
   const days = minutes / 60 / 24;
-  if (days >= 1) return `${Math.round(days)} ${t("days")}`;
+  // El singular se decide sobre el número YA redondeado, que es el que se
+  // imprime: 1,4 días se enseña como "1" y tiene que decir "1 día", no "1 días".
+  if (days >= 1) {
+    const d = Math.round(days);
+    return `${d} ${t(d === 1 ? "day" : "days")}`;
+  }
   const hours = minutes / 60;
   if (hours >= 1) return `${Math.round(hours)}h`;
   return `${minutes}m`;

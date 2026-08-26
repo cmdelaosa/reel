@@ -187,7 +187,7 @@ export function HiddenTitles({ medium }: { medium: Medium }) {
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
       {open && (
-        <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))" }}>
+        <div className="poster-grid">
           {mine.map((t) => {
             const art = tmdbImg(t.posterPath);
             return (
