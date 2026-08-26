@@ -52,7 +52,6 @@ const kindsSchema = z.array(z.object({
   n: z.number().int(),
 }));
 const heatmapSchema = z.array(z.object({ day: z.string(), n: z.number().int() }));
-export type HeatmapDay = z.infer<typeof heatmapSchema>[number];
 
 /** Per-day watch counts for the profile heatmap, bucketed in the local tz.
  *  Omit `userId` for your own history; pass a friend's id for theirs — the RPC

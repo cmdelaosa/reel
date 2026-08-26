@@ -231,6 +231,28 @@ export default function FriendPage() {
     [fp],
   );
 
+  /* El progreso de un título suyo, o nada si no se puede saber de quién es.
+     `rpc_friend_progress` es de 0038 —de cuando solo había series— y llavea sus
+     filas por el `tmdb_id` a secas, así que dos títulos suyos de medios
+     distintos con el mismo número comparten entrada y gana la última fila. Con
+     la ficha abierta a los tres medios eso deja de ser teórico: una biblioteca
+     importada trae cientos de ids de IGDB, que viven en otro espacio de
+     numeración entero (0071). El síntoma sería una barra "1/1" —el episodio
+     sintético de un juego— bajo una serie de setenta capítulos.
+
+     Los números ambiguos se descartan: sin barra se lee como "no se sabe", y
+     con la barra de otro se lee como un dato. */
+  const progressOf = useMemo(() => {
+    const mediaById = new Map<number, Set<Medium>>();
+    for (const f of fp?.follows ?? []) {
+      const set = mediaById.get(f.tmdb_id) ?? new Set<Medium>();
+      set.add(f.kind);
+      mediaById.set(f.tmdb_id, set);
+    }
+    return (tmdbId: number): FriendProgress | undefined =>
+      (mediaById.get(tmdbId)?.size ?? 0) > 1 ? undefined : progressMap?.get(tmdbId);
+  }, [fp, progressMap]);
+
   const slices = useMemo((): MediumSlice[] => {
     if (!fp) return [];
     return MEDIA.flatMap((medium): MediumSlice[] => {
@@ -412,7 +434,7 @@ export default function FriendPage() {
     const wName = locName(esNames, w.tmdb_id, w.name, "tv");
     const p = w.watched != null && w.aired != null
       ? { watched: w.watched, aired: w.aired }
-      : progressMap?.get(w.tmdb_id);
+      : progressOf(w.tmdb_id);
     const pct = p && p.aired > 0 ? Math.min(100, Math.round((p.watched / p.aired) * 100)) : null;
     return (
       <div key={w.tmdb_id} className="card mq-row" onClick={() => openSheet(w.tmdb_id, "tv")}>
@@ -443,7 +465,12 @@ export default function FriendPage() {
      cambia de nombre: son todos sus watch_events, y una película vista y un
      juego terminado escriben uno igual que un episodio (0067, 0071). */
   const stats: { key: string; label: string; value: string; icon?: typeof User; medium?: Medium }[] = [
-    ...slices.map((s) => ({ key: s.medium, label: tr(mediumPlural(s.medium)), value: String(s.follows.length), medium: s.medium })),
+    /* Una tarjeta por medio del que SIGA algo. `slices` incluye también los
+       medios de los que solo tiene notas, y con ellos la cabecera enseñaba un
+       "Cine · 0" a quien puntuó tres películas sin guardarlas — el cero
+       permanente que el resto de la página evita. */
+    ...slices.filter((s) => s.follows.length > 0)
+      .map((s) => ({ key: s.medium, label: tr(mediumPlural(s.medium)), value: String(s.follows.length), medium: s.medium })),
     { key: "watched", icon: Eye, label: tr("stat: Watched"), value: snap.stats.episodes.toLocaleString() },
     { key: "rated", icon: Star, label: tr("Rated"), value: String(snap.stats.rated) },
     { key: "time", icon: Clock, label: tr("Est. watch time"), value: `~${timeSpentLabel(estMinutes)}` },
@@ -609,7 +636,7 @@ export default function FriendPage() {
                            episodios y su clave es el número a secas, así que en
                            otro medio pintaría el progreso de la serie que
                            llevara ese número. */
-                        progress={f.kind === "tv" ? progressMap?.get(f.tmdb_id) : undefined}
+                        progress={f.kind === "tv" ? progressOf(f.tmdb_id) : undefined}
                         added={myFollowKeys.has(keyOf(f.kind, f.tmdb_id))}
                         onOpen={() => openSheet(f.tmdb_id, f.kind)}
                         onAdd={() => follow.mutate(toTitleRow(f))}

@@ -1549,7 +1549,6 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    exactamente lo que se pintaba antes. */
 .heat-keys { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-right: auto; }
 .heat-key { display: inline-flex; align-items: center; gap: 4px; }
-.heat-key i { background: var(--accent); }
 .heat-scale { display: inline-flex; align-items: center; gap: 4px; }
 .heatmap-months {
   grid-area: 1 / 2;
