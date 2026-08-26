@@ -6,7 +6,7 @@ import { trackedFetch } from "@/lib/connection";
 import { qk } from "@/lib/queryKeys";
 import type { ApplyPick } from "@/lib/steam";
 
-/* Cliente de la edge function nintendo-sync (0080). Hermano de lib/steam.ts,
+/* Cliente de la edge function nintendo-sync (0082). Hermano de lib/steam.ts,
    con dos diferencias que vienen de que aquí NO hay login de Nintendo:
 
      · enlazar es un formulario, no una navegación. Se escribe el código de

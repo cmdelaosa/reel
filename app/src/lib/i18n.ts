@@ -226,7 +226,7 @@ const ES: Record<string, string> = {
     "Lo importado entra marcado como «lo tengo» y sin estado: las horas de Steam son de por vida y no dicen nada sobre lo que estás jugando ahora.",
   "Your Steam library came back empty, and the profile is public — so there's nothing to import.":
     "Tu biblioteca de Steam ha vuelto vacía, y el perfil es público — así que no hay nada que importar.",
-  /* Nintendo (0080). El vocabulario lo pone la consola, no nosotros: lo que
+  /* Nintendo (0082). El vocabulario lo pone la consola, no nosotros: lo que
      Nintendo llama "registro de juego" y "Todos los jugadores" hay que
      llamarlo igual, o la instrucción de arreglar la privacidad manda a alguien
      a buscar un ajuste que en su Switch se llama de otra manera. */

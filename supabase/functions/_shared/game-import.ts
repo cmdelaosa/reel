@@ -1,5 +1,5 @@
 /* Lo que comparten las dos importaciones de juegos, Steam (0076) y Nintendo
- * (0080): las reglas de qué se escribe y las escrituras en sí.
+ * (0082): las reglas de qué se escribe y las escrituras en sí.
  *
  * Existe porque lo que cambia entre un proveedor y otro es de dónde salen las
  * filas —OpenID y una Web API key contra un código de amigo y la app de
@@ -62,7 +62,7 @@ export interface Pick {
    *  aparte y no dentro de `playState`.
    *
    *  Nintendo no lo ofrece —no da la última partida con la que fechar el
-   *  evento, ver 0080— pero se parsea igual: lo que decide si se escribe es
+   *  evento, ver 0082— pero se parsea igual: lo que decide si se escribe es
    *  quien llama, no el parseo. */
   finished: boolean;
   /** 1..10, o null para no puntuar. */
@@ -142,7 +142,7 @@ export interface EntryWrite {
    *  la importación sin estado. */
   playState: Pick["playState"];
   /** Cuándo se jugó por última vez, cuando el proveedor lo sabe o cuando lo
-   *  hemos aprendido (Nintendo, 0080). Null es no tocar `played_at`. */
+   *  hemos aprendido (Nintendo, 0082). Null es no tocar `played_at`. */
   playedAt?: string | null;
 }
 

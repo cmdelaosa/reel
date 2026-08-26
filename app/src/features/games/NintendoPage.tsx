@@ -42,7 +42,7 @@ import { t as tr, tv } from "@/lib/i18n";
    ── Lo que no está, y no es un olvido ────────────────────────────────────
    No hay "terminado". Nintendo no dice cuándo jugaste por última vez, así que
    fecharlo sería ponerle a todo el día de hoy y publicarle a tus amigos que te
-   acabaste seis juegos esta tarde (ver 0080). Se marca desde la ficha, donde la
+   acabaste seis juegos esta tarde (ver 0082). Se marca desde la ficha, donde la
    fecha la eliges tú.
 
    ── Y por qué el código de amigo se escribe en un campo ──────────────────

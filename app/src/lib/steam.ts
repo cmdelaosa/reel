@@ -112,7 +112,7 @@ export type SteamImport = z.infer<typeof steamImportSchema>;
 
 export const steamItemSchema = z.object({
   id: z.string().uuid(),
-  /* El appid, como TEXTO: desde 0080 la columna la comparten Steam y Nintendo,
+  /* El appid, como TEXTO: desde 0082 la columna la comparten Steam y Nintendo,
      y Nintendo no tiene ningún número que poner ahí. La pantalla lo vuelve a
      número para armar la URL de la carátula, que es lo único que lo usa. */
   external_id: z.string(),
@@ -151,7 +151,7 @@ export function useSteamImport() {
       const { data: runs, error } = await supabase
         .from("game_imports")
         .select("*")
-        // Desde 0080 la tabla la comparten dos proveedores. Sin este filtro,
+        // Desde 0082 la tabla la comparten dos proveedores. Sin este filtro,
         // importar de Nintendo dejaría el último borrador arriba y esta
         // pantalla enseñaría juegos de Switch como si vinieran de Steam.
         .eq("provider", "steam")

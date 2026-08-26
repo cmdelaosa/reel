@@ -1,4 +1,4 @@
--- 0080_nintendo.sql
+-- 0082_nintendo.sql
 -- Traer de Nintendo las horas jugadas. La cuarta rodaja del modo Videojuegos:
 -- el catálogo lo puso 0071, el progreso a mano 0073, Steam 0076, y el estado y
 -- la nota de la pantalla de confirmar 0078.

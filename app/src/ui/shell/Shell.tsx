@@ -75,7 +75,7 @@ const GAME_TABS = [
   // barra, y repetirlo en una pestaña de dentro sería decir "juegos" dos veces
   // y "cuenta enlazada" ninguna.
   { path: "/games/steam", label: "Steam", icon: Link2 },
-  /* Y una SÉPTIMA desde 0080, que es la misma pestaña con otro proveedor:
+  /* Y una SÉPTIMA desde 0082, que es la misma pestaña con otro proveedor:
      Nintendo. Rompe la simetría igual que Steam y por el mismo motivo —es una
      pantalla de tres pasos a la que se vuelve, y es del modo Juegos— pero
      además llevan juntas la fila a siete elementos, que es más de lo que cabe

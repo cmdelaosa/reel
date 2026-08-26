@@ -361,7 +361,7 @@ async function call<T>(session: CoralSession, path: string, parameter: unknown):
 /** El código de amigo a NSA ID, que es con lo que se pregunta todo lo demás.
  *
  *  Esta llamada la limita Nintendo, y por eso su resultado se guarda en
- *  `profiles.nintendo_nsa_id` (0080): sincronizar no vuelve a gastarla. */
+ *  `profiles.nintendo_nsa_id` (0082): sincronizar no vuelve a gastarla. */
 export async function userByFriendCode(
   session: CoralSession,
   friendCode: string,

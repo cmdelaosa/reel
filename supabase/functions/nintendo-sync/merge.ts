@@ -1,6 +1,6 @@
 /* Las reglas de producto de la importación de Nintendo, separadas de la red y
  * de la base para poder probarlas. Todas salen de lo que el registro de juego
- * DA y de lo que no da (ver 0080):
+ * DA y de lo que no da (ver 0082):
  *
  *   1. Da minutos acumulados DE POR VIDA. Igual que con Steam, de esa cifra no
  *      se deduce ningún estado: lo que la importación marca sola es `owned`, y

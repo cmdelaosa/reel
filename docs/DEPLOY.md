@@ -51,14 +51,14 @@ en todas sus otras rutas.
 ruta `/by-steam` de `igdb-proxy`, que llega en 0076: desplegar solo `steam-sync`
 deja las importaciones colgadas en `applying` con un 404 en `job_runs`.
 
-⚠️ **`nintendo-sync` e `igdb-proxy` van juntos, y con la 0080.** Lo mismo, con
-la ruta `/by-name`. Y la migración 0080 renombra `steam_imports` →
+⚠️ **`nintendo-sync` e `igdb-proxy` van juntos, y con la 0082.** Lo mismo, con
+la ruta `/by-name`. Y la migración 0082 renombra `steam_imports` →
 `game_imports` (y `steam_import_items` → `game_import_items`, con `appid` →
 `external_id`): `steam-sync` y el frontend nuevos hablan de las tablas nuevas,
-así que **la 0080 va antes que las dos funciones**, y desplegar las funciones
+así que **la 0082 va antes que las dos funciones**, y desplegar las funciones
 sin ella rompe también las importaciones de Steam, no solo las de Nintendo.
 
-⚠️⚠️ **Y la 0080 hay que empujarla EN CUANTO se fusione, no cuando toque.** El
+⚠️⚠️ **Y la 0082 hay que empujarla EN CUANTO se fusione, no cuando toque.** El
 frontend se despliega solo al fusionar; la migración no. Entre una cosa y la
 otra, la pantalla de Steam —que ya funcionaba y no la ha pedido nadie— consulta
 `game_imports`, una tabla que en producción todavía no existe: 404 de PostgREST
@@ -93,7 +93,7 @@ supabase secrets set TMDB_API_KEY=...        # TMDB v4 read access token (or v3 
 supabase secrets set IGDB_CLIENT_ID=...       # Twitch app Client ID  (videojuegos)
 supabase secrets set IGDB_CLIENT_SECRET=...   # Twitch app Client Secret
 supabase secrets set STEAM_API_KEY=...        # Steam Web API key   (videojuegos)
-supabase secrets set NINTENDO_SESSION_TOKEN=...      # cuenta de Nintendo de Reel (0080)
+supabase secrets set NINTENDO_SESSION_TOKEN=...      # cuenta de Nintendo de Reel (0082)
 supabase secrets set NINTENDO_F_CLIENT_ID=...        # cliente del servicio de f
 supabase secrets set NINTENDO_F_CLIENT_SECRET=...
 supabase secrets set APP_URL=https://...      # origen público de la app (vuelta de Steam)
@@ -167,7 +167,7 @@ lista. La función lo distingue de una biblioteca vacía de verdad (que sí trae
 `game_count`) y la interfaz lo explica con los pasos exactos, porque leído como
 "no tienes juegos" manda a la persona a buscar una avería en su cuenta.
 
-**Nintendo (importar horas, 0080).** Es el caso más raro de los tres, y hay que
+**Nintendo (importar horas, 0082).** Es el caso más raro de los tres, y hay que
 entenderlo antes de tocar un secreto: **Nintendo no tiene API de bibliotecas ni
 login por usuario**. La única forma de saber a qué ha jugado alguien es
 preguntárselo a la API de la app Nintendo Switch Online desde dentro de esa app,

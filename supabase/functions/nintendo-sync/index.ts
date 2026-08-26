@@ -1,4 +1,4 @@
-// nintendo-sync — Deno edge function. Traer de Nintendo las horas jugadas (0080).
+// nintendo-sync — Deno edge function. Traer de Nintendo las horas jugadas (0082).
 //
 // Rutas (bajo /functions/v1/nintendo-sync):
 //   POST /link     → { status }        guarda el código de amigo y lo resuelve
@@ -359,7 +359,7 @@ Deno.serve(async (req) => {
         })
         .eq("id", userId);
 
-      // El índice único de 0080: esa cuenta de Nintendo ya está en otro perfil
+      // El índice único de 0082: esa cuenta de Nintendo ya está en otro perfil
       // de Reel. Es un caso legítimo (dos cuentas de Reel, una Switch) y hay
       // que decirlo, no dejarlo en un 500.
       if (error) return json({ status: error.code === "23505" ? "taken" : "error" });
@@ -462,7 +462,7 @@ Deno.serve(async (req) => {
          llega — lo limpia `parsePick`.
 
          `finished` se parsea y NO se usa: Nintendo no da la última partida con
-         la que fechar el evento (ver 0080), así que esa casilla no existe en
+         la que fechar el evento (ver 0082), así que esa casilla no existe en
          esta pantalla. Terminar un juego se marca desde la ficha. */
       const picks = new Map<string, Pick>();
       for (const raw of Array.isArray(body?.items) ? body.items : []) {

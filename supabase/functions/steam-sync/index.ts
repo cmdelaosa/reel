@@ -53,7 +53,7 @@
 // por lotes, y con su fila en `job_runs` como los crons.
 //
 // ── Las tablas del borrador ya no son solo de Steam ──────────────────────
-// Desde 0080 se llaman `game_imports` y `game_import_items`, las comparte con
+// Desde 0082 se llaman `game_imports` y `game_import_items`, las comparte con
 // `nintendo-sync`, y cada fila dice de quién es (`provider`). El appid vive en
 // `external_id` como texto, porque Nintendo no tiene ningún número que poner
 // ahí. Las escrituras comunes —biblioteca, notas, finales— viven en
@@ -183,7 +183,7 @@ async function userOf(req: Request): Promise<string | null> {
 /* ─────────────────────────── El escaneo ─────────────────────────────────── */
 
 interface Scanned {
-  /** El appid, como TEXTO: desde 0080 la columna es `external_id` y la
+  /** El appid, como TEXTO: desde 0082 la columna es `external_id` y la
    *  comparten los dos proveedores. La conversión vive aquí y en
    *  `resolvePending`, que son los dos únicos sitios que cruzan la frontera. */
   external_id: string;
@@ -555,7 +555,7 @@ Deno.serve(async (req) => {
         .select("*")
         .eq("id", importId)
         .eq("user_id", userId)
-        // Desde 0080 la tabla la comparten dos proveedores: confirmar aquí un
+        // Desde 0082 la tabla la comparten dos proveedores: confirmar aquí un
         // borrador de Nintendo escribiría `minutes_source = 'steam'` en horas
         // que no son de Steam.
         .eq("provider", "steam")
@@ -679,7 +679,7 @@ async function resolvePending(
   let ok = false;
   let note: string | null = null;
 
-  /* Las filas vienen de la base, donde el appid vive como TEXTO desde 0080
+  /* Las filas vienen de la base, donde el appid vive como TEXTO desde 0082
      (`external_id`, compartida con Nintendo). Una sola conversión aquí en vez
      de un `Number()` suelto en cada uso, que es como se cuelan los NaN. */
   const appidOf = (i: Any) => Number(i.external_id);

@@ -20,7 +20,7 @@
  *      hoy. Ver `finishedAt`.
  *
  * ── Lo que ya no vive aquí ───────────────────────────────────────────────
- * Las reglas 1 a 3 no son de Steam: son de importar juegos, y desde 0080 hay
+ * Las reglas 1 a 3 no son de Steam: son de importar juegos, y desde 0082 hay
  * dos proveedores que las cumplen igual. Se mudaron a
  * `_shared/game-import.ts` y se reexportan desde aquí, que es lo que deja
  * intactos a index.ts y a merge_test.ts — este fichero sigue siendo el sitio

@@ -1,5 +1,5 @@
 // Las reglas de la importación de Nintendo. Cada prueba es una decisión de
-// 0080, no una comprobación de que TypeScript sabe sumar.
+// 0082, no una comprobación de que TypeScript sabe sumar.
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   externalIdOf,

@@ -6,7 +6,7 @@
 //   GET  /discover/:pool   → { results: TitleRow[] }  (anticipated|new|popular|top-rated)
 //   POST /warm             → { ok, summary }          (solo el cron)
 //   POST /by-steam         → { matches: { [appid]: TitleRow } }  (0076)
-//   POST /by-name          → { matches: { [name]: TitleRow } }   (0080)
+//   POST /by-name          → { matches: { [name]: TitleRow } }   (0082)
 //
 // Las de descubrimiento son las gemelas de las cuatro de tmdb-proxy y comparten
 // con ellas la tabla discover_cache; sus consultas viven en discover.ts, con
@@ -385,7 +385,7 @@ async function fetchGamesInto(admin: SupabaseClient, igdbIds: number[]): Promise
   return byIgdbId;
 }
 
-/* ──────────────── Del nombre de un juego de Nintendo al catálogo (0080) ─── */
+/* ──────────────── Del nombre de un juego de Nintendo al catálogo (0082) ─── */
 
 /** Tope por petición. Cada nombre cuesta UNA petición a IGDB, así que treinta
  *  nombres son siete segundos y medio del presupuesto de 4 req/s que comparte
@@ -684,7 +684,7 @@ Deno.serve(async (req) => {
       return json({ matches });
     }
 
-    // POST /by-name — de nombres del registro de Nintendo al catálogo (0080).
+    // POST /by-name — de nombres del registro de Nintendo al catálogo (0082).
     //
     // La hermana pobre de /by-steam, y lo es por lo que Nintendo NO da: allí
     // hay un appid que casa contra un índice, aquí solo hay un título. Por eso

@@ -86,7 +86,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
   const minutes = entry?.minutes_played ?? 0;
   const playState = entry?.play_state ?? null;
   const owned = Boolean(entry?.owned);
-  /* De dónde salen las horas (0076, y Nintendo desde 0080). Se dice cuando las
+  /* De dónde salen las horas (0076, y Nintendo desde 0082). Se dice cuando las
      trajo una sincronización, y no cuando las escribiste tú: lo tuyo no
      necesita explicación, y ver "de Steam" es lo que explica por qué esa cifra
      cambió sola. Con dos proveedores hay que decir CUÁL: "de Steam" en unas

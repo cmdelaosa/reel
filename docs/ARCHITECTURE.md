@@ -226,7 +226,7 @@ library_entries (
   -- FINISHED is not here — that is the watch_event on it, same as everything else.
   play_state text,                          -- playing | ongoing | dropped (0073)
   minutes_played int not null default 0,    -- denominator lives in titles.beat_seconds
-  minutes_source text,                      -- manual | steam | nintendo (0073; nintendo since 0080)
+  minutes_source text,                      -- manual | steam | nintendo (0073; nintendo since 0082)
   owned boolean not null default false,     -- you bought it. Orthogonal to play_state: written by
                                             -- the Steam import and by hand (console, GOG, physical)
   played_at timestamptz,                    -- when minutes_played/play_state last moved, set by the
@@ -350,7 +350,7 @@ popular_now_cache (…)                       -- 0025  }  Public read, service-r
 discover_cache (…)                          -- 0064 /   rest of the metadata mirror.
 ```
 
-The game imports (Steam 0076/0078, Nintendo 0080) are three tables because the flow is three
+The game imports (Steam 0076/0078, Nintendo 0082) are three tables because the flow is three
 steps — ask the provider, show you what it found, then write only what you approved. Two of
 those tables are shared: what changes between providers is where the rows come from, not the
 shape of the draft. The nonce table is Steam's alone, because only Steam has a login:
@@ -368,7 +368,7 @@ steam_link_nonces (                         -- the IOU of the OpenID round trip
 
 game_imports (                              -- one per import attempt (was steam_imports)
   id uuid pk, user_id uuid fk,
-  provider text not null                    -- 0080. No default on purpose: a forgotten provider
+  provider text not null                    -- 0082. No default on purpose: a forgotten provider
     check (provider in ('steam','nintendo')),  --  would not fail, it would just lie in the receipt
   state text check (state in ('scanning','ready','applying','done','error')),
   error text,                               -- 'private' is the one the UI explains on its own,
@@ -377,7 +377,7 @@ game_imports (                              -- one per import attempt (was steam
 )
 game_import_items (                         -- one per game the provider returned
   id uuid pk, import_id uuid fk, user_id uuid fk,
-  external_id text not null,                -- 0080: the provider's own id AS TEXT. Steam writes
+  external_id text not null,                -- 0082: the provider's own id AS TEXT. Steam writes
                                             --   its appid; Nintendo the eShop nsuid, or
                                             --   `name:<normalised>` when the record has no URL.
   name text not null,
@@ -395,7 +395,7 @@ game_import_items (                         -- one per game the provider returne
 )
 ```
 
-Nintendo has no login and no library API, so **0080 stores a friend code, not a token**:
+Nintendo has no login and no library API, so **0082 stores a friend code, not a token**:
 `profiles.nintendo_friend_code` plus the `nintendo_nsa_id` Nintendo returns when it resolves it.
 Reel asks with **one Nintendo account of its own** (`NINTENDO_SESSION_TOKEN`), the same shape
 Exophase uses. Two consequences worth knowing before reading `nintendo-sync`:
