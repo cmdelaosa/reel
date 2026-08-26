@@ -38,8 +38,28 @@ for (let p = 1; p <= 29; p++) {                              // hasta que una p�
 }
 ```
 
-La lista se recoge igual contra `/es/mylist.php?list_id=<id>&v=list&page=<n>`,
-leyendo directamente los `.row.movie-card` (una lista no tiene notas).
+La lista se recoge igual contra `/es/mylist.php?list_id=<id>&orderby=0&v=list&page=<n>`,
+leyendo directamente los `.row.movie-card` (una lista no tiene notas). El
+`orderby=0` es **Posición**, y hay que guardarla:
+
+```js
+const orden = [];
+for (let p = 1; p <= 7; p++) {
+  const doc = new DOMParser().parseFromString(
+    await (await fetch(`/es/mylist.php?list_id=201&orderby=0&v=list&page=${p}`, { credentials: 'include' })).text(),
+    'text/html',
+  );
+  for (const c of doc.querySelectorAll('.row.movie-card')) orden.push(c.getAttribute('data-movie-id'));
+}
+const posiciones = [...new Set(orden)];   // ← las páginas se solapan: dedup por PRIMERA aparición
+```
+
+**Una lista de FA no tiene fechas.** Sus órdenes son *Posición, Título, Año,
+Voto, Nota media* —ninguna es una fecha— y ni la vista de lista, ni la de
+edición («Modificar películas»), ni `mylists.php` traen una sola fecha en el
+HTML. Lo único que hay es la posición, y la posición 1 es lo **primero** que se
+añadió: comprobado el 26-08-2026 sobre una lista de 320, donde la primera página
+no pasa de 2019 y la última trae estrenos de 2025 y 2026. FA añade al final.
 
 Dos trampas, las dos costaron un intento:
 
@@ -51,7 +71,7 @@ Dos trampas, las dos costaron un intento:
   devuelve vacío. Todo lo de arriba usa `textContent`.
 
 El resultado se guarda como `{ "votes": [...], "list": [...] }` en un JSON
-**fuera del repo**.
+**fuera del repo**, con `position` en cada fila de `list`.
 
 ## 2. Pasarlo a Reel
 
@@ -89,6 +109,10 @@ Sin `--dry-run` escribe. Banderas:
   del dry run. Son ~2.700 peticiones a TMDB y veinte minutos que no cambian de
   respuesta, y además garantiza que lo que se escribe es exactamente lo que se
   revisó. Si el JSON trae filas que aquel informe no tenía, lo avisa.
+- `--base-lista=<ISO>` — el momento al que se cuelgan las filas de lista (por
+  defecto, ahora). Se pasa a mano para **reparar** una pasada anterior.
+- `--fechas-lista` — no importa nada: solo recoloca el `added_at` de las filas de
+  lista según su posición. Ni TMDB ni tmdb-proxy, así que tarda segundos.
 
 ## Cómo empareja, y por qué así
 
@@ -129,13 +153,20 @@ Por cada película emparejada, en este orden:
 | tabla | qué |
 |---|---|
 | `titles` + `episodes` | **no a mano**: se pide `tmdb-proxy /movie/:id`, el mismo camino que abre una ficha en la app, y el trigger de 0067 pone el episodio sintético |
-| `library_entries` | `followed = true`, `added_at` = la fecha del voto |
+| `library_entries` | `followed = true`; `added_at` = la fecha del voto, o —en las de lista— el momento de la importación con los segundos repartidos por posición |
 | `watch_events` | solo los votos: `watched_at` = fecha del voto, `source = 'filmaffinity_import'` |
 | `ratings` | la nota de FA tal cual — las dos escalas son 1..10 |
 
 Idempotente: los `upsert` van con `ignoreDuplicates`, y una nota que ya existiera
 en Reel **no se pisa** (sale contada aparte en el informe). Volver a lanzarlo no
 duplica nada.
+
+**Las fechas.** Un voto trae la suya y esa es la que se usa, en `watched_at` y en
+`added_at`: el historial y el mapa de calor cuentan cuándo lo viste de verdad, no
+cuándo se importó. Una fila de lista **no tiene fecha que traer** —FA no la
+guarda— así que lleva el momento real de la importación, con los segundos
+repartidos por su posición para que ordenar por "fecha de adición" en Reel
+devuelva el orden de la lista en FA. No se inventa un pasado que nadie registró.
 
 Para deshacer una pasada, `watch_events.source = 'filmaffinity_import'` identifica
 lo que escribió este guión; `ratings` y `library_entries` no tienen columna de

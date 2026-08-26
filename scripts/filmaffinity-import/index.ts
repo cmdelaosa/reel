@@ -31,6 +31,7 @@ import {
   confirmDirector,
   faDateToIso,
   keepItem,
+  listAddedAt,
   FA_ALIASES,
   pickMatch,
   searchMovies,
@@ -301,9 +302,42 @@ async function main() {
   const soloArg = args.find((a) => a.startsWith("--solo="))?.slice("--solo=".length);
   const solo = soloArg ? new Set(soloArg.split(",").map((s) => s.trim()).filter(Boolean)) : null;
   if (solo) console.log(`--solo: ${solo.size} filas`);
+
+  // El momento al que se cuelgan las filas de lista. Por defecto, ahora. Se pasa
+  // a mano para REPARAR una importación anterior: los segundos se recalculan
+  // sobre el instante en que aquella escribió, no sobre el de hoy.
+  const baseArg = args.find((a) => a.startsWith("--base-lista="))?.slice("--base-lista=".length);
+  if (baseArg && Number.isNaN(Date.parse(baseArg))) throw new Error(`--base-lista: "${baseArg}" no es una fecha`);
+  const baseLista = baseArg ? new Date(baseArg) : new Date();
   // El denominador del progreso es lo que ESTA pasada va a escribir, no el
   // emparejamiento entero: con --solo decía "12/1325" sobre una sola fila.
   const porEscribir = all.filter(({ fa }) => resolved.has(fa.id) && (!solo || solo.has(fa.id))).length;
+
+  // `--fechas-lista` no importa nada: solo recoloca el `added_at` de las filas
+  // de lista según su puesto en FA. Es la reparación de una pasada anterior, y
+  // no toca ni TMDB ni tmdb-proxy — los títulos ya están cacheados.
+  if (args.includes("--fechas-lista")) {
+    let tocadas = 0;
+    for (const { fa, kind } of all) {
+      if (kind !== "list" || !fa.position) continue;
+      const r = resolved.get(fa.id);
+      if (!r) continue;
+      const { data: t, error: te } = await admin
+        .from("titles").select("id").eq("kind", "movie").eq("tmdb_id", r.tmdbId).maybeSingle();
+      if (te) throw new Error(`titles: ${te.message}`);
+      if (!t) { report.errors.push(`${fa.title}: no está cacheada`); continue; }
+      const { error } = await admin
+        .from("library_entries")
+        .update({ added_at: listAddedAt(baseLista, fa.position) })
+        .eq("user_id", env.targetUserId)
+        .eq("title_id", t.id);
+      if (error) throw new Error(`library_entries: ${error.message}`);
+      if (++tocadas % 50 === 0) console.log(`  fechas ${tocadas}`);
+    }
+    console.log(`\n--fechas-lista: ${tocadas} filas recolocadas desde ${baseLista.toISOString()}`);
+    if (report.errors.length) console.log(`  ${report.errors.length} sin tocar:`, report.errors.slice(0, 5));
+    return;
+  }
 
   done = 0;
   for (const { fa, kind } of all) {
@@ -314,7 +348,12 @@ async function main() {
       const { titleId, episodeId: fromProxy } = await warmMovie(env, r.tmdbId);
       report.titles++;
 
-      const addedAt = (fa.date && faDateToIso(fa.date)) || new Date().toISOString();
+      // Un voto trae su fecha y esa es la buena. Una fila de lista no tiene
+      // ninguna —FA no la guarda—, así que lleva el momento de la importación
+      // con los segundos repartidos por su puesto en la lista (ver listAddedAt).
+      const addedAt =
+        (fa.date && faDateToIso(fa.date)) ||
+        (fa.position ? listAddedAt(baseLista, fa.position) : baseLista.toISOString());
       if (await ensureFollowed(admin, env.targetUserId, titleId, addedAt)) report.library++;
 
       if (kind === "vote") {

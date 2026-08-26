@@ -50,6 +50,7 @@ export interface FaItem {
   url: string;
   rating?: number | null;  // 1..10 en los votos; ausente en las listas
   date?: string | null;    // "8/07/2026" (D/M/AAAA) en los votos
+  position?: number;       // 1..n en las listas; ausente en los votos
 }
 
 /** Los tipos de FA que NO son cine: lo que se ve por temporadas o por episodios.
@@ -136,6 +137,27 @@ export function faDateToIso(d: string): string | null {
   const iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
   if (Number.isNaN(Date.parse(iso))) return null;
   return `${iso}T12:00:00Z`;
+}
+
+/** Cuándo se añadió a Reel una película de una LISTA de FilmAffinity.
+ *
+ *  Y aquí no hay fecha que traer: FilmAffinity **no guarda cuándo añadiste algo
+ *  a una lista**. Sus órdenes son Posición, Título, Año, Voto y Nota media —
+ *  ninguna es una fecha—, y ni la vista de lista, ni la de edición, ni "mis
+ *  listas" traen una sola fecha en el HTML. Lo único que existe es la posición.
+ *
+ *  Así que `added_at` sigue siendo el momento REAL de la importación —no se
+ *  inventa un pasado que nadie registró—, y lo que hace la posición es repartir
+ *  los segundos dentro de ese momento, para que ordenar por "fecha de adición"
+ *  en Reel devuelva el mismo orden que tiene la lista en FA. La posición 1 es lo
+ *  primero que se añadió: la cabeza de esta lista no pasa de 2019 y la cola trae
+ *  estrenos de 2025 y 2026, o sea que FA añade al final.
+ *
+ *  Un segundo por puesto: 320 películas caben en cinco minutos, que es menos de
+ *  lo que tarda la propia importación, así que la marca sigue cayendo dentro de
+ *  la ventana en la que de verdad se escribieron. */
+export function listAddedAt(base: Date, position: number): string {
+  return new Date(base.getTime() + Math.max(0, position) * 1000).toISOString();
 }
 
 /** Un resultado de /search/movie, con lo poco que hace falta para juzgarlo. */

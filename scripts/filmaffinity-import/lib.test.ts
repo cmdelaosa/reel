@@ -17,6 +17,7 @@ import {
   firstDirector,
   isFilm,
   keepItem,
+  listAddedAt,
   norm,
   pickMatch,
   queryVariants,
@@ -142,6 +143,18 @@ test("FA_ALIASES: claves de FA en texto, ids de TMDB en número", () => {
     assert.equal(typeof tmdbId, "number");
     assert.ok(tmdbId > 0);
   }
+});
+
+test("listAddedAt: la posición reparte segundos, y el orden es el de la lista", () => {
+  const base = new Date("2026-08-25T20:10:00Z");
+  assert.equal(listAddedAt(base, 1), "2026-08-25T20:10:01.000Z");
+  assert.equal(listAddedAt(base, 320), "2026-08-25T20:15:20.000Z");
+  // Lo que de verdad importa: ordenar por esta fecha da el orden de FA.
+  const pos = [7, 3, 100, 1];
+  const ordenadas = pos.map((p) => ({ p, at: listAddedAt(base, p) })).sort((a, b) => a.at.localeCompare(b.at));
+  assert.deepEqual(ordenadas.map((x) => x.p), [1, 3, 7, 100]);
+  // Y las 320 caben en cinco minutos: sigue siendo el momento de la importación.
+  assert.ok(new Date(listAddedAt(base, 320)).getTime() - base.getTime() < 6 * 60 * 1000);
 });
 
 // ── el emparejador ──────────────────────────────────────────────────────────
