@@ -246,6 +246,10 @@ const ES: Record<string, string> = {
   "Coming to cinemas": "Próximamente en cines",
   "Best rated by your friends": "Lo mejor valorado por tus amigos",
   "Your services": "Tus plataformas",
+  // Lo que dice el desplegable de Tus plataformas cuando no hay ninguna
+  // marcada. "Todas" y no "Ninguna", porque sin marcar nada el carril enseña
+  // todo lo que entra en tu país: el ajuste estrecha, no enciende.
+  "All platforms": "Todas las plataformas",
   "Narrows \"New to stream\" in Movies to the platforms you pay for. Leave it empty to see everything new in your country.":
     "Ajusta \"Nuevo en streaming\" de Películas a las plataformas que pagas. Déjalo vacío para ver todo lo que llega a tu país.",
   "Nothing new on your services.": "Nada nuevo en tus plataformas.",

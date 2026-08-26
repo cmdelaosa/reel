@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 // Sliders, not lucide's Settings gear: this has to match the shell button that
 // opens the sheet, or the icon changes under you on click.
-import { Bell, Download, Mail, RotateCcw, Sliders as SettingsIcon, Upload, X } from "lucide-react";
+import { Bell, Check, ChevronDown, Download, Mail, RotateCcw, Sliders as SettingsIcon, Upload, X } from "lucide-react";
 import { useFocusTrap } from "@/ui/useFocusTrap";
 import {
   useSettings, setSetting, resetSettings,
@@ -69,7 +69,13 @@ function NotificationsSection() {
             <div key={n.type} className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div style={{ fontSize: 13.5, fontWeight: 650 }}>{t(n.label)}</div>
-                <div className="mute truncate" style={{ fontSize: 12 }}>{t(n.sub)}</div>
+                {/* Sin truncate. Los dos chips de la derecha son shrink-0, así
+                    que se llevaban todo el ancho y esta línea se quedaba con
+                    131px de los hasta 325 que pide en español: "Cuando una
+                    película de tu lista llega al cine o a streaming" se veía
+                    hasta "llega al…". Una descripción que hay que adivinar no
+                    describe nada, y aquí sobra el alto: la hoja ya scrollea. */}
+                <div className="mute" style={{ fontSize: 12 }}>{t(n.sub)}</div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Toggle on={p.inapp} icon={Bell} label={t("App")} onClick={() => setPref.mutate({ type: n.type, pref: { ...p, inapp: !p.inapp } })} />
@@ -96,35 +102,79 @@ function NotificationsSection() {
 function ServicesSection() {
   const { services } = useSettings();
   const { data: options = [], isLoading } = useProviderOptions(true);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  /* Mismo idioma de cierre que TabMenu y que el popover de Filtros: fuera o
+     Escape. Es lo que hace que un desplegable se comporte como el resto. */
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
+
   if (!isLoading && options.length === 0) return null;
   const toggle = (id: number) =>
     setSetting("services", services.includes(id) ? services.filter((s) => s !== id) : [...services, id]);
+
+  const picked = options.filter((p) => services.includes(p.id));
+  const logoOf = (p: (typeof options)[number]) => tmdbImg(p.logo_path, "w92");
+  /* Dos nombres y un contador para el resto. El contador es un número, así que
+     no hay plural que traducir ni cadena que se alargue al cambiar de idioma —
+     que es justo lo que rompía la fila de chips que había aquí. */
+  const summary = picked.length === 0
+    ? t("All platforms")
+    : picked.slice(0, 2).map((p) => p.name).join(", ") + (picked.length > 2 ? ` +${picked.length - 2}` : "");
+
   return (
     <Row label={t("Your services")}>
-      <div className="flex flex-wrap gap-2">
-        {options.map((p) => {
-          const on = services.includes(p.id);
-          const logo = tmdbImg(p.logo_path, "w92");
-          return (
-            <button
-              key={p.id}
-              className={`chip ${on ? "chip-active" : ""}`}
-              aria-pressed={on}
-              onClick={() => toggle(p.id)}
-            >
-              {logo && (
-                <img
-                  src={logo}
-                  alt=""
-                  width={16}
-                  height={16}
-                  style={{ borderRadius: 4, objectFit: "cover" }}
-                />
-              )}
-              {p.name}
-            </button>
-          );
-        })}
+      <div style={{ position: "relative" }} ref={ref}>
+        <button
+          className="field-select"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, textAlign: "left" }}
+        >
+          <span className="flex items-center gap-2 min-w-0">
+            {picked.length > 0 && (
+              <span className="flex items-center gap-1 shrink-0">
+                {picked.slice(0, 3).map((p) => {
+                  const logo = logoOf(p);
+                  return logo
+                    ? <img key={p.id} src={logo} alt="" width={16} height={16} style={{ borderRadius: 4, objectFit: "cover" }} />
+                    : null;
+                })}
+              </span>
+            )}
+            <span className="truncate">{summary}</span>
+          </span>
+          <ChevronDown size={15} className="shrink-0" />
+        </button>
+        {open && (
+          <div className="filter-menu" role="menu" aria-label={t("Your services")} style={{ right: 0, minWidth: 0 }}>
+            {options.map((p) => {
+              const on = services.includes(p.id);
+              const logo = logoOf(p);
+              return (
+                <button
+                  key={p.id}
+                  role="menuitemcheckbox"
+                  aria-checked={on}
+                  className="filter-opt"
+                  onClick={() => toggle(p.id)}
+                >
+                  {logo && <img src={logo} alt="" width={16} height={16} style={{ borderRadius: 4, objectFit: "cover", flex: "0 0 auto" }} />}
+                  <span className="truncate">{p.name}</span>
+                  {on && <Check size={14} className="filter-opt-check" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="mute" style={{ fontSize: 12 }}>
         {t("Narrows \"New to stream\" in Movies to the platforms you pay for. Leave it empty to see everything new in your country.")}

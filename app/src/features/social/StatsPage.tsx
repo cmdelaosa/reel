@@ -161,7 +161,7 @@ function Section({ icon: Icon, title, more, children }: {
   );
 }
 
-const GRID = { display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" } as const;
+const GRID = { display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" } as const;
 
 export default function StatsPage() {
   const stats = useStats();

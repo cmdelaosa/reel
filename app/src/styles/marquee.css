@@ -57,7 +57,15 @@
 /* Icon-only is a circle everywhere, not just in the top bar — that is what let
    the bar drop its own radius/padding override. A square of the same footprint
    reads heavier next to round avatars and pills. */
-.btn-icon { width: var(--ctl-h); height: var(--ctl-h); padding: 0; border-radius: 999px; }
+.btn-icon { width: var(--ctl-h); height: var(--ctl-h); padding: 0; border-radius: 999px; position: relative; }
+/* --ctl-h son 40px y el mínimo táctil son 44. Los 4 que faltan se ponen fuera de
+   la caja, no dentro: el círculo que se ve —y con él el ritmo de controles que
+   --ctl-h define— no se mueve un píxel, y el dedo cuenta con los 44. Es la
+   diferencia entre arreglar el área de toque y rediseñar la barra. */
+.btn-icon::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 44px; height: 44px; transform: translate(-50%, -50%);
+}
 .btn-sm { min-height: var(--ctl-h-sm); padding: 0 14px; font-size: 13px; }
 .btn-sm.btn-icon { width: var(--ctl-h-sm); height: var(--ctl-h-sm); }
 
@@ -397,6 +405,17 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
   from { opacity: 0; transform: translate(-50%, calc(-50% + 18px)) scale(.985); }
   to   { opacity: 1; transform: translate(-50%, -50%); }
 }
+/* La misma trampa, para lo que se centra SOLO en horizontal y se coloca arriba
+   con `top` (la paleta ⌘K). Con `.sheet` a secas duraba los 280ms de la
+   animación fuera de la pantalla: medido el 26-08-2026 a 375px, la paleta salía
+   en left:190 / right:537 —162px fuera— y entraba cruzando de derecha a
+   izquierda hasta caer en su sitio. `rise-center` no servía porque arrastra
+   también el -50% vertical, que aquí no lo hay. */
+.sheet-x { animation: rise-x .28s cubic-bezier(.16,1,.3,1); }
+@keyframes rise-x {
+  from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(.985); }
+  to   { opacity: 1; transform: translateX(-50%); }
+}
 
 /* ---- La saga, en la ficha de una película ----
    Lo que en una serie es la lista de episodios. Una rejilla en vez de una fila
@@ -711,8 +730,15 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 /* The bar is one --ctl-h control plus --bar-pad-y top and bottom, and nothing
    inside it may be taller — that identity is what --bar-h encodes for everything
    pinned underneath. */
+/* min-width: 0 en el carril, y todo lo que no es el nav clavado a su tamaño.
+   Sin eso, un hijo flex no baja de su min-content y la barra entera crecía por
+   detrás de la ventana: medido el 26-08-2026 en modo Juegos a 1280px, el nav de
+   seis pestañas pedía 682px en español y la página se iba a 1385 de ancho —115
+   de barra horizontal, con el buscador, la campana, los ajustes y el avatar
+   fuera de la pantalla. En inglés pasaba lo mismo, 1300, solo que menos. El
+   único que puede encoger es el nav, y encoge deslizándose (abajo). */
 .mq-top-inner {
-  max-width: 1280px; margin: 0 auto;
+  max-width: 1280px; margin: 0 auto; min-width: 0;
   display: flex; align-items: center; gap: 14px;
   padding: var(--bar-pad-y) clamp(16px, 3vw, 28px);
 }
@@ -745,8 +771,20 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
      the one that deleted the nav's container and the bar's bottom border, and
      putting a divider back into the same bar would argue with both. */
   margin-left: 12px;
+  /* El nav es el ÚNICO que cede cuando la barra no cabe, y cede deslizándose en
+     vez de empujar a los demás fuera de la ventana. El desvanecido de la
+     derecha es lo que dice que hay más: sin él, un nav cortado a hueso se lee
+     como un nav que termina ahí. La barra de desplazamiento se esconde — con
+     seis pestañas el recorte es de unas pocas decenas de píxeles y un carril
+     gris debajo de las píldoras pesaría más que lo que resuelve. */
+  min-width: 0; overflow-x: auto;
+  scrollbar-width: none; -ms-overflow-style: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
 }
+.mq-tabs::-webkit-scrollbar { display: none; }
 .mq-tab {
+  flex: 0 0 auto;
   display: inline-flex; align-items: center; gap: 7px;
   height: var(--ctl-h-sm); padding: 0 13px;
   border-radius: 999px; border: none;
@@ -801,7 +839,9 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   .mq-medium-seg.on span { display: inline; }
 }
 
-.mq-top-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+/* flex: 0 0 auto — ver .mq-top-inner: de los cuatro hijos de la barra, el nav
+   es el único al que se le permite encoger. */
+.mq-top-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; margin-left: auto; }
 /* Space the bar's actions by their ink, not their boxes. The icon buttons are
    borderless, so an 18px glyph floats in a 40px target with 11px of nothing each
    side. Against the search pill or the avatar — both of which have a visible edge
@@ -869,10 +909,16 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   border-radius: 999px; background: var(--accent); border: 2px solid var(--app-bg);
 }
 .mq-avatar {
+  position: relative;
   width: var(--ctl-h); height: var(--ctl-h);
   border-radius: 999px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--accent);
   font-weight: 800; font-size: 15px; cursor: pointer;
+}
+/* Los 44px de toque por fuera del círculo, igual que .btn-icon. */
+.mq-avatar::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 44px; height: 44px; transform: translate(-50%, -50%);
 }
 
 /* ---- Layout ---- */
@@ -1378,8 +1424,14 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   box-shadow: var(--shadow-lg);
   max-width: calc(100vw - 24px);
 }
+/* El mínimo táctil, escrito como mínimo y no confiado al padding. Un botón sin
+   rótulo medía 19px de glifo + 22 de padding = 41px, y por debajo de 359px el
+   bloque de abajo le quitaba ancho hasta dejarlo en 35. Los dos por debajo de
+   los 44px que pide un pulgar, y ninguno de los dos se veía: la caja es
+   transparente, así que crecer no mueve un solo píxel de lo que se pinta. */
 .mq-dockbtn {
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  min-width: 44px; min-height: 44px;
   padding: 11px; border-radius: 999px; border: none;
   background: transparent; color: var(--text-dim);
   font-size: 12.5px; font-weight: 600; cursor: pointer;
@@ -1394,15 +1446,25 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 }
 .mq-docklabel { display: none; }
 .mq-dockbtn.on .mq-docklabel { display: inline; }
-/* Five tabs is one more than this pill was drawn for. At 320px the Spanish
-   labels ("Esta noche", "Calendario", "Pendientes") ask for ~8px more than the
-   dock's max-width allows, and with nothing here to scroll or wrap, the fifth
-   tab simply spilled past the rounded edge. Buying the space back from
-   horizontal padding rather than from the labels: it is invisible, the buttons
-   keep their full height, and 37px of width is still a thumb's target. */
-@media (max-width: 359px) {
-  .mq-dockbtn { padding: 11px 8px; }
-  .mq-dockbtn.on { padding: 11px 12px; }
+/* Aquel arreglo compraba el sitio del padding, y se acabó el padding.
+   Estaba calibrado para CINCO pestañas —lo dice su propio comentario— y el modo
+   Juegos tiene SEIS desde que Steam es una de ellas: medido el 26-08-2026, a
+   320px el dock pedía 308px para un carril de 294 y "Amigos" aterrizaba en
+   right:321, fuera de la pantalla. Y no había de dónde seguir sacando: los
+   botones ya estaban en 35px de ancho, por debajo del mínimo táctil.
+
+   Así que lo que se cae ahora es la ETIQUETA de la activa, no más padding. Es
+   el mismo trato que .mq-medium-seg recibe a 359px y por el mismo motivo: en un
+   teléfono estrecho el rótulo es lo primero prescindible, porque la píldora
+   rellena ya dice cuál está encendida. A 400px y no a 359: con seis pestañas la
+   cuenta no sale tampoco a 375, que es el teléfono más común.
+
+   Con la etiqueta fuera todas las pestañas miden lo mismo, así que el dock cabe
+   con cualquier número de ellas — que es lo que le faltaba al arreglo anterior
+   para sobrevivir a la sexta. */
+@media (max-width: 400px) {
+  .mq-dockbtn.on .mq-docklabel { display: none; }
+  .mq-dockbtn.on { padding: 11px; }
 }
 
 /* ---- Notification panel ---- */

@@ -514,7 +514,7 @@ export default function FriendPage() {
             {watchingCards.length > 0 && (
               <section className="flex flex-col gap-2.5">
                 <div className="eyebrow flex items-center gap-1.5"><Play size={13} />{tr("Watching now")}</div>
-                <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+                <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))" }}>
                   {watchingCards}
                 </div>
               </section>
@@ -536,7 +536,7 @@ export default function FriendPage() {
                 separaron, y además esconde lo interesante, que es coincidir en
                 cine y no en series. */}
             {slices.length > 0 && (
-              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))" }}>
                 {slices.map((s) => {
                   const copy = tasteCopy(s.medium);
                   return (
@@ -701,7 +701,7 @@ function CompareSection({ slice, esNames, onOpen }: {
         <Scale size={13} />{tr(mediumPlural(slice.medium))} · {slice.coRated.length} {tr(copy.ratedInCommon)}
         {slice.affinity && <span className="mute"> · {tv("{pct}% taste match", { pct: slice.affinity.pct })}</span>}
       </div>
-      <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+      <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
         {shown.map((c) => {
           const name = locName(esNames, c.tmdb_id, c.name, c.kind);
           return (
