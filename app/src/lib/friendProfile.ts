@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { fetchPaged } from "@/lib/paging";
 import type { Medium } from "@/domain/tasteScope";
 
 /* Rich friend-profile data for the friend page (/friend/:id): the friend's full
@@ -13,6 +14,10 @@ import type { Medium } from "@/domain/tasteScope";
 
 const followRowSchema = z.object({
   added_at: z.string(),
+  /* "Lo tengo" (0076). Es lo que decide si su muro dice que algo fue a sus
+     PENDIENTES o a su BIBLIOTECA, y no lo decide el medio (domain/mediumCopy).
+     Opcional porque la columna llegó con una migración que se aplica a mano. */
+  owned: z.boolean().nullable().optional(),
   titles: z.object({
     id: z.string().uuid(),
     tmdb_id: z.number().int(),
@@ -25,6 +30,11 @@ const followRowSchema = z.object({
     first_air_date: z.string().nullable(),
     genres: z.array(z.string()),
     network: z.string().nullable(),
+    /* Las plataformas de un juego (0071). Es con lo que se describe su
+       biblioteca de juegos en el perfil de gustos, igual que la cadena describe
+       la de series. Vacío en los otros dos medios, y opcional para una base
+       anterior a esa migración. */
+    platforms: z.array(z.string()).nullable().optional(),
     vote_average: z.number().nullable(),
     episode_run_time: z.number().int().nullable(),
     status: z.string().nullable(),
@@ -37,8 +47,9 @@ const ratingRowSchema = z.object({
   titles: z.object({
     id: z.string().uuid(),
     tmdb_id: z.number().int(),
-    /** El medio de lo puntuado — la afinidad de esta ficha se calcula con el
-     *  del modo, igual que la de /friends/taste (domain/tasteScope). */
+    /** El medio de lo puntuado. La ficha calcula TRES afinidades, una por
+     *  medio, porque un `tmdb_id` solo es único dentro del suyo — cruzar las
+     *  tres listas en un saco inventa coincidencias (domain/tasteScope). */
     kind: z.enum(["tv", "movie", "game"]).optional().default("tv"),
     name: z.string(),
     poster_path: z.string().nullable(),
@@ -56,10 +67,12 @@ export interface FriendFollow {
   first_air_date: string | null;
   genres: string[];
   network: string | null;
+  platforms?: string[] | null;
   vote_average: number | null;
   episode_run_time: number | null;
   status: string | null;
   added_at: string;
+  owned: boolean | null;
 }
 
 export interface FriendRating {
@@ -108,21 +121,22 @@ export interface FriendWatch {
   poster_path: string | null;
 }
 
-/** El muro de la ficha de un amigo, ya recortado al medio que se está mirando.
+/** Lo último que ha visto un amigo, de los TRES medios.
  *
- *  El recorte va en SQL y no después: `limit` corta las 60 más recientes de
- *  todas, y filtrar por medio al recibirlas dejaba el muro de cine vacío en
- *  cuanto un amigo llevaba sesenta episodios seguidos de series. */
-export function useFriendWatchHistory(friendId: string, medium: Medium, limit = 60) {
+ *  Filtraba por el medio del modo, y esa era la mitad de "su perfil solo enseña
+ *  series": entrabas en su ficha desde Videojuegos y el muro se quedaba con lo
+ *  que hubiera jugado, sin una sola de sus series. El perfil ya no mira el modo
+ *  —enseña a la persona entera— así que el recorte se cae y el `limit` reparte
+ *  entre los tres, que es lo que se quiere: lo último es lo último. */
+export function useFriendWatchHistory(friendId: string, limit = 60) {
   return useQuery({
-    queryKey: ["friendWatchHistory", friendId, medium, limit],
+    queryKey: ["friendWatchHistory", friendId, limit],
     enabled: Boolean(friendId),
     queryFn: async (): Promise<FriendWatch[]> => {
       const { data, error } = await supabase
         .from("watch_events")
         .select("watched_at, episodes!inner(season_number, episode_number, titles!inner(tmdb_id, kind, name, poster_path))")
         .eq("user_id", friendId)
-        .eq("episodes.titles.kind", medium)
         .order("watched_at", { ascending: false })
         .limit(limit);
       if (error) throw error;
@@ -169,27 +183,40 @@ export function useFriendProfile(friendId: string) {
   return useQuery({
     queryKey: ["friendProfile", friendId],
     queryFn: async (): Promise<FriendProfileData> => {
-      const [followsRes, ratingsRes] = await Promise.all([
-        supabase
-          .from("library_entries")
-          .select("added_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres, network, vote_average, episode_run_time, status)")
-          .eq("user_id", friendId)
-          .eq("followed", true),
-        supabase
-          .from("ratings")
-          .select("score, created_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres)")
-          .eq("user_id", friendId)
-          .not("title_id", "is", null),
+      /* Paginadas las dos, y no por prudencia: PostgREST corta en mil filas sin
+         avisar (lib/paging), y estas dos listas son justo las que crecen de
+         golpe — una importación de FilmAffinity son 1.325 películas y la de
+         InfiniteBacklog, 386 juegos. Leídas a medias, el perfil de gustos de un
+         amigo y vuestra afinidad salían calculados sobre el trozo que cupo, con
+         la pantalla llena y sin un solo error que lo dijera.
+
+         El `.order()` de cada una es obligatorio, no decorativo: sin un orden
+         total, dos ventanas consecutivas repiten filas y se saltan otras. */
+      const [followsData, ratingsData] = await Promise.all([
+        fetchPaged((from, to) =>
+          supabase
+            .from("library_entries")
+            .select("added_at, owned, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres, network, platforms, vote_average, episode_run_time, status)")
+            .eq("user_id", friendId)
+            .eq("followed", true)
+            .order("title_id")
+            .range(from, to)),
+        fetchPaged((from, to) =>
+          supabase
+            .from("ratings")
+            .select("score, created_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres)")
+            .eq("user_id", friendId)
+            .not("title_id", "is", null)
+            .order("title_id")
+            .range(from, to)),
       ]);
-      if (followsRes.error) throw followsRes.error;
-      if (ratingsRes.error) throw ratingsRes.error;
       const follows: FriendFollow[] = z
         .array(followRowSchema)
-        .parse(followsRes.data)
-        .map((r) => ({ ...r.titles, added_at: r.added_at }));
+        .parse(followsData)
+        .map((r) => ({ ...r.titles, added_at: r.added_at, owned: r.owned ?? null }));
       const ratings: FriendRating[] = z
         .array(ratingRowSchema)
-        .parse(ratingsRes.data)
+        .parse(ratingsData)
         .map((r) => ({ ...r.titles, score: r.score, created_at: r.created_at }));
       return { follows, ratings };
     },

@@ -455,6 +455,9 @@ const ES: Record<string, string> = {
 
   // ---- You ----
   "in your library": "en tu biblioteca",
+  /* Con la cifra dentro, para los accesos del perfil: son cuatro tarjetas y el
+     número es lo que las distingue de un vistazo. */
+  "{n} in your library": "{n} en tu biblioteca",
   "Everything you've watched": "Todo lo que has visto",
   "Episodes watched": "Episodios vistos",
   "Time spent": "Tiempo total",
@@ -545,6 +548,21 @@ const ES: Record<string, string> = {
   "self: added {count} {things} to their backlog": "añadiste {count} {things} a tus pendientes",
   "added {count} {things} to their watchlist": "añadió {count} {things} a su lista",
   "self: added {count} {things} to their watchlist": "añadiste {count} {things} a tu lista",
+  /* El desglose de un día en la rejilla de actividad (0082): "3 episodios · 1
+     película · 20 ago". Tres frases y no una con el nombre del medio dentro,
+     por lo de siempre: el género arrastra, y de un juego no se dice que se vio
+     sino que se terminó. */
+  "heat: {n} episode": "{n} episodio",
+  "heat: {n} episodes": "{n} episodios",
+  "heat: {n} movie": "{n} película",
+  "heat: {n} movies": "{n} películas",
+  "heat: {n} game finished": "{n} juego terminado",
+  "heat: {n} games finished": "{n} juegos terminados",
+  /* La década de una película, en el perfil de gustos. Llegan las dos formas
+     del número y cada idioma coge la suya: el inglés dice "1990s" y el español
+     "los 90" — pero "los 2000", no "los 00", así que el corte de dos cifras lo
+     decide quien llama. */
+  "decade: {full}": "los {short}",
   "games": "juegos",
   "movies": "películas",
   "See which ones": "Ver cuáles",
@@ -616,6 +634,16 @@ const ES: Record<string, string> = {
   "Watching now": "Viendo ahora",
   "Shows": "Series",
   "Episodes": "Episodios",
+  /* La cifra de "todo lo que ha visto" de la cabecera de un amigo. Prefijada,
+     como los verbos del muro y por lo mismo: el "Watched" sin prefijo ya es
+     "Visto" (la etiqueta de un episodio marcado) y una clave nombra un
+     significado, no una palabra.
+
+     Y NO dice "Episodios" aunque venga de `rpc_friend_snapshot.stats.episodes`:
+     esa cuenta TODOS sus watch_events, y una película vista y un juego
+     terminado escriben uno igual que un episodio (0067, 0071). Llamarlo
+     episodios era la etiqueta prestada de siempre. */
+  "stat: Watched": "Vistos",
   "Rated": "Puntuadas",
   "Est. watch time": "Tiempo estimado",
   // es needs a "de" the English doesn't, so the percentage travels in the key.
@@ -905,6 +933,14 @@ const EN: Record<string, string> = {
   "self: added {count} {things} to their library": "added {count} {things} to your library",
   "self: added {count} {things} to their backlog": "added {count} {things} to your backlog",
   "self: added {count} {things} to their watchlist": "added {count} {things} to your watchlist",
+  "stat: Watched": "Watched",
+  "heat: {n} episode": "{n} episode",
+  "heat: {n} episodes": "{n} episodes",
+  "heat: {n} movie": "{n} movie",
+  "heat: {n} movies": "{n} movies",
+  "heat: {n} game finished": "{n} game finished",
+  "heat: {n} games finished": "{n} games finished",
+  "decade: {full}": "{full}s",
 };
 
 /** Dictionaries by language. */

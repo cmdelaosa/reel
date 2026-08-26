@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useAddedBatch, useFriendActivity, type ActivityItem } from "@/lib/explore";
@@ -7,6 +7,7 @@ import { useEventReactions } from "@/lib/reactions";
 import { byEvent, type ReactionRow } from "@/domain/reactions";
 import { relativeTime } from "@/domain/time";
 import { addedListOf, showsEpisodeCount, watchedPhrase } from "@/domain/mediumCopy";
+import { activityPhrase, fill } from "@/ui/activityPhrase";
 import { thumbArt } from "@/lib/artwork";
 import { dateLocale, locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -122,82 +123,44 @@ function epRange(a: ActivityItem): React.ReactNode {
   return `S${a.season_number} · E${a.episode_number} – S${toS} · E${toE}`;
 }
 
-/* Slot React nodes into a translated sentence's {placeholders}. The whole
-   sentence is one dictionary key, so a language can put the show name and the
-   episode range where its grammar wants them ("vio S1 · E3 de Severance") —
-   a chain of translated fragments would freeze English order. */
-function fill(s: string, nodes: Record<string, React.ReactNode>): React.ReactNode {
-  return s.split(/(\{[a-z]+\})/).map((part, i) => {
-    const slot = /^\{[a-z]+\}$/.test(part) ? nodes[part.slice(1, -1)] : undefined;
-    return <Fragment key={i}>{slot ?? part}</Fragment>;
-  });
-}
+/* La frase de una fila vive en ui/activityPhrase, compartida con el muro del
+   perfil (features/social/ActivityWall): elegir la clave —tercera persona o
+   segunda, la lista de cada medio, el plural, "terminó" en vez de "vio"— es la
+   parte con esquinas, y dos copias de eso son dos copias que un día dirán cosas
+   distintas.
 
-/* Your own rows need their own keys, not the third-person ones: English gets
-   away with one verb ("watched"), Spanish does not ("vio" / "viste"). */
+   Aquí se quedan los dos verbos que solo existen contra un RPC anterior a 0040,
+   que el muro del perfil no conoce, y la traducción de una fila del RPC a lo
+   que esa función pide. */
 function phrase(a: ActivityItem, titleName: string, isMe: boolean): React.ReactNode {
   const name = <b style={{ fontWeight: 700 }}>{titleName}</b>;
-  const shape = watchedPhrase(a.kind);
-  // Solo cuando la frase lleva episodios: ni en cine ni en juegos hay rango que
-  // componer, y construirlo para tirarlo deja el código afirmando justo encima
-  // lo que la rama de abajo niega.
-  const eps = shape === "with-episodes"
-    && a.season_number != null && a.episode_number != null && (
-      <b style={{ fontWeight: 700 }}>{epRange(a)}</b>
-    );
   switch (a.verb) {
-    case "rated":
-      return fill(tr(isMe ? "self: rated {name}" : "rated {name}"), { name });
-    case "added": {
-      /* La lista tiene otro nombre en cada medio —watchlist para series y cine,
-         PENDIENTES para juegos— y desde 0076 hay una tercera que no la decide
-         el medio sino la fila: lo marcado como "Lo tengo" va a la BIBLIOTECA.
-         Cuál toca lo dice el servidor; domain/mediumCopy pone el respaldo. */
-      const list = addedListOf(a.kind, a.added_list);
-      const n = a.added_count ?? 1;
-
-      /* Plegado (0077). Una importación de Steam mete cuarenta juegos de golpe:
-         sin esto son cuarenta filas idénticas que además se comen el cupo del
-         muro de esa persona y borran su actividad de series. Con uno solo la
-         frase es exactamente la de antes, y por eso son dos ramas y no una
-         frase con "1" dentro: "añadió 1 juego a su biblioteca" es lo que se
-         escribe cuando a nadie le importa cómo suena. */
-      if (n > 1) {
-        const count = <b style={{ fontWeight: 700 }}>{n}</b>;
-        const things = tr(a.kind === "game" ? "games" : a.kind === "movie" ? "movies" : "shows");
-        const key = list === "library"
-          ? (isMe ? "self: added {count} {things} to their library" : "added {count} {things} to their library")
-          : list === "backlog"
-          ? (isMe ? "self: added {count} {things} to their backlog" : "added {count} {things} to their backlog")
-          : (isMe ? "self: added {count} {things} to their watchlist" : "added {count} {things} to their watchlist");
-        return fill(tr(key), { count, things });
-      }
-
-      const key = list === "library"
-        ? (isMe ? "self: added {name} to their library" : "added {name} to their library")
-        : list === "backlog"
-        ? (isMe ? "self: added {name} to their backlog" : "added {name} to their backlog")
-        : (isMe ? "self: added {name} to their watchlist" : "added {name} to their watchlist");
-      return fill(tr(key), { name });
-    }
-    case "watched":
-      /* Una película se ve entera y de una vez, y un juego ni siquiera se ve:
-         se termina. En los dos casos no hay un "S1·E1 de" que anteponerle, y el
-         episodio sintético que los sostiene por debajo (0067, 0071) no es algo
-         que nadie quiera leer. Cuál de las tres frases toca lo decide
-         domain/mediumCopy, que es donde está probado. */
-      if (shape === "whole-title-finished") {
-        return fill(tr(isMe ? "self: finished {name}" : "finished {name}"), { name });
-      }
-      if (shape === "whole-title") {
-        return fill(tr(isMe ? "self: watched {name}" : "watched {name}"), { name });
-      }
-      return fill(tr(isMe ? "self: watched {eps} of {name}" : "watched {eps} of {name}"), { eps, name });
     case "started":
       return fill(tr("started watching {name}"), { name });
     case "finished_season":
       // {season} is a plain number — filled first, so only {name} stays a node.
       return fill(tv("finished season {season} of {name}", { season: a.season_number ?? "" }), { name });
+    default:
+      return activityPhrase({
+        verb: a.verb,
+        kind: a.kind,
+        name,
+        count: a.verb === "added" ? a.added_count ?? 1 : a.ep_count ?? 1,
+        /* Solo cuando la frase lleva episodios: ni en cine ni en juegos hay
+           rango que componer, y construirlo para tirarlo deja el código
+           afirmando justo encima lo que la rama de abajo niega. */
+        episodes: watchedPhrase(a.kind) === "with-episodes"
+          && a.season_number != null && a.episode_number != null
+          ? <b style={{ fontWeight: 700 }}>{epRange(a)}</b>
+          : undefined,
+        /* La lista tiene otro nombre en cada medio —watchlist para series y
+           cine, PENDIENTES para juegos— y desde 0076 hay una tercera que no la
+           decide el medio sino la fila: lo marcado como "Lo tengo" va a la
+           BIBLIOTECA. Cuál toca lo dice el servidor; domain/mediumCopy pone el
+           respaldo. */
+        list: addedListOf(a.kind, a.added_list),
+        isMe,
+      });
   }
 }
 

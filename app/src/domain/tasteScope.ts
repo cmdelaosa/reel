@@ -20,6 +20,18 @@
 
 export type Medium = "tv" | "movie" | "game";
 
+/** Los tres medios EN ORDEN, que es el que la app usa en todas partes: el
+ *  conmutador de la barra, los bloques del perfil, las secciones de la
+ *  biblioteca de un amigo y la leyenda de la rejilla de actividad.
+ *
+ *  Se exporta para que ese orden se escriba UNA vez de cara a las pantallas.
+ *  Los módulos puros de al lado (domain/heatmap, domain/tasteProfile) mantienen
+ *  el suyo a propósito, por lo mismo que cada uno declara su `Medium`: son
+ *  independientes y sus pruebas corren solas. Aquí lo que se evita es la copia
+ *  en cada componente, que es donde se olvidaba.
+ */
+export const MEDIA: readonly Medium[] = ["tv", "movie", "game"];
+
 /** Las filas de UN medio, sean tuyas o de un amigo.
  *
  *  Pregunta `kind === medium` en positivo, la misma regla que 0071 usa en SQL:

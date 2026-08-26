@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heroArt, thumbArt } from "@/lib/artwork";
+import { gridArt, heroArt, thumbArt } from "@/lib/artwork";
 
 /* Lo que se prueba aquí es la equivalencia entre las dos fuentes, que es lo
    único que este módulo decide. El fallo que lo trajo no fue un tamaño mal
@@ -41,5 +41,27 @@ describe("thumbArt", () => {
   it("cada medio a su fuente", () => {
     expect(thumbArt("game", "co1abc")).toContain("images.igdb.com");
     expect(thumbArt("tv", "/post.jpg")).toContain("image.tmdb.org");
+  });
+});
+
+describe("gridArt", () => {
+  it("cada fuente da su cartel grande", () => {
+    expect(gridArt("tv", "/post.jpg")).toContain("/w342/post.jpg");
+    expect(gridArt("movie", "/post.jpg")).toContain("/w342/post.jpg");
+    expect(gridArt("game", "co1abc")).toContain("t_cover_big/co1abc.jpg");
+  });
+
+  it("un juego nunca pide su cartel a TMDB", () => {
+    // Es el fallo que trajo esta función: la rejilla de la ficha de un amigo
+    // pedía `tmdbImg` para los tres medios, y a un hash de IGDB eso le devuelve
+    // una URL bien formada que responde 404 sin quejarse.
+    const url = gridArt("game", "co1abc")!;
+    expect(url).toContain("images.igdb.com");
+    expect(url).not.toContain("image.tmdb.org");
+  });
+
+  it("sin carátula no inventa una URL", () => {
+    expect(gridArt("game", null)).toBeUndefined();
+    expect(gridArt("tv", undefined)).toBeUndefined();
   });
 });

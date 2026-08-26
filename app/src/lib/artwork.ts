@@ -21,6 +21,24 @@ export function thumbArt(kind: Medium, path: string | null | undefined): string 
   return kind === "game" ? igdbImg(path, "cover_small") : tmdbImg(path, "w92");
 }
 
+/** El cartel de una REJILLA en una lista mezclada: la biblioteca de un amigo,
+ *  donde sus series, su cine y sus juegos se navegan en la misma parrilla.
+ *
+ *  Segundo par medido, y el párrafo de arriba explica por qué no contradice lo
+ *  que dice: allí se rechaza inventar un diccionario de los seis tamaños de cada
+ *  fuente sin comprobarlos; aquí hay UN hueco concreto —un cartel de ~160 px de
+ *  ancho en pantalla, el doble en retina— y para ese hueco los dos escalones
+ *  están medidos: `w342` de TMDB y `cover_big` de IGDB (264×374), que es lo más
+ *  grande que IGDB da de una carátula.
+ *
+ *  Y hace falta porque la rejilla de la ficha de un amigo pasó a ser de los tres
+ *  medios: pedía `tmdbImg` para todo, y a un hash de IGDB eso le devuelve una
+ *  URL bien formada que responde 404 sin quejarse — la rejilla de sus juegos
+ *  entera en blanco, sin un error que lo dijera. */
+export function gridArt(kind: Medium, path: string | null | undefined): string | undefined {
+  return kind === "game" ? igdbImg(path, "cover_big") : tmdbImg(path, "w342");
+}
+
 /* El banner de "Esta noche": la imagen apaisada, con la carátula de respaldo.
  *
  * Esto SÍ vive aquí, y el párrafo de arriba explica por qué parece una
