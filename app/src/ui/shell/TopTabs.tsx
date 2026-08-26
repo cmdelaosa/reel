@@ -11,10 +11,16 @@ import { t } from "@/lib/i18n";
    en el borde derecho diciendo que había más. Con seis pestañas en modo Juegos
    eso significaba, medido, que "Amigos" no se veía NUNCA y que Steam se veía a
    dos tercios — a 1280px y también a 1920, porque la barra estaba topada al
-   mismo ancho que la rejilla de carátulas. Ahora la barra ocupa la ventana
-   entera (marquee.css, .mq-top-inner) y lo que aun así no quepa entra en el
-   menú. Una pestaña en un menú se ve, se pulsa y la encuentra el teclado; una
-   pestaña detrás de un degradado no está en ninguna parte.
+   mismo ancho que la rejilla de carátulas. Hoy la barra tiene tope propio y más
+   ancho, --bar-max (tokens.css), que da para las seis; y lo que aun así no
+   quepa —una ventana estrecha, un idioma más largo, una séptima pestaña— entra
+   en el menú. Una pestaña en un menú se ve, se pulsa y la encuentra el teclado;
+   una pestaña detrás de un degradado no está en ninguna parte.
+
+   Los dos números se leen juntos: --bar-max decide cuánto carril hay, y esto
+   decide qué cabe en él. Si un día deja de caber algo que debería, el que se
+   toca es --bar-max — pero mirando antes lo que dice su comentario sobre por
+   qué no es más grande.
 
    La cuenta de cuántas caben es de domain/tabFit, con sus pruebas. Aquí solo
    está lo que hace falta un navegador para saber: cuánto mide cada rótulo. */
