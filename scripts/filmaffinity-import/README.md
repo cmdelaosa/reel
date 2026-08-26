@@ -117,6 +117,11 @@ Sin `--dry-run` escribe. Banderas:
   **No necesita el JSON**: la saca de los `watch_events` que escribió la propia
   importación (`source = 'filmaffinity_import'`), así que se puede lanzar meses
   después, cuando el export ya no esté en ningún disco. Idempotente.
+- `--desde=<ISO>` — con `--fechas-notas`, solo toca las notas escritas a partir
+  de ese instante. **Ponlo si ya habías puntuado películas en Reel a mano**:
+  `ratings` no tiene columna de origen, así que una nota tuya anterior se
+  reconoce por el mismo título que la de FA y sin este filtro se le movería la
+  fecha años atrás. El instante es el de la importación que hay que reparar.
 
 ## Cómo empareja, y por qué así
 

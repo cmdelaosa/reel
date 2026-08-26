@@ -63,6 +63,9 @@ function readEnv(): Env {
 
 const SOURCE = "filmaffinity_import";
 
+/** Lo que PostgREST devuelve de una tacada, y que no avisa de haberlo aplicado. */
+const PAGE = 1000;
+
 interface Resolved {
   fa: FaItem;
   tmdbId: number;
@@ -215,38 +218,57 @@ async function ensureFollowed(
  *  (`source = 'filmaffinity_import'`) y no puede fechar la nota en un día
  *  distinto del que dice la marca de vista.
  *
- *  Idempotente: dos pasadas dejan lo mismo. */
-async function fecharNotas(admin: SupabaseClient, userId: string): Promise<void> {
+ *  `desde` acota a las notas escritas a partir de ese instante, y existe por lo
+ *  único que esto NO puede distinguir solo: `ratings` no tiene columna de
+ *  origen, así que una nota que TÚ pusiste en Reel antes de importar —esa que el
+ *  importador respetó a propósito— se reconoce por el mismo título que la de FA
+ *  y se le movería la fecha quince años atrás. Pasando el instante de la
+ *  importación solo se tocan las suyas.
+ *
+ *  Idempotente: dos pasadas dejan lo mismo. Con `desde`, la segunda no toca
+ *  nada, porque las fechas ya no caen dentro de la ventana. */
+async function fecharNotas(admin: SupabaseClient, userId: string, desde?: string): Promise<void> {
   // Paginado, porque son mil y pico y PostgREST devuelve mil sin decirlo.
-  const vistas: { watched_at: string; episodes: { title_id: string } }[] = [];
-  for (let from = 0; ; from += 1000) {
+  const vistas: { watched_at: string; episodes: { title_id: string } | null }[] = [];
+  for (let from = 0; ; from += PAGE) {
     const { data, error } = await admin
       .from("watch_events")
       .select("watched_at, episodes!inner(title_id)")
       .eq("user_id", userId)
       .eq("source", SOURCE)
       .order("watched_at", { ascending: true })
-      .range(from, from + 999);
+      .range(from, from + PAGE - 1);
     if (error) throw new Error(`watch_events: ${error.message}`);
     vistas.push(...((data ?? []) as unknown as typeof vistas));
-    if (!data || data.length < 1000) break;
+    if (!data || data.length < PAGE) break;
   }
-  console.log(`${vistas.length} vistas de ${SOURCE} con su fecha`);
+  console.log(`${vistas.length} vistas de ${SOURCE} con su fecha${desde ? ` (solo notas desde ${desde})` : ""}`);
 
   let tocadas = 0;
   let sinNota = 0;
+  let sinTitulo = 0;
   for (const v of vistas) {
-    const { data: filas, error } = await admin
+    // El `!inner` obliga a que haya episodio, pero la forma de la relación la
+    // decide PostgREST: si algún día viniera como lista, `title_id` sería
+    // undefined y el filtro saldría sin condición. Mejor contarlo que filtrar
+    // por nada sobre una tabla de notas.
+    const titleId = v.episodes?.title_id;
+    if (!titleId) { sinTitulo++; continue; }
+    let q = admin
       .from("ratings")
       .update({ created_at: v.watched_at, updated_at: v.watched_at })
       .eq("user_id", userId)
-      .eq("title_id", v.episodes.title_id)
-      .select("id");
+      .eq("title_id", titleId);
+    if (desde) q = q.gte("created_at", desde);
+    const { data: filas, error } = await q.select("id");
     if (error) throw new Error(`ratings: ${error.message}`);
     if (!filas?.length) { sinNota++; continue; }
     if (++tocadas % 100 === 0) console.log(`  notas ${tocadas}/${vistas.length}`);
   }
-  console.log(`\n--fechas-notas: ${tocadas} notas fechadas con su voto, ${sinNota} vistas sin nota`);
+  console.log(
+    `\n--fechas-notas: ${tocadas} notas fechadas con su voto, ${sinNota} vistas sin nota que tocar` +
+      `${sinTitulo ? `, ${sinTitulo} sin título legible` : ""}`,
+  );
 }
 
 /** Los ids de episodio de una película, para cuando tmdb-proxy devuelve el
@@ -266,9 +288,11 @@ async function main() {
   // nadie va a abrir, y esa reparación tiene que poder lanzarse meses después,
   // cuando el export ya no esté en ningún disco.
   if (args.includes("--fechas-notas")) {
+    const desde = args.find((a) => a.startsWith("--desde="))?.slice("--desde=".length);
+    if (desde && Number.isNaN(Date.parse(desde))) throw new Error(`--desde: "${desde}" no es una fecha`);
     const envNotas = readEnv();
     const adminNotas = createClient(envNotas.supabaseUrl, envNotas.serviceKey, { auth: { persistSession: false } });
-    await fecharNotas(adminNotas, envNotas.targetUserId);
+    await fecharNotas(adminNotas, envNotas.targetUserId, desde);
     return;
   }
 
@@ -377,13 +401,6 @@ async function main() {
   // emparejamiento entero: con --solo decía "12/1325" sobre una sola fila.
   const porEscribir = all.filter(({ fa }) => resolved.has(fa.id) && (!solo || solo.has(fa.id))).length;
 
-  // `--fechas-notas` le pone a cada nota la fecha del voto en su propio
-  // `created_at`. No es cosmético: es la columna con la que el muro de amigos
-  // fecha el verbo "rated" (0077_added_agrupado.sql), así que mil notas
-  // importadas con el `now()` por omisión salen todas como votadas hoy —y
-  // sepultan la actividad de todos los amigos bajo una avalancha que nunca
-  // ocurrió. La reparación de una pasada anterior; el importador ya la escribe
-  // bien de origen.
   // `--fechas-lista` no importa nada: solo recoloca el `added_at` de las filas
   // de lista según su puesto en FA. Es la reparación de una pasada anterior, y
   // no toca ni TMDB ni tmdb-proxy — los títulos ya están cacheados.
