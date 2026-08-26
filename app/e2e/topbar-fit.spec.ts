@@ -18,6 +18,13 @@ import { test, expect, type Page } from "@playwright/test";
    Hermética: no toca datos, solo mide. Necesita la pila local y el usuario
    sembrado, como el resto.
 
+   LO QUE NO CAZA. Mide UN instante —el primero en que la barra está pintada—,
+   que es cuando están tanto la barra como los esqueletos, o sea las dos formas
+   de desbordar que se han visto. Un ancho de más que apareciera solo DESPUÉS,
+   con los datos ya puestos, se le escaparía: para eso haría falta muestrear
+   toda la carga, y eso es una prueba más lenta y con más motivos para parpadear
+   de los que este ancho justifica.
+
    Env (por defecto, la pila local):
      E2E_SUPABASE_URL / E2E_ANON_KEY / E2E_EMAIL / E2E_PASSWORD */
 
