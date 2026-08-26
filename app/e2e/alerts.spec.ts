@@ -82,7 +82,7 @@ test("new-episode alerts follow the show's status", async () => {
     const tmdbId = BASE_TMDB + i;
     const { data: title, error: tErr } = await admin
       .from("titles")
-      .upsert({ tmdb_id: tmdbId, kind: "tv", name: `Alert ${c.bucket}`, status: c.tmdbStatus }, { onConflict: "tmdb_id" })
+      .upsert({ tmdb_id: tmdbId, kind: "tv", name: `Alert ${c.bucket}`, status: c.tmdbStatus }, { onConflict: "kind,tmdb_id" })
       .select("id").single();
     expect(tErr, `seed title ${c.bucket}: ${tErr?.message}`).toBeNull();
     const titleId = title!.id as string;

@@ -342,7 +342,13 @@ export function FriendActivityCard() {
           const isOpen = grouped && openKey === a.event_key;
           const rowKey = a.event_key ?? `${a.friend_id}|${a.tmdb_id}|${a.at}`;
           return (
-            <div key={rowKey} className="flex flex-col">
+            /* `fr-row` no es decorativo: la separación entre filas la daba
+               `.fr-activity + .fr-activity`, y al envolver cada fila para poder
+               desplegar el grupo debajo, esas dos filas dejaron de ser hermanas
+               — el muro se quedó con las filas pegadas y nadie lo vio, porque 2px
+               menos por fila no se nota mirando. Lo vio el e2e: 9 huecos por 2px
+               son los 18 de diferencia entre el esqueleto y el contenido. */
+            <div key={rowKey} className="fr-row flex flex-col">
             <div
               ref={flashed ? flashRef : undefined}
               className={`fr-activity${flashed ? " fr-flash" : ""}`}
