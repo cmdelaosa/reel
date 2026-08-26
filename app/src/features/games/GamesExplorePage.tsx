@@ -7,6 +7,7 @@ import { useIgnored } from "@/lib/ignore";
 import { t as tr } from "@/lib/i18n";
 import { Poster, Rail, TabMenu, useShowMore } from "@/ui";
 import { PosterGridSkeleton, RailCardsSkeleton } from "@/ui/Skeleton";
+import { HiddenTitles } from "@/features/explore/DiscoverPieces";
 import type { TitleRow } from "@/lib/schemas";
 
 /* Explorar, en juegos. La tercera con esta planta —un carrusel arriba y una
@@ -106,7 +107,7 @@ export default function GamesExplorePage() {
   const items = useMemo(
     () =>
       (poolData ?? [])
-        .filter((t) => !followed.has(t.tmdb_id) && !isIgnored(t.tmdb_id))
+        .filter((t) => !followed.has(t.tmdb_id) && !isIgnored(t.tmdb_id, "game"))
         .filter((t) => platforms.length === 0 || (t.platforms ?? []).some((p) => platforms.includes(p))),
     [poolData, followed, isIgnored, platforms],
   );
@@ -215,6 +216,8 @@ export default function GamesExplorePage() {
         </div>
 
         {more}
+
+        <HiddenTitles medium="game" />
       </section>
     </div>
   );

@@ -403,11 +403,11 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 </button>
                 {!added && (
                   <button
-                    className={`btn ${isIgnored(title.tmdb_id) ? "btn-accent" : "btn-outline"}`}
-                    onClick={() => (isIgnored(title.tmdb_id) ? unignore.mutate(title.id) : ignore.mutate(title.id))}
-                    title={tr(isIgnored(title.tmdb_id) ? "Un-ignore — show in suggestions again" : "Ignore — hide from suggestions")}
+                    className={`btn ${isIgnored(title.tmdb_id, "tv") ? "btn-accent" : "btn-outline"}`}
+                    onClick={() => (isIgnored(title.tmdb_id, "tv") ? unignore.mutate(title.id) : ignore.mutate(title.id))}
+                    title={tr(isIgnored(title.tmdb_id, "tv") ? "Un-ignore — show in suggestions again" : "Ignore — hide from suggestions")}
                   >
-                    {isIgnored(title.tmdb_id) ? <><Eye size={16} />{tr("Un-ignore")}</> : <><EyeOff size={16} />{tr("Ignore")}</>}
+                    {isIgnored(title.tmdb_id, "tv") ? <><Eye size={16} />{tr("Un-ignore")}</> : <><EyeOff size={16} />{tr("Ignore")}</>}
                   </button>
                 )}
                 {added && entry && (

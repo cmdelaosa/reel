@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Check, ChevronDown, ChevronUp, Eye, EyeOff, List, Plus, SlidersHorizontal, Star, X } from "lucide-react";
+import { Check, EyeOff, List, Plus, SlidersHorizontal, Star, X } from "lucide-react";
 import { useTrending, usePopular, usePopularNow, useTopRated, usePopularWithFriends } from "@/lib/explore";
 import { useFriendships } from "@/lib/friends";
 import { useLibrary, useFollow, useUnfollow } from "@/lib/library";
-import { useIgnore, useIgnored, useUnignore } from "@/lib/ignore";
+import { useIgnore, useIgnored } from "@/lib/ignore";
 import type { TitleRow } from "@/lib/schemas";
 import { tmdbImg } from "@/lib/tmdb";
 import { isEs, locName, t as tr, tv, tGenre, useEsNames } from "@/lib/i18n";
@@ -12,7 +12,7 @@ import { Rail, TabMenu } from "@/ui";
 import { PosterGridSkeleton, RailCardsSkeleton, RowsSkeleton } from "@/ui/Skeleton";
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
-import { FilterPanel, TitlePoster } from "@/features/explore/DiscoverPieces";
+import { FilterPanel, HiddenTitles, TitlePoster } from "@/features/explore/DiscoverPieces";
 import { useTitleIntent } from "@/lib/useOpenTitle";
 
 /* Trending rail (ranked) + a single tabbed discover section: Popular now,
@@ -151,9 +151,8 @@ export function DiscoverSections() {
   const { data: trendingRaw = [], isLoading: trendingLoading } = useTrending();
   const { data: library = [] } = useLibrary();
   const { data: friendships = [] } = useFriendships();
-  const { isIgnored, ignored } = useIgnored();
+  const { isIgnored } = useIgnored();
   const ignore = useIgnore();
-  const unignore = useUnignore();
 
   const [tab, setTab] = useState<Tab>("popular");
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
@@ -161,7 +160,6 @@ export function DiscoverSections() {
   const [toYear, setToYear] = useState<number | null>(null);
   const [shown, setShown] = useState(PAGE_SIZE);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [showHidden, setShowHidden] = useState(false);
   const [view, setView] = useState<ViewMode>(loadView);
   const switchView = (v: ViewMode) => {
     setView(v);
@@ -242,22 +240,22 @@ export function DiscoverSections() {
   };
 
   // Ignored suggestions never surface anywhere in Explore.
-  const trending = trendingRaw.filter((t) => !isIgnored(t.tmdb_id));
+  const trending = trendingRaw.filter((t) => !isIgnored(t.tmdb_id, "tv"));
 
   let items: DiscoverItem[];
   if (tab === "popular") {
     items = (catalogMode ? catalogRaw : popularNowRaw)
-      .filter((t) => !isIgnored(t.tmdb_id) && !followed.has(t.tmdb_id) && passesGenre(t.genres))
+      .filter((t) => !isIgnored(t.tmdb_id, "tv") && !followed.has(t.tmdb_id) && passesGenre(t.genres))
       .map((t) => ({ t, score: null, friends: null, friendCount: 0 }));
   } else if (tab === "rated") {
     // Year + genre already applied server-side.
     items = ratedRaw
-      .filter((t) => !isIgnored(t.tmdb_id) && !followed.has(t.tmdb_id))
+      .filter((t) => !isIgnored(t.tmdb_id, "tv") && !followed.has(t.tmdb_id))
       .map((t) => ({ t, score: t.vote_average, friends: null, friendCount: 0 }));
   } else {
     items = friendsRaw
       // Need the title id to add/hide the card; skip pre-0035 rows that lack it.
-      .filter((p) => p.id != null && !isIgnored(p.tmdb_id) && !followed.has(p.tmdb_id) && passesGenre(p.genres) && passesYear(p.first_air_date))
+      .filter((p) => p.id != null && !isIgnored(p.tmdb_id, "tv") && !followed.has(p.tmdb_id) && passesGenre(p.genres) && passesYear(p.first_air_date))
       .map((p) => ({
         t: {
           id: p.id!, tmdb_id: p.tmdb_id, kind: "tv", name: p.name, overview: null,
@@ -433,45 +431,8 @@ export function DiscoverSections() {
           </div>
         )}
 
-        {ignored.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <button
-              className="chip"
-              style={{ alignSelf: "flex-start" }}
-              onClick={() => setShowHidden((v) => !v)}
-              aria-expanded={showHidden}
-            >
-              <EyeOff size={13} />
-              {ignored.length} {ignored.length === 1 ? tr("hidden show") : tr("hidden shows")}
-              {showHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-            {showHidden && (
-              <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))" }}>
-                {ignored.map((t) => {
-                  const art = tmdbImg(t.posterPath);
-                  return (
-                    <div key={t.titleId} className="poster" style={{ background: posterBg(t.name) }} onClick={() => open(t.tmdbId)}>
-                      {art && <img className="poster-img" src={art} alt="" loading="lazy" />}
-                      <div className="poster-sheen" />
-                      <button
-                        className="btn btn-icon badge-glass absolute"
-                        style={{ top: 8, right: 8, color: "#fff", zIndex: 3 }}
-                        title={tr("Restore to suggestions")}
-                        aria-label={tv("Restore {name} to suggestions", { name: t.name })}
-                        onClick={(e) => { e.stopPropagation(); unignore.mutate(t.titleId); }}
-                      >
-                        <Eye size={15} />
-                      </button>
-                      <div className="poster-body">
-                        <div className="poster-title">{t.name}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+        <HiddenTitles medium="tv" />
+
       </section>
     </>
   );

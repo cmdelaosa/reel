@@ -104,3 +104,14 @@ export const historyLines = (kind: Medium): HistoryLines =>
   kind === "tv"
     ? { headline: "episode-number", caption: "episode-name" }
     : { headline: "title", caption: "studio" };
+
+/** Cómo se llama el cajón de lo oculto en Explorar, en singular y en plural.
+ *
+ *  Otra vez una clave por medio y no el nombre interpolado: en español el
+ *  género arrastra ("ocultas" / "ocultos"), y además lo que se oculta se dice
+ *  con la palabra del medio — "series ocultas" sobre una rejilla de juegos era
+ *  la etiqueta prestada de siempre. */
+export const hiddenLabel = (kind: Medium, count: number): string =>
+  count === 1
+    ? kind === "movie" ? "hidden movie" : kind === "game" ? "hidden game" : "hidden show"
+    : kind === "movie" ? "hidden movies" : kind === "game" ? "hidden games" : "hidden shows";

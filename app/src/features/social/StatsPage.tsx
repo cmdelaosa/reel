@@ -79,7 +79,7 @@ function useStats() {
     // (a) Unseen by you, recommended by friends: not in your library, best
     // friend average first (rater count breaks ties).
     const recommended = all
-      .filter((t) => !inLibrary.has(t.tmdb_id) && t.mine == null && !isIgnored(t.tmdb_id))
+      .filter((t) => !inLibrary.has(t.tmdb_id) && t.mine == null && !isIgnored(t.tmdb_id, medium))
       .sort((a, b) => b.friendAvg - a.friendAvg || b.raters.length - a.raters.length);
 
     // (b) Head-to-head: every show you and at least one friend both rated.

@@ -19,7 +19,7 @@ export default function CollectionPage() {
   const [, setSearchParams] = useSearchParams();
   // Only surface discoveries: drop what you already follow or have hidden.
   const followed = new Set(library.map((r) => r.tmdb_id));
-  const titles = (data?.titles ?? []).filter((t) => !isIgnored(t.tmdb_id) && !followed.has(t.tmdb_id));
+  const titles = (data?.titles ?? []).filter((t) => !isIgnored(t.tmdb_id, "tv") && !followed.has(t.tmdb_id));
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
