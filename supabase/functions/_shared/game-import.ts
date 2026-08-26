@@ -146,6 +146,50 @@ export interface EntryWrite {
   playedAt?: string | null;
 }
 
+/** Dos filas del borrador que acaban en el MISMO juego del catálogo, en una.
+ *
+ *  Pasa, y no es raro: con Nintendo el emparejamiento es por nombre, así que
+ *  dos entradas del registro con el mismo título —la de Switch y la de Switch
+ *  2, una reedición, una versión regional— casan con la misma fila de `titles`.
+ *  Con Steam es menos común y también ocurre: dos appids que IGDB ficha como el
+ *  mismo juego.
+ *
+ *  Y no es un detalle cosmético: **Postgres rechaza el lote entero**. Dos filas
+ *  con la misma clave dentro de un solo `on conflict do update` dan
+ *  `ON CONFLICT DO UPDATE command cannot affect row a second time` (21000), o
+ *  sea que una importación de veinte juegos falla del todo porque dos se
+ *  llamaban igual. Comprobado contra Postgres, no deducido.
+ *
+ *  Cómo se funden, y por qué así:
+ *
+ *    · Los minutos NO se suman. Sumar daría el doble en el caso más probable
+ *      —la misma partida listada dos veces— y no hay forma de distinguirlo de
+ *      dos ediciones jugadas de verdad. Gana la cifra mayor, que es la que no
+ *      es un fragmento.
+ *    · Salvo que alguna diga null, y entonces manda el null: null aquí
+ *      significa "no toques las horas, son las que escribió a mano", y dejar
+ *      que la otra fila las pisara sería saltarse la única regla que estas
+ *      importaciones prometen.
+ *    · Del estado y la fecha gana el primero que diga algo. Son decisiones de
+ *      la persona sobre lo que ella ve como un solo juego; cualquiera de las
+ *      dos vale y ninguna se pierde en silencio. */
+export function mergeByTitle(rows: EntryWrite[]): EntryWrite[] {
+  const byTitle = new Map<string, EntryWrite>();
+  for (const r of rows) {
+    const seen = byTitle.get(r.titleId);
+    if (!seen) {
+      byTitle.set(r.titleId, { ...r });
+      continue;
+    }
+    seen.minutes = seen.minutes === null || r.minutes === null
+      ? null
+      : Math.max(seen.minutes, r.minutes);
+    seen.playState = seen.playState ?? r.playState;
+    seen.playedAt = seen.playedAt ?? r.playedAt;
+  }
+  return [...byTitle.values()];
+}
+
 /** Escribe en la biblioteca las filas que ya tienen `title_id`.
  *
  *  Un upsert POR JUEGO DE COLUMNAS, y esto no es manía: la lista del
@@ -163,7 +207,7 @@ export async function writeEntries(
   source: "steam" | "nintendo",
 ): Promise<number> {
   const groups = new Map<string, EntryWrite[]>();
-  for (const r of rows) {
+  for (const r of mergeByTitle(rows)) {
     const key = `${r.minutes !== null ? "m" : ""}${r.playState ? "s" : ""}${r.playedAt ? "p" : ""}`;
     const group = groups.get(key);
     if (group) group.push(r);
@@ -194,12 +238,21 @@ export async function writeEntries(
 /** Las notas que la persona puso en la pantalla de confirmar.
  *
  *  Un upsert como el de la ficha (`app/src/lib/ratings.ts`), con la misma clave
- *  única: puntuar dos veces el mismo juego es corregir la nota, no apilar dos. */
+ *  única: puntuar dos veces el mismo juego es corregir la nota, no apilar dos.
+ *
+ *  Y por lo mismo que en `writeEntries`, dos filas del borrador que apunten al
+ *  mismo juego se funden ANTES de escribir: con la clave repetida dentro del
+ *  lote, Postgres tira el upsert entero con un 21000. Gana la primera nota, que
+ *  es la que la persona puso en la fila de arriba. */
 export async function writeRatings(
   admin: SupabaseClient,
   userId: string,
   rows: { titleId: string; rating: number }[],
 ): Promise<number> {
+  const byTitle = new Map<string, { titleId: string; rating: number }>();
+  for (const r of rows) if (!byTitle.has(r.titleId)) byTitle.set(r.titleId, r);
+  rows = [...byTitle.values()];
+
   if (!rows.length) return 0;
   const now = new Date().toISOString();
   for (const part of chunk(rows, PAGE)) {
