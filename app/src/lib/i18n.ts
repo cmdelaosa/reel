@@ -429,6 +429,16 @@ const ES: Record<string, string> = {
   "Series premiere": "Estreno de la serie",
   "Season premiere": "Estreno de temporada",
   "Season finale": "Final de temporada",
+  /* Dos formas y quien llama coge la suya, como en "heat: {n} episode(s)". Una
+     sola cadena imprimía "1 días" y "1 days" en la cuenta atrás de un estreno de
+     mañana, en el calendario, en los lanzamientos de juegos y en el tiempo
+     total del perfil — cinco sitios diciendo lo mismo mal.
+
+     No hay helper de plural y no lo hay a propósito: con dos idiomas cuyo
+     plural funciona igual, un `Intl.PluralRules` sería maquinaria para una
+     regla de dos casos. El día que entre un idioma con más formas, el helper
+     entra con él. */
+  "day": "día",
   "days": "días",
   "Watched": "Visto",
   "Loading more…": "Cargando más…",
@@ -787,7 +797,9 @@ const ES: Record<string, string> = {
   // ---- Search palette ----
   "Search TV shows…": "Busca series…",
   "Search movies…": "Busca películas…",
+  "Search games…": "Busca juegos…",
   "Search movies": "Buscar películas",
+  "Search games": "Buscar juegos",
   "No results.": "Sin resultados.",
   "Searching…": "Buscando…",
   "Type to search TMDB.": "Escribe para buscar en TMDB.",

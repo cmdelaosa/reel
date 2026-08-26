@@ -88,7 +88,7 @@ export function MovieReleaseRow({ r, now }: { r: MovieRelease; now: Date }) {
           </button>
         ) : (
           <>
-            <div className="cal-days">{days}<span>{tr("days")}</span></div>
+            <div className="cal-days">{days}<span>{tr(days === 1 ? "day" : "days")}</span></div>
             <div className="cal-when mute">{fmtAirDate(r.release_at)}</div>
           </>
         )}

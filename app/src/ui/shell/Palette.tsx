@@ -112,14 +112,19 @@ export function Palette({ onClose, onOpen }: {
   return (
     <>
       <div className="backdrop" onClick={onClose} />
-      <div className="mq-pal sheet-x" onKeyDown={onKey} role="dialog" aria-modal="true" aria-label={tr(movies ? "Search movies" : "Search shows")}>
+      <div className="mq-pal sheet-x" onKeyDown={onKey} role="dialog" aria-modal="true" aria-label={tr(gamesMode ? "Search games" : movies ? "Search movies" : "Search shows")}>
         <div className="mq-pal-head">
           <Search size={17} className="mute" />
+          {/* El rótulo nombra los TRES medios. El buscador ya buscaba juegos
+              —searchGames, ahí arriba— pero seguía diciendo "Busca series…":
+              esta línea y el aria-label de la hoja se escribieron cuando solo
+              había dos modos, y nadie volvió a ellas cuando entró el tercero.
+              Prometer series y devolver juegos es peor que no prometer nada. */}
           <input
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={tr(movies ? "Search movies…" : "Search TV shows…")}
+            placeholder={tr(gamesMode ? "Search games…" : movies ? "Search movies…" : "Search TV shows…")}
           />
           <kbd className="mq-kbd">esc</kbd>
         </div>
