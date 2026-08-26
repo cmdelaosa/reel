@@ -770,7 +770,6 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
      part of the brand lockup. No hairline between the two — this direction is
      the one that deleted the nav's container and the bar's bottom border, and
      putting a divider back into the same bar would argue with both. */
-  margin-left: 12px;
   /* El nav es el ÚNICO que cede cuando la barra no cabe, y cede deslizándose en
      vez de empujar a los demás fuera de la ventana. El desvanecido de la
      derecha es lo que dice que hay más: sin él, un nav cortado a hueso se lee
@@ -781,6 +780,25 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   scrollbar-width: none; -ms-overflow-style: none;
   -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
   mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent);
+  /* El relleno paga dos cosas, y las dos son consecuencia de que esto sea ahora
+     una caja con scroll:
+
+     1. `overflow-x: auto` arrastra `overflow-y` a `auto` — lo dice la
+        especificación, no hay forma de pedir uno sin el otro—, y el carril mide
+        exactamente lo que mide una pestaña. Sin holgura vertical, el anillo de
+        `:focus-visible` (2px de grosor a 2px de separación) se recortaba
+        entero: el nav quedaba navegable con el teclado y sin decir dónde estás.
+     2. Los 20px de la derecha son los mismos que dura el desvanecido. Cuando el
+        nav CABE, la máscara cae sobre el relleno en vez de sobre la última
+        pestaña, que si no se veía medio apagada sin haber nada que descubrir; y
+        cuando no cabe, al llegar al final del scroll el relleno entra en cuadro
+        y la última pestaña se lee limpia.
+
+     El margen negativo devuelve lo que el relleno ocupa, así que la fila de la
+     barra se ve exactamente igual que antes. Y `margin-left` baja de 12 a 8
+     porque los otros 4 los pone ya el relleno. */
+  padding: 4px 20px 4px 4px;
+  margin: -4px 0 -4px 8px;
 }
 .mq-tabs::-webkit-scrollbar { display: none; }
 .mq-tab {
