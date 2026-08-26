@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { useLibrary, toTitleCard, type LibraryShow } from "@/lib/library";
+import { useRatedSort } from "@/lib/ratings";
 import type { ShowStatus } from "@/domain/status";
 import { t as tr, tv } from "@/lib/i18n";
 import { fmtAirDate } from "@/lib/region";
@@ -21,12 +22,13 @@ const FILTERS: { key: Bucket; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-type SortKey = "lastwatched" | "lastreleased" | "az" | "rating";
+type SortKey = "lastwatched" | "lastreleased" | "az" | "rating" | "rated";
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "lastwatched", label: "Last watched" },
   { key: "lastreleased", label: "Last released" },
   { key: "az", label: "A–Z" },
   { key: "rating", label: "Top rated" },
+  { key: "rated", label: "Last rated" },
 ];
 /* "Last watched" is the page's default everywhere except Not started, where by
    definition nothing has been watched: every row's key is null, so the order was
@@ -35,7 +37,9 @@ const SORTS: { key: SortKey; label: string }[] = [
    default — pick a sort and it holds while you move between buckets. */
 const DEFAULT_SORT: Partial<Record<Bucket, SortKey>> = { watchlist: "lastreleased" };
 const ms = (s: string | null) => (s ? new Date(s).getTime() : 0);
-const COMPARATORS: Record<SortKey, (a: LibraryShow, b: LibraryShow) => number> = {
+/* «Última puntuada» no está aquí: es el único orden que no se lee de la fila de
+   la biblioteca sino de tus notas, que son otra tabla — ver domain/ratedSort. */
+const COMPARATORS: Record<Exclude<SortKey, "rated">, (a: LibraryShow, b: LibraryShow) => number> = {
   lastwatched: (a, b) => ms(b.last_watched_at) - ms(a.last_watched_at),
   lastreleased: (a, b) => ms(b.last_aired_datetime) - ms(a.last_aired_datetime),
   az: (a, b) => a.name.localeCompare(b.name),
@@ -46,6 +50,7 @@ export default function ShowsPage() {
   const { data: library = [], isPending } = useLibrary();
   // Null until you touch the sort strip; until then the bucket chooses.
   const [sortPick, setSortPick] = useState<SortKey | null>(null);
+  const rated = useRatedSort();
   const [searchParams, setSearchParams] = useSearchParams();
 
   /* The bucket lives in the URL, not in state: the Watchlist tab links straight
@@ -67,6 +72,12 @@ export default function ShowsPage() {
       { replace: true },
     );
   const sort: SortKey = sortPick ?? DEFAULT_SORT[f] ?? "lastwatched";
+  /* Pulsar «Última puntuada» estando ya activa voltea el sentido en vez de no
+     hacer nada, que es lo que hacía volver a elegir el orden que ya tenías. La
+     flecha de la etiqueta dice cuál de los dos está puesto. */
+  const pickSort = (key: SortKey) => (key === "rated" && sort === "rated" ? rated.flip() : setSortPick(key));
+  const sortLabel = (s: { key: SortKey; label: string }) =>
+    s.key === "rated" ? `${tr(s.label)} ${rated.arrow}` : tr(s.label);
 
   // All includes every follow (stopped too); the status buckets show active
   // follows only, and Stopped collects the stopped ones.
@@ -82,7 +93,7 @@ export default function ShowsPage() {
       : key === "stopped"
         ? library.filter((s) => s.stopped).length
         : library.filter((s) => !s.stopped && s.status === key).length;
-  const items = library.filter(inBucket).sort(COMPARATORS[sort]);
+  const items = library.filter(inBucket).sort(sort === "rated" ? rated.cmp : COMPARATORS[sort]);
 
   const open = (tmdbId: number) =>
     setSearchParams((prev) => {
@@ -115,8 +126,8 @@ export default function ShowsPage() {
         />
         <div className="segmented scroll no-scrollbar">
           {SORTS.map((s) => (
-            <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => setSortPick(s.key)}>
-              {tr(s.label)}
+            <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => pickSort(s.key)}>
+              {sortLabel(s)}
             </div>
           ))}
         </div>
@@ -124,8 +135,8 @@ export default function ShowsPage() {
             360px, with nothing saying a fourth sort existed. */}
         <TabMenu
           value={sort}
-          options={SORTS.map((s) => ({ key: s.key, label: tr(s.label) }))}
-          onPick={setSortPick}
+          options={SORTS.map((s) => ({ key: s.key, label: sortLabel(s) }))}
+          onPick={pickSort}
           menuLabel={tr("Sort")}
           align="end"
         />

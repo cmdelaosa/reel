@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { useGameLibrary, type LibraryGame } from "@/lib/library";
+import { useRatedSort } from "@/lib/ratings";
 import type { GameStatus } from "@/domain/gameStatus";
 import { formatPlaytime } from "@/domain/gameStatus";
 import { t as tr, tv } from "@/lib/i18n";
@@ -37,17 +38,20 @@ const FILTERS: { key: Bucket; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-type SortKey = "added" | "played" | "lastreleased" | "az" | "rating";
+type SortKey = "added" | "played" | "lastreleased" | "az" | "rating" | "rated";
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "added", label: "Date added" },
   { key: "played", label: "Most played" },
   { key: "lastreleased", label: "Last released" },
   { key: "az", label: "A–Z" },
   { key: "rating", label: "Top rated" },
+  { key: "rated", label: "Last rated" },
 ];
 
 const ms = (s: string | null) => (s ? new Date(s).getTime() : 0);
-const COMPARATORS: Record<SortKey, (a: LibraryGame, b: LibraryGame) => number> = {
+/* «Última puntuada» no está aquí: es el único orden que no se lee de la fila de
+   la biblioteca sino de tus notas, que son otra tabla — ver domain/ratedSort. */
+const COMPARATORS: Record<Exclude<SortKey, "rated">, (a: LibraryGame, b: LibraryGame) => number> = {
   added: (a, b) => ms(b.added_at) - ms(a.added_at),
   played: (a, b) => (b.minutes_played ?? 0) - (a.minutes_played ?? 0),
   lastreleased: (a, b) => (b.first_air_date ?? "").localeCompare(a.first_air_date ?? ""),
@@ -70,6 +74,12 @@ export default function GamesPage() {
   const { data: games = [], isPending } = useGameLibrary();
   const [sort, setSort] = useState<SortKey>("added");
   const [searchParams, setSearchParams] = useSearchParams();
+  const rated = useRatedSort();
+  /* Pulsar «Última puntuada» estando ya activa voltea el sentido, igual que en
+     las otras dos bibliotecas; la flecha de la etiqueta dice cuál está puesto. */
+  const pickSort = (key: SortKey) => (key === "rated" && sort === "rated" ? rated.flip() : setSort(key));
+  const sortLabel = (s: { key: SortKey; label: string }) =>
+    s.key === "rated" ? `${tr(s.label)} ${rated.arrow}` : tr(s.label);
 
   /* El cubo vive en la URL, igual que en las otras dos bibliotecas: la pestaña
      de la barra enlaza a un cubo concreto, y desde la propia página eso es una
@@ -88,7 +98,9 @@ export default function GamesPage() {
 
   const count = (key: Bucket) =>
     key === "all" ? games.length : games.filter((g) => g.status === key).length;
-  const items = games.filter((g) => f === "all" || g.status === f).sort(COMPARATORS[sort]);
+  const items = games
+    .filter((g) => f === "all" || g.status === f)
+    .sort(sort === "rated" ? rated.cmp : COMPARATORS[sort]);
 
   const open = (igdbId: number) =>
     setSearchParams((prev) => {
@@ -118,15 +130,15 @@ export default function GamesPage() {
         />
         <div className="segmented scroll no-scrollbar">
           {SORTS.map((s) => (
-            <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => setSort(s.key)}>
-              {tr(s.label)}
+            <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => pickSort(s.key)}>
+              {sortLabel(s)}
             </div>
           ))}
         </div>
         <TabMenu
           value={sort}
-          options={SORTS.map((s) => ({ key: s.key, label: tr(s.label) }))}
-          onPick={setSort}
+          options={SORTS.map((s) => ({ key: s.key, label: sortLabel(s) }))}
+          onPick={pickSort}
           menuLabel={tr("Sort")}
           align="end"
         />
