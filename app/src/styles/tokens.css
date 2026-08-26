@@ -120,6 +120,40 @@
 :root[data-accent="emerald"] { --accent: #35d39a; --accent-2: #46c7c7; --on-accent: #052018; }
 :root[data-accent="amber"]   { --accent: #fbbf3c; --accent-2: #ff9f45; --on-accent: #291c02; }
 
+/* ---- Los tres colores, como DATO ----
+   Hasta aquí el color del medio solo existía como "el acento cuando estás en
+   ese modo", y eso alcanzaba mientras el color dijera UNA cosa por pantalla. El
+   perfil rompe esa premisa: enseña los tres medios a la vez (tu taste de cine
+   al lado del de juegos, y un cuadradito por día teñido de lo que hiciste ese
+   día), así que necesita nombrar el violeta sin estar en modo Videojuegos.
+
+   Los valores son los mismos de siempre, escritos una vez: los bloques de
+   `data-medium` de abajo los consumen en vez de repetirlos, y el coral es el
+   mismo `--accent` que Ajustes fija en coral desde que se quitó el selector. */
+:root {
+  --tint-tv: #ff6a5c;
+  --tint-tv-2: #ff8a5c;
+  --tint-tv-on: #241009;
+  --tint-movie: #35c5d9;
+  --tint-movie-2: #4fd8c9;
+  --tint-movie-on: #04262b;
+  --tint-game: #8b7cff;
+  --tint-game-2: #b07cff;
+  --tint-game-on: #150e33;
+}
+
+/* Un TROZO de página teñido del color de un medio, esté en el modo que esté.
+   Se pone en la raíz del bloque (`data-tint="game"`) y todo lo que hay dentro
+   —barras, chips, iconos— sigue leyendo `--accent` como siempre, sin que
+   ninguno de ellos tenga que saber de medios.
+
+   No es `:root[...]`: la especificidad tiene que ser BAJA para que el bloque de
+   dentro gane al modo de fuera, que es justo lo contrario de lo que hacen las
+   dos reglas de abajo. */
+[data-tint="tv"]    { --accent: var(--tint-tv);    --accent-2: var(--tint-tv-2);    --on-accent: var(--tint-tv-on); }
+[data-tint="movie"] { --accent: var(--tint-movie); --accent-2: var(--tint-movie-2); --on-accent: var(--tint-movie-on); }
+[data-tint="game"]  { --accent: var(--tint-game);  --accent-2: var(--tint-game-2);  --on-accent: var(--tint-game-on); }
+
 /* ---- Cine ----
    El modo Movies tiene acento propio, y pisa el que hayas elegido en Ajustes:
    el color es LA señal de en qué medio estás, y una preferencia personal no
@@ -133,7 +167,7 @@
    Va DESPUÉS del bloque de acentos a propósito: las dos reglas tienen la misma
    especificidad (:root + un atributo), así que quien gana es la última — mover
    este bloque hacia arriba devolvería el acento personal en silencio. */
-:root[data-medium="movie"] { --accent: #35c5d9; --accent-2: #4fd8c9; --on-accent: #04262b; }
+:root[data-medium="movie"] { --accent: var(--tint-movie); --accent-2: var(--tint-movie-2); --on-accent: var(--tint-movie-on); }
 
 /* ---- Videojuegos ----
    El violeta que el bloque de arriba reservaba. Es el mismo `violet` que llegó
@@ -144,7 +178,7 @@
    Cierra el triángulo de temperatura: coral cálido para series, cian frío para
    cine, violeta para juegos. Los tres a la misma distancia entre sí y ninguno
    cerca del oro de IMDb (--imdb). */
-:root[data-medium="game"] { --accent: #8b7cff; --accent-2: #b07cff; --on-accent: #150e33; }
+:root[data-medium="game"] { --accent: var(--tint-game); --accent-2: var(--tint-game-2); --on-accent: var(--tint-game-on); }
 
 /* ============================================================
    BASE

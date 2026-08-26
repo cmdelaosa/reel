@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useWatchHeatmap } from "@/lib/stats";
+import { heatDays, heatLevel } from "@/domain/heatmap";
+import { MEDIA, type Medium } from "@/domain/tasteScope";
+import { mediumPlural, watchedCountKey } from "@/domain/mediumCopy";
 import { dateLocale, t as tr, tv } from "@/lib/i18n";
 
 /* GitHub-style contribution grid of the days you watched episodes — weeks as
@@ -7,7 +10,14 @@ import { dateLocale, t as tr, tv } from "@/lib/i18n";
    missing (e.g. hosted DB behind on migrations).
 
    Pass `userId` to render a friend's grid instead of your own (friend profile);
-   the friend-read RLS on watch_events is what gates it. */
+   the friend-read RLS on watch_events is what gates it.
+
+   Cada cuadradito se tiñe del MEDIO que más pesó ese día (0082): coral series,
+   cian cine, violeta juegos. La intensidad sigue siendo el total, así que son
+   dos ejes y no uno — de qué fue el día, y cuánto. Quién gana un empate lo
+   decide domain/heatmap, que es donde está probado. Contra una base sin 0082
+   las filas llegan sin medio y esto vuelve a ser la rejilla monocroma de antes,
+   sin un solo error en pantalla. */
 
 /* A rolling year, not year-to-date: 53 columns is the smallest count that can
    hold 365 days once they're snapped to Monday-first weeks (52 weeks = 364 days
@@ -24,8 +34,8 @@ export function WatchHeatmap({ userId }: { userId?: string }) {
 
   const grid = useMemo(() => {
     if (!data) return null;
-    const counts = new Map(data.map((r) => [r.day, r.n]));
-    const max = Math.max(1, ...counts.values());
+    const byDay = heatDays(data);
+    const max = Math.max(1, ...[...byDay.values()].map((d) => d.total));
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -33,34 +43,35 @@ export function WatchHeatmap({ userId }: { userId?: string }) {
     // Back to the Monday that starts the window (Monday-first: (getDay()+6)%7).
     start.setDate(start.getDate() - (WEEKS - 1) * 7 - ((today.getDay() + 6) % 7));
 
-    const cells: { key: string; label: string; n: number; level: number; future: boolean }[] = [];
+    const cells: { key: string; label: string; level: number; tint: Medium | null; future: boolean }[] = [];
     const months: { week: number; label: string }[] = [];
+    const present = new Set<Medium>();
     let lastMonth = -1;
     for (let w = 0; w < WEEKS; w++) {
       for (let r = 0; r < 7; r++) {
         const d = new Date(start);
         d.setDate(start.getDate() + w * 7 + r);
         const key = localIso(d);
-        const n = counts.get(key) ?? 0;
+        const day = byDay.get(key);
         const future = d > today;
         if (r === 0 && d.getMonth() !== lastMonth) {
           // Skip a label in the first fortnight-wide slot only if it would collide.
           if (lastMonth === -1 || w >= 2) months.push({ week: w, label: d.toLocaleDateString(dateLocale(), { month: "short" }) });
           lastMonth = d.getMonth();
         }
-        cells.push({
-          key,
-          label: tv(n === 1 ? "{count} episode · {date}" : "{count} episodes · {date}", {
-            count: n,
-            date: d.toLocaleDateString(dateLocale(), { day: "numeric", month: "short" }),
-          }),
-          n,
-          level: n === 0 ? 0 : Math.max(1, Math.ceil((n / max) * 4)),
-          future,
-        });
+        for (const part of day?.byKind ?? []) present.add(part.kind);
+        const when = d.toLocaleDateString(dateLocale(), { day: "numeric", month: "short" });
+        /* El texto desglosa: "3 episodios · 1 película · 20 ago". Sin medios
+           —la base sin 0082— vuelve a la frase de siempre, que decía
+           "episodios" de todo. Es la frase vieja porque es el dato viejo: no
+           hay con qué afinarla. */
+        const label = day?.byKind.length
+          ? [...day.byKind.map((p) => tv(watchedCountKey(p.kind, p.n), { n: p.n })), when].join(" · ")
+          : tv(day && day.total === 1 ? "{count} episode · {date}" : "{count} episodes · {date}", { count: day?.total ?? 0, date: when });
+        cells.push({ key, label, level: heatLevel(day?.total ?? 0, max), tint: day?.dominant ?? null, future });
       }
     }
-    return { cells, months };
+    return { cells, months, keys: MEDIA.filter((m) => present.has(m)) };
   }, [data]);
 
   // When the year is too wide to fit (narrow screens), open on the current week
@@ -109,6 +120,7 @@ export function WatchHeatmap({ userId }: { userId?: string }) {
                 <div
                   key={c.key}
                   className={`heatmap-cell${c.future ? " future" : c.level ? ` l${c.level}` : ""}`}
+                  data-tint={c.future || !c.level ? undefined : c.tint ?? undefined}
                   title={c.future ? undefined : c.label}
                 />
               ))}
@@ -116,9 +128,21 @@ export function WatchHeatmap({ userId }: { userId?: string }) {
           </div>
         </div>
         <div className="heatmap-legend">
-          <span style={{ marginRight: 2 }}>{tr("Less")}</span>
-          {[0, 1, 2, 3, 4].map((l) => <i key={l} className={`heatmap-cell${l ? ` l${l}` : ""}`} />)}
-          <span style={{ marginLeft: 2 }}>{tr("More")}</span>
+          {/* La leyenda de colores solo cuando hay más de uno que explicar: con
+              un medio solo, tres nombres al pie del cuadro cuentan una regla
+              que la rejilla no está usando. */}
+          {grid.keys.length > 1 && (
+            <span className="heat-keys">
+              {grid.keys.map((m) => (
+                <span key={m} className="heat-key" data-tint={m}><i className="heatmap-cell l4" />{tr(mediumPlural(m))}</span>
+              ))}
+            </span>
+          )}
+          <span className="heat-scale">
+            <span style={{ marginRight: 2 }}>{tr("Less")}</span>
+            {[0, 1, 2, 3, 4].map((l) => <i key={l} className={`heatmap-cell${l ? ` l${l}` : ""}`} />)}
+            <span style={{ marginLeft: 2 }}>{tr("More")}</span>
+          </span>
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { qk } from "@/lib/queryKeys";
 import { t } from "@/lib/i18n";
+import type { HeatRow } from "@/domain/heatmap";
 
 const statsSchema = z.object({
   episodes_watched: z.number().int(),
@@ -38,8 +39,19 @@ export function useUserStats() {
   });
 }
 
+/* La rejilla de actividad se pide POR MEDIO (0082) y cae a la de siempre
+   mientras esa migración no esté aplicada. Las dos formas se normalizan aquí a
+   `HeatRow`, con `kind: null` en el respaldo: quien pinta no tiene que saber
+   por cuál de las dos funciones vino, solo si sabe de qué fue el día.
+
+   Rellenar ese null con "tv" habría sido lo cómodo y lo equivocado — teñiría
+   de coral el año entero de quien solo juega. Ver domain/heatmap. */
+const kindsSchema = z.array(z.object({
+  day: z.string(),
+  kind: z.enum(["tv", "movie", "game"]),
+  n: z.number().int(),
+}));
 const heatmapSchema = z.array(z.object({ day: z.string(), n: z.number().int() }));
-export type HeatmapDay = z.infer<typeof heatmapSchema>[number];
 
 /** Per-day watch counts for the profile heatmap, bucketed in the local tz.
  *  Omit `userId` for your own history; pass a friend's id for theirs — the RPC
@@ -52,12 +64,19 @@ export function useWatchHeatmap(days: number, userId?: string) {
     // wider grid — the 26→53 week change left friend grids drawing a rolling
     // year over half a year of data, blank until mid-January.
     queryKey: [...qk.watchHeatmap, userId ?? "me", days],
-    queryFn: async (): Promise<HeatmapDay[] | null> => {
+    queryFn: async (): Promise<HeatRow[] | null> => {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
       // Only send p_user when targeting someone else, so the own-profile call
       // still matches the pre-0048 two-arg signature on a database that hasn't
       // had the migration applied yet.
       const args = userId ? { days, tz, p_user: userId } : { days, tz };
+
+      const byKind = await supabase.rpc("rpc_watch_heatmap_kinds", args);
+      if (!byKind.error) return kindsSchema.parse(byKind.data ?? []);
+      // Cualquier error que no sea "esa función todavía no existe" es un error
+      // de verdad y no se disfraza de rejilla monocroma.
+      if ((byKind.error as { code?: string }).code !== "PGRST202") throw byKind.error;
+
       const { data, error } = await supabase.rpc("rpc_watch_heatmap", args);
       // PGRST202 = this signature isn't deployed yet. The grid is an extra, so
       // null (→ the component renders nothing) beats throwing, which would also
@@ -66,7 +85,7 @@ export function useWatchHeatmap(days: number, userId?: string) {
         if ((error as { code?: string }).code === "PGRST202") return null;
         throw error;
       }
-      return heatmapSchema.parse(data ?? []);
+      return heatmapSchema.parse(data ?? []).map((r) => ({ ...r, kind: null }));
     },
   });
 }

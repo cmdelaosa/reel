@@ -2,22 +2,44 @@ import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { CalendarClock, ChevronLeft, ChevronRight, Clapperboard, Clock, Eye, Film, Gamepad2, History, LayoutGrid, Share2, Star, Timer, Trophy, Tv, Users } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { useLibrary } from "@/lib/library";
+import { useLibraryRows } from "@/lib/library";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
-import { sheetParam, type Medium } from "@/domain/tasteScope";
+import { useWatchHistory } from "@/lib/history";
+import { buildWall } from "@/domain/activityWall";
+import { tasteBlocks } from "@/domain/tasteProfile";
+import { mediumPlural } from "@/domain/mediumCopy";
+import { MEDIA, sheetParam, type Medium } from "@/domain/tasteScope";
 import { useUserStats, timeSpentLabel } from "@/lib/stats";
-import { tmdbImg } from "@/lib/tmdb";
+import { thumbArt } from "@/lib/artwork";
 import { dateLocale, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 import { Stars } from "@/ui";
+import { MediumGlyph } from "@/ui/MediumGlyph";
 import { StatsSkeleton } from "@/ui/Skeleton";
 import { hueOf, posterBg } from "@/ui/posterBg";
+import { ActivityWall } from "@/features/social/ActivityWall";
+import { TasteBlocks } from "@/features/social/TasteBlocks";
 import { WatchHeatmap } from "@/features/you/WatchHeatmap";
 
 /* You — profile header + your ratings (sort + 15/page). Port of prototype
-   marquee.tsx → You; the stats grid lands in P2-C9. */
+   marquee.tsx → You; the stats grid lands in P2-C9.
+
+   Esta página NO mira el conmutador de medio: es el único sitio donde te ves
+   entero, con las series, el cine y los juegos a la vez. Por eso los gustos son
+   tres bloques (domain/tasteProfile), el muro mezcla los tres (domain/
+   activityWall) y la rejilla de actividad tiñe cada día del medio que más pesó
+   en él. */
 
 const RATE_PAGE = 15;
 type RateSort = "new" | "old" | "best" | "worst";
+/** El filtro de medio de tus notas. "all" es un cuarto valor y no la ausencia
+ *  del filtro: es lo que la barra tiene seleccionado al abrir. */
+type RateMedium = Medium | "all";
+
+/* Cuántas filas del historial alimentan el muro. Es la primera página de
+   `useWatchHistory`, que ya está pedida en cuanto abres Historial, así que aquí
+   no cuesta un viaje nuevo: 60 episodios dan de sobra para las doce filas que
+   el muro enseña de entrada, incluso plegando poco. */
+const WALL_FROM_HISTORY = 60;
 
 function ratedAtLabel(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -29,7 +51,12 @@ function ratedAtLabel(iso: string): string {
 
 function RatingRow({ r, onOpen }: { r: RatedRow; onOpen: () => void }) {
   const t = r.titles;
-  const art = tmdbImg(t.poster_path, "w92");
+  /* La carátula sale de una fuente distinta según el medio: un juego guarda un
+     hash de IGDB donde series y cine guardan una ruta de TMDB (0071). thumbArt
+     lo resuelve; tmdbImg a secas devolvía una URL bien formada que responde 404
+     sin quejarse — o sea, todas tus notas de juegos sin carátula y ni un error
+     en consola que lo explicara. */
+  const art = thumbArt(t.kind, t.poster_path);
   const esNames = useEsNames();
   const name = locName(esNames, t.tmdb_id, t.name, t.kind);
   return (
@@ -45,6 +72,9 @@ function RatingRow({ r, onOpen }: { r: RatedRow; onOpen: () => void }) {
         </div>
         <div style={{ marginTop: 4 }}><Stars score={r.score} size={13} /></div>
       </div>
+      {/* De qué medio es la nota. Tus notas son de los tres y sin esto la única
+          pista era la carátula, que en un juego y en una película se parecen. */}
+      <MediumGlyph kind={t.kind} />
       <div className="mq-score">{r.score}<span>/10</span></div>
     </div>
   );
@@ -54,19 +84,23 @@ export default function YouPage() {
   const { profile } = useAuth();
   const { data: ratings = [] } = useMyRatings();
   const { data: stats } = useUserStats();
-  const { data: library = [] } = useLibrary();
+  const { data: library = [] } = useLibraryRows();
+  const { data: history } = useWatchHistory();
   const [sort, setSort] = useState<RateSort>("new");
+  const [rateMedium, setRateMedium] = useState<RateMedium>("all");
   const [page, setPage] = useState(0);
   const [, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const byNew = (a: RatedRow, b: RatedRow) => b.created_at.localeCompare(a.created_at);
-  const rated = [...ratings].sort((a, b) => {
-    if (sort === "new") return byNew(a, b);
-    if (sort === "old") return -byNew(a, b);
-    if (sort === "best") return b.score - a.score || byNew(a, b);
-    return a.score - b.score || byNew(a, b);
-  });
+  const rated = [...ratings]
+    .filter((r) => rateMedium === "all" || r.titles.kind === rateMedium)
+    .sort((a, b) => {
+      if (sort === "new") return byNew(a, b);
+      if (sort === "old") return -byNew(a, b);
+      if (sort === "best") return b.score - a.score || byNew(a, b);
+      return a.score - b.score || byNew(a, b);
+    });
 
   const pageCount = Math.max(1, Math.ceil(rated.length / RATE_PAGE));
   const clamped = Math.min(page, pageCount - 1);
@@ -91,19 +125,54 @@ export default function YouPage() {
     { v: "worst", label: tr("Worst rated") },
   ];
 
-  // Your taste profile — genre + network mix across the shows you follow,
-  // same aggregation the friend page shows for others (friendProfile derived).
-  const taste = useMemo(() => {
-    const genreCounts = new Map<string, number>();
-    for (const s of library) for (const g of s.genres) genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
-    const topGenres = [...genreCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+  /* El filtro de medio solo se ofrece si hay más de uno que filtrar: con notas
+     de un medio solo, cuatro pestañas de las que tres devuelven vacío. */
+  const ratedMedia = useMemo(() => {
+    const present = new Set(ratings.map((r) => r.titles.kind));
+    return MEDIA.filter((m) => present.has(m));
+  }, [ratings]);
 
-    const netCounts = new Map<string, number>();
-    for (const s of library) if (s.network) netCounts.set(s.network, (netCounts.get(s.network) ?? 0) + 1);
-    const topNetworks = [...netCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
+  /* Tu perfil de gustos, uno por medio. Leía `useLibrary()`, que filtra a
+     series desde 0067: "tus gustos" eran los de un tercio de lo que usas. */
+  const taste = useMemo(() => tasteBlocks(library), [library]);
 
-    return { topGenres, topNetworks };
-  }, [library]);
+  /* Tu muro: lo visto, lo puntuado y lo añadido, plegado. El plegado es lo que
+     impide que la importación de InfiniteBacklog (386 juegos en una tarde) sea
+     386 filas que entierran todo lo demás. */
+  const wall = useMemo(
+    () => buildWall({
+      watched: (history?.pages[0] ?? []).slice(0, WALL_FROM_HISTORY).map((h) => ({
+        at: h.watched_at, kind: h.kind, tmdb_id: h.tmdb_id, name: h.show_name,
+        poster_path: h.poster_path, season_number: h.season_number, episode_number: h.episode_number,
+      })),
+      rated: ratings.map((r) => ({
+        at: r.created_at, kind: r.titles.kind, tmdb_id: r.titles.tmdb_id,
+        name: r.titles.name, poster_path: r.titles.poster_path, score: r.score,
+      })),
+      added: library.map((l) => ({
+        at: l.added_at, kind: l.kind, tmdb_id: l.tmdb_id,
+        name: l.name, poster_path: l.poster_path, owned: l.owned,
+      })),
+    }),
+    [history, ratings, library],
+  );
+
+  /* Los accesos de arriba. Eran dos —"Mis series" e Historial— en una app de
+     tres medios, así que tu cine y tus juegos no tenían puerta desde tu perfil.
+     Se ocultan los vacíos, la misma regla que las estadísticas de abajo: a
+     quien solo ve series, dos tarjetas a cero le dicen menos que nada. */
+  const counts = useMemo(() => ({
+    tv: library.filter((l) => l.kind === "tv").length,
+    movie: library.filter((l) => l.kind === "movie").length,
+    game: library.filter((l) => l.kind === "game").length,
+  }), [library]);
+
+  const links = [
+    { icon: LayoutGrid, label: tr("My Shows"), sub: tv("{n} in your library", { n: counts.tv }), path: "/shows", show: counts.tv > 0 },
+    { icon: Clapperboard, label: tr("My Movies"), sub: tv("{n} in your library", { n: counts.movie }), path: "/movies", show: counts.movie > 0 },
+    { icon: Gamepad2, label: tr("My Games"), sub: tv("{n} in your library", { n: counts.game }), path: "/games", show: counts.game > 0 },
+    { icon: History, label: tr("History"), sub: tr("Everything you've watched"), path: "/history", show: true },
+  ].filter((l) => l.show);
 
   const initial = (profile?.display_name?.[0] ?? "?").toUpperCase();
 
@@ -137,10 +206,7 @@ export default function YouPage() {
 
       {/* My Shows + History moved off the top tabs — they live here now */}
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-        {[
-          { icon: LayoutGrid, label: tr("My Shows"), sub: `${library.length} ${tr("in your library")}`, path: "/shows" },
-          { icon: History, label: tr("History"), sub: tr("Everything you've watched"), path: "/history" },
-        ].map((l) => (
+        {links.map((l) => (
           <button
             key={l.path}
             className="card p-4 flex items-center gap-3 text-left"
@@ -214,30 +280,15 @@ export default function YouPage() {
         </div>
       )}
 
+      {/* La rejilla se lleva la fila entera: al lado ya no hay un solo bloque de
+          gustos sino tres, y esos van debajo en su propia parrilla. */}
       <section className="taste-grid">
-        {taste.topGenres.length > 0 && (
-          <div className="taste-col">
-            <div className="eyebrow">{tr("Taste profile")}</div>
-            <div className="card p-4 flex flex-col gap-2">
-              {taste.topGenres.slice(0, 8).map((g) => (
-                <div key={g.name} className="flex items-center gap-2.5">
-                  <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{tGenre(g.name)}</span>
-                  <div className="fr-matchbar" style={{ flex: 1 }}><i style={{ width: `${(g.count / taste.topGenres[0].count) * 100}%` }} /></div>
-                  <span className="mute" style={{ fontSize: 11.5, width: 24, textAlign: "right", flex: "0 0 auto" }}>{g.count}</span>
-                </div>
-              ))}
-            </div>
-            {taste.topNetworks.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {taste.topNetworks.map((n) => (
-                  <span key={n.name} className="badge badge-soft" style={{ fontSize: 11 }}>{n.name} · {n.count}</span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
         <WatchHeatmap />
       </section>
+
+      <TasteBlocks blocks={taste} />
+
+      <ActivityWall items={wall} isMe />
 
       <section className="flex flex-col gap-4">
         <div className="mq-sechead">
@@ -254,6 +305,19 @@ export default function YouPage() {
               </div>
             ))}
           </div>
+          {ratedMedia.length > 1 && (
+            <div className="segmented scroll no-scrollbar">
+              {([["all", tr("All")] as const, ...ratedMedia.map((m) => [m, tr(mediumPlural(m))] as const)]).map(([v, label]) => (
+                <div
+                  key={v}
+                  className={`seg ${rateMedium === v ? "seg-active" : ""}`}
+                  onClick={() => { setRateMedium(v); setPage(0); }}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+          )}
           {rated.length > 0 && (
             <span className="mute" style={{ fontSize: 12.5 }}>
               {start + 1}–{Math.min(start + RATE_PAGE, rated.length)} {tr("of")} {rated.length}

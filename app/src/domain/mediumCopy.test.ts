@@ -5,7 +5,9 @@ import {
   hiddenLabel,
   historyLines,
   mediumLabel,
+  mediumPlural,
   showsEpisodeCount,
+  watchedCountKey,
   watchedPhrase,
 } from "@/domain/mediumCopy";
 
@@ -133,5 +135,45 @@ describe("hiddenLabel", () => {
     // Compartirla es publicar "series ocultas" sobre una rejilla de juegos.
     const todas = (["tv", "movie", "game"] as const).flatMap((m) => [hiddenLabel(m, 1), hiddenLabel(m, 2)]);
     expect(new Set(todas).size).toBe(todas.length);
+  });
+});
+
+describe("mediumPlural", () => {
+  it("encabeza una sección en plural, no con la etiqueta de una fila", () => {
+    // "Película" etiqueta una fila; el bloque que la contiene se llama "Cine".
+    expect(mediumPlural("tv")).toBe("Shows");
+    expect(mediumPlural("movie")).toBe("Movies");
+    expect(mediumPlural("game")).toBe("Games");
+  });
+
+  it("ningún medio comparte encabezado con otro", () => {
+    const todas = (["tv", "movie", "game"] as const).map(mediumPlural);
+    expect(new Set(todas).size).toBe(3);
+  });
+});
+
+describe("watchedCountKey", () => {
+  it("un juego no se ve: se termina", () => {
+    expect(watchedCountKey("game", 1)).toBe("heat: {n} game finished");
+    expect(watchedCountKey("game", 4)).toBe("heat: {n} games finished");
+  });
+
+  it("cada medio cuenta lo suyo, en singular y en plural", () => {
+    expect(watchedCountKey("tv", 1)).toBe("heat: {n} episode");
+    expect(watchedCountKey("tv", 3)).toBe("heat: {n} episodes");
+    expect(watchedCountKey("movie", 1)).toBe("heat: {n} movie");
+    expect(watchedCountKey("movie", 3)).toBe("heat: {n} movies");
+  });
+
+  it("ninguna clave se repite entre medios", () => {
+    // Compartirla es escribir "3 episodios" sobre tres juegos terminados, que
+    // es exactamente lo que hacía la rejilla antes de 0082.
+    const todas = (["tv", "movie", "game"] as const).flatMap((m) => [watchedCountKey(m, 1), watchedCountKey(m, 2)]);
+    expect(new Set(todas).size).toBe(todas.length);
+  });
+
+  it("la clave lleva el hueco del número, no el número", () => {
+    // Interpolarlo aquí congela el orden inglés: la traducción decide dónde va.
+    expect(watchedCountKey("tv", 7)).toContain("{n}");
   });
 });

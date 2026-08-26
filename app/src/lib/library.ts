@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { qk } from "@/lib/queryKeys";
+import { fetchPaged } from "@/lib/paging";
 import { getMovie, getTitle, tmdbImg } from "@/lib/tmdb";
 import { libraryRowSchema, type LibraryRow, type TitleRow } from "@/lib/schemas";
 import { deriveStatus, watchProgress, type ShowStatus } from "@/domain/status";
@@ -76,51 +77,23 @@ function decorate(row: LibraryRow): LibraryShow {
    son de un medio sino del que tengas puesto: allí el filtro lo pone quien lee,
    con el `medium` del conmutador. Llamar a `useLibrary()` desde ellas daba por
    no seguido todo tu cine y todos tus juegos. */
-/** El tope de filas que PostgREST devuelve de una tacada, y que no avisa de que
- *  ha aplicado: la respuesta es un 200 con mil filas y un `content-range` que
- *  nadie mira. */
-export const ROLLUP_PAGE = 1000;
-
 /** Toda la biblioteca, ventana a ventana.
  *
  *  Sin esto, una biblioteca de más de mil títulos se lee a medias y la pantalla
- *  que la pinta no tiene forma de saberlo. Medido el 25-08-2026, importando el
- *  cine de FilmAffinity: 2.107 filas en `library_entries`, y "Tu cine" enseñaba
- *  220 películas de 1.325 — las que cabían en el trozo que PostgREST decidió
- *  mandar. No hubo error, ni aviso, ni hueco visible: la rejilla estaba llena.
+ *  que la pinta no tiene forma de saberlo: PostgREST corta en mil y no avisa.
+ *  El bucle y su matriz de pruebas viven en lib/paging, que es de donde lo
+ *  copian las demás lecturas largas (la ficha de un amigo, la primera).
  *
- *  El `.order("title_id")` no es cosmético. Sin un orden TOTAL, dos ventanas
- *  consecutivas pueden repetir filas y saltarse otras — Postgres no promete un
- *  orden estable entre consultas—, y eso es justo lo que este bucle provoca. Es
- *  la misma regla que documenta `supabase/functions/episode-refresh/paging.ts`,
- *  que es este mismo bucle del lado del servidor.
- *
- *  Se exporta para su matriz de pruebas (library.test.ts), que es donde se
- *  comprueba que la segunda página se pide y que una página corta termina. */
-export async function fetchRollupPaged(
-  page: (
-    from: number,
-    to: number,
-  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }> = (from, to) =>
-    supabase.rpc("rpc_library_rollup").order("title_id").range(from, to),
-): Promise<unknown[]> {
-  const all: unknown[] = [];
-  for (let from = 0; ; from += ROLLUP_PAGE) {
-    const { data, error } = await page(from, from + ROLLUP_PAGE - 1);
-    if (error) throw new Error(error.message);
-    if (data?.length) all.push(...data);
-    // Una página corta es el final. Una llena puede serlo o no, y averiguarlo
-    // cuesta una petición más — incluida la página vacía con la que acaba un
-    // total que cae justo en un múltiplo del tamaño.
-    if (!data || data.length < ROLLUP_PAGE) return all;
-  }
-}
-
+ *  El `.order("title_id")` no es cosmético, y por eso lo pone quien llama: sin
+ *  un orden TOTAL, dos ventanas consecutivas pueden repetir filas y saltarse
+ *  otras — Postgres no promete un orden estable entre consultas—, y eso es
+ *  justo lo que ese bucle provoca. */
 export function useLibraryRows() {
   return useQuery({
     queryKey: qk.library,
     queryFn: async (): Promise<LibraryRow[]> => {
-      const data = await fetchRollupPaged();
+      const data = await fetchPaged((from, to) =>
+        supabase.rpc("rpc_library_rollup").order("title_id").range(from, to));
       return rollupSchema.parse(data);
     },
   });
@@ -246,10 +219,20 @@ export function useFollow() {
       // y pedirlo con el id de una peli trae otra cosa o un 404. Lo que rellena
       // ahí el recuento no son episodios sino el estreno — el detalle escribe
       // first_air_date y el trigger de 0067 mueve con él el episodio sintético.
-      const fill = title.kind === "movie" ? getMovie(title.tmdb_id) : getTitle(title.tmdb_id);
-      fill
-        .then(() => queryClient.invalidateQueries({ queryKey: qk.library }))
-        .catch(() => {});
+      //
+      // Un JUEGO no pasa por aquí, y no es una omisión: su ficha la sirve
+      // igdb-proxy y su recuento es el episodio sintético que 0071 ya creó al
+      // guardarlo. Pedirle `/title/:id` a tmdb-proxy con un id de IGDB no es un
+      // 404 inofensivo — es pedir la SERIE que lleve ese número, y el proxy la
+      // cachearía en `titles` pisando la fila del juego. Se descubrió al abrir
+      // la rejilla de la biblioteca de un amigo a los tres medios, que es el
+      // primer sitio desde el que se puede añadir un juego que no es tuyo.
+      if (title.kind !== "game") {
+        const fill = title.kind === "movie" ? getMovie(title.tmdb_id) : getTitle(title.tmdb_id);
+        fill
+          .then(() => queryClient.invalidateQueries({ queryKey: qk.library }))
+          .catch(() => {});
+      }
     },
     onMutate: async (title) => {
       await queryClient.cancelQueries({ queryKey: qk.library });

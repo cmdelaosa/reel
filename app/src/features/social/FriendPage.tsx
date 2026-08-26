@@ -1,28 +1,34 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams, useSearchParams } from "react-router";
+import { useParams } from "react-router";
 import {
   Activity, ArrowDownWideNarrow, ArrowUpNarrowWide, Check, Clock, Eye, Heart,
-  LayoutGrid, Play, Plus, Scale, Star, Tv, User,
+  LayoutGrid, Play, Plus, Scale, Star, User,
 } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { hueOf, posterBg } from "@/ui/posterBg";
-import { tmdbImg } from "@/lib/tmdb";
+import { gridArt, thumbArt } from "@/lib/artwork";
 import { NetworkLogo, TabMenu } from "@/ui";
 import { useShowMore } from "@/ui/ShowMore";
 import { FriendAvatar } from "@/ui/FriendAvatar";
+import { MediumGlyph } from "@/ui/MediumGlyph";
 import { relativeTime } from "@/domain/time";
 import {
   useFriendProfile, useFriendProgress, useFriendWatchHistory,
-  type FriendFollow, type FriendProgress,
+  type FriendFollow, type FriendProgress, type FriendRating,
 } from "@/lib/friendProfile";
 import { useLibraryRows, useFollow } from "@/lib/library";
-import { useMedium } from "@/lib/medium";
-import { ofMedium, sheetParam, tasteCopy } from "@/domain/tasteScope";
+import { buildWall } from "@/domain/activityWall";
+import { mediumPlural } from "@/domain/mediumCopy";
+import { tasteBlocks } from "@/domain/tasteProfile";
+import { MEDIA, ofMedium, tasteCopy, type Medium } from "@/domain/tasteScope";
 import { useMyRatings } from "@/lib/ratings";
-import { tasteAffinity } from "@/lib/taste";
+import { tasteAffinity, type Affinity } from "@/lib/taste";
 import { timeSpentLabel } from "@/lib/stats";
+import { useOpenSheet } from "@/lib/useOpenTitle";
+import { ActivityWall } from "@/features/social/ActivityWall";
+import { TasteBlocks } from "@/features/social/TasteBlocks";
 import { WatchHeatmap } from "@/features/you/WatchHeatmap";
 import { dateLocale, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 import type { TitleRow } from "@/lib/schemas";
@@ -32,9 +38,21 @@ import type { TitleRow } from "@/lib/schemas";
    their last watch); useFriendProfile adds their full follow list + ratings,
    useFriendProgress their per-show watched/aired counts and
    useFriendWatchHistory their latest episode watches. A slim sticky header
-   fuses identity + section tabs (Overview / Shows / Activity / Compare) and
-   stays pinned under the top bar. Opening a show stacks the detail sheet on
-   top via the shell's global ?title= param. */
+   fuses identity + section tabs (Overview / Library / Activity / Compare) and
+   stays pinned under the top bar. Opening a title stacks the detail sheet on
+   top via the shell's global ?title= / ?movie= / ?game= param.
+
+   Esta página NO mira el conmutador de medio, y ese cambio es el que arregla
+   "el perfil solo enseña series": lo miraba, así que entrar en la ficha de un
+   amigo desde Videojuegos te contaba sus juegos y ni una de sus series, y desde
+   Series al revés. Ahora enseña a la persona entera, y lo que se reparte por
+   medio son las cosas que NO se pueden mezclar: hay tres afinidades, tres
+   bloques de gustos y tres secciones de biblioteca, porque un `tmdb_id` solo es
+   único dentro de su medio (domain/tasteScope). */
+
+/** La identidad de un título en una lista de los tres medios. El número solo no
+ *  vale: la serie 1399 y la película 1399 son cosas distintas (0067). */
+const keyOf = (kind: Medium, tmdbId: number) => `${kind}:${tmdbId}`;
 
 const snapshotSchema = z.object({
   profile: z.object({
@@ -61,25 +79,31 @@ const snapshotSchema = z.object({
 });
 type Snapshot = z.infer<typeof snapshotSchema>;
 
-type SectionKey = "overview" | "shows" | "activity" | "compare";
+type SectionKey = "overview" | "library" | "activity" | "compare";
 type ShowFilter = "all" | "both" | "not";
 type ShowSort = "their" | "critic" | "air";
 type SortDir = "desc" | "asc";
 
-type Act = {
-  kind: "rated" | "added" | "watched";
-  at: string;
-  tmdb_id: number;
-  name: string;
-  poster_path: string | null;
-  score?: number;
-  count?: number;
-  season_number?: number;
-  episode_number?: number;
-};
+/** Lo que sale de cruzar SU medio con el tuyo. Uno por medio con algo dentro. */
+interface MediumSlice {
+  medium: Medium;
+  follows: FriendFollow[];
+  ratings: FriendRating[];
+  /** null si no habéis puntuado nada en común de ese medio. */
+  affinity: Affinity | null;
+  /** Lo que los dos habéis puntuado, lo que más difiere primero. */
+  coRated: (FriendRating & { mine: number })[];
+  /** Lo que los dos seguís. */
+  shared: FriendFollow[];
+  /** Géneros suyos que también son tuyos. */
+  sharedGenres: string[];
+}
 
-function MiniArt({ poster, name, className = "mq-row-art", style }: { poster: string | null; name: string; className?: string; style?: React.CSSProperties }) {
-  const art = tmdbImg(poster, "w92");
+function MiniArt({ kind, poster, name, className = "mq-row-art", style }: { kind: Medium; poster: string | null; name: string; className?: string; style?: React.CSSProperties }) {
+  /* thumbArt y no tmdbImg: un juego guarda un hash de IGDB donde series y cine
+     guardan una ruta de TMDB (0071), y pasárselo a tmdbImg da una URL que
+     responde 404 sin quejarse en consola. */
+  const art = thumbArt(kind, poster);
   return (
     <div className={className} style={{ ...(art ? {} : { background: posterBg(name) }), ...style }}>
       {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
@@ -90,7 +114,7 @@ function MiniArt({ poster, name, className = "mq-row-art", style }: { poster: st
 
 function toTitleRow(f: FriendFollow): TitleRow {
   return {
-    id: f.id, tmdb_id: f.tmdb_id, kind: "tv", name: f.name, overview: null,
+    id: f.id, tmdb_id: f.tmdb_id, kind: f.kind, name: f.name, overview: null,
     poster_path: f.poster_path, backdrop_path: null, first_air_date: f.first_air_date,
     status: f.status, genres: f.genres, network: f.network, episode_run_time: f.episode_run_time,
     vote_average: f.vote_average, popularity: null,
@@ -116,13 +140,13 @@ function ProgressStrip({ watched, aired }: { watched: number; aired: number }) {
   );
 }
 
-/* Poster tile in the browsable "Shows" grid: their score (if rated), a
+/* Poster tile in the browsable library grid: their score (if rated), a
    common-ring when you follow it too, a one-tap Add, and their episode
    progress underneath. */
 function FollowTile({ f, name, theirScore, progress, added, onOpen, onAdd }: {
   f: FriendFollow; name: string; theirScore?: number; progress?: FriendProgress; added: boolean; onOpen: () => void; onAdd: () => void;
 }) {
-  const art = tmdbImg(f.poster_path, "w342");
+  const art = gridArt(f.kind, f.poster_path);
   return (
     <div className="fr-show">
       <div className={`fr-mini ${added ? "fr-common" : ""}`} style={{ background: posterBg(name) }} title={name} onClick={onOpen}>
@@ -148,10 +172,27 @@ function FollowTile({ f, name, theirScore, progress, added, onOpen, onAdd }: {
   );
 }
 
+/** Una sección de la biblioteca de un amigo: sus series, o su cine, o sus
+ *  juegos. Es un componente y no un bucle porque cada una revela las suyas por
+ *  su cuenta (`useShowMore` es un hook, y un hook no se llama en un bucle). */
+function FollowSection({ slice, rows, children }: { slice: MediumSlice; rows: FriendFollow[]; children: (f: FriendFollow) => React.ReactNode }) {
+  // 12 caben en dos filas completas de la rejilla más ancha.
+  const { shown, more } = useShowMore(rows, 12);
+  if (rows.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2.5" data-tint={slice.medium}>
+      <div className="eyebrow flex items-center gap-1.5">
+        <MediumGlyph kind={slice.medium} tone="accent" />{tr(mediumPlural(slice.medium))} · {rows.length}
+      </div>
+      <div className="fr-grid">{shown.map(children)}</div>
+      {more}
+    </section>
+  );
+}
+
 export default function FriendPage() {
   const { id = "" } = useParams();
   const friendId = id;
-  const [, setSearchParams] = useSearchParams();
 
   const { data: snap, isPending } = useQuery({
     queryKey: ["friendSnapshot", friendId],
@@ -163,24 +204,11 @@ export default function FriendPage() {
     },
   });
 
-  const medium = useMedium();
-  const copy = tasteCopy(medium);
-  const { data: fpAll } = useFriendProfile(friendId);
+  const { data: fp } = useFriendProfile(friendId);
   const { data: progressMap } = useFriendProgress(friendId);
-  const { data: watchHistory = [] } = useFriendWatchHistory(friendId, medium);
-  const { data: libraryRows = [] } = useLibraryRows();
+  const { data: watchHistory = [] } = useFriendWatchHistory(friendId);
+  const { data: library = [] } = useLibraryRows();
   const { data: myRatings = [] } = useMyRatings();
-
-  /* La ficha de un amigo habla del medio en el que estás, como la afinidad de
-     /friends/taste: un `tmdb_id` solo es único dentro del suyo (0067, 0071), y
-     comparar los tres en un saco inventa coincidencias entre tu serie 1399 y su
-     película 1399. Se filtra UNA vez, aquí, y todo lo de abajo hereda el
-     recorte: la afinidad, lo que tenéis en común, los géneros y el muro. */
-  const fp = useMemo(
-    () => (fpAll ? { follows: ofMedium(fpAll.follows, medium), ratings: ofMedium(fpAll.ratings, medium) } : undefined),
-    [fpAll, medium],
-  );
-  const library = useMemo(() => ofMedium(libraryRows, medium), [libraryRows, medium]);
   const follow = useFollow();
 
   const [section, setSection] = useState<SectionKey>("overview");
@@ -189,101 +217,121 @@ export default function FriendPage() {
   const [showSort, setShowSort] = useState<ShowSort>("their");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  /* Todo lo que se pinta aquí es ya del medio del modo, así que su ficha se
-     abre con el parámetro de ESE medio: `?title=` sobre una película llevaba a
-     la serie con ese número, o a ninguna (domain/tasteScope, `sheetParam`). */
-  const openTitle = (tmdbId: number) =>
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set(sheetParam(medium), String(tmdbId));
-      return next;
-    });
+  /* Cada fila se abre con el parámetro de SU medio: `?title=` sobre una
+     película llevaba a la ficha de la serie con ese número, o a ninguna
+     (domain/tasteScope, `sheetParam`). */
+  const openSheet = useOpenSheet();
 
-  const myFollowIds = useMemo(() => new Set(library.map((r) => r.tmdb_id)), [library]);
-  /* Los suyos, ya recortados al medio: es lo que le pone medio a las filas de
-     `rpc_friend_snapshot`, que no lo dice (0016 y 0038 son de cuando solo había
-     series) y saca su "viendo ahora" de library_entries, o sea de los tres. Sin
-     este cruce, en modo Cine la tarjeta abría `?movie=` con el id de una serie,
-     y en series escribía "S1 · E1" sobre una película — el episodio sintético
-     de 0067 asomando donde no lo lee nadie. */
-  const theirFollowIds = useMemo(() => new Set((fp?.follows ?? []).map((f) => f.tmdb_id)), [fp]);
-  const myGenres = useMemo(() => new Set(library.flatMap((r) => r.genres)), [library]);
-  const myScoreByTmdb = useMemo(
-    () =>
-      new Map(
-        ofMedium(
-          myRatings.map((r) => ({ kind: r.titles.kind, tmdb_id: r.titles.tmdb_id, score: r.score })),
-          medium,
-        ).map((r) => [r.tmdb_id, r.score]),
-      ),
-    [myRatings, medium],
+  /* Todos los cruces van por (medio, número) y no por el número solo. Sin el
+     medio, su película 1399 salía marcada como "ya la sigues" porque sigues la
+     serie 1399, y su nota de esa película se comparaba con la de tu serie. */
+  const myFollowKeys = useMemo(() => new Set(library.map((r) => keyOf(r.kind, r.tmdb_id))), [library]);
+  const theirScoreByKey = useMemo(
+    () => new Map((fp?.ratings ?? []).map((r) => [keyOf(r.kind, r.tmdb_id), r.score])),
+    [fp],
   );
-  const theirScoreByTmdb = useMemo(() => new Map((fp?.ratings ?? []).map((r) => [r.tmdb_id, r.score])), [fp]);
 
-  // Everything derived from the friend's follows + ratings.
-  const derived = useMemo(() => {
-    if (!fp) return null;
-    const { follows, ratings } = fp;
+  /* El progreso de un título suyo, o nada si no se puede saber de quién es.
+     `rpc_friend_progress` es de 0038 —de cuando solo había series— y llavea sus
+     filas por el `tmdb_id` a secas, así que dos títulos suyos de medios
+     distintos con el mismo número comparten entrada y gana la última fila. Con
+     la ficha abierta a los tres medios eso deja de ser teórico: una biblioteca
+     importada trae cientos de ids de IGDB, que viven en otro espacio de
+     numeración entero (0071). El síntoma sería una barra "1/1" —el episodio
+     sintético de un juego— bajo una serie de setenta capítulos.
 
-    const sharedFollows = follows.filter((f) => myFollowIds.has(f.tmdb_id));
-    // Same confidence-adjusted taste affinity as the /friends/taste leaderboard,
-    // so a friend shows one number app-wide (replaces the old follow-overlap %).
-    const affinity = tasteAffinity(myScoreByTmdb, theirScoreByTmdb);
-
-    const coRated = ratings
-      .filter((r) => myScoreByTmdb.has(r.tmdb_id))
-      .map((r) => ({ ...r, mine: myScoreByTmdb.get(r.tmdb_id)! }))
-      .sort((a, b) => Math.abs(b.score - b.mine) - Math.abs(a.score - a.mine));
-
-    const genreCounts = new Map<string, number>();
-    for (const f of follows) for (const g of f.genres) genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
-    const topGenres = [...genreCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
-    const sharedGenres = topGenres.filter((g) => myGenres.has(g.name)).slice(0, 8).map((g) => g.name);
-
-    const netCounts = new Map<string, number>();
-    for (const f of follows) if (f.network) netCounts.set(f.network, (netCounts.get(f.network) ?? 0) + 1);
-    const topNetworks = [...netCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
-
-    const runtimes = follows.map((f) => f.episode_run_time).filter((n): n is number => n != null && n > 0);
-    const avgRuntime = runtimes.length ? runtimes.reduce((a, b) => a + b, 0) / runtimes.length : 42;
-    const avgRating = ratings.length ? ratings.reduce((a, b) => a + b.score, 0) / ratings.length : null;
-
-    return { sharedFollows, affinity, coRated, topGenres, sharedGenres, topNetworks, avgRuntime, avgRating };
-  }, [fp, myFollowIds, myGenres, myScoreByTmdb, theirScoreByTmdb]);
-
-  // Activity feed: episode watches (consecutive same-show-same-day runs are
-  // collapsed into one "watched N episodes" entry) + ratings + follows.
-  const activity = useMemo(() => {
-    if (!fp) return [];
-    const watched: Act[] = [];
-    for (const w of watchHistory) {
-      const last = watched[watched.length - 1];
-      if (last && last.tmdb_id === w.tmdb_id && last.at.slice(0, 10) === w.watched_at.slice(0, 10)) {
-        last.count = (last.count ?? 1) + 1;
-      } else {
-        watched.push({
-          kind: "watched", at: w.watched_at, tmdb_id: w.tmdb_id, name: w.name,
-          poster_path: w.poster_path, count: 1,
-          season_number: w.season_number, episode_number: w.episode_number,
-        });
-      }
+     Los números ambiguos se descartan: sin barra se lee como "no se sabe", y
+     con la barra de otro se lee como un dato. */
+  const progressOf = useMemo(() => {
+    const mediaById = new Map<number, Set<Medium>>();
+    for (const f of fp?.follows ?? []) {
+      const set = mediaById.get(f.tmdb_id) ?? new Set<Medium>();
+      set.add(f.kind);
+      mediaById.set(f.tmdb_id, set);
     }
-    const rest: Act[] = [
-      ...fp.ratings.map((r): Act => ({ kind: "rated", at: r.created_at, tmdb_id: r.tmdb_id, name: r.name, poster_path: r.poster_path, score: r.score })),
-      ...fp.follows.map((f): Act => ({ kind: "added", at: f.added_at, tmdb_id: f.tmdb_id, name: f.name, poster_path: f.poster_path })),
-    ];
-    return [...watched, ...rest].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 24);
-  }, [fp, watchHistory]);
+    return (tmdbId: number): FriendProgress | undefined =>
+      (mediaById.get(tmdbId)?.size ?? 0) > 1 ? undefined : progressMap?.get(tmdbId);
+  }, [fp, progressMap]);
 
-  // Browsable follows: follow-overlap filter + sort, either way up.
-  const browseFollows = useMemo(() => {
-    let list = fp?.follows ?? [];
-    if (showFilter === "both") list = list.filter((f) => myFollowIds.has(f.tmdb_id));
-    if (showFilter === "not") list = list.filter((f) => !myFollowIds.has(f.tmdb_id));
+  const slices = useMemo((): MediumSlice[] => {
+    if (!fp) return [];
+    return MEDIA.flatMap((medium): MediumSlice[] => {
+      const follows = ofMedium(fp.follows, medium);
+      const ratings = ofMedium(fp.ratings, medium);
+      if (follows.length === 0 && ratings.length === 0) return [];
+
+      /* Los tres mapas se construyen DENTRO del medio, así que la clave vuelve
+         a ser el `tmdb_id` a secas sin que eso sea una trampa: es lo que
+         domain/tasteScope pide, filtrar en el borde y comparar después. */
+      const mine = new Map(
+        ofMedium(myRatings.map((r) => ({ kind: r.titles.kind, tmdb_id: r.titles.tmdb_id, score: r.score })), medium)
+          .map((r) => [r.tmdb_id, r.score]),
+      );
+      const theirs = new Map(ratings.map((r) => [r.tmdb_id, r.score]));
+      const myGenres = new Set(ofMedium(library, medium).flatMap((r) => r.genres));
+      const theirGenres = new Set(follows.flatMap((f) => f.genres));
+
+      return [{
+        medium,
+        follows,
+        ratings,
+        // La misma afinidad ajustada por confianza que la tabla de /friends/taste,
+        // para que una persona enseñe el mismo número en toda la app.
+        affinity: tasteAffinity(mine, theirs),
+        coRated: ratings
+          .filter((r) => mine.has(r.tmdb_id))
+          .map((r) => ({ ...r, mine: mine.get(r.tmdb_id)! }))
+          .sort((a, b) => Math.abs(b.score - b.mine) - Math.abs(a.score - a.mine)),
+        shared: follows.filter((f) => myFollowKeys.has(keyOf(medium, f.tmdb_id))),
+        sharedGenres: [...theirGenres].filter((g) => myGenres.has(g)).slice(0, 6),
+      }];
+    });
+  }, [fp, library, myRatings, myFollowKeys]);
+
+  /* Su perfil de gustos, un bloque por medio: géneros y, debajo, sus cadenas /
+     sus décadas / sus plataformas (domain/tasteProfile). */
+  const taste = useMemo(() => tasteBlocks(fp?.follows ?? []), [fp]);
+
+  /* Su muro, con los tres medios y plegado: sin plegar, el día que importó su
+     backlog son cuatrocientas filas idénticas que entierran todo lo demás. */
+  const wall = useMemo(
+    () => buildWall({
+      watched: watchHistory.map((w) => ({
+        at: w.watched_at, kind: w.kind, tmdb_id: w.tmdb_id, name: w.name,
+        poster_path: w.poster_path, season_number: w.season_number, episode_number: w.episode_number,
+      })),
+      rated: (fp?.ratings ?? []).map((r) => ({
+        at: r.created_at, kind: r.kind, tmdb_id: r.tmdb_id, name: r.name,
+        poster_path: r.poster_path, score: r.score,
+      })),
+      added: (fp?.follows ?? []).map((f) => ({
+        at: f.added_at, kind: f.kind, tmdb_id: f.tmdb_id, name: f.name,
+        poster_path: f.poster_path, owned: f.owned,
+      })),
+    }),
+    [fp, watchHistory],
+  );
+
+  /* Su media de nota, de todo lo que puntúa. Es de la persona, no de un medio:
+     no se compara con nada de otro sitio, solo dice si es de puntuar alto. */
+  const avgRating = useMemo(() => {
+    const all = fp?.ratings ?? [];
+    return all.length ? all.reduce((a, b) => a + b.score, 0) / all.length : null;
+  }, [fp]);
+
+  /* El runtime medio sale SOLO de sus series: es lo que multiplica a los
+     episodios para estimar el tiempo, y una película o un juego en esa media la
+     convierten en otra cosa. */
+  const avgRuntime = useMemo(() => {
+    const runtimes = ofMedium(fp?.follows ?? [], "tv").map((f) => f.episode_run_time).filter((n): n is number => n != null && n > 0);
+    return runtimes.length ? runtimes.reduce((a, b) => a + b, 0) / runtimes.length : 42;
+  }, [fp]);
+
+  const browse = useMemo(() => {
     // One numeric key per field so the direction is a single sign flip; dates
     // become timestamps rather than a second, string-shaped comparison.
     const rank: Record<ShowSort, (f: FriendFollow) => number | null> = {
-      their: (f) => theirScoreByTmdb.get(f.tmdb_id) ?? null,
+      their: (f) => theirScoreByKey.get(keyOf(f.kind, f.tmdb_id)) ?? null,
       critic: (f) => f.vote_average ?? null,
       air: (f) => {
         const t = f.first_air_date ? Date.parse(f.first_air_date) : NaN;
@@ -292,27 +340,48 @@ export default function FriendPage() {
     };
     const key = rank[showSort];
     const dir = sortDir === "asc" ? -1 : 1;
-    return [...list].sort((a, b) => {
-      const ka = key(a), kb = key(b);
-      // Shows with no value sink whichever way the sort runs. Flipping to
-      // "lowest first" is a request for their worst scores, not for the pile
-      // they never scored at all — those would otherwise take the whole screen.
-      if (ka == null || kb == null) {
-        if (ka != null) return -1;
-        if (kb != null) return 1;
-      } else if (ka !== kb) {
-        return dir * (kb - ka);
-      }
-      return a.name.localeCompare(b.name);
-    });
-  }, [fp, showFilter, showSort, sortDir, myFollowIds, theirScoreByTmdb]);
+    /* Un solo juego de controles manda sobre las tres secciones: se lee como
+       una decisión ("enséñame solo lo que tenemos en común") y no como tres
+       formularios. La sección que se quede vacía con el filtro puesto
+       desaparece, en vez de dejar un título con nada debajo. */
+    return slices.map((slice) => ({
+      slice,
+      rows: slice.follows
+        .filter((f) => {
+          if (showFilter === "both") return myFollowKeys.has(keyOf(f.kind, f.tmdb_id));
+          if (showFilter === "not") return !myFollowKeys.has(keyOf(f.kind, f.tmdb_id));
+          return true;
+        })
+        .sort((a, b) => {
+          const ka = key(a), kb = key(b);
+          // Shows with no value sink whichever way the sort runs. Flipping to
+          // "lowest first" is a request for their worst scores, not for the pile
+          // they never scored at all — those would otherwise take the whole screen.
+          if (ka == null || kb == null) {
+            if (ka != null) return -1;
+            if (kb != null) return 1;
+          } else if (ka !== kb) {
+            return dir * (kb - ka);
+          }
+          return a.name.localeCompare(b.name);
+        }),
+    }));
+  }, [slices, showFilter, showSort, sortDir, myFollowKeys, theirScoreByKey]);
 
-  // 9 at a time, so the comparison grid reveals whole rows at its widest (three
-  // 320px columns). Must sit above the early returns — it is a hook.
-  const { shown: coRatedShown, more: coRatedMore } = useShowMore(derived?.coRated ?? [], 9);
+  /* "Viendo ahora" es de SERIES y no por descuido: `rpc_friend_snapshot` lo saca
+     de lo que tiene un episodio emitido sin ver, y ni una película ni un juego
+     tienen tal cosa — su episodio sintético (0067, 0071) se ve entero de una
+     vez. Se cruza con sus series para saber que el número es de una: la función
+     no dice el medio (0016 y 0038 son de cuando solo había series) y sin el
+     cruce escribía "S1 · E1" sobre una película. Arriba de los `return`
+     tempranos porque es un hook. */
+  const theirTvIds = useMemo(
+    () => new Set(ofMedium(fp?.follows ?? [], "tv").map((f) => f.tmdb_id)),
+    [fp],
+  );
 
   const hue = hueOf(friendId);
-  const estMinutes = snap && derived ? Math.round(snap.stats.episodes * derived.avgRuntime) : 0;
+  const estMinutes = snap ? Math.round(snap.stats.episodes * avgRuntime) : 0;
 
   if (isPending) {
     return <div className="screen mq-page"><div className="dim">{tr("Loading…")}</div></div>;
@@ -335,7 +404,7 @@ export default function FriendPage() {
   // app. "Notas" said whose notes it was showing, and the answer was "both".
   const sections: { v: SectionKey; label: string; icon: typeof User }[] = [
     { v: "overview", label: tr("Overview"), icon: User },
-    { v: "shows", label: tr("Shows"), icon: LayoutGrid },
+    { v: "library", label: tr("Library"), icon: LayoutGrid },
     { v: "activity", label: tr("Activity"), icon: Activity },
     { v: "compare", label: tr("Compare"), icon: Scale },
   ];
@@ -361,18 +430,15 @@ export default function FriendPage() {
       ? tr("Highest first")
       : tr("Lowest first");
 
-  const watchingCards = snap.watching.filter((w) => theirFollowIds.has(w.tmdb_id)).map((w) => {
-    const wName = locName(esNames, w.tmdb_id, w.name, medium);
-    /* El progreso por serie de `rpc_friend_progress` es solo de series: cuenta
-       episodios, y un id de otro medio que coincida con el de una serie suya
-       pintaría la barra de esa serie sobre una película. */
+  const watchingCards = snap.watching.filter((w) => theirTvIds.has(w.tmdb_id)).map((w) => {
+    const wName = locName(esNames, w.tmdb_id, w.name, "tv");
     const p = w.watched != null && w.aired != null
       ? { watched: w.watched, aired: w.aired }
-      : medium === "tv" ? progressMap?.get(w.tmdb_id) : undefined;
+      : progressOf(w.tmdb_id);
     const pct = p && p.aired > 0 ? Math.min(100, Math.round((p.watched / p.aired) * 100)) : null;
     return (
-      <div key={w.tmdb_id} className="card mq-row" onClick={() => openTitle(w.tmdb_id)}>
-        <MiniArt poster={w.poster_path} name={wName} style={{ width: 52, height: 76 }} />
+      <div key={w.tmdb_id} className="card mq-row" onClick={() => openSheet(w.tmdb_id, "tv")}>
+        <MiniArt kind="tv" poster={w.poster_path} name={wName} style={{ width: 52, height: 76 }} />
         <div className="min-w-0 flex-1">
           <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{wName}</div>
           <div className="dim" style={{ fontSize: 12.5 }}>
@@ -390,6 +456,26 @@ export default function FriendPage() {
       </div>
     );
   });
+
+  /* Las cifras de su cabecera, desglosadas por medio en el cliente.
+     `rpc_friend_snapshot.stats.shows` cuenta TODO lo que sigue —cine y juegos
+     incluidos— bajo la etiqueta "series", porque 0016 y 0038 son de cuando solo
+     había series. Aquí ya tenemos su lista entera y paginada, así que contar
+     bien no cuesta ni una consulta. `episodes` sí se queda como viene, y por eso
+     cambia de nombre: son todos sus watch_events, y una película vista y un
+     juego terminado escriben uno igual que un episodio (0067, 0071). */
+  const stats: { key: string; label: string; value: string; icon?: typeof User; medium?: Medium }[] = [
+    /* Una tarjeta por medio del que SIGA algo. `slices` incluye también los
+       medios de los que solo tiene notas, y con ellos la cabecera enseñaba un
+       "Cine · 0" a quien puntuó tres películas sin guardarlas — el cero
+       permanente que el resto de la página evita. */
+    ...slices.filter((s) => s.follows.length > 0)
+      .map((s) => ({ key: s.medium, label: tr(mediumPlural(s.medium)), value: String(s.follows.length), medium: s.medium })),
+    { key: "watched", icon: Eye, label: tr("stat: Watched"), value: snap.stats.episodes.toLocaleString() },
+    { key: "rated", icon: Star, label: tr("Rated"), value: String(snap.stats.rated) },
+    { key: "time", icon: Clock, label: tr("Est. watch time"), value: `~${timeSpentLabel(estMinutes)}` },
+    { key: "avg", icon: Heart, label: tr("Avg. rating"), value: avgRating != null ? avgRating.toFixed(1) : "—" },
+  ];
 
   return (
     <div className="screen mq-page">
@@ -425,7 +511,7 @@ export default function FriendPage() {
         {section === "overview" && (
           <>
             {/* Watching now — the first thing you see */}
-            {snap.watching.length > 0 && (
+            {watchingCards.length > 0 && (
               <section className="flex flex-col gap-2.5">
                 <div className="eyebrow flex items-center gap-1.5"><Play size={13} />{tr("Watching now")}</div>
                 <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
@@ -436,81 +522,63 @@ export default function FriendPage() {
 
             {/* Stats */}
             <div className="fr-stats">
-              {[
-                { icon: Tv, label: tr("Shows"), value: snap.stats.shows },
-                { icon: Eye, label: tr("Episodes"), value: snap.stats.episodes.toLocaleString() },
-                { icon: Star, label: tr("Rated"), value: snap.stats.rated },
-                { icon: Clock, label: tr("Est. watch time"), value: derived ? `~${timeSpentLabel(estMinutes)}` : "—" },
-                { icon: Heart, label: tr("Avg. rating"), value: derived?.avgRating != null ? derived.avgRating.toFixed(1) : "—" },
-              ].map((st) => (
-                <div key={st.label} className="card p-3 flex flex-col gap-0.5">
-                  <st.icon size={16} style={{ color: "var(--accent)" }} />
+              {stats.map((st) => (
+                <div key={st.key} className="card p-3 flex flex-col gap-0.5" data-tint={st.medium}>
+                  {st.medium ? <MediumGlyph kind={st.medium} size={16} tone="accent" /> : st.icon && <st.icon size={16} style={{ color: "var(--accent)" }} />}
                   <div style={{ fontSize: 18, fontWeight: 800 }} className="mt-1">{st.value}</div>
                   <div className="mute" style={{ fontSize: 11.5 }}>{st.label}</div>
                 </div>
               ))}
             </div>
 
-            {/* Taste match — the same confidence-adjusted figure as /friends/taste */}
-            {derived && (
-              <div className="card p-4 flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2" style={{ fontSize: 13.5, fontWeight: 700 }}>
-                    <Heart size={15} style={{ color: "var(--accent)" }} />
-                    {derived.affinity
-                      ? tv("{pct}% taste match", { pct: derived.affinity.pct })
-                      : tr("No taste match yet")}
-                  </div>
-                  <span className="mute" style={{ fontSize: 12.5 }}>
-                    {derived.affinity ? `${derived.affinity.common} ${tr(copy.ratedInCommon)} · ` : ""}
-                    {derived.sharedFollows.length} {tr(copy.inCommon)}
-                  </span>
-                </div>
-                <div className="fr-matchbar"><i style={{ width: `${derived.affinity?.pct ?? 0}%` }} /></div>
-                {!derived.affinity && (
-                  <p className="mute" style={{ fontSize: 12, margin: 0 }}>
-                    {tr("Rate shows you've both seen and the match score appears.")}
-                  </p>
-                )}
-                {derived.sharedGenres.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: 2 }}>
-                    <span className="mute" style={{ fontSize: 11.5 }}>{tr("Shared taste:")}</span>
-                    {derived.sharedGenres.map((g) => <span key={g} className="badge badge-soft" style={{ fontSize: 11 }}>{tGenre(g)}</span>)}
-                  </div>
-                )}
+            {/* Taste match — una por medio. No hay una sola cifra que las resuma
+                y no se inventa: promediarlas sería mezclar lo que 0067 y 0071
+                separaron, y además esconde lo interesante, que es coincidir en
+                cine y no en series. */}
+            {slices.length > 0 && (
+              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+                {slices.map((s) => {
+                  const copy = tasteCopy(s.medium);
+                  return (
+                    <div key={s.medium} className="card p-4 flex flex-col gap-2" data-tint={s.medium}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2" style={{ fontSize: 13.5, fontWeight: 700 }}>
+                          <MediumGlyph kind={s.medium} size={15} tone="accent" />
+                          {s.affinity
+                            ? tv("{pct}% taste match", { pct: s.affinity.pct })
+                            : tr("No taste match yet")}
+                        </div>
+                      </div>
+                      <div className="fr-matchbar"><i style={{ width: `${s.affinity?.pct ?? 0}%` }} /></div>
+                      <span className="mute" style={{ fontSize: 12 }}>
+                        {s.affinity ? `${s.affinity.common} ${tr(copy.ratedInCommon)} · ` : ""}
+                        {s.shared.length} {tr(copy.inCommon)}
+                      </span>
+                      {!s.affinity && (
+                        <p className="mute" style={{ fontSize: 12, margin: 0 }}>{tr(copy.noOverlap)}</p>
+                      )}
+                      {s.sharedGenres.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: 2 }}>
+                          <span className="mute" style={{ fontSize: 11.5 }}>{tr("Shared taste:")}</span>
+                          {s.sharedGenres.map((g) => <span key={g} className="badge badge-soft" style={{ fontSize: 11 }}>{tGenre(g)}</span>)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
-            {/* Taste profile + their watch activity, side by side on web */}
             <section className="taste-grid">
-              {derived && derived.topGenres.length > 0 && (
-                <div className="taste-col">
-                  <div className="eyebrow">{tr("Taste profile")}</div>
-                  <div className="card p-4 flex flex-col gap-2">
-                    {derived.topGenres.slice(0, 8).map((g) => (
-                      <div key={g.name} className="flex items-center gap-2.5">
-                        <span className="truncate" style={{ width: 150, fontSize: 12.5, flex: "0 0 auto" }}>{tGenre(g.name)}</span>
-                        <div className="fr-matchbar" style={{ flex: 1 }}><i style={{ width: `${(g.count / derived.topGenres[0].count) * 100}%` }} /></div>
-                        <span className="mute" style={{ fontSize: 11.5, width: 24, textAlign: "right", flex: "0 0 auto" }}>{g.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {derived.topNetworks.length > 0 && (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {derived.topNetworks.map((n) => (
-                        <span key={n.name} className="badge badge-soft" style={{ fontSize: 11 }}>{n.name} · {n.count}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
               <WatchHeatmap userId={friendId} />
             </section>
+
+            <TasteBlocks blocks={taste} />
           </>
         )}
 
-        {section === "shows" && (
-          <section className="flex flex-col gap-3">
+        {section === "library" && (
+          <section className="flex flex-col gap-5">
             <div className="fr-toolbar">
               <div className="segmented scroll no-scrollbar">
                 {filters.map((f) => (
@@ -552,25 +620,30 @@ export default function FriendPage() {
                 </button>
               </div>
             </div>
-            {browseFollows.length === 0 ? (
+            {browse.every((b) => b.rows.length === 0) ? (
               <p className="dim" style={{ fontSize: 13, margin: 0 }}>{tr("Nothing here.")}</p>
             ) : (
               <>
-                <div className="eyebrow">{browseFollows.length} {tr("shows")}</div>
-                <div className="fr-grid">
-                  {browseFollows.map((f) => (
-                    <FollowTile
-                      key={f.tmdb_id}
-                      f={f}
-                      name={locName(esNames, f.tmdb_id, f.name, medium)}
-                      theirScore={theirScoreByTmdb.get(f.tmdb_id)}
-                      progress={medium === "tv" ? progressMap?.get(f.tmdb_id) : undefined}
-                      added={myFollowIds.has(f.tmdb_id)}
-                      onOpen={() => openTitle(f.tmdb_id)}
-                      onAdd={() => follow.mutate(toTitleRow(f))}
-                    />
-                  ))}
-                </div>
+                {browse.map(({ slice, rows }) => (
+                  <FollowSection key={slice.medium} slice={slice} rows={rows}>
+                    {(f) => (
+                      <FollowTile
+                        key={keyOf(f.kind, f.tmdb_id)}
+                        f={f}
+                        name={locName(esNames, f.tmdb_id, f.name, f.kind)}
+                        theirScore={theirScoreByKey.get(keyOf(f.kind, f.tmdb_id))}
+                        /* Las barras son de series: `rpc_friend_progress` cuenta
+                           episodios y su clave es el número a secas, así que en
+                           otro medio pintaría el progreso de la serie que
+                           llevara ese número. */
+                        progress={f.kind === "tv" ? progressOf(f.tmdb_id) : undefined}
+                        added={myFollowKeys.has(keyOf(f.kind, f.tmdb_id))}
+                        onOpen={() => openSheet(f.tmdb_id, f.kind)}
+                        onAdd={() => follow.mutate(toTitleRow(f))}
+                      />
+                    )}
+                  </FollowSection>
+                ))}
                 <span className="mute" style={{ fontSize: 11.5 }}>
                   {/* One key for the whole legend: the + icon is slotted back
                       where the translation puts {plus}, not where English did. */}
@@ -583,88 +656,70 @@ export default function FriendPage() {
           </section>
         )}
 
-        {section === "activity" && (
-          <section className="flex flex-col gap-1.5">
-            <div className="eyebrow flex items-center gap-1.5"><Activity size={13} />{tr("Recent activity")}</div>
-            {activity.length === 0 ? (
-              <div className="card" style={{ padding: "24px" }}>
-                <p className="dim" style={{ margin: 0, fontSize: 14 }}>{tr("No activity yet.")}</p>
-              </div>
-            ) : (
-              <div className="card" style={{ padding: 6 }}>
-                {activity.map((a, i) => (
-                  <div key={`${a.kind}-${a.tmdb_id}-${i}`} className="fr-activity" onClick={() => openTitle(a.tmdb_id)} style={{ cursor: "pointer" }}>
-                    <span className="badge badge-soft btn-icon" style={{ width: 30, height: 30, flex: "0 0 auto" }}>
-                      {a.kind === "rated" ? <Star size={14} style={{ color: "var(--accent)" }} />
-                        : a.kind === "watched" ? <Eye size={14} style={{ color: "var(--accent)" }} />
-                        : <Plus size={14} />}
-                    </span>
-                    <div className="min-w-0 flex-1" style={{ fontSize: 13.5 }}>
-                      {a.kind === "watched" ? (
-                        <>
-                          <span className="mute">{tr("activity: Watched")}{" "}</span>
-                          {(a.count ?? 1) > 1
-                            ? <><b style={{ fontWeight: 700 }}>{a.count} {tr("episodes")}</b><span className="mute"> {tr("of")} </span></>
-                            : <><b style={{ fontWeight: 700 }}>S{a.season_number} · E{a.episode_number}</b><span className="mute"> {tr("of")} </span></>}
-                          <b style={{ fontWeight: 700 }}>{locName(esNames, a.tmdb_id, a.name, medium)}</b>
-                        </>
-                      ) : (
-                        <>
-                          <span className="mute">{a.kind === "rated" ? tr("activity: Rated") : tr("activity: Added")}{" "}</span>
-                          <b style={{ fontWeight: 700 }}>{locName(esNames, a.tmdb_id, a.name, medium)}</b>
-                          {a.kind === "rated" && a.score != null && <span className="mute"> · {a.score}/10</span>}
-                        </>
-                      )}
-                    </div>
-                    <span className="mute" style={{ fontSize: 12, flex: "0 0 auto" }}>{relativeTime(a.at, new Date(), dateLocale())}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
+        {section === "activity" && <ActivityWall items={wall} isMe={false} />}
 
         {/* Head-to-head only. "Their top ratings" sat above it saying nothing
             about the two of you, and it was already the first thing the Activity
-            feed and the Overview's average covered. Everything you have both
-            rated is reachable now, 9 at a press: the list runs widest
-            disagreement first, so the old hard cap of 8 always cut from the
-            agreeing end — the half of the picture that says you two match. */}
+            feed and the Overview's average covered. Una sección por medio, cada
+            una encabezada por su afinidad: es donde el porcentaje se entiende,
+            justo encima de las notas que lo justifican. */}
         {section === "compare" && (
-          <>
-            {derived && derived.coRated.length > 0 && (
-              <div className="flex flex-col gap-2.5">
-                <div className="eyebrow flex items-center gap-1.5">
-                  <Scale size={13} />{tr("You both rated")} · {derived.coRated.length}
-                </div>
-                <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
-                  {coRatedShown.map((c) => (
-                    <div key={c.tmdb_id} className="card mq-row" onClick={() => openTitle(c.tmdb_id)}>
-                      <MiniArt poster={c.poster_path} name={locName(esNames, c.tmdb_id, c.name, medium)} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{locName(esNames, c.tmdb_id, c.name, medium)}</div>
-                        <div className="dim" style={{ fontSize: 12.5 }}>{agreementLabel(c.score, c.mine)}</div>
-                      </div>
-                      <div className="flex items-center gap-1.5" style={{ flex: "0 0 auto" }}>
-                        <span className="badge badge-soft" title={tr("Their score")} style={{ fontWeight: 800 }}>{tr("Them")} {c.score}</span>
-                        <span className="badge badge-soft" title={tr("Your score")} style={{ fontWeight: 800 }}>{tr("You")} {c.mine}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {coRatedMore}
-              </div>
-            )}
-            {derived && derived.coRated.length === 0 && (
+          <div className="flex flex-col gap-6">
+            {slices.every((s) => s.coRated.length === 0) && (
               <div className="card" style={{ padding: "24px" }}>
                 <p className="dim" style={{ margin: 0, fontSize: 14 }}>
                   {tr("You haven't both rated the same show yet. Rate one you've both seen and it shows up here.")}
                 </p>
               </div>
             )}
-          </>
+            {slices.filter((s) => s.coRated.length > 0).map((s) => (
+              <CompareSection key={s.medium} slice={s} esNames={esNames} onOpen={openSheet} />
+            ))}
+          </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Lo que los dos habéis puntuado de UN medio, lo que más difiere primero.
+ *
+ *  Componente aparte por lo mismo que FollowSection: cada sección revela las
+ *  suyas de nueve en nueve, y `useShowMore` es un hook. */
+function CompareSection({ slice, esNames, onOpen }: {
+  slice: MediumSlice;
+  esNames: ReturnType<typeof useEsNames>;
+  onOpen: (tmdbId: number, kind: Medium) => void;
+}) {
+  // 9 at a time, so the comparison grid reveals whole rows at its widest (three
+  // 320px columns).
+  const { shown, more } = useShowMore(slice.coRated, 9);
+  const copy = tasteCopy(slice.medium);
+  return (
+    <div className="flex flex-col gap-2.5" data-tint={slice.medium}>
+      <div className="eyebrow flex items-center gap-1.5">
+        <Scale size={13} />{tr(mediumPlural(slice.medium))} · {slice.coRated.length} {tr(copy.ratedInCommon)}
+        {slice.affinity && <span className="mute"> · {tv("{pct}% taste match", { pct: slice.affinity.pct })}</span>}
+      </div>
+      <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+        {shown.map((c) => {
+          const name = locName(esNames, c.tmdb_id, c.name, c.kind);
+          return (
+            <div key={c.tmdb_id} className="card mq-row" onClick={() => onOpen(c.tmdb_id, c.kind)}>
+              <MiniArt kind={c.kind} poster={c.poster_path} name={name} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{name}</div>
+                <div className="dim" style={{ fontSize: 12.5 }}>{agreementLabel(c.score, c.mine)}</div>
+              </div>
+              <div className="flex items-center gap-1.5" style={{ flex: "0 0 auto" }}>
+                <span className="badge badge-soft" title={tr("Their score")} style={{ fontWeight: 800 }}>{tr("Them")} {c.score}</span>
+                <span className="badge badge-soft" title={tr("Your score")} style={{ fontWeight: 800 }}>{tr("You")} {c.mine}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {more}
     </div>
   );
 }

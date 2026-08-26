@@ -12,7 +12,7 @@ import { t as tr } from "@/lib/i18n";
 
    Y solo en las listas mezcladas. Dentro del modo cine no hace falta —todo lo
    es— y ahí sería ruido en cada fila. */
-export function MediumGlyph({ kind, size = 13 }: { kind: Medium; size?: number }) {
+export function MediumGlyph({ kind, size = 13, tone = "mute" }: { kind: Medium; size?: number; tone?: "mute" | "accent" }) {
   const Icon = kind === "movie" ? Film : kind === "game" ? Gamepad2 : Tv;
   return (
     // `title` y no `aria-label`: con role="img" el title ya es el nombre
@@ -22,7 +22,11 @@ export function MediumGlyph({ kind, size = 13 }: { kind: Medium; size?: number }
     <span
       role="img"
       title={tr(mediumLabel(kind))}
-      style={{ display: "inline-flex", flex: "0 0 auto", color: "var(--text-mute)" }}
+      /* Apagado en una lista, donde es una marca al margen de la fila; con el
+         acento cuando ES el icono de algo —la cifra de un medio en el perfil—,
+         y allí el acento es el del medio porque el bloque lo redefine con
+         `data-tint` (tokens.css). */
+      style={{ display: "inline-flex", flex: "0 0 auto", color: tone === "accent" ? "var(--accent)" : "var(--text-mute)" }}
     >
       <Icon size={size} />
     </span>

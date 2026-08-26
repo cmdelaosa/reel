@@ -77,6 +77,34 @@ export const addedListOf = (kind: Medium, fromServer?: string | null): AddedList
     ? fromServer
     : addedList(kind);
 
+/** El nombre del medio EN PLURAL, que es como se encabeza una sección ("Cine",
+ *  "Juegos") frente al singular de `mediumLabel`, que es como se etiqueta una
+ *  fila ("Película"). Las dos formas existen porque el perfil usa las dos a la
+ *  vez: el glifo de una fila y el título del bloque que la contiene.
+ *
+ *  Claves del diccionario, como todo lo de aquí — y las mismas que ya usa la
+ *  barra de navegación, así que el bloque de cine del perfil y la pestaña Cine
+ *  dicen exactamente la misma palabra. */
+const PLURAL: Record<Medium, string> = { tv: "Shows", movie: "Movies", game: "Games" };
+
+export const mediumPlural = (kind: Medium): string => PLURAL[kind];
+
+/** Cómo se cuenta lo VISTO de un medio, para el desglose del día en la rejilla
+ *  de actividad: "3 episodios · 1 película · 2 juegos terminados".
+ *
+ *  Otra vez claves y no texto, y otra vez TRES frases y no una con el nombre
+ *  del medio interpolado: en español el género arrastra, y de un juego no se
+ *  dice que se vio sino que se terminó — la misma distinción que `watchedPhrase`
+ *  hace en el muro, aquí en forma de recuento.
+ *
+ *  Lleva `{n}` y no el número dentro: la traducción decide dónde va. */
+export const watchedCountKey = (kind: Medium, n: number): string =>
+  kind === "tv"
+    ? (n === 1 ? "heat: {n} episode" : "heat: {n} episodes")
+    : kind === "game"
+    ? (n === 1 ? "heat: {n} game finished" : "heat: {n} games finished")
+    : (n === 1 ? "heat: {n} movie" : "heat: {n} movies");
+
 /** Si la fila puede decir "· N episodios" bajo el texto. Ni una película ni un
  *  juego tienen varios episodios que agrupar, así que el recuento nunca es suyo
  *  por mucho que el burst del RPC devuelva uno. */

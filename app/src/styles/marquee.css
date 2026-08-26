@@ -1527,6 +1527,17 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 }
 .friends-pop-row:hover, .friends-pop-row:focus-visible { background: var(--surface-2); }
 
+/* ---- Perfil de gustos: un bloque por medio ----
+   Tres columnas donde quepan, una donde no. `auto-fit` y no `auto-fill` a
+   propósito: con un solo medio —quien únicamente ve series— la columna se
+   estira a lo ancho en vez de dejar dos huecos donde no hay nada.
+   `align-items: start` porque los tres bloques rara vez tienen el mismo alto:
+   un medio con dos géneros no tiene por qué crecer hasta el de ocho. */
+.taste-blocks {
+  display: grid; gap: 12px 16px; align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
 /* ---- Taste profile + watch heatmap side by side (your profile and a friend's) ---- */
 /* The split is deliberately uneven. The taste card is eight fixed bars in a box
    that stops growing; the heatmap is 53 columns and spends every pixel it gets.
@@ -1582,6 +1593,14 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .heatmap-cell.l2 { background: color-mix(in srgb, var(--accent) 52%, var(--surface-3)); }
 .heatmap-cell.l3 { background: color-mix(in srgb, var(--accent) 76%, var(--surface-3)); }
 .heatmap-cell.l4 { background: var(--accent); }
+/* El color del día lo pone el medio que más pesó en él (domain/heatmap): el
+   cuadradito redefine `--accent` para sí mismo y las cuatro reglas de arriba
+   siguen valiendo tal cual, sin una quinta escala por medio. Sin `data-tint`
+   —la base todavía sin 0082— la rejilla sale con el acento del modo, que es
+   exactamente lo que se pintaba antes. */
+.heat-keys { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-right: auto; }
+.heat-key { display: inline-flex; align-items: center; gap: 4px; }
+.heat-scale { display: inline-flex; align-items: center; gap: 4px; }
 .heatmap-months {
   grid-area: 1 / 2;
   display: grid; column-gap: var(--heat-gap);
