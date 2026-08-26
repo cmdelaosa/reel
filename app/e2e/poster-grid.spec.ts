@@ -28,7 +28,13 @@ const ANCHOS = [320, 360, 390, 414, 768] as const;
  *  pistas ya en píxeles. */
 async function columnas(page: Page, clase: string): Promise<{ n: number; pistas: string; ancho: number }> {
   return page.evaluate((cls) => {
-    const host = document.querySelector(".mq-main") ?? document.body;
+    /* Dentro de .mq-main y de ningún otro sitio: la anchura que hay que medir
+       es la que la rejilla tiene de verdad en la página, con el relleno del
+       contenedor ya descontado. Cayendo a <body> se mediría el ancho completo
+       del viewport —hasta 32px de más— y la comprobación pasaría a ser más
+       permisiva que la realidad, sin decirlo. Mejor que reviente. */
+    const host = document.querySelector(".mq-main");
+    if (!host) throw new Error("no hay .mq-main: la página no ha montado");
     const probe = document.createElement("div");
     probe.className = cls;
     // Ocho hijos: más que columnas quepan en cualquiera de los anchos de arriba,
