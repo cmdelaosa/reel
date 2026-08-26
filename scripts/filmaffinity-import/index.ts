@@ -294,7 +294,10 @@ async function main() {
   }
 
   // ── 2. Cachear fichas y escribir el perfil ───────────────────────────────
-  await preflight(env);
+  // La puerta se comprueba solo si vamos a llamarla: `--fechas-lista` no toca
+  // tmdb-proxy, y hacerle depender de que la edge function esté en pie sería
+  // pedirle una llave que no necesita.
+  if (!args.includes("--fechas-lista")) await preflight(env);
   // `--solo=<id de FA,…>` reescribe unas pocas filas y nada más. Existe por lo
   // que pasó en la primera pasada de verdad: una película se perdió por un 5xx
   // suelto, y repetir las mil trescientas para recuperar UNA es media hora de
@@ -320,22 +323,31 @@ async function main() {
     let tocadas = 0;
     for (const { fa, kind } of all) {
       if (kind !== "list" || !fa.position) continue;
+      if (solo && !solo.has(fa.id)) continue;
       const r = resolved.get(fa.id);
       if (!r) continue;
       const { data: t, error: te } = await admin
         .from("titles").select("id").eq("kind", "movie").eq("tmdb_id", r.tmdbId).maybeSingle();
       if (te) throw new Error(`titles: ${te.message}`);
-      if (!t) { report.errors.push(`${fa.title}: no está cacheada`); continue; }
-      const { error } = await admin
+      if (!t) { report.errors.push(`${fa.title}: la ficha no está cacheada`); continue; }
+      // `.select()` para contar filas TOCADAS y no vueltas del bucle: un update
+      // que no encuentra su fila no es un error en PostgREST, y sin esto una
+      // película que no esté en la biblioteca se contaría como recolocada.
+      const { data: filas, error } = await admin
         .from("library_entries")
         .update({ added_at: listAddedAt(baseLista, fa.position) })
         .eq("user_id", env.targetUserId)
-        .eq("title_id", t.id);
+        .eq("title_id", t.id)
+        .select("title_id");
       if (error) throw new Error(`library_entries: ${error.message}`);
+      if (!filas?.length) { report.errors.push(`${fa.title}: no está en la biblioteca`); continue; }
       if (++tocadas % 50 === 0) console.log(`  fechas ${tocadas}`);
     }
     console.log(`\n--fechas-lista: ${tocadas} filas recolocadas desde ${baseLista.toISOString()}`);
-    if (report.errors.length) console.log(`  ${report.errors.length} sin tocar:`, report.errors.slice(0, 5));
+    if (report.errors.length) {
+      console.log(`  ${report.errors.length} sin tocar:`);
+      report.errors.slice(0, 10).forEach((e) => console.log(`    ${e}`));
+    }
     return;
   }
 
