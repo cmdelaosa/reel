@@ -31,7 +31,7 @@ function RatingRow({ r, onOpen }: { r: RatedRow; onOpen: () => void }) {
   const t = r.titles;
   const art = tmdbImg(t.poster_path, "w92");
   const esNames = useEsNames();
-  const name = locName(esNames, t.tmdb_id, t.name);
+  const name = locName(esNames, t.tmdb_id, t.name, t.kind);
   return (
     <div className="card mq-row" onClick={onOpen}>
       <div className="mq-row-art" style={art ? undefined : { background: posterBg(name) }}>

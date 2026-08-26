@@ -108,15 +108,21 @@ export interface FriendWatch {
   poster_path: string | null;
 }
 
-export function useFriendWatchHistory(friendId: string, limit = 60) {
+/** El muro de la ficha de un amigo, ya recortado al medio que se está mirando.
+ *
+ *  El recorte va en SQL y no después: `limit` corta las 60 más recientes de
+ *  todas, y filtrar por medio al recibirlas dejaba el muro de cine vacío en
+ *  cuanto un amigo llevaba sesenta episodios seguidos de series. */
+export function useFriendWatchHistory(friendId: string, medium: Medium, limit = 60) {
   return useQuery({
-    queryKey: ["friendWatchHistory", friendId, limit],
+    queryKey: ["friendWatchHistory", friendId, medium, limit],
     enabled: Boolean(friendId),
     queryFn: async (): Promise<FriendWatch[]> => {
       const { data, error } = await supabase
         .from("watch_events")
         .select("watched_at, episodes!inner(season_number, episode_number, titles!inner(tmdb_id, kind, name, poster_path))")
         .eq("user_id", friendId)
+        .eq("episodes.titles.kind", medium)
         .order("watched_at", { ascending: false })
         .limit(limit);
       if (error) throw error;

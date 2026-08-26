@@ -118,7 +118,7 @@ function StatRow({ t, groupAvg, onOpen }: { t: StatTitle; groupAvg?: number; onO
   const copy = tasteCopy(t.kind);
   const art = tmdbImg(t.poster_path, "w92");
   const esNames = useEsNames();
-  const name = locName(esNames, t.tmdb_id, t.name);
+  const name = locName(esNames, t.tmdb_id, t.name, t.kind);
   return (
     <div className="card mq-row" onClick={onOpen}>
       <div className="mq-row-art" style={art ? undefined : { background: posterBg(name) }}>

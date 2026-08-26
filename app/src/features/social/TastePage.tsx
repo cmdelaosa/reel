@@ -67,7 +67,10 @@ function FriendRow({ rank, f, medium, onOpen }: { rank: number; f: TasteFriend; 
 function TitleRow({ t, onOpen }: { t: TasteTitle; onOpen: () => void }) {
   const copy = tasteCopy(t.kind);
   const esNames = useEsNames();
-  const name = locName(esNames, t.tmdb_id, t.name);
+  /* Con el medio de la fila: el mapa de nombres en español va por "medio:id"
+     (0046), y sin decirlo se busca siempre en series — el juego 961 salía con
+     el título español de la serie 961. */
+  const name = locName(esNames, t.tmdb_id, t.name, t.kind);
   return (
     <div className="card mq-row" onClick={onOpen}>
       <TitleArt poster={t.poster_path} name={name} />
