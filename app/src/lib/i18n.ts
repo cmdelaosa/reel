@@ -120,6 +120,12 @@ const ES: Record<string, string> = {
   "Mark finished": "Marcar terminado",
   "Finished — tap to clear": "Terminado — toca para quitarlo",
   "Platforms": "Plataformas",
+  /* El selector de 0083. "En cuál lo juegas" y no "Plataforma": la fila de
+     abajo también son plataformas, y lo que separa a las dos no es la palabra
+     sino de quién habla cada una — las del juego y la TUYA. */
+  "You play it on": "En cuál lo juegas",
+  "mark as where you play it": "marcar como donde lo juegas",
+  "where you play it — tap to clear": "donde lo juegas — toca para quitarlo",
   "Library": "Biblioteca",
   /* Esta noche, en juegos. El héroe no dice "elige juego": un juego empezado se
      retoma, y elegir es lo que se hace en la pestaña Pendientes. De ahí que
@@ -937,6 +943,25 @@ const ES: Record<string, string> = {
   "Preparing…": "Preparando…",
   "Download my data": "Descargar mis datos",
 
+  /* ---- Lo que hace un amigo con ESTE título (ficha de cine y de juegos) ----
+     Con prefijo porque no son las palabras de los cubos: en tu biblioteca el
+     cubo se llama "Sin empezar" y hablando de otra persona eso no se entiende
+     ("¿sin empezar qué?"). En tercera persona y con el verbo delante, que es
+     como se cuenta lo que hace alguien.
+
+     El género arrastra, y por eso son dos juegos de claves y no uno con el
+     nombre del medio interpolado: "la tiene pendiente" (la película) y "lo
+     tiene pendiente" (el juego) no se arreglan con una sola frase. */
+  "friend: Not out yet": "Aún no ha salido",
+  "friend: On their watchlist": "La tiene pendiente",
+  "friend: Watched it": "La ha visto",
+  "friend: In their backlog": "Lo tiene pendiente",
+  "friend: Owns it": "Lo tiene",
+  "friend: Playing it": "Lo está jugando",
+  "friend: Keeps playing it": "Sigue jugándolo",
+  "friend: Finished it": "Se lo ha terminado",
+  "friend: Dropped it": "Lo dejó",
+
   // ---- Toasts ----
   "Couldn't load — check your connection and retry": "No se pudo cargar — revisa tu conexión y reintenta",
   "You're offline — changes are paused": "Sin conexión — los cambios quedan en pausa",
@@ -974,6 +999,18 @@ const EN: Record<string, string> = {
   "heat: {n} game finished": "{n} game finished",
   "heat: {n} games finished": "{n} games finished",
   "decade: {full}": "{full}s",
+  /* Los estados de un amigo. En inglés el prefijo es lo único que sobra —el
+     género no arrastra— pero la entrada tiene que estar igual, o la ficha
+     enseñaría la clave con los dos puntos delante. */
+  "friend: Not out yet": "Not out yet",
+  "friend: On their watchlist": "On their watchlist",
+  "friend: Watched it": "Watched it",
+  "friend: In their backlog": "In their backlog",
+  "friend: Owns it": "Owns it",
+  "friend: Playing it": "Playing it",
+  "friend: Keeps playing it": "Keeps playing it",
+  "friend: Finished it": "Finished it",
+  "friend: Dropped it": "Dropped it",
 };
 
 /** Dictionaries by language. */

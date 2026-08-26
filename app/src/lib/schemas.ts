@@ -174,6 +174,11 @@ export const libraryRowSchema = z.object({
      dónde salen las horas sin una consulta más. */
   owned: z.boolean().nullable().optional(),
   minutes_source: z.enum(["manual", "steam"]).nullable().optional(),
+  /* En cuál lo juegas TÚ (0083), por su nombre de IGDB — el mismo de
+     `platforms`, que es la lista que la ficha ofrece a elegir. Una sola y no
+     varias: la pregunta es "¿dónde lo juego?", y esa respuesta cambia cuando
+     te lo llevas a otra consola, no se acumula. Null es "no lo has dicho". */
+  played_platform: z.string().nullable().optional(),
   release_precision: z
     .enum(["day", "month", "q1", "q2", "q3", "q4", "year", "tbd"])
     .nullable()

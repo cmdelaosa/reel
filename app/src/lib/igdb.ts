@@ -112,6 +112,10 @@ export interface GameProgress {
    *  importación de Steam en todo lo que trae, y a mano se marca lo que tengas
    *  en consola, en GOG o en físico. */
   owned?: boolean;
+  /** En cuál lo juegas (0083), por su nombre de IGDB. `null` lo borra —volver a
+   *  pulsar la que ya está puesta es dejar de decirlo—, y por eso el tipo
+   *  admite null: `undefined` es "no toques esta columna". */
+  playedPlatform?: string | null;
 }
 
 /** Escribe estado y/o minutos de un juego de tu biblioteca.
@@ -129,10 +133,11 @@ export function useSetGameProgress() {
   const qc = useQueryClient();
   const { session } = useAuth();
   return useMutation({
-    mutationFn: async ({ titleId, playState, minutesPlayed, owned }: GameProgress) => {
+    mutationFn: async ({ titleId, playState, minutesPlayed, owned, playedPlatform }: GameProgress) => {
       const patch: Record<string, unknown> = {};
       if (playState !== undefined) patch.play_state = playState;
       if (owned !== undefined) patch.owned = owned;
+      if (playedPlatform !== undefined) patch.played_platform = playedPlatform;
       if (minutesPlayed !== undefined) {
         patch.minutes_played = Math.max(0, Math.round(minutesPlayed));
         patch.minutes_source = "manual";

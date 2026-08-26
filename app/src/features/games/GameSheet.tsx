@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { Check, Eye, EyeOff, Gamepad2, Library, Minus, Plus, X } from "lucide-react";
 import { igdbImg, useGame, useSetGameProgress } from "@/lib/igdb";
 import { isEs, t as tr, tGenre, tv } from "@/lib/i18n";
@@ -15,6 +16,8 @@ import {
 } from "@/domain/gameStatus";
 import { formatRelease, isReleased } from "@/domain/gameRelease";
 import { RatingStars } from "@/ui/RatingStars";
+import { PlatformLogo } from "@/ui/PlatformLogo";
+import { FriendsOnTitle } from "@/features/social/FriendsOnTitle";
 import { posterBg } from "@/ui/posterBg";
 import { useFocusTrap } from "@/ui/useFocusTrap";
 
@@ -26,7 +29,13 @@ import { useFocusTrap } from "@/ui/useFocusTrap";
 
      · el estado, que aquí no se puede derivar de contar nada (gameStatus.ts);
      · las horas, a mano, con el tiempo medio de IGDB como denominador;
-     · las plataformas y su fecha, que en un juego son varias y distintas.
+     · en cuál lo juegas TÚ (0083), que es lo que hace falta para volver a
+       ponerte: un juego que tienes en Switch y en PS5 no se retoma igual;
+     · las plataformas y su fecha, que en un juego son varias y distintas. Se
+       enseñan como LOGOTIPOS (ui/PlatformLogo) y no como una fila de nombres:
+       ocho nombres con ocho fechas detrás son dos renglones de texto que nadie
+       lee, y las ocho marcas se reconocen de un vistazo. El nombre y la fecha
+       están al pasar por encima, que es donde caben sin ocupar sitio.
 
    La fila de notas tiene DOS celdas y no cuatro: tuya e IGDB. No hay TMDB —otro
    medio— ni IMDb, que no puntúa juegos. */
@@ -51,6 +60,7 @@ const BUMPS = [30, 120];
 
 export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => void }) {
   const trapRef = useFocusTrap<HTMLDivElement>();
+  const navigate = useNavigate();
   const { data, isPending } = useGame(igdbId);
   const title = data?.title;
   const episodeId = data?.episode_id ?? null;
@@ -86,6 +96,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
   const minutes = entry?.minutes_played ?? 0;
   const playState = entry?.play_state ?? null;
   const owned = Boolean(entry?.owned);
+  const playedPlatform = entry?.played_platform ?? null;
   /* De dónde salen las horas (0076). Se dice cuando las trajo Steam, y no
      cuando las escribiste tú: lo tuyo no necesita explicación, y ver "de Steam"
      es lo que explica por qué esa cifra cambió sola. */
@@ -145,6 +156,14 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
   const pickState = (next: PlayState) => {
     if (!entry) return;
     setProgress.mutate({ titleId: entry.title_id, playState: playState === next ? null : next });
+  };
+
+  /* Y lo mismo con la plataforma: volver a pulsar la que está puesta la quita.
+     Es una sola (0083) — "¿dónde lo juego?" tiene una respuesta, y cuando te lo
+     llevas a la consola nueva esa respuesta cambia, no se acumula. */
+  const pickPlatform = (name: string) => {
+    if (!entry) return;
+    setProgress.mutate({ titleId: entry.title_id, playedPlatform: playedPlatform === name ? null : name });
   };
 
   const cover = igdbImg(title?.poster_path, "cover_big");
@@ -256,6 +275,39 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                     </button>
                   </div>
 
+                  {/* En cuál lo juegas TÚ (0083). Solo se ofrecen las
+                      plataformas del juego: no tiene sentido decir que juegas
+                      en Switch a algo que no salió en Switch, y con la lista
+                      cerrada la columna guarda el mismo nombre que
+                      `titles.platforms`, que es lo que la hace comparable.
+
+                      Chips CON EL NOMBRE, y no la fila de logotipos pelados de
+                      más abajo aunque lleven el mismo dibujo dentro: aquí hay
+                      que elegir, y un juego que sale en PS4 y en PS5 pone dos
+                      logotipos idénticos uno al lado del otro. Distinguirlos
+                      pasando por encima no es una opción — en un móvil no hay
+                      «por encima», y lo que hay es tocar y ver qué pasa. */}
+                  {platforms.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <div className="eyebrow">{tr("You play it on")}</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {platforms.map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            className={`chip ${playedPlatform === p ? "chip-active" : ""}`}
+                            aria-pressed={playedPlatform === p}
+                            title={playedPlatform === p ? tr("where you play it — tap to clear") : tr("mark as where you play it")}
+                            onClick={() => pickPlatform(p)}
+                          >
+                            <PlatformLogo name={p} size={14} bare />
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Las horas. Un juego sin final las enseña a secas: no hay
                       contra qué medirlas, y una barra al 400% no dice nada. */}
                   <div className="card" style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -357,6 +409,19 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                 </div>
               </div>
 
+              {/* Quién de los tuyos anda con esto: su estado y su nota, uno por
+                  línea. Debajo de las notas porque es la misma pregunta un
+                  escalón más abajo — de "¿está bien?" a "¿con quién lo hablo?".
+                  No se pinta nada cuando no hay nadie. */}
+              <FriendsOnTitle
+                kind="game"
+                titleId={title.id}
+                episodeId={episodeId}
+                tmdbId={title.tmdb_id}
+                released={released}
+                onOpen={(id) => { onClose(); navigate(`/friend/${id}`); }}
+              />
+
               {title.overview && (
                 <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>{title.overview}</p>
               )}
@@ -371,14 +436,12 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                     {platforms.map((p) => {
                       const own = perPlatform.find(([name]) => name === p)?.[1];
                       return (
-                        <span key={p} className="chip" style={{ cursor: "default" }}>
-                          {p}
-                          {own && (
-                            <span className="mute">
-                              {formatRelease(own.date, own.precision as never, { es })}
-                            </span>
-                          )}
-                        </span>
+                        <PlatformLogo
+                          key={p}
+                          name={p}
+                          size={22}
+                          hint={own ? formatRelease(own.date, own.precision as never, { es }) : null}
+                        />
                       );
                     })}
                   </div>
