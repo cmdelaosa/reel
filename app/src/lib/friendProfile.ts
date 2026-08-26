@@ -168,6 +168,41 @@ export function useFriendWatchHistory(friendId: string, limit = 60) {
   });
 }
 
+/** Lo último que ha visto de UN medio.
+ *
+ *  Existe aparte de `useFriendWatchHistory` porque aquel reparte su `limit`
+ *  entre los tres medios y esta pregunta no admite reparto: "lo último que vio
+ *  de cine" tiene que salir aunque lleve dos meses de maratón de series. Con las
+ *  sesenta filas del muro, un amigo que se haya metido cuatro temporadas no
+ *  tiene ni una película dentro, y su bloque de cine desaparecía de la ficha
+ *  diciendo, sin decirlo, que no ve películas.
+ *
+ *  El filtro va sobre el `kind` del título —dos niveles dentro del embebido— y
+ *  se apoya en los `!inner` de siempre: sin ellos PostgREST devuelve la fila con
+ *  el embebido a null en vez de descartarla. */
+export function useFriendLastWatched(friendId: string, kind: Medium, limit = 6) {
+  return useQuery({
+    queryKey: ["friendLastWatched", friendId, kind, limit],
+    enabled: Boolean(friendId),
+    queryFn: async (): Promise<FriendWatch[]> => {
+      const { data, error } = await supabase
+        .from("watch_events")
+        .select("watched_at, episodes!inner(season_number, episode_number, titles!inner(tmdb_id, kind, name, poster_path))")
+        .eq("user_id", friendId)
+        .eq("episodes.titles.kind", kind)
+        .order("watched_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return z.array(watchRowSchema).parse(data).map((r) => ({
+        watched_at: r.watched_at,
+        season_number: r.episodes.season_number,
+        episode_number: r.episodes.episode_number,
+        ...r.episodes.titles,
+      }));
+    },
+  });
+}
+
 /** Per-followed-title progress (watched/aired) for a friend, keyed by tmdb id.
  *  rpc_friend_progress is security invoker — 0015 friend-read RLS gates it, so
  *  a non-friend / private profile just yields an empty map. */

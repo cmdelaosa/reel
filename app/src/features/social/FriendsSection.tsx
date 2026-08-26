@@ -145,13 +145,17 @@ function FriendCard({ r, onOpen }: { r: Friendship; onOpen: () => void }) {
      "Severance" aquí y "Separación" dos dedos más abajo. El medio es el del
      modo porque es de ese medio de lo que habla la fila. */
   const name = locName(useEsNames(), r.watching_tmdb, r.watching_title ?? "", medium);
+  /* La fila que quedó del modo anterior mientras llega la de este se queda sin
+     verbo, en vez de decir "Jugando a" de una serie durante un fotograma: es el
+     precio de que la lista no parpadee a cero al cambiar de modo (lib/friends). */
+  const said = r.medium === medium ? r.watching_title : null;
   return (
     <div className="card mq-row" onClick={onOpen}>
       <FriendAvatar f={{ id: r.other_id, name: r.display_name, avatarUrl: r.avatar_url }} size={44} />
       <div className="flex-1 min-w-0">
         <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{r.display_name}</div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>
-          {r.watching_title
+          {said
             ? <>{tr(friendActivityVerb(friendActivityOf(r.activity, medium)))} <b style={{ fontWeight: 650 }}>{name}</b></>
             : `@${r.handle}`}
         </div>

@@ -15,7 +15,7 @@ import { FriendAvatar } from "@/ui/FriendAvatar";
 import { MediumGlyph } from "@/ui/MediumGlyph";
 import { relativeTime } from "@/domain/time";
 import {
-  useFriendProfile, useFriendProgress, useFriendWatchHistory,
+  useFriendLastWatched, useFriendProfile, useFriendProgress, useFriendWatchHistory,
   type FriendFollow, type FriendProgress, type FriendRating,
 } from "@/lib/friendProfile";
 import { useLibraryRows, useFollow } from "@/lib/library";
@@ -218,6 +218,10 @@ export default function FriendPage() {
   const { data: fp } = useFriendProfile(friendId);
   const { data: progressMap } = useFriendProgress(friendId);
   const { data: watchHistory = [] } = useFriendWatchHistory(friendId);
+  /* Las últimas películas se piden aparte y no se sacan del muro: ver
+     `useFriendLastWatched`. Doce para que al quitar los revisionados sigan
+     quedando seis. */
+  const { data: movieHistory = [] } = useFriendLastWatched(friendId, "movie", 12);
   const { data: library = [] } = useLibraryRows();
   const { data: myRatings = [] } = useMyRatings();
   const follow = useFollow();
@@ -413,7 +417,7 @@ export default function FriendPage() {
      La de juegos no sale de contar nada —el progreso de una partida no está en
      ninguna tabla— sino de lo que él mismo dijo (0073). */
   const playingGames = useMemo(() => playingNow(fp?.follows ?? [], finishedGameIds), [fp, finishedGameIds]);
-  const recentMovies = useMemo(() => lastWatched(watchHistory, "movie"), [watchHistory]);
+  const recentMovies = useMemo(() => lastWatched(movieHistory, "movie"), [movieHistory]);
 
   const hue = hueOf(friendId);
   const estMinutes = snap ? Math.round(snap.stats.episodes * avgRuntime) : 0;
