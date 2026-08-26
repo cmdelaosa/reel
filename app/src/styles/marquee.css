@@ -1591,12 +1591,16 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 }
 @keyframes notif-sweep { to { opacity: 0; transform: translateX(36px); } }
 @media (prefers-reduced-motion: reduce) { .notif-sweep { animation: none; } }
-/* On a phone there is no centred column to drift away from, and the bell is not
-   the last control in the bar — hanging the panel off it would run its left
-   edge off the screen. Back to the bar's own width, which is the shape a phone
-   wants anyway. (Fixed inside .mq-top resolves against the bar's box, courtesy
-   of its backdrop-filter — and the bar is full-width and pinned to the top, so
-   that lands exactly where a viewport-anchored panel used to.) */
+/* En un teléfono la campana NO es el último control de la barra, así que colgar
+   el panel de ella le saca el borde izquierdo de la pantalla. Vuelve al ancho
+   de la propia barra, que además es la forma que un teléfono quiere. (`fixed`
+   dentro de .mq-top se resuelve contra la caja de la barra, cortesía de su
+   backdrop-filter — y la barra va pegada arriba y a todo el ancho, así que cae
+   exactamente donde caía un panel anclado a la ventana.)
+   El motivo que había aquí antes —"en un teléfono no hay columna centrada de la
+   que alejarse"— ya no distingue nada: desde que la barra ocupa la ventana no
+   hay columna centrada en ningún ancho. El de arriba sí sigue siendo cierto, y
+   es el único que sostiene esta regla. */
 @media (max-width: 767px) {
   .mq-notif {
     position: fixed;

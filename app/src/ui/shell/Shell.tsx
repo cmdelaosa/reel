@@ -278,11 +278,15 @@ export function Shell() {
               <span className="mq-searchbtn-label">{t("Search")}</span>
               <kbd className="mq-kbd">⌘K</kbd>
             </button>
-            {/* The panel hangs off this wrapper, not off the window: the bar's
-                content is centred in a 1280px column, so a viewport-anchored
-                panel drifted further from its own bell the wider the screen
-                got. Its scrim stays down in Overlays — fixed positioning inside
-                the bar would be trapped by the bar's backdrop-filter. */}
+            {/* The panel hangs off this wrapper, not off the window: back when
+                the bar's content sat in a centred 1280px column, a
+                viewport-anchored panel drifted further from its own bell the
+                wider the screen got. That column is gone —the bar spans the
+                window now— so today the two land in the same place; the anchor
+                stays because the panel belongs to ITS bell, which is what has
+                to keep being true the next time the bar moves. Its scrim stays
+                down in Overlays — fixed positioning inside the bar would be
+                trapped by the bar's backdrop-filter. */}
             <span className="mq-bell-wrap">
               <button className="btn btn-ghost btn-icon relative" title={t("Notifications")} onClick={() => setNotifOpen((v) => !v)}>
                 <Bell size={18} />
