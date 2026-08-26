@@ -23,6 +23,8 @@ export const qk = {
      importación. */
   steamLink: ["steamLink"] as const,
   steamImport: ["steamImport"] as const,
+  nintendoLink: ["nintendoLink"] as const,
+  nintendoImport: ["nintendoImport"] as const,
   title: (tmdbId: number) => ["title", tmdbId] as const,
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,

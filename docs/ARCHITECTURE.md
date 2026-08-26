@@ -226,7 +226,7 @@ library_entries (
   -- FINISHED is not here — that is the watch_event on it, same as everything else.
   play_state text,                          -- playing | ongoing | dropped (0073)
   minutes_played int not null default 0,    -- denominator lives in titles.beat_seconds
-  minutes_source text,                      -- manual | steam (0073, meaningful since 0076)
+  minutes_source text,                      -- manual | steam | nintendo (0073; nintendo since 0082)
   owned boolean not null default false,     -- you bought it. Orthogonal to play_state: written by
                                             -- the Steam import and by hand (console, GOG, physical)
   played_at timestamptz,                    -- when minutes_played/play_state last moved, set by the
@@ -320,7 +320,8 @@ stops happening.
 ```sql
 job_runs (                                  -- 0029: one row per scheduled run, per exit path
   id uuid pk, job text not null,            -- episode-refresh | alerts | discover-warm |
-                                            -- igdb-warm | steam-sync | imdb-dataset-import
+                                            -- igdb-warm | steam-sync | nintendo-sync |
+                                            -- imdb-dataset-import
   started_at timestamptz, finished_at timestamptz,
   ok boolean not null default false,
   summary jsonb not null default '{}'       -- the run's own report: counts, errors, skips
@@ -349,8 +350,10 @@ popular_now_cache (…)                       -- 0025  }  Public read, service-r
 discover_cache (…)                          -- 0064 /   rest of the metadata mirror.
 ```
 
-The Steam import (0076/0078) is three tables because the flow is three steps — ask Steam, show
-you what it found, then write only what you approved:
+The game imports (Steam 0076/0078, Nintendo 0082) are three tables because the flow is three
+steps — ask the provider, show you what it found, then write only what you approved. Two of
+those tables are shared: what changes between providers is where the rows come from, not the
+shape of the draft. The nonce table is Steam's alone, because only Steam has a login:
 
 ```sql
 steam_link_nonces (                         -- the IOU of the OpenID round trip
@@ -363,22 +366,44 @@ steam_link_nonces (                         -- the IOU of the OpenID round trip
 -- an Authorization header, which is why steam-sync is the one function deployed with
 -- verify_jwt = false (see supabase/config.toml).
 
-steam_imports (                             -- one per import attempt
+game_imports (                              -- one per import attempt (was steam_imports)
   id uuid pk, user_id uuid fk,
+  provider text not null                    -- 0082. No default on purpose: a forgotten provider
+    check (provider in ('steam','nintendo')),  --  would not fail, it would just lie in the receipt
   state text check (state in ('scanning','ready','applying','done','error')),
-  error text,                               -- 'private' is the one the UI explains on its own
+  error text,                               -- 'private' is the one the UI explains on its own,
+                                            --   and it means two different console settings
   started_at, finished_at timestamptz, summary jsonb
 )
-steam_import_items (                        -- one per game Steam returned
+game_import_items (                         -- one per game the provider returned
   id uuid pk, import_id uuid fk, user_id uuid fk,
-  appid int not null, steam_name text not null,
-  minutes int not null default 0,           -- MINUTES, Steam's own unit (playtime_forever) and
-                                            -- the same one library_entries.minutes_played uses.
-                                            -- There is no conversion anywhere in the path.
-  title_id uuid fk null,                    -- null = not in the catalogue yet; ask IGDB by appid
+  external_id text not null,                -- 0082: the provider's own id AS TEXT. Steam writes
+                                            --   its appid; Nintendo the eShop nsuid, or
+                                            --   `name:<normalised>` when the record has no URL.
+  name text not null,
+  image_uri text,                           -- Nintendo only: it ships the cover with each game.
+                                            --   Steam's is built from the appid, so it is null.
+  minutes int not null default 0,           -- MINUTES, both providers' own unit (Steam's
+                                            --   playtime_forever, Nintendo's totalPlayTime) and
+                                            --   the one library_entries.minutes_played uses.
+                                            --   There is no conversion anywhere in the path.
+  title_id uuid fk null,                    -- null = not in the catalogue yet. Steam asks IGDB by
+                                            --   appid (/by-steam); Nintendo has no id at all and
+                                            --   asks by exact name (/by-name), which is why it
+                                            --   resolves fewer and says so.
   in_library boolean not null default false
 )
 ```
+
+Nintendo has no login and no library API, so **0082 stores a friend code, not a token**:
+`profiles.nintendo_friend_code` plus the `nintendo_nsa_id` Nintendo returns when it resolves it.
+Reel asks with **one Nintendo account of its own** (`NINTENDO_SESSION_TOKEN`), the same shape
+Exophase uses. Two consequences worth knowing before reading `nintendo-sync`:
+
+- entering Coral (Nintendo's app API) needs an `f` parameter only the real app can compute, so
+  there is a **third-party service in the chain** — see `coral.ts` and docs/DEPLOY.md;
+- the play record has **no last-played date**, so `library_entries.played_at` is *learned*: when
+  the minutes go up between syncs, that is a session. The first import leaves it alone.
 
 ## Core derivations (pure functions in `app/src/domain/`, unit-tested)
 

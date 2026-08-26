@@ -226,6 +226,50 @@ const ES: Record<string, string> = {
     "Lo importado entra marcado como «lo tengo» y sin estado: las horas de Steam son de por vida y no dicen nada sobre lo que estás jugando ahora.",
   "Your Steam library came back empty, and the profile is public — so there's nothing to import.":
     "Tu biblioteca de Steam ha vuelto vacía, y el perfil es público — así que no hay nada que importar.",
+  /* Nintendo (0082). El vocabulario lo pone la consola, no nosotros: lo que
+     Nintendo llama "registro de juego" y "Todos los jugadores" hay que
+     llamarlo igual, o la instrucción de arreglar la privacidad manda a alguien
+     a buscar un ajuste que en su Switch se llama de otra manera. */
+  "Nintendo Switch": "Nintendo Switch",
+  "from Nintendo": "de Nintendo",
+  "Friend code": "Código de amigo",
+  "Connect": "Conectar",
+  "Type your Switch friend code and Reel will bring in the games you've played and the hours on each. There's nothing to sign in to.":
+    "Escribe el código de amigo de tu Switch y Reel se traerá los juegos que has jugado y las horas de cada uno. No hay que identificarse en ningún sitio.",
+  "On your Switch, your play activity has to be visible to \"All Players\" — otherwise Nintendo won't show your record to anyone but you.":
+    "En tu Switch, el registro de juego tiene que estar visible para «Todos los jugadores» — si no, Nintendo no se lo enseña a nadie más que a ti.",
+  "That's not a friend code. It's twelve digits, like SW-1234-5678-9012.":
+    "Eso no es un código de amigo. Son doce dígitos, como SW-1234-5678-9012.",
+  "Nintendo doesn't know that friend code. Check the digits on your Switch.":
+    "Nintendo no conoce ese código de amigo. Comprueba los dígitos en tu Switch.",
+  "That Nintendo account is already connected to another Reel account.":
+    "Esa cuenta de Nintendo ya está conectada a otra cuenta de Reel.",
+  "Couldn't save it. Try again in a moment.": "No se ha podido guardar. Prueba dentro de un rato.",
+  "Update my hours": "Actualizar mis horas",
+  "Look at my play record": "Mirar mi registro de juego",
+  "Look again": "Volver a mirar",
+  "{n} games updated": "{n} juegos actualizados",
+  "Nothing new — your hours were already up to date.":
+    "Nada nuevo: tus horas ya estaban al día.",
+  "Asking Nintendo for your play record…": "Pidiéndole a Nintendo tu registro de juego…",
+  "Nintendo won't show your play record": "Nintendo no enseña tu registro de juego",
+  "On your Switch: System Settings → User → your account → Play Activity Settings, and set it to \"All Players\". Then look again.":
+    "En tu Switch: Configuración de la consola → Usuario → tu cuenta → Ajustes del registro de juego, y ponlo en «Todos los jugadores». Luego vuelve a mirar.",
+  "Couldn't read your play record": "No se ha podido leer tu registro de juego",
+  "Nintendo didn't answer. Try again in a moment.":
+    "Nintendo no ha contestado. Prueba dentro de un rato.",
+  "Your play record came back empty. Nintendo only lists what you've played recently — play something and look again.":
+    "Tu registro de juego ha vuelto vacío. Nintendo solo lista lo que has jugado hace poco — juega a algo y vuelve a mirar.",
+  "Select all": "Marcar todos",
+  "Select none": "Desmarcar todos",
+  "Import {n}": "Importar {n}",
+  "new to your library": "nuevo en tu biblioteca",
+  "we'll look this one up": "este habrá que buscarlo",
+  "use Nintendo's {hours}": "usar las {hours} de Nintendo",
+  "Adding the rest…": "Añadiendo el resto…",
+  "Imported": "Importado",
+  "{n} games in your library": "{n} juegos en tu biblioteca",
+  "{n} rated": "{n} con nota",
   "No games yet — hit {key} and add one.": "Aún no hay juegos — pulsa {key} y añade uno.",
   "Movie details": "Ficha de la película",
   "Director": "Dirección",

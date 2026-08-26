@@ -29,6 +29,7 @@ import GamesTonightPage from "@/features/games/GamesTonightPage";
 import GameReleasesPage from "@/features/games/GameReleasesPage";
 import GamesExplorePage from "@/features/games/GamesExplorePage";
 import SteamPage from "@/features/games/SteamPage";
+import NintendoPage from "@/features/games/NintendoPage";
 import ShowsPage from "@/features/shows/ShowsPage";
 import FriendPage from "@/features/social/FriendPage";
 import FriendsPage from "@/features/social/FriendsPage";
@@ -147,6 +148,10 @@ const router = createBrowserRouter([
          que escribe la edge function a partir del secreto APP_URL, así que la
          ruta no puede moverse sin mover también lo que se escribe allí (0076). */
       { path: "games/steam", element: <SteamPage /> },
+      /* Nintendo no tiene vuelta de login que aterrizar (0082): lo único que se
+         escribe aquí es un código de amigo, así que esta ruta no la conoce
+         ninguna edge function y se puede mover sin romper nada. */
+      { path: "games/nintendo", element: <NintendoPage /> },
       { path: "explore", element: <ExplorePage /> },
       { path: "collection/:slug", element: <CollectionPage /> },
       { path: "calendar", element: <CalendarPage /> },

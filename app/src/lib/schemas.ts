@@ -173,7 +173,7 @@ export const libraryRowSchema = z.object({
      domain/gameStatus.ts. `minutes_source` es lo que deja a la ficha decir de
      dónde salen las horas sin una consulta más. */
   owned: z.boolean().nullable().optional(),
-  minutes_source: z.enum(["manual", "steam"]).nullable().optional(),
+  minutes_source: z.enum(["manual", "steam", "nintendo"]).nullable().optional(),
   release_precision: z
     .enum(["day", "month", "q1", "q2", "q3", "q4", "year", "tbd"])
     .nullable()

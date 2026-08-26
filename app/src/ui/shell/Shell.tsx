@@ -75,6 +75,19 @@ const GAME_TABS = [
   // barra, y repetirlo en una pestaña de dentro sería decir "juegos" dos veces
   // y "cuenta enlazada" ninguna.
   { path: "/games/steam", label: "Steam", icon: Link2 },
+  /* Y una SÉPTIMA desde 0082, que es la misma pestaña con otro proveedor:
+     Nintendo. Rompe la simetría igual que Steam y por el mismo motivo —es una
+     pantalla de tres pasos a la que se vuelve, y es del modo Juegos— pero
+     además llevan juntas la fila a siete elementos, que es más de lo que cabe
+     en cualquier móvil.
+
+     Se aceptan dos pestañas en vez de una de "Importar" con las dos dentro
+     porque cada proveedor es una pantalla entera con su propio estado (una
+     cuenta conectada, un borrador a medio confirmar), y meterlas en una sola
+     obligaría a elegir cuál de los dos borradores se enseña. En móvil la fila
+     scrollea en horizontal y el TabMenu recoge lo que no quepa, que es
+     exactamente el caso para el que existe. */
+  { path: "/games/nintendo", label: "Nintendo", icon: Gamepad2 },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 

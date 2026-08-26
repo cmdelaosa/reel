@@ -6,6 +6,7 @@
 //   GET  /discover/:pool   → { results: TitleRow[] }  (anticipated|new|popular|top-rated)
 //   POST /warm             → { ok, summary }          (solo el cron)
 //   POST /by-steam         → { matches: { [appid]: TitleRow } }  (0076)
+//   POST /by-name          → { matches: { [name]: TitleRow } }   (0082)
 //
 // Las de descubrimiento son las gemelas de las cuatro de tmdb-proxy y comparten
 // con ellas la tabla discover_cache; sus consultas viven en discover.ts, con
@@ -56,7 +57,7 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { type Any, apicalypseTerm, gameRow, gameSearchRow, steamAppid } from "./normalize.ts";
-import { GAME_TYPE_FILTER, mergeResults, rankSearch } from "./rank.ts";
+import { GAME_TYPE_FILTER, mergeResults, normalizeName, rankSearch } from "./rank.ts";
 import {
   anticipatedQuery,
   DISCOVER_TTL_MS,
@@ -384,6 +385,74 @@ async function fetchGamesInto(admin: SupabaseClient, igdbIds: number[]): Promise
   return byIgdbId;
 }
 
+/* ──────────────── Del nombre de un juego de Nintendo al catálogo (0082) ─── */
+
+/** Tope por petición. Cada nombre cuesta UNA petición a IGDB, así que treinta
+ *  nombres son siete segundos y medio del presupuesto de 4 req/s que comparte
+ *  todo el proyecto. El registro de juego de Nintendo trae unas dos docenas de
+ *  entradas, así que con esto cabe una importación entera; quien tenga más hace
+ *  varias llamadas. */
+const NAME_MAX = 30;
+
+/** Un nombre a un juego del catálogo, o nada.
+ *
+ *  ── Por qué SOLO acepta el nombre exacto ─────────────────────────────────
+ *  Nintendo no da ningún identificador: ni appid, ni nsuid en el registro, ni
+ *  nada que IGDB tenga fichado. Lo único que hay es el título, así que esto es
+ *  una búsqueda — y una búsqueda siempre devuelve algo. "Nintendo Entertainment
+ *  System - Nintendo Switch Online" devuelve juegos de NES, y aceptar el primero
+ *  metería en la biblioteca de alguien un juego al que no ha jugado, con las
+ *  horas de otro. Un fallo así no se ve: parece un juego más.
+ *
+ *  Así que el listón es la igualdad del nombre normalizado —el mismo
+ *  `normalizeName` con el que rankSearch decide qué es exacto— y lo que no lo
+ *  pase se queda sin resolver y se dice. Un juego que no entra es una fila que
+ *  la persona ve y arregla desde la búsqueda; un juego equivocado que sí entra
+ *  no lo descubre nadie.
+ *
+ *  Se pide `search` y no `name ~ *"…"*` porque aquí el término es un título
+ *  COMPLETO, que es justo donde `search` acierta: la coincidencia de subcadena
+ *  existe en /search para lo escrito a medias, y aquí no hay nada a medias. */
+async function igdbGamesByName(
+  admin: SupabaseClient,
+  names: string[],
+): Promise<Record<string, Any>> {
+  const matches: Record<string, Any> = {};
+
+  for (const name of names) {
+    const term = apicalypseTerm(name);
+    if (!term) continue;
+
+    let found: Any[];
+    try {
+      found = await igdb(
+        "games",
+        `search "${term}"; fields ${SEARCH_FIELDS}; ` +
+          `where version_parent = null & ${GAME_TYPE_FILTER}; limit 10;`,
+      );
+    } catch (e) {
+      // Un nombre que falla no puede tumbar a los demás: lo que no se resuelva
+      // se queda pendiente y quien llama lo cuenta.
+      console.error("igdb-proxy by-name", e);
+      continue;
+    }
+    if (!found.length) continue;
+
+    const wanted = normalizeName(name);
+    // De los exactos, el más popular: "Tetris" exacto hay varios, y el que la
+    // gente quiere decir es el que juega la gente. rankSearch ya pone delante
+    // los exactos ordenados por popularidad, así que basta con mirar el primero
+    // y comprobar que de verdad lo es.
+    const best = rankSearch(found, name)[0];
+    if (!best || normalizeName(String(best?.name ?? "")) !== wanted) continue;
+
+    const [row] = await upsertReturning(admin, [gameSearchRow(best)], "kind,tmdb_id");
+    if (row) matches[name] = row;
+  }
+
+  return matches;
+}
+
 /** Lanza trabajo sin que la respuesta lo espere. EdgeRuntime.waitUntil lo
  *  mantiene vivo después del return; sin él la plataforma mata la invocación
  *  con la promesa a medias. Idéntico al de tmdb-proxy. */
@@ -612,6 +681,56 @@ Deno.serve(async (req) => {
       // `external_games`: pasa con demos, con herramientas y con juegos
       // retirados. Quien llama lo marca como no resuelto y lo dice; callarlo
       // sería enseñar "importados 40" habiendo entrado 38.
+      return json({ matches });
+    }
+
+    // POST /by-name — de nombres del registro de Nintendo al catálogo (0082).
+    //
+    // La hermana pobre de /by-steam, y lo es por lo que Nintendo NO da: allí
+    // hay un appid que casa contra un índice, aquí solo hay un título. Por eso
+    // esta ruta es una búsqueda con un listón —el nombre exacto— y por eso
+    // devuelve menos: ver `igdbGamesByName`.
+    //
+    // Vive aquí por lo mismo que /by-steam: aquí están el token de Twitch y el
+    // estrangulador de las 4 req/s, que son del proyecto. Dos estranguladores
+    // que no se conocen contra un límite compartido no son un estrangulador.
+    if (path === "/by-name") {
+      if (req.method !== "POST") return json({ error: "not found" }, 404);
+      const body = await req.json().catch(() => null);
+      const names = [
+        ...new Set(
+          (Array.isArray(body?.names) ? body.names : [])
+            .filter((n: Any): n is string => typeof n === "string")
+            .map((n: string) => n.trim())
+            .filter((n: string) => n.length > 0 && n.length <= 200),
+        ),
+      ] as string[];
+      if (!names.length) return json({ matches: {} });
+      if (names.length > NAME_MAX) return json({ error: `max ${NAME_MAX} names` }, 400);
+
+      // Lo que el catálogo ya tiene con ESE nombre no se le pregunta a IGDB. En
+      // una segunda importación —o cuando otra persona del grupo ya importó el
+      // mismo juego— esto es casi todo, y sale gratis.
+      const { data: known } = await admin
+        .from("titles")
+        .select("*")
+        .eq("kind", "game")
+        .in("name", names);
+
+      const matches: Record<string, Any> = {};
+      for (const row of known ?? []) {
+        const wanted = normalizeName(String(row.name ?? ""));
+        const asked = names.find((n) => normalizeName(n) === wanted);
+        if (asked && !(asked in matches)) matches[asked] = row;
+      }
+
+      const missing = names.filter((n) => !(n in matches));
+      if (missing.length) Object.assign(matches, await igdbGamesByName(admin, missing));
+
+      // Lo que no aparezca es un nombre que IGDB no tiene escrito igual: pasa
+      // con las apps de Nintendo Switch Online, con las demos y con los juegos
+      // que allí se llaman de otra manera. Quien llama lo marca como no
+      // resuelto y lo dice.
       return json({ matches });
     }
 
