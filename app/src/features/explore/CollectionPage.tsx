@@ -47,7 +47,7 @@ export default function CollectionPage() {
         </div>
       )}
 
-      <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))" }}>
+      <div className="poster-grid">
         {titles.map((t) => (
           <div key={t.tmdb_id} className="flex flex-col gap-1.5">
             <CollectionPoster t={t} onOpen={() => open(t.tmdb_id)} onIgnore={() => ignore.mutate(t.id)} />

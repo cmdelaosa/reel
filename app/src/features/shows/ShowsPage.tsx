@@ -153,7 +153,7 @@ export default function ShowsPage() {
         </div>
       )}
 
-      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))", gap: "var(--gap)" }}>
+      <div className="poster-grid">
         {items.map((s) => (
           <div key={s.title_id} className="flex flex-col gap-1.5">
             <Poster t={toTitleCard(s)} prefetchTmdbId={s.tmdb_id} onClick={() => open(s.tmdb_id)} />

@@ -128,7 +128,7 @@ export default function MoviesPage() {
         </div>
       )}
 
-      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))", gap: "var(--gap)" }}>
+      <div className="poster-grid">
         {items.map((m) => (
           <Poster
             key={m.title_id}

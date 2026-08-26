@@ -90,7 +90,12 @@ const ES: Record<string, string> = {
   "Medium": "Medio",
   "TV": "Series",
   "Movies": "Cine",
-  "My Movies": "Mi cine",
+  /* "Mis películas" y no "Mi cine", aunque el MODO se llame Cine. El modo es
+     un sitio —una sección de la app— y ahí "Cine" funciona; esto es una lista
+     de cosas tuyas, y lo que hay en ella son películas, igual que en "Mis
+     series" y "Mis juegos" hay series y juegos. "Mi cine" nombraba el sitio
+     otra vez en vez de nombrar lo que guardas. */
+  "My Movies": "Mis películas",
   /* Videojuegos. "Sin final" y no "En curso" para 'ongoing': lo que dice no es
      que lo estés jugando ahora —eso es "Jugando"— sino que el juego no se
      acaba. Un CS que llevas un año sin tocar sigue sin tener final. */

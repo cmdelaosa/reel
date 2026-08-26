@@ -16,7 +16,7 @@
  *  button, so it defaults off. */
 export function PosterGridSkeleton({ count = 12, action = false }: { count?: number; action?: boolean }) {
   return (
-    <div className="grid gap-[var(--gap)]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))" }}>
+    <div className="poster-grid">
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="flex flex-col gap-1.5">
           <div className="skeleton" style={{ aspectRatio: "2 / 3" }} />

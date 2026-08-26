@@ -263,6 +263,30 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 .badge-glass  { background: rgba(10, 12, 18, 0.6); color: #fff; backdrop-filter: blur(8px); }
 
 /* Poster */
+/* ---- La rejilla de carátulas ----
+   La biblioteca de los tres medios, Explorar, una colección y una saga: siete
+   sitios repetían literalmente la misma cadena inline
+   —`repeat(auto-fill, minmax(var(--pw), 1fr))` con `gap: var(--gap)`—, así que
+   arreglarla era arreglarla siete veces y acordarse las siete.
+
+   Y había que arreglarla: `--pw` son 158px y a 320px de pantalla la anchura
+   útil son 288, o sea que dos columnas más el hueco pedían 336 y `auto-fill`
+   se caía a UNA. Una sola carátula ocupando el teléfono entero, que no es una
+   rejilla de nada: es un cartel, y hay que hacer scroll por cada título.
+
+   El suelo de dos columnas se escribe en el propio mínimo: `min()` deja que la
+   columna baje de --pw cuando --pw no cabe dos veces, y ni un píxel más abajo.
+   A 288 de ancho salen dos de 134; a 375 vuelven a ser dos de 158; en un
+   escritorio la cuenta no interviene y salen las siete de siempre.
+
+   Por eso no hace falta la lista de reserva: no queda ningún ancho en el que
+   dos no quepan. El teléfono más estrecho que la app admite es 320. */
+.poster-grid {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--pw), calc((100% - var(--gap)) / 2)), 1fr));
+}
+
 .poster {
   position: relative; aspect-ratio: 2 / 3; border-radius: var(--r);
   overflow: hidden; cursor: pointer; isolation: isolate;
@@ -1128,7 +1152,11 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 }
 .fr-grid {
   display: grid; gap: 12px 10px;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  /* Dos por fila como suelo — ver .poster-grid, que es la misma cuenta con el
+     hueco de esta rejilla (10px) en vez de --gap. A 320px la anchura útil son
+     288 y dos columnas de 140 más el hueco pedían 290: se caía a una sola
+     carátula del ancho del teléfono. */
+  grid-template-columns: repeat(auto-fill, minmax(min(140px, calc((100% - 10px) / 2)), 1fr));
 }
 /* Their-shows toolbar, built like .disc-toolbar: one row always. It used to
    wrap, which on a phone stacked the three follow filters over the sort and

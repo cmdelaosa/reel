@@ -211,7 +211,7 @@ export default function GamesExplorePage() {
           </p>
         )}
 
-        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(var(--pw), 1fr))", gap: "var(--gap)" }}>
+        <div className="poster-grid">
           {shown.map((t) => card(t))}
         </div>
 
