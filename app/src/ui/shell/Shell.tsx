@@ -33,6 +33,10 @@ import { t } from "@/lib/i18n";
    siquiera en Cine acertaba, porque esta pestaña no es "una película", es la
    portada del modo. El destello dice lo único que las tres portadas tienen en
    común: esto es lo elegido para ti, ahora. */
+/* ⚠️ Las rutas de estas tres listas están escritas también en la tabla de
+   domain/mediumRoute, que es por donde cruza el conmutador. Se tocan juntas:
+   main.tsx no tiene ruta comodín, así que renombrar una ruta en un solo sitio
+   no da error — deja la pantalla en blanco bajo la barra. */
 const TABS = [
   { path: "/tonight", label: "Tonight", icon: Sparkles },
   { path: "/calendar", label: "Calendar", icon: CalendarClock },

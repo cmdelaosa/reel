@@ -26,7 +26,14 @@ export type Section = "tonight" | "calendar" | "library" | "explore";
    La biblioteca de series lleva el `?filter=watchlist` que lleva su pestaña, y
    no `/shows` a secas: el cubo que abre —lo que no has empezado— es el
    equivalente honesto de "Pendientes" en juegos, que es de donde más se va a
-   venir. */
+   venir.
+
+   ⚠️ Estas doce rutas son las MISMAS que las de TABS / MOVIE_TABS / GAME_TABS
+   en ui/shell/Shell.tsx, escritas dos veces, y nada ata las dos tablas. Se
+   tocan juntas: main.tsx no tiene ruta comodín, así que una ruta renombrada
+   solo aquí —o solo allí— no da error, deja la pantalla en blanco bajo la
+   barra. Ya pasó una vez con la biblioteca de juegos (/games/library →
+   /games/backlog, cuya redirección sigue viva en main.tsx). */
 const ROUTES: Record<Section, Record<Medium, string>> = {
   tonight: { tv: "/tonight", movie: "/movies/tonight", game: "/games/tonight" },
   calendar: { tv: "/calendar", movie: "/movies/releases", game: "/games/releases" },
