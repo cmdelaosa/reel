@@ -36,8 +36,13 @@ export const ofMedium = <T extends { kind: Medium }>(rows: readonly T[], medium:
  *  series— tiene que decir en qué espacio de numeración vive su id. */
 export type SheetParam = "title" | "movie" | "game";
 
-export const sheetParam = (kind: Medium): SheetParam =>
-  kind === "movie" ? "movie" : kind === "game" ? "game" : "title";
+/* Tabla y no ternarios: el medio que se añada mañana no compila hasta que diga
+   con qué parámetro se abre, en vez de heredar en silencio el de las series y
+   mandar sus fichas a la que lleve ese número. Lo mismo vale para las palabras
+   de abajo. */
+const SHEET: Record<Medium, SheetParam> = { tv: "title", movie: "movie", game: "game" };
+
+export const sheetParam = (kind: Medium): SheetParam => SHEET[kind];
 
 /* ─────────────────────────── Las palabras ───────────────────────────────── */
 
@@ -106,5 +111,6 @@ const GAME: TasteCopy = {
   inCommon: "games in common",
 };
 
-export const tasteCopy = (medium: Medium): TasteCopy =>
-  medium === "movie" ? MOVIE : medium === "game" ? GAME : TV;
+const COPY: Record<Medium, TasteCopy> = { tv: TV, movie: MOVIE, game: GAME };
+
+export const tasteCopy = (medium: Medium): TasteCopy => COPY[medium];

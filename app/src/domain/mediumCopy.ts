@@ -110,8 +110,17 @@ export const historyLines = (kind: Medium): HistoryLines =>
  *  Otra vez una clave por medio y no el nombre interpolado: en español el
  *  género arrastra ("ocultas" / "ocultos"), y además lo que se oculta se dice
  *  con la palabra del medio — "series ocultas" sobre una rejilla de juegos era
- *  la etiqueta prestada de siempre. */
+ *  la etiqueta prestada de siempre.
+ *
+ *  Tabla y no ternarios encadenados, que es la forma que tiene aquí la regla de
+ *  arriba: al medio que llegue el año que viene no le vale heredar en silencio
+ *  las palabras de las series, y con un `Record<Medium, …>` no compila hasta
+ *  que alguien escriba las suyas. */
+const HIDDEN: Record<Medium, { one: string; many: string }> = {
+  tv: { one: "hidden show", many: "hidden shows" },
+  movie: { one: "hidden movie", many: "hidden movies" },
+  game: { one: "hidden game", many: "hidden games" },
+};
+
 export const hiddenLabel = (kind: Medium, count: number): string =>
-  count === 1
-    ? kind === "movie" ? "hidden movie" : kind === "game" ? "hidden game" : "hidden show"
-    : kind === "movie" ? "hidden movies" : kind === "game" ? "hidden games" : "hidden shows";
+  count === 1 ? HIDDEN[kind].one : HIDDEN[kind].many;

@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
@@ -62,13 +63,22 @@ export function useIgnored() {
   });
   /* `kind` es OBLIGATORIO en isIgnored, sin valor por defecto: un respaldo a
      "tv" haría que cada llamador nuevo heredase en silencio justo el cruce que
-     esto viene a quitar. Que el compilador lo pregunte. */
-  const keys = new Set((query.data ?? []).map((r) => ignoreKey(r.tmdbId, r.kind)));
-  return {
-    ...query,
-    ignored: query.data ?? [],
-    isIgnored: (tmdbId: number, kind: Medium) => keys.has(ignoreKey(tmdbId, kind)),
-  };
+     esto viene a quitar. Que el compilador lo pregunte.
+
+     Y con identidad estable —useMemo + useCallback—, porque media docena de
+     pantallas la meten en las dependencias de un useMemo: una función nueva en
+     cada render volvía a cribar el catálogo entero de Explorar en cada
+     pulsación de tecla del filtro. */
+  const data = query.data;
+  const keys = useMemo(
+    () => new Set((data ?? []).map((r) => ignoreKey(r.tmdbId, r.kind))),
+    [data],
+  );
+  const isIgnored = useCallback(
+    (tmdbId: number, kind: Medium) => keys.has(ignoreKey(tmdbId, kind)),
+    [keys],
+  );
+  return { ...query, ignored: data ?? [], isIgnored };
 }
 
 export function useIgnore() {
