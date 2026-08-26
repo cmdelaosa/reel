@@ -16,6 +16,7 @@ import { useWatched } from "@/features/detail/data";
 import type { TitleRow } from "@/lib/schemas";
 import { externalScore, scoreColor, scoreLabel } from "@/domain/externalScore";
 import { FriendAvatar } from "@/ui/FriendAvatar";
+import { FriendsOnTitle } from "@/features/social/FriendsOnTitle";
 import { CastRail } from "@/ui/CastRail";
 import { RatingStars } from "@/ui/RatingStars";
 import { WatchOn } from "@/ui";
@@ -295,6 +296,20 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                   </>
                 )}
               </div>
+
+              {/* Quién de los tuyos anda con esta película: su estado y su
+                  nota, uno por línea. La celda de arriba es la MEDIA —un
+                  número, al lado de la de IMDb, respondiendo "¿está bien?"—; en
+                  esta lista caben además los que no la han puntuado: el que la
+                  tiene pendiente es justo con quien se queda para verla. */}
+              <FriendsOnTitle
+                kind="movie"
+                titleId={title.id}
+                episodeId={episodeId}
+                tmdbId={title.tmdb_id}
+                released={released}
+                onOpen={(id) => { onClose(); navigate(`/friend/${id}`); }}
+              />
 
               {displayOverview && (
                 <p className="dim" style={{ fontSize: 14.5, lineHeight: 1.6, margin: 0 }}>{displayOverview}</p>

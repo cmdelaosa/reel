@@ -1689,6 +1689,59 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 }
 .friends-pop-row:hover, .friends-pop-row:focus-visible { background: var(--surface-2); }
 
+/* ---- Tus amigos sobre ESTE título (ficha de cine y de juegos) ----
+   Una fila por amigo: cara, nombre, lo que hace con ello y su nota. El nombre
+   se encoge y el estado y la nota no (`flex: 0 0 auto`): en un móvil lo que se
+   corta es el nombre, que se reconoce por la cara, y no el dato que se venía a
+   leer. */
+.friends-title-list { padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.friends-title-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 7px 8px; border-radius: var(--r-sm); cursor: pointer; text-align: left;
+  transition: background .14s ease;
+}
+.friends-title-row:hover, .friends-title-row:focus-visible { background: var(--surface-2); }
+.friends-title-name {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13.5px; font-weight: 650;
+}
+.friends-title-state {
+  flex: 0 0 auto; font-size: 12px; font-weight: 600; color: var(--text-mute);
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.friends-title-row:hover .friends-title-state { color: var(--text-dim); }
+.friends-title-score {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+
+/* ---- Plataformas de un juego, como logotipos (ui/PlatformLogo) ----
+   La baldosa es neutra y el dibujo va en color de marca: al revés —el color de
+   fondo de cada marca, como en las cadenas de televisión— una fila de ocho
+   plataformas sería una fila de ocho rectángulos de colores gritando, y aquí
+   son ocho a la vez, no uno.
+
+   El tamaño lo pone el componente (el icono + 14), así que esto solo dice
+   forma, fondo y qué pasa al pasar por encima. */
+.plat-logo {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border);
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+@media (hover: hover) {
+  /* Solo donde hay ratón: el `title` con el nombre y la fecha se lee ahí, y el
+     realce es lo que dice que hay algo que leer. */
+  .plat-logo:hover { border-color: var(--border-strong); background: var(--surface-3); }
+}
+/* La misma baldosa cuando además es un botón: elegir en cuál lo juegas. */
+.plat-pick { cursor: pointer; padding: 0; }
+@media (hover: hover) { .plat-pick:hover { transform: translateY(-1px); } }
+.plat-pick-on {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
 /* ---- Perfil de gustos: un bloque por medio ----
    Tres columnas donde quepan, una donde no. `auto-fit` y no `auto-fill` a
    propósito: con un solo medio —quien únicamente ve series— la columna se
