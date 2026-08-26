@@ -766,19 +766,31 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    de barra horizontal, con el buscador, la campana, los ajustes y el avatar
    fuera de la pantalla. En inglés pasaba lo mismo, 1300, solo que menos. El
    único que puede encoger es el nav. */
-/* Y SIN tope de ancho, que es lo que la distingue de .mq-main. La barra estuvo
-   topada a 1280px, los mismos que la rejilla de carátulas, y eso hacía que un
-   monitor de 27 pulgadas le dejara al carril de pestañas exactamente los mismos
-   575px que un portátil: el ancho de más no llegaba a la única fila que lo
-   necesitaba. Medido el 26-08-2026 en Juegos y en español, el carril pedía 706
-   y se quedaban fuera 131 —"Amigos" entero y un tercio de Steam— igual a 1280
-   que a 1920.
-   La barra no es contenido: es el marco, y el marco puede ocupar la ventana
-   aunque lo que enmarca no lo haga. El precio, sabido y aceptado: la marca y el
-   avatar dejan de alinearse con la columna del contenido y se van a los bordes
-   de la pantalla. */
+/* Con un tope PROPIO, más ancho que el del contenido pero tope al fin. Los tres
+   estados por los que ha pasado esto, porque los dos primeros se equivocaron en
+   direcciones opuestas:
+
+   1. Topada a 1280, los mismos que la rejilla de carátulas. Un monitor de 27
+      pulgadas le dejaba al carril de pestañas exactamente los mismos 575px que
+      un portátil, así que el ancho de más no llegaba nunca a la única fila que
+      lo necesitaba: medido en Juegos y en español, el carril pedía 706 y se
+      quedaban fuera 131 —"Amigos" entera y un tercio de Steam— igual a 1280 que
+      a 1920.
+   2. Sin tope, a todo el ancho. Arregla lo anterior y rompe otra cosa: en un
+      ultrapanorámico de 2.752 la marca queda a 700px del contenido, las
+      acciones a 700 por el otro lado, y entre las pestañas y el buscador se
+      abre un vacío de 1.450px — más ancho que todo lo que la barra tiene
+      dentro. Visto en el monitor del usuario el 26-08-2026.
+   3. Topada a --bar-max, que es la columna del contenido MÁS lo que la barra
+      necesita por encima de ella (el porqué del número, en tokens.css). La
+      barra sigue siendo el marco y no el contenido, pero un marco que sobresale
+      80px por lado se lee como marco; uno que sobresale 700, como una avería.
+
+   `margin: 0 auto` la centra sobre la misma vertical que .mq-main: que las dos
+   cajas sean concéntricas es lo que hace que el desbordamiento se lea simétrico
+   en vez de descolgado, y hay una prueba e2e que lo sostiene. */
 .mq-top-inner {
-  min-width: 0;
+  max-width: var(--bar-max); margin: 0 auto; min-width: 0;
   display: flex; align-items: center; gap: 14px;
   padding: var(--bar-pad-y) clamp(16px, 3vw, 28px);
 }
@@ -1554,15 +1566,15 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    it. Opaque glass mix instead, the same fix .filter-menu and .friends-pop
    already carry for the same reason. Top follows the bar, never a literal. */
 /* The bell owns the panel. Anchoring it to the viewport instead parked it at
-   the window's right edge while the bar's controls sat inside a centred 1280px
-   column — on an ultrawide the panel opened a screen away from the bell that
-   spawned it. The offset reproduces the old gap exactly: the bar is one control
-   plus --bar-pad-y above and below, so bell-bottom + pad + 4px is where the
+   the window's right edge while the bar's controls sit inside a centred column
+   — on an ultrawide the panel opened a screen away from the bell that spawned
+   it. The offset reproduces the old gap exactly: the bar is one control plus
+   --bar-pad-y above and below, so bell-bottom + pad + 4px is where the
    viewport-anchored version used to land.
-   Esa columna centrada ya no existe —la barra ocupa la ventana entera— y el
-   anclaje se queda igualmente: ahora las dos formas coinciden, pero el panel
-   sigue colgando de SU campana, que es lo que hay que mantener cierto si la
-   barra vuelve a moverse. */
+   La columna dejó de ser la de 1280 y pasó a ser --bar-max, pero sigue siendo
+   una columna centrada: en el monitor donde se midió esto, de 2.752, la campana
+   cae cerca de 1.960 y el borde de la ventana en 2.752 — 790px de diferencia.
+   O sea que el motivo del anclaje está tan vivo como el primer día. */
 .mq-bell-wrap { position: relative; display: inline-flex; }
 /* Over everything the page can put on screen — including the floating bottom
    nav at 45, which would otherwise swallow the tap meant to dismiss this —
@@ -1597,10 +1609,11 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    dentro de .mq-top se resuelve contra la caja de la barra, cortesía de su
    backdrop-filter — y la barra va pegada arriba y a todo el ancho, así que cae
    exactamente donde caía un panel anclado a la ventana.)
-   El motivo que había aquí antes —"en un teléfono no hay columna centrada de la
-   que alejarse"— ya no distingue nada: desde que la barra ocupa la ventana no
-   hay columna centrada en ningún ancho. El de arriba sí sigue siendo cierto, y
-   es el único que sostiene esta regla. */
+   Y el otro motivo, el de siempre: en un teléfono no hay columna centrada de la
+   que alejarse, porque --bar-max solo empieza a morder muy por encima de estos
+   767px. Los dos motivos están vivos y cada uno sostiene una mitad — el de
+   arriba, que aquí el panel se colgaría mal; este, que aquí no hace falta
+   colgarlo de nada. */
 @media (max-width: 767px) {
   .mq-notif {
     position: fixed;

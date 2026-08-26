@@ -81,10 +81,20 @@ const MODOS = [
    las seis de Juegos y el menú «···» se lleva dos, mientras que a 1440 caben
    todas y el menú no tiene que existir. Las dos ramas del reparto tienen que
    estar medidas, porque la que se rompe sola es siempre la que no se mira. */
-const ANCHOS = [1440, 1280, 390, 320] as const;
+/* Y 2560, el ultrapanorámico, que es donde la barra se rompió por el otro lado:
+   sin tope de ancho la marca se iba a un extremo de la pantalla, las acciones al
+   otro, y en medio quedaba un vacío más ancho que todo lo que la barra tiene
+   dentro. "Cabe" no lo cazaba —claro que cabía—, así que la prueba que lo
+   sostiene es la del tope y el centrado, más abajo. */
+const ANCHOS = [2560, 1440, 1280, 390, 320] as const;
 
 /** Por debajo de esto manda el dock; por encima, el nav de la barra. */
 const ESCRITORIO = 1024;
+
+/** El tope de la barra, --bar-max. Escrito aquí a mano y no leído de la hoja:
+ *  una prueba que se entera del número por el mismo sitio que lo define no
+ *  comprueba nada. */
+const TOPE = 1440;
 
 /* Los rótulos de cada modo, en español y escritos a mano. Son la lista contra
    la que se comprueba que no falta ninguno: leerlos de la propia barra haría
@@ -129,6 +139,41 @@ for (const ancho of ANCHOS) {
           medida.avatar,
           `el avatar llega a ${medida.avatar}px sobre ${medida.clientWidth} de pantalla`,
         ).toBeLessThanOrEqual(medida.clientWidth);
+      });
+
+      /* Que la barra quepa tampoco es que esté donde tiene que estar. Con la
+         barra a todo el ancho y sin tope, en un ultrapanorámico de 2.752 la
+         marca acababa a 700px del contenido, las acciones a 700 por el otro
+         lado y en medio un vacío de 1.450 — y las dos pruebas de arriba daban
+         verde, porque cabía de sobra. Lo que hay que sostener es otra cosa:
+         que la barra tiene su propio tope, y que su caja y la del contenido
+         son CONCÉNTRICAS, que es lo que hace que sobresalir se lea simétrico
+         en vez de descolgado. */
+      test(`la barra ni se estira ni se descuelga en modo ${medium}`, async ({ page }) => {
+        await authenticate(page, medium);
+        await page.goto(ruta);
+        await expect(page.locator(".mq-medium-seg.on")).toBeVisible();
+
+        const caja = await page.evaluate(() => {
+          const r = (s: string) => {
+            const b = document.querySelector(s)?.getBoundingClientRect();
+            return { ancho: b?.width ?? -1, centro: b ? b.left + b.width / 2 : -1 };
+          };
+          return { barra: r(".mq-top-inner"), contenido: r(".mq-main") };
+        });
+        expect(caja.barra.ancho, "no encuentro la barra").toBeGreaterThan(0);
+        expect(caja.contenido.ancho, "no encuentro el contenido").toBeGreaterThan(0);
+
+        expect(
+          Math.round(caja.barra.ancho),
+          `la barra mide ${Math.round(caja.barra.ancho)}px en una ventana de ${ancho}`,
+        ).toBeLessThanOrEqual(TOPE);
+
+        /* Un píxel de margen por el redondeo a subpíxel de un ancho impar. */
+        expect(
+          Math.abs(caja.barra.centro - caja.contenido.centro),
+          `la barra está centrada en ${Math.round(caja.barra.centro)} y el contenido en ${Math.round(caja.contenido.centro)}`,
+        ).toBeLessThanOrEqual(1);
       });
 
       /* Que la barra QUEPA no es que se pueda usar. Antes cabía —el carril se
