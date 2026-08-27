@@ -38,10 +38,11 @@
  * Un `vitest` verde no lo ve; `wrangler dev` no levanta.
  */
 
-/** Lo que Cloudflare inyecta. `SUPABASE_URL` va como **secreto de runtime** y
- *  no como variable del build: las variables en texto plano que no estén en
- *  `wrangler.jsonc` se borran en cada `wrangler deploy`, y las `VITE_*` del
- *  build no existen aquí — Vite las incrusta en el bundle, no en el Worker. */
+/** Lo que Cloudflare inyecta. `SUPABASE_URL` se declara en `wrangler.jsonc` y
+ *  NO en los secretos de la consola: puesto allí, el primer despliegue de
+ *  Workers Builds lo dejó fuera y esta ruta empezó a contestar 500 sin que nada
+ *  avisara (27-ago-2026). Tampoco vale la `VITE_SUPABASE_URL` del build: Vite
+ *  la incrusta en el bundle del navegador, no en el Worker. */
 export interface Env {
   SUPABASE_URL?: string;
   ASSETS: { fetch(request: Request): Promise<Response> };
