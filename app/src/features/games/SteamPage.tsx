@@ -370,17 +370,21 @@ const STATES: { key: ImportState; label: string }[] = [
   { key: "dropped", label: "Dropped" },
 ];
 
-/** Cómo se llama en Reel el estado que un juego YA tiene, para decirlo con la
- *  misma palabra que la pestaña Juegos y no con una inventada aquí. "Finished"
- *  y no "Finished it": esto CUENTA lo que hay, no ofrece marcarlo. */
+/** Cómo se dice, DE UN JUEGO, el estado que ya tiene en Reel.
+ *
+ *  Claves propias y no las de los cubos de la pestaña Juegos, que era lo obvio y
+ *  está mal: esas etiquetan una lista, así que en español van en plural —y
+ *  "Finished" es además "Terminadas", el femenino de las series—. "en Reel ·
+ *  Terminadas" de un solo juego es la misma avería que ya obligó a separar
+ *  "Finished it" de "Finished" (ver i18n.ts). Aquí se habla de uno. */
 const KNOWN_LABEL: Record<GameStatus, string> = {
-  upcoming: "Upcoming",
-  backlog: "Backlog",
-  playing: "Playing",
-  ongoing: "Ongoing",
-  finished: "Finished",
-  dropped: "Dropped",
-  owned: "Owned",
+  upcoming: "not out yet",
+  backlog: "on your backlog",
+  playing: "you're playing it",
+  ongoing: "no ending",
+  finished: "you finished it",
+  dropped: "you dropped it",
+  owned: "yours, untouched",
 };
 
 /** El chip que ese estado enciende, si tiene uno. 'owned' y 'upcoming' no lo
