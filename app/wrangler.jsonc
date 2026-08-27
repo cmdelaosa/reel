@@ -20,9 +20,20 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/steam/*"]
-  }
+  },
 
-  // SUPABASE_URL NO va aquí: es un secreto de runtime del dashboard. Las
-  // variables en texto plano que no estén en este fichero se borran en cada
-  // `wrangler deploy`; los secretos sobreviven. Ver docs/DEPLOY.md.
+  // A dónde reenvía la vuelta de Steam. Vive AQUÍ y no en los secretos del
+  // dashboard porque el 27-ago-2026 se probó al revés: puesto como Secret en
+  // «Runtime variables and secrets», el primer despliegue de Workers Builds lo
+  // dejó fuera y la ruta empezó a contestar «SUPABASE_URL not configured» sin
+  // que nada avisara. Lo que este fichero declara se despliega con el Worker;
+  // lo que solo está en la consola depende de que nadie lo pise.
+  //
+  // Y no es un secreto: es el origen público del proyecto, el mismo que Vite
+  // incrusta en el bundle —está cinco veces en el index-*.js que sirve esta
+  // misma app— y que viaja en cada petición del navegador. Lo que sí es
+  // credencial son las claves, y ninguna está aquí.
+  "vars": {
+    "SUPABASE_URL": "https://kjdnjuicghemusfiiign.supabase.co"
+  }
 }

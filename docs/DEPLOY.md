@@ -355,16 +355,16 @@ select count(*) from episodes where season_number > 0 and tmdb_vote_average is n
   only if you enabled Google in step 4.
 - Do **not** set `VITE_DEV_AUTOLOGIN_*` — dev-only, and inert in a prod build
   anyway (`import.meta.env.DEV` is false).
-- Runtime secret — **Settings → Variables & Secrets**, this time the runtime one
-  and *not* the build variables: `SUPABASE_URL`, the same origin the edge
-  functions have. It is what the Steam-return proxy in `src/worker/index.ts`
-  forwards to; without it that route answers 500 and the Steam link never
-  completes (the rest of the app is unaffected — it talks to Supabase from the
-  browser with the build-time `VITE_` vars).
+- Nothing to set by hand for the Steam-return proxy: `SUPABASE_URL` — what
+  `src/worker/steamReturn.ts` forwards to — is declared in `wrangler.jsonc` and
+  ships with the Worker.
 
-  Add it as a **Secret**, not as a plain-text variable: plain-text variables that
-  aren't in `wrangler.jsonc` are wiped on every `wrangler deploy`, so the link
-  would break at the next deploy and nothing would say why.
+  ⚠️ It was first set as a runtime **Secret** in the dashboard, and the very
+  next Workers Build dropped it: the route answered `SUPABASE_URL not
+  configured` and nothing in the build said why (27-Aug-2026). Config that the
+  repo declares survives a deploy; config that only lives in the console depends
+  on nobody overwriting it. And this value is not a credential — it is the
+  public project origin, already inlined in the browser bundle by Vite.
 
 ⚠️ Missing build vars do **not** fail the build: it goes green and serves a
 blank app from a vendor-only bundle (~30 KB of JS). Verify by bundle size
