@@ -55,7 +55,14 @@
 // decide nada sobre los datos, solo se piden y se guardan.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { type Any, apicalypseTerm, gameRow, gameSearchRow, steamAppid } from "./normalize.ts";
+import {
+  type Any,
+  apicalypseTerm,
+  couldBeOnSteam,
+  gameRow,
+  gameSearchRow,
+  steamAppid,
+} from "./normalize.ts";
 import { GAME_TYPE_FILTER, mergeResults, rankSearch } from "./rank.ts";
 import {
   anticipatedQuery,
@@ -318,7 +325,7 @@ function chunk<T>(xs: T[], n: number): T[][] {
   return out;
 }
 
-/** appid de Steam → id de IGDB, preguntando por `external_games`.
+/** appid de Steam → ids de IGDB, preguntando por `external_games`.
  *
  *  Se filtra por `uid` y NO por la fuente en el `where`: el enum de fuentes es
  *  justo el que IGDB está migrando (`category` viejo, `external_game_source`
@@ -327,9 +334,17 @@ function chunk<T>(xs: T[], n: number): T[][] {
  *  acepta las dos formas y es lo que llena `titles.steam_appid` en cada ficha.
  *
  *  El precio de no filtrar es que vuelven también los uid iguales de GOG o de
- *  Epic; son cuatro filas por tanda y se descartan aquí. */
-async function igdbIdsForAppids(appids: number[]): Promise<Map<number, number>> {
-  const found = new Map<number, number>();
+ *  Epic; son cuatro filas por tanda y se descartan aquí.
+ *
+ *  Devuelve TODOS los candidatos de cada appid y no el primero, que es lo que
+ *  hacía. Un appid puede aparecer colgado de dos juegos —IGDB tiene el 374900,
+ *  el ABC Murders de 2016, también en la ficha del de 2009, que es exclusivo de
+ *  Nintendo DS—, y quedarse con el que llegara antes es echarlo a suertes: el
+ *  27-ago-2026 salió cara y la importación metió en la biblioteca un juego de
+ *  DS que nadie tiene en Steam. Quien elige es la ruta, que para entonces ya
+ *  tiene las plataformas de cada candidato (`couldBeOnSteam`). */
+async function igdbIdsForAppids(appids: number[]): Promise<Map<number, number[]>> {
+  const found = new Map<number, number[]>();
   for (const part of chunk(appids, STEAM_CHUNK)) {
     // `uid = "570" | uid = "730" | …`: la forma con OR es la que la gramática
     // de apicalypse garantiza para un campo de texto. Una lista entre
@@ -350,8 +365,10 @@ async function igdbIdsForAppids(appids: number[]): Promise<Map<number, number>> 
     for (const r of rows) {
       const appid = steamAppid([r]);
       const gameId = Number(r?.game?.id ?? r?.game);
-      if (appid && Number.isInteger(gameId) && gameId > 0 && !found.has(appid)) {
-        found.set(appid, gameId);
+      if (appid && Number.isInteger(gameId) && gameId > 0) {
+        const list = found.get(appid);
+        if (!list) found.set(appid, [gameId]);
+        else if (!list.includes(gameId)) list.push(gameId);
       }
     }
   }
@@ -601,9 +618,19 @@ Deno.serve(async (req) => {
       const missing = appids.filter((a) => !(String(a) in matches));
       if (missing.length) {
         const igdbIds = await igdbIdsForAppids(missing);
-        const rows = await fetchGamesInto(admin, [...new Set(igdbIds.values())]);
-        for (const [appid, igdbId] of igdbIds) {
-          const row = rows.get(igdbId);
+        const rows = await fetchGamesInto(admin, [
+          ...new Set([...igdbIds.values()].flat()),
+        ]);
+        for (const [appid, candidates] of igdbIds) {
+          /* De los candidatos, el primero que PUEDA estar en Steam. Con uno solo
+             —el caso normal— esto es lo de siempre; con dos es lo que separa el
+             juego que tienes del homónimo de consola al que IGDB le colgó el
+             mismo appid. Y si ninguno puede, no hay match: quien llama lo marca
+             como no resuelto y lo dice, que es mejor que meter en tu biblioteca
+             un juego que no es. */
+          const row = candidates
+            .map((id) => rows.get(id))
+            .find((r) => r && couldBeOnSteam(r.platforms, r.first_air_date));
           if (row) matches[String(appid)] = row;
         }
       }

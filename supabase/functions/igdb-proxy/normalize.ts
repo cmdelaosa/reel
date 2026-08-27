@@ -255,6 +255,53 @@ export function steamAppid(externals: readonly Any[] | null | undefined): number
   return null;
 }
 
+/** Las plataformas que Steam vende, en minúsculas y como las nombra IGDB.
+ *
+ *  Steam es una tienda de ordenador: lo que vende corre en Windows, en Mac, en
+ *  Linux o en su propio SteamOS. No hay un juego de Steam que sea solo de
+ *  Nintendo DS, y esa imposibilidad es justo la comprobación que faltaba. */
+const STEAM_PLATFORMS = [
+  "pc (microsoft windows)",
+  "mac",
+  "linux",
+  "steamos",
+  "steam vr",
+];
+
+/** ¿Puede este juego estar en Steam, a la vista de sus plataformas?
+ *
+ *  Nace de un fallo real (27-ago-2026): IGDB tiene el appid 374900 —el ABC
+ *  Murders de 2016— colgado también de la ficha del ABC Murders de 2009, que es
+ *  EXCLUSIVO de Nintendo DS. La importación de Steam se creyó ese vínculo, metió
+ *  en la biblioteca el juego equivocado y dejó el appid escrito en la ficha
+ *  incorrecta, con lo que la siguiente sincronización lo repetía sin volver a
+ *  preguntar. El dato malo es de IGDB; lo que faltaba aquí era desconfiar.
+ *
+ *  Dice que NO en un solo caso, y a propósito: un juego **que ya salió**, con
+ *  plataformas sabidas, y ninguna de ordenador. Los otros dos noes que uno
+ *  escribiría sin pensar son peores que el fallo que arreglan:
+ *
+ *    · Sin plataformas no es que no, es que no lo sabemos —una ficha recién
+ *      creada o un resultado de búsqueda no las traen—, y descartar por no
+ *      saber pierde juegos de verdad.
+ *    · Un juego SIN SALIR tiene la lista a medias por definición: se anuncia
+ *      para consola, aparece en Steam meses después y IGDB lo añade cuando le
+ *      llega. Vetarlo ahí sería borrarle el appid a media pestaña de novedades.
+ *
+ *  Lo que queda es lo imposible de verdad: una tienda de ordenador no vende un
+ *  juego de 2009 que solo salió en Nintendo DS. */
+export function couldBeOnSteam(
+  platforms: readonly string[] | null | undefined,
+  releaseDate?: string | null,
+  now = new Date(),
+): boolean {
+  if (!platforms?.length) return true;
+  if (platforms.some((p) => STEAM_PLATFORMS.includes(String(p).toLowerCase()))) return true;
+  if (!releaseDate) return true;
+  const released = Date.parse(releaseDate);
+  return !Number.isFinite(released) || released > now.getTime();
+}
+
 /** Las tres medias de IGDB para terminarse un juego, en segundos.
  *
  *  Devuelve undefined —no {}— cuando no hay ninguna, para que un upsert que no
@@ -337,7 +384,13 @@ export function gameRow(d: Any, ttb: Any = null) {
     // deja una sola columna que ordena las dos épocas sin ramas.
     popularity: (d.hypes ?? 0) + (d.total_rating_count ?? 0),
     ...(beats ? { beat_seconds: beats } : {}),
-    steam_appid: steamAppid(d.external_games),
+    /* Y no el que IGDB diga a secas: un appid de Steam en un juego que solo
+       salió en consola es un vínculo roto de su catálogo, y escribirlo aquí lo
+       convierte en el puente por el que la siguiente sincronización importa el
+       juego equivocado sin preguntar a nadie. Ver `couldBeOnSteam`. */
+    steam_appid: couldBeOnSteam([...platformNames.values()], canonical.date)
+      ? steamAppid(d.external_games)
+      : null,
     last_refreshed_at: new Date().toISOString(),
   };
 }

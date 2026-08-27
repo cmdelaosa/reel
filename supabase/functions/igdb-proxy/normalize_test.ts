@@ -16,6 +16,7 @@ import {
   platformReleases,
   precisionOf,
   rating10,
+  couldBeOnSteam,
   steamAppid,
   studio,
   windowEnd,
@@ -252,6 +253,62 @@ Deno.test("otras tiendas no son Steam", () => {
   assertEquals(steamAppid([{ category: 26, uid: "epic-slug" }]), null);
   assertEquals(steamAppid([]), null);
   assertEquals(steamAppid(undefined), null);
+});
+
+/* ── couldBeOnSteam: lo que la tienda de Steam no puede vender ─────────── */
+
+Deno.test("un juego de ordenador puede estar en Steam", () => {
+  assertEquals(couldBeOnSteam(["PC (Microsoft Windows)"]), true);
+  assertEquals(couldBeOnSteam(["Linux", "Mac", "PlayStation 4"]), true);
+  // Como los nombra IGDB, y en cualquier caja: la lista viene de su catálogo.
+  assertEquals(couldBeOnSteam(["pc (microsoft windows)"]), true);
+});
+
+Deno.test("un exclusivo de consola YA SALIDO no", () => {
+  // El caso real del 27-ago-2026: IGDB tiene el appid 374900 (ABC Murders de
+  // 2016) colgado también del ABC Murders de 2009, que solo salió en DS.
+  assertEquals(couldBeOnSteam(["Nintendo DS"], "2009-11-09"), false);
+  assertEquals(couldBeOnSteam(["PlayStation 2", "Xbox"], "2004-03-01"), false);
+});
+
+Deno.test("uno sin salir tiene la lista a medias, así que no se veta", () => {
+  // Se anuncia para consola y aparece en Steam meses después; IGDB lo añade
+  // cuando le llega. Vetarlo aquí sería borrarle el appid a media pestaña de
+  // novedades.
+  const now = new Date("2026-08-27T00:00:00Z");
+  assertEquals(couldBeOnSteam(["Nintendo Switch"], "2027-03-12", now), true);
+  assertEquals(couldBeOnSteam(["Nintendo Switch"], null, now), true);
+});
+
+Deno.test("sin plataformas es que no lo sabemos, no que no", () => {
+  // Descartar por no saber perdería juegos de verdad: una ficha recién creada
+  // o un resultado de búsqueda no traen plataformas.
+  assertEquals(couldBeOnSteam([], "2009-11-09"), true);
+  assertEquals(couldBeOnSteam(null, "2009-11-09"), true);
+  assertEquals(couldBeOnSteam(undefined, "2009-11-09"), true);
+});
+
+Deno.test("gameRow no escribe un appid que sus plataformas desmienten", () => {
+  // La otra mitad de la avería: escrito en `titles`, ese appid es el puente por
+  // el que la SIGUIENTE sincronización importa el juego equivocado sin
+  // preguntarle a IGDB.
+  const ds = gameRow({
+    id: 19657,
+    name: "Agatha Christie: The ABC Murders",
+    platforms: [{ id: 20, name: "Nintendo DS" }],
+    release_dates: [{ platform: 20, date: 1257724800, date_format: { id: 0 } }],
+    external_games: [{ category: 1, uid: "374900" }],
+  });
+  assertEquals(ds.steam_appid, null);
+
+  const pc = gameRow({
+    id: 17470,
+    name: "Agatha Christie: The ABC Murders",
+    platforms: [{ id: 6, name: "PC (Microsoft Windows)" }],
+    release_dates: [{ platform: 6, date: 1454544000, date_format: { id: 0 } }],
+    external_games: [{ category: 1, uid: "374900" }],
+  });
+  assertEquals(pc.steam_appid, 374_900);
 });
 
 Deno.test("el estudio es el desarrollador, no la distribuidora", () => {
