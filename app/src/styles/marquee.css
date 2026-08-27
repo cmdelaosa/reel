@@ -423,7 +423,9 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
    cell width. Without flex: 0 0 auto they shrink while the 24px <svg> inside
    them doesn't, so the glyphs overlap and the row reads as broken. */
 .rating-stars { display: inline-flex; gap: 3px; flex-wrap: nowrap; }
-.rating-star { flex: 0 0 auto; position: relative; display: inline-block; width: 24px; height: 24px; line-height: 0; color: var(--text-mute); }
+/* El lado lo pone el componente con --star (por defecto 24). Sin esto, subir
+   el tamaño del <svg> dejaba la caja en 24 y las estrellas se solapaban. */
+.rating-star { flex: 0 0 auto; position: relative; display: inline-block; width: var(--star, 24px); height: var(--star, 24px); line-height: 0; color: var(--text-mute); }
 .rating-star-bg { display: block; }
 .rating-star-fg { position: absolute; inset: 0; overflow: hidden; color: var(--accent); pointer-events: none; }
 .rating-star-fg svg { display: block; }
@@ -566,6 +568,64 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 .cast-edge.right { right: 2px; }
 @media (hover: none) { .cast-edge { display: none; } }
 
+/* ---- La ficha de un título, en dos columnas (0085) ----
+   De 760 a 1180. El ancho no es capricho: la lista de episodios tenía cuatro
+   columnas apretadas en 700px y ahora tiene cinco holgadas, y lo tuyo —seguir
+   por, progreso, amigos— deja de empujar hacia abajo lo de la serie.
+
+   El carril mide 296 y no 336: los 40 de diferencia se los queda la lista, que
+   es la que los aprovecha. Por debajo de 900 no hay dos columnas que valgan y
+   se apila, con el carril primero, que es donde está lo que se viene a hacer. */
+.detail-hero { height: 262px; flex: 0 0 auto; }
+.detail-hero-actions { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 8px; }
+.detail-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: grid; grid-template-columns: 296px minmax(0, 1fr); gap: 26px;
+  padding: 20px 26px 26px; align-items: start;
+}
+.detail-rail { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+.detail-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* Las notas del héroe. La tuya en caja de acento y las ajenas en una oscura:
+   sueltas sobre el arte, un fotograma claro se las comía. */
+.detail-scores { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 13px; }
+.detail-mine {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--accent) 20%, rgba(10, 12, 18, .5));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.detail-others {
+  display: inline-flex; align-items: center; gap: 16px;
+  padding: 8px 18px; border-radius: var(--r-sm); background: rgba(10, 12, 18, .5);
+}
+.detail-others-sep { width: 1px; height: 34px; background: rgba(255, 255, 255, .18); }
+.detail-out {
+  border-radius: var(--r-sm); white-space: nowrap;
+  background: rgba(10, 12, 18, .5); border-color: rgba(255, 255, 255, .28); color: #fff;
+}
+.detail-out:hover { background: rgba(10, 12, 18, .7); }
+
+/* Por dónde ibas */
+.detail-next { padding: 15px; display: flex; flex-direction: column; gap: 12px; }
+.detail-next-still { width: 86px; height: 50px; flex: 0 0 auto; border-radius: var(--r-sm); border: 1px solid var(--border); }
+.detail-next-se { display: block; font-size: 11.5px; font-weight: 700; color: var(--accent); }
+.detail-next-name { display: block; font-size: 14.5px; font-weight: 700; }
+.detail-next-date { display: block; font-size: 12px; color: var(--text-mute); }
+
+@media (max-width: 900px) {
+  .detail-body { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 18px; }
+  .detail-hero { height: 214px; }
+  .detail-scores { gap: 10px; }
+}
+@media (max-width: 560px) {
+  .detail-hero-actions { gap: 5px; }
+  /* Los rótulos se caen y quedan los glifos: tres botones con texto más la X no
+     caben en 366px, y lo que se pierde es la palabra, no la acción. */
+  .detail-hero-actions .btn-sm { padding: 0; width: var(--ctl-h-sm); justify-content: center; }
+  .detail-hero-actions .btn-sm > :not(svg) { display: none; }
+}
+
 /* Episode row */
 .ep-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--r); transition: background .15s ease; }
 .ep-row:hover { background: var(--surface-2); }
@@ -635,7 +695,7 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .ep-main {
   flex: 1 1 auto; min-width: 0;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 44px 76px;
+  grid-template-columns: 34px minmax(0, 1fr) 44px 42px 84px;
   align-items: center; gap: 12px;
   padding: 0; border: 0; background: none; cursor: pointer;
   color: inherit; font: inherit; text-align: left;
@@ -662,11 +722,19 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   font-size: 12.5px; font-weight: 750; font-variant-numeric: tabular-nums;
 }
 .ep-imdb svg { color: var(--imdb); }
+/* La de TMDB, sin estrella: la estrella dorada ES la identidad de IMDb, y dos
+   estrellas seguidas de distinto color en la misma fila no distinguen nada. */
+.ep-tmdb { font-size: 12.5px; font-weight: 700; color: var(--text-dim);
+  font-variant-numeric: tabular-nums; text-align: right; }
 .ep-imdb > span { text-align: right; }
 /* Narrow phones: the sheet is ~92vw, so give the title back some room. */
 @media (max-width: 480px) {
   /* 44px, not 40: the score badge is 12 + 3 + 26 and must not be clipped. */
   .ep-main { grid-template-columns: 26px minmax(0, 1fr) 44px 54px; gap: 8px; }
+  /* En un teléfono la columna de TMDB se cae: entre ella y el nombre del
+     episodio, gana el nombre. La nota de TMDB sigue en la ficha del
+     episodio, que es donde se va a mirar de todas formas. */
+  .ep-tmdb { display: none; }
   .ep-row { gap: 8px; padding: 12px 10px; }
 }
 
@@ -692,10 +760,38 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 
 /* Episode sub-sheet — a small card over the detail sheet: synopsis + per-episode
    scores from both sources, and mark-watched. Reuses the sheet/backdrop system. */
-.ep-sheet { width: min(460px, 92vw); max-height: 86vh; border-radius: var(--r-lg); display: flex; flex-direction: column; }
-.ep-sheet-body { overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+/* 552 y no 460: desde 0085 la ficha lleva dos filas de caras de 96px, y a 460
+   se veían cuatro y media. A 552 entran cinco enteras y sigue sin competir con
+   la ficha de la serie que hay debajo, que mide 1180. */
+.ep-sheet { width: min(552px, 92vw); max-height: 88vh; border-radius: var(--r-lg); display: flex; flex-direction: column; overflow: hidden; }
+.ep-sheet-body { overflow-y: auto; padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 16px; }
 .ep-sheet-scores { display: flex; align-items: stretch; gap: 8px; }
 .ep-sheet-overview { font-size: 14px; line-height: 1.6; color: var(--text-dim); margin: 0; }
+
+/* ---- El fotograma, y la marca de visto encima ----
+   La tira va SOBRE la imagen y no en una franja aparte: la franja costaba 54px
+   de alto antes de empezar, y con ellos las caras tuvieron que bajar de 76 a
+   68. Sobre la imagen no cuesta nada y la marca sigue siendo lo primero.
+
+   El degradado no es decoración: es lo único que hace legible el texto blanco
+   sobre un fotograma que puede ser de cualquier color. */
+.ep-still { position: relative; flex: 0 0 auto; }
+.ep-still img { display: block; width: 100%; height: 246px; object-fit: cover; }
+.ep-still-empty { display: grid; place-items: center; height: 158px; font-size: 12.5px; }
+.ep-still-scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(6,8,12,.42) 0%, transparent 30%, transparent 48%, rgba(6,8,12,.76) 100%);
+}
+.ep-still-close { position: absolute; top: 12px; right: 12px; color: #fff; }
+.ep-state { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; align-items: center; gap: 11px; }
+.ep-state .check { box-shadow: 0 6px 18px -6px rgba(0,0,0,.7); }
+.ep-state-title { display: block; font-size: 13.5px; font-weight: 750; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.65); }
+.ep-state-sub { display: block; font-size: 11.5px; color: rgba(255,255,255,.74); text-shadow: 0 1px 5px rgba(0,0,0,.6); }
+/* Un teléfono no aguanta 246px de imagen antes del título. */
+@media (max-width: 480px) {
+  .ep-still img { height: 206px; }
+  .ep-sheet-body { padding: 16px 14px 18px; gap: 13px; }
+}
 
 /* Profile header — the same hue wash the friend header uses, over the whole
    block rather than a 64px band. The band faded to transparent horizontally but

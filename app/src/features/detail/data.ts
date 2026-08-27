@@ -117,3 +117,32 @@ export function useWatched(titleId: string | null) {
     },
   });
 }
+
+/** Cuándo viste UN episodio, y de dónde salió esa marca.
+ *
+ *  Va aparte de useWatched a propósito. Ese hook devuelve un
+ *  Map<episodio, id-del-evento> que consumen la ficha de serie, la de cine y la
+ *  de juegos, y que lleva un centinela "optimistic" mientras la mutación viaja;
+ *  meterle la fecha dentro obligaría a cambiar esa forma en los tres sitios y a
+ *  inventarse una fecha para el caso optimista.
+ *
+ *  Aquí basta una consulta por episodio cuando se abre su ficha, que es justo
+ *  cuando hace falta el dato — y ni se pide si el episodio no está visto. */
+export function useWatchedAt(episodeId: string | null, enabled: boolean) {
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  return useQuery({
+    queryKey: qk.watchedAt(episodeId ?? ""),
+    enabled: enabled && Boolean(episodeId) && Boolean(userId),
+    queryFn: async (): Promise<{ watched_at: string; source: string } | null> => {
+      const { data, error } = await supabase
+        .from("watch_events")
+        .select("watched_at, source")
+        .eq("user_id", userId!)
+        .eq("episode_id", episodeId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? { watched_at: data.watched_at as string, source: data.source as string } : null;
+    },
+  });
+}

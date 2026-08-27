@@ -58,6 +58,7 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { boostSpanish, capNonWestern } from "./rank.ts";
+import { crewRecortado, invitadosRecortados, textoEs } from "./episodio.ts";
 import { redactCredential, tmdbFetch as callTmdb } from "../_shared/tmdb.ts";
 
 const TVMAZE = "https://api.tvmaze.com";
@@ -806,6 +807,7 @@ const episodeRow = (
   seasonId: string,
   e: Any,
   keep: Map<string, ResolvedTime>,
+  es?: Any,
 ) => {
   // Only carried through while TMDB still reports the same day for it — see
   // keepResolvedTimes. Otherwise it goes back to the placeholder and the
@@ -820,7 +822,19 @@ const episodeRow = (
     episode_number: e.episode_number,
     name: e.name ?? null,
     overview: e.overview ?? null,
+    // Solo cuando hay traducción de verdad — ver textoEs: la clave ausente deja
+    // intacto lo que un refresco anterior escribió, mientras que un null
+    // explícito lo borraría.
+    ...textoEs(es),
     runtime: e.runtime ?? null,
+    /* Los cuatro que ya venían en este mismo payload y se tiraban (0085). El
+       fotograma es una ruta de TMDB como las demás; el equipo y los invitados
+       van recortados a lo que la ficha pinta, que es lo que evita meter 28
+       personas de doce campos por episodio en la consulta más caliente. */
+    still_path: e.still_path ?? null,
+    episode_type: e.episode_type ?? null,
+    crew: crewRecortado(e.crew),
+    guest_stars: invitadosRecortados(e.guest_stars),
     // Per-episode TMDB score — free (already in this payload) and the second
     // source behind the episode graph. IMDb ratings come from the weekly
     // dataset import (scripts/imdb-ratings), which owns those columns.
@@ -1106,7 +1120,23 @@ async function refreshSeason(
   n: number,
   enrich = true,
 ) {
-  const s = await fetchTmdb(apiKey, `/tv/${tmdbId}/season/${n}`);
+  /* Dos peticiones, no una. La canónica manda, y la española solo aporta el
+     nombre y la sinopsis traducidos DONDE LOS HAY: comprobado contra la API el
+     27-ago-2026, pedir la temporada con `language=es-ES` devuelve la sinopsis
+     vacía cuando no hay traducción en vez de la inglesa (tv 220400 pierde una
+     entera), así que pedirla solo en español cambiaría texto por nada.
+
+     La española va tolerante a fallo, como la mitad en español de
+     fetchMoviePages: si TMDB tiene un mal minuto, la temporada sale en el
+     idioma canónico en vez de no salir. */
+  const [s, es] = await Promise.all([
+    fetchTmdb(apiKey, `/tv/${tmdbId}/season/${n}`),
+    fetchTmdb(apiKey, `/tv/${tmdbId}/season/${n}?language=es-ES`).catch(() => null),
+  ]);
+  const esByNumber = new Map<number, Any>();
+  for (const e of ((es as Any)?.episodes ?? []) as Any[]) {
+    if (typeof e?.episode_number === "number") esByNumber.set(e.episode_number, e);
+  }
   const [season] = await upsertReturning(admin, "seasons", seasonRow(titleId, s), "title_id,number");
   // Read before the first episode write, so the upsert can carry known air
   // times through instead of clobbering them.
@@ -1115,7 +1145,7 @@ async function refreshSeason(
     ? await upsertReturning(
         admin,
         "episodes",
-        s.episodes.map((e: Any) => episodeRow(titleId, season.id, e, keep)),
+        s.episodes.map((e: Any) => episodeRow(titleId, season.id, e, keep, esByNumber.get(e.episode_number))),
         "title_id,season_number,episode_number",
       )
     : [];
