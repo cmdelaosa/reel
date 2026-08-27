@@ -272,7 +272,7 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                 )}
 
                 <div className="detail-others">
-                  {friendsAvg != null && (
+                  {amigos.length > 0 && (
                     <>
                       <button
                         className="detail-cell detail-friends"
@@ -282,7 +282,7 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                         <span className="eyebrow" style={{ fontSize: 10 }}>{tr("Friends")}</span>
                         <span className="detail-cellval">
                           <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                          {friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 })}
+                          {friendsAvg != null ? friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 }) : "—"}
                           {friendsOpen ? <ChevronUp size={14} style={{ color: "var(--text-mute)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-mute)" }} />}
                         </span>
                       </button>

@@ -358,7 +358,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                     {[releaseLabel, title.genres.map(tGenre).join(" · "), title.network].filter(Boolean).join(" · ")}
                   </div>
                   {edad && (
-                    <div className="detail-orig">{edad.org} {edad.rating}</div>
+                    <div className="detail-sub">{edad.org} {edad.rating}</div>
                   )}
                 </div>
               </div>
@@ -376,7 +376,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                   <RatingStars value={myRating ?? 0} size={28} onRate={(score) => rate.mutate(score)} />
                 </div>
                 <div className="detail-others">
-                  {friendsAvg != null && (
+                  {amigos.length > 0 && (
                     <>
                       <button
                         className="detail-cell detail-friends"
@@ -386,7 +386,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                         <span className="eyebrow" style={{ fontSize: 10 }}>{tr("Friends")}</span>
                         <span className="detail-cellval">
                           <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                          {friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 })}
+                          {friendsAvg != null ? friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 }) : "—"}
                           {friendsOpen ? <ChevronUp size={14} style={{ color: "var(--text-mute)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-mute)" }} />}
                         </span>
                       </button>
