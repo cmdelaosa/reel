@@ -52,6 +52,31 @@ export function authUrl(returnTo: string): string {
   return `${STEAM_OPENID}?${p}`;
 }
 
+/** La base pública del ida y vuelta, de la que cuelga `/return`.
+ *
+ *  Steam le enseña a la persona el `realm`, que sale del origen del
+ *  `return_to`: mientras la vuelta aterriza directamente en la edge function,
+ *  esa pantalla dice "vas a identificarte ante <ref>.supabase.co" — un dominio
+ *  que quien usa la app no ha visto nunca, justo donde lo que se juzga es si el
+ *  sitio es de fiar. Con `STEAM_RETURN_BASE` apuntando al proxy del dominio
+ *  propio (`https://reel-app.com/api/steam`, ver app/src/worker/steamReturn.ts), el
+ *  realm pasa a ser el de la app.
+ *
+ *  Es opcional a propósito: sin el secreto —en local, o en un despliegue sin
+ *  Worker delante— se sigue usando `SUPABASE_URL`, que es lo que había. Lo que
+ *  NO puede hacerse es sacarla de la petición: las dos mitades del ida y vuelta
+ *  (la que firma el `return_to` y la que lo comprueba al volver) tienen que
+ *  calcular lo mismo, y con el proxy delante el isolate ve el host de Supabase
+ *  y no el nuestro. */
+export function returnBase(
+  publicBase: string | null | undefined,
+  supabaseUrl: string | null | undefined,
+): string {
+  const trim = (s: string) => s.replace(/\/+$/, "");
+  if (publicBase && publicBase.trim()) return trim(publicBase.trim());
+  return `${trim(supabaseUrl ?? "")}/functions/v1/steam-sync`;
+}
+
 /** El cuerpo con el que se le pregunta a Steam si esos parámetros son suyos.
  *
  *  Van TODOS los `openid.*` que llegaron, tal cual, con `mode` cambiado. Filtrar

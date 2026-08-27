@@ -3,11 +3,26 @@
   "name": "reel",
   "compatibility_date": "2026-07-20",
 
-  // Static-only Worker: no `main`, the build output is served directly.
-  // `single-page-application` returns index.html (200) for any path that
-  // isn't a built asset, which is what React Router needs on deep links.
+  // Casi todo lo que sirve este Worker son ficheros estáticos, y `assets` los
+  // sirve sin pasar por aquí. La única excepción es la vuelta de Steam, que
+  // tiene que aterrizar en NUESTRO dominio para que la pantalla de OpenID diga
+  // "Sign in to reel-app.com" y no el host del proyecto de Supabase — el
+  // motivo entero está en src/worker/steamReturn.ts.
+  "main": "./src/worker/index.ts",
+
+  // `single-page-application` devuelve index.html (200) para cualquier ruta que
+  // no sea un fichero del build, que es lo que React Router necesita en los
+  // enlaces profundos. `run_worker_first` es la lista de rutas que se saltan
+  // esa regla: sin ella, /api/steam/return devolvería la app en vez de llegar
+  // al código de aquí.
   "assets": {
     "directory": "./dist/",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/steam/*"]
   }
+
+  // SUPABASE_URL NO va aquí: es un secreto de runtime del dashboard. Las
+  // variables en texto plano que no estén en este fichero se borran en cada
+  // `wrangler deploy`; los secretos sobreviven. Ver docs/DEPLOY.md.
 }
