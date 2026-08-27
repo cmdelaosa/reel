@@ -95,6 +95,8 @@ export default function SteamPage() {
 
   const run = draft?.run ?? null;
   const items = useMemo(() => draft?.items ?? [], [draft]);
+  /* Las notas que ya le pusiste a estos juegos, por título (lib/steam). */
+  const rated = useMemo(() => draft?.rated ?? new Map<string, number>(), [draft]);
 
   /* La vuelta de Steam aterriza con ?steam=confirm&n=… y NO con la cuenta ya
      enlazada: escribirla es el segundo paso, y lo dispara esta sesión para que
@@ -252,6 +254,7 @@ export default function SteamPage() {
         <ReviewList
           key={run.id}
           items={items}
+          rated={rated}
           pending={apply.isPending}
           onApply={(picks) => apply.mutate({ importId: run.id, items: picks })}
         />
@@ -324,6 +327,10 @@ export default function SteamPage() {
 const BUCKETS: { key: string; label: string; keep: (i: SteamItem) => boolean }[] = [
   { key: "all", label: "Every game", keep: () => true },
   { key: "library", label: "Already in Reel", keep: (i) => i.in_library },
+  /* El montón que faltaba, y es el que se mira primero al sincronizar: lo que
+     Steam tiene y Reel todavía no. Los otros cortan por horas o por conflictos;
+     este corta por lo único que separa el trabajo nuevo del repaso. */
+  { key: "missing", label: "Not in Reel", keep: (i) => !i.in_library },
   { key: "played", label: "More than 10 hours", keep: (i) => i.minutes >= 600 },
   { key: "untouched", label: "Never opened", keep: (i) => i.minutes === 0 },
   { key: "conflict", label: "Hours in conflict", keep: (i) => i.manual_minutes !== null },
@@ -360,9 +367,13 @@ const playedOn = (iso: string) =>
  *  casillas. La semilla —lo que ya sigues en Reel— se calcula en el estado
  *  inicial, que es lo que el `key` del padre deja hacer bien. */
 function ReviewList({
-  items, onApply, pending,
+  items, rated: already, onApply, pending,
 }: {
   items: SteamItem[];
+  /** La nota que YA tiene cada título en Reel, por title_id. No se siembra en
+   *  `ratings`: eso la reenviaría al confirmar y la contaría como nota nueva en
+   *  el recibo. Se enseña, y se manda solo lo que toques tú. */
+  rated: Map<string, number>;
   onApply: (picks: ApplyPick[]) => void;
   pending: boolean;
 }) {
@@ -508,6 +519,7 @@ function ReviewList({
                 on={chosen.has(i.id)}
                 state={states.get(i.id) ?? null}
                 rating={ratings.get(i.id) ?? 0}
+                already={(i.title_id && already.get(i.title_id)) || 0}
                 overwritten={overwrite.has(i.id)}
                 onToggle={() => onToggle(i.id)}
                 onState={(next) => setState(i.id, next)}
@@ -599,12 +611,15 @@ function BatchBar({
  *  la nota se van al margen derecho, alineadas entre sí: eran el hueco vacío de
  *  la tarjeta y ahora es donde se lee de un vistazo cuánto y qué tal. */
 function GameRow({
-  item, on, state, rating, overwritten, onToggle, onState, onRate, onOverwrite,
+  item, on, state, rating, already, overwritten, onToggle, onState, onRate, onOverwrite,
 }: {
   item: SteamItem;
   on: boolean;
   state: ImportState | null;
   rating: number;
+  /** La nota que ya le habías puesto, 0 si ninguna. Manda la tuya de ahora en
+   *  cuanto tocas las estrellas. */
+  already: number;
   overwritten: boolean;
   onToggle: () => void;
   onState: (next: ImportState | null) => void;
@@ -683,7 +698,15 @@ function GameRow({
             </button>
           ))}
           <span className="flex items-center gap-2" style={{ marginLeft: "auto" }}>
-            <RatingStars value={rating} onRate={onRate} />
+            {/* Lo que ya dijiste de este juego, dicho antes de que lo vuelvas a
+                decir: las estrellas arrancan en tu nota, y el rótulo aclara que
+                viene de Reel y no de lo que acabas de marcar aquí. Mientras no
+                las toques no se manda nada, así que la nota no se reescribe con
+                la misma cifra ni engorda el recuento del recibo. */}
+            {!rating && already > 0 && (
+              <span className="mute" style={{ fontSize: 11.5 }}>{tr("your rating")}</span>
+            )}
+            <RatingStars value={rating || already} onRate={onRate} />
           </span>
         </div>
 

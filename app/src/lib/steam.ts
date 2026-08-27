@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { trackedFetch } from "@/lib/connection";
 import { qk } from "@/lib/queryKeys";
+import { fetchPaged } from "@/lib/paging";
 import type { PlayState } from "@/domain/gameStatus";
 
 /* Cliente de la edge function steam-sync (0076). Hermano de lib/igdb.ts, con
@@ -152,7 +153,8 @@ export function useSteamImport() {
         .limit(1);
       if (error) throw new Error(error.message);
       const run = runs?.[0] ? steamImportSchema.parse(runs[0]) : null;
-      if (!run || run.state === "scanning") return { run, items: [] as SteamItem[] };
+      if (!run || run.state === "scanning")
+        return { run, items: [] as SteamItem[], rated: new Map<string, number>() };
 
       /* PostgREST corta en 1.000 filas sin avisar, y una biblioteca de Steam de
          mil y pico juegos existe (la de One Piece nos lo enseñó con los
@@ -173,9 +175,40 @@ export function useSteamImport() {
         items.push(...page);
         if (page.length < PAGE) break;
       }
-      return { run, items };
+      return { run, items, rated: await myGameRatings(session!.user.id) };
     },
   });
+}
+
+const gameRatingSchema = z.object({ title_id: z.string().uuid(), score: z.number() });
+
+/** Las notas que YA le has puesto a tus juegos, por título.
+ *
+ *  Va aquí y no en una consulta aparte porque se mira junto a la lista o no se
+ *  mira: lo que resuelve es abrir la pantalla de confirmar y no saber cuáles de
+ *  esos trescientos ya puntuaste — con la nota delante, la fila que ya está
+ *  decidida se reconoce sin salir a buscarla.
+ *
+ *  Se filtra por `user_id` porque la política de RLS de amigos también deja leer
+ *  las suyas, y se pagina porque una biblioteca importada pasa de mil notas sin
+ *  esfuerzo (lib/paging). Solo los juegos: cruzar por título no distingue medio,
+ *  pero aquí todos los títulos son juegos, así que el `titles!inner` recorta la
+ *  lectura en vez de recortar el resultado. */
+async function myGameRatings(userId: string): Promise<Map<string, number>> {
+  const rows = await fetchPaged((from, to) =>
+    supabase
+      .from("ratings")
+      .select("title_id, score, titles!inner(kind)")
+      .eq("user_id", userId)
+      .eq("titles.kind", "game")
+      .not("title_id", "is", null)
+      .order("title_id", { ascending: true })
+      .range(from, to),
+  );
+  return new Map(rows.map((r) => {
+    const { title_id, score } = gameRatingSchema.parse(r);
+    return [title_id, score] as const;
+  }));
 }
 
 /** Pide la biblioteca a Steam y prepara el borrador. */
