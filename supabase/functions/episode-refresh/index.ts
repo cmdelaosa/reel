@@ -41,10 +41,10 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { needsEpisodeRefresh } from "./stale.ts";
 import { pageAll } from "./paging.ts";
 import { redactCredential, tmdbFetch } from "../_shared/tmdb.ts";
-// Compartidas con tmdb-proxy a propósito: las dos funciones escriben la MISMA
-// fila de `episodes`, así que recortar el equipo de dos maneras distintas sería
-// que un episodio cambiara de reparto según quién lo refrescara.
-import { crewRecortado, invitadosRecortados, textoEs } from "../tmdb-proxy/episodio.ts";
+// En _shared porque las escriben DOS funciones: esta y tmdb-proxy, sobre la
+// misma fila de `episodes`. Recortar el equipo de dos maneras distintas sería
+// que un episodio cambiara de reparto según quién lo hubiera refrescado.
+import { crewRecortado, invitadosRecortados, textoEs } from "../_shared/episodio.ts";
 
 const TVMAZE = "https://api.tvmaze.com";
 const LIMIT = 40;
@@ -794,9 +794,9 @@ async function refreshTitle(
         episode_number: e.episode_number,
         name: e.name ?? null,
         overview: e.overview ?? null,
-        // Clave ausente cuando no hay traducción, nunca null: un null explícito
-        // borraría lo que un refresco anterior guardó (ver textoEs).
-        ...textoEs(esByNumber.get(e.episode_number)),
+        /* Las dos del español, o ninguna, para toda la temporada: el upsert es
+           un lote y PostgREST une las claves de sus filas (ver textoEs). */
+        ...(sdEs !== null ? textoEs(esByNumber.get(e.episode_number)) : {}),
         runtime: e.runtime ?? null,
         // Los cuatro de 0085, que ya venían en este payload y se tiraban.
         still_path: e.still_path ?? null,

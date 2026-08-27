@@ -619,11 +619,10 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
   .detail-scores { gap: 10px; }
 }
 @media (max-width: 560px) {
+  /* Solo el aire. Los rótulos se quedan: el grupo son dos botones con texto más
+     la X —nunca tres, porque «Quitar/Parar» y «Añadir/Ignorar» son excluyentes—
+     y eso mide 170px, que caben de sobra en la hoja incluso a 320. */
   .detail-hero-actions { gap: 5px; }
-  /* Los rótulos se caen y quedan los glifos: tres botones con texto más la X no
-     caben en 366px, y lo que se pierde es la palabra, no la acción. */
-  .detail-hero-actions .btn-sm { padding: 0; width: var(--ctl-h-sm); justify-content: center; }
-  .detail-hero-actions .btn-sm > :not(svg) { display: none; }
 }
 
 /* Episode row */

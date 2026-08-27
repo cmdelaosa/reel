@@ -4,6 +4,12 @@
 // al importarse, así que nada de lo que hay allí se puede probar. Aquí está lo
 // que DECIDE algo sobre los datos, y aquí están sus tests (episodio_test.ts,
 // que corre el job `edge` de CI).
+//
+// Y en _shared/ y no dentro de tmdb-proxy porque lo usan DOS funciones —el
+// proxy y el cron episode-refresh— que escriben la misma fila de `episodes`.
+// Que una alcance a la otra por `../tmdb-proxy/…` funciona hoy, pero mete a un
+// despliegue por función a depender del directorio de otra; _shared es el sitio
+// que este repo ya tiene para esto (ver _shared/tmdb.ts).
 
 // deno-lint-ignore no-explicit-any
 export type Any = any;
@@ -124,16 +130,25 @@ export function invitadosRecortados(guests: readonly Any[] | null | undefined): 
  * traducción, así que copiarla tal cual cambiaría una sinopsis en inglés por
  * ninguna sinopsis.
  *
- * Devuelve undefined en vez de null cuando no hay nada que decir, y eso es
- * deliberado: el upsert de PostgREST escribe NULL explícito por cada clave
- * presente, así que devolver `{ name_es: null }` BORRARÍA una traducción que
- * un refresco anterior ya guardó. Con undefined la clave no llega a la fila.
- * Es la misma regla que titleRow sigue con `translations` (index.ts). */
-export function textoEs(es: Any): { name_es?: string; overview_es?: string } {
-  const out: { name_es?: string; overview_es?: string } = {};
+ * ── Devuelve SIEMPRE las dos claves, y eso es lo importante ────────────────
+ * La tentación es omitir la clave cuando no hay traducción, para no pisar lo
+ * que un refresco anterior guardó. Con un upsert de UNA fila funcionaría; con
+ * el de un LOTE —y una temporada entera es un lote— no: PostgREST construye una
+ * sola lista de columnas con la unión de las claves de TODAS las filas, así que
+ * en cuanto un episodio de la temporada trae traducción, la columna entra en el
+ * INSERT y los que la omitieron reciben un NULL explícito igualmente. La
+ * omisión no protege nada; solo hace que el borrado dependa de si al vecino le
+ * tocó traducción, que es peor que borrar a propósito. Es la misma trampa que
+ * `gameSearchRow` documenta en igdb-proxy/normalize.ts.
+ *
+ * Lo que sí decide de verdad es QUIÉN llama: se aplica solo cuando la petición
+ * en español llegó. Si esa mitad falló, el llamante no usa esto y las dos
+ * columnas se quedan fuera del upsert, intactas. */
+export function textoEs(es: Any): { name_es: string | null; overview_es: string | null } {
   const name = es?.name;
   const overview = es?.overview;
-  if (typeof name === "string" && name.trim()) out.name_es = name;
-  if (typeof overview === "string" && overview.trim()) out.overview_es = overview;
-  return out;
+  return {
+    name_es: typeof name === "string" && name.trim() ? name : null,
+    overview_es: typeof overview === "string" && overview.trim() ? overview : null,
+  };
 }

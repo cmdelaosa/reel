@@ -5,7 +5,8 @@
 // rompería en silencio, porque ninguna revienta — todas devuelven algo:
 //   1. dejar un episodio sin guionista por filtrar solo por "Writer";
 //   2. pintar la misma cara dos veces cuando alguien dirige y firma;
-//   3. borrar una traducción ya guardada al escribir null encima.
+//   3. borrar traducciones de media temporada porque el upsert es un lote y
+//      PostgREST une las claves de todas sus filas.
 import { assertEquals } from "jsr:@std/assert@1";
 import { crewRecortado, invitadosRecortados, textoEs } from "./episodio.ts";
 
@@ -81,15 +82,27 @@ Deno.test("invitados: sin nadie devuelve null", () => {
   assertEquals(invitadosRecortados(undefined), null);
 });
 
-Deno.test("español: el texto vacío de TMDB no pisa al canónico", () => {
+Deno.test("español: el texto vacío de TMDB se guarda como null, no como cadena", () => {
   // Es LO QUE DEVUELVE la API cuando falta la traducción: cadena vacía, no la
-  // inglesa. Si estas claves llegaran a la fila, el upsert escribiría null.
-  assertEquals(textoEs({ name: "Título", overview: "" }), { name_es: "Título" });
-  assertEquals(textoEs({ name: "   ", overview: "   " }), {});
-  assertEquals(textoEs(null), {});
+  // inglesa. Guardarla tal cual dejaría la ficha con un título en blanco.
+  assertEquals(textoEs({ name: "Título", overview: "" }), { name_es: "Título", overview_es: null });
+  assertEquals(textoEs({ name: "   ", overview: "   " }), { name_es: null, overview_es: null });
+  assertEquals(textoEs(null), { name_es: null, overview_es: null });
 });
 
-Deno.test("español: cuando hay traducción, van las dos claves", () => {
+Deno.test("español: SIEMPRE las dos claves, aunque no haya nada que decir", () => {
+  // El upsert de una temporada es un LOTE, y PostgREST hace una sola lista de
+  // columnas con la unión de las claves de todas las filas. Si esta función
+  // omitiera la clave cuando no hay traducción, la columna entraría igual en
+  // cuanto UN episodio de la temporada la trajera, y los demás recibirían NULL
+  // sin que nadie lo hubiera decidido. Con las dos claves siempre, lo que se
+  // escribe es lo mismo para todos y es una decisión, no un efecto colateral.
+  for (const entrada of [null, undefined, {}, { name: "" }, { name: "Hola", overview: "Qué tal" }]) {
+    assertEquals(Object.keys(textoEs(entrada)).sort(), ["name_es", "overview_es"]);
+  }
+});
+
+Deno.test("español: cuando hay traducción, van las dos", () => {
   assertEquals(
     textoEs({ name: "Buenas noticias sobre el Infierno", overview: "Mark es ascendido…" }),
     { name_es: "Buenas noticias sobre el Infierno", overview_es: "Mark es ascendido…" },

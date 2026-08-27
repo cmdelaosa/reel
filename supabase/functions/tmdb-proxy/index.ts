@@ -58,7 +58,7 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { boostSpanish, capNonWestern } from "./rank.ts";
-import { crewRecortado, invitadosRecortados, textoEs } from "./episodio.ts";
+import { crewRecortado, invitadosRecortados, textoEs } from "../_shared/episodio.ts";
 import { redactCredential, tmdbFetch as callTmdb } from "../_shared/tmdb.ts";
 
 const TVMAZE = "https://api.tvmaze.com";
@@ -807,7 +807,11 @@ const episodeRow = (
   seasonId: string,
   e: Any,
   keep: Map<string, ResolvedTime>,
+  /* La fila española del mismo episodio, o undefined si la petición en español
+     no llegó. Se distingue de "llegó pero sin traducción" a propósito: ver el
+     spread de abajo. */
   es?: Any,
+  hayEs = false,
 ) => {
   // Only carried through while TMDB still reports the same day for it — see
   // keepResolvedTimes. Otherwise it goes back to the placeholder and the
@@ -822,10 +826,13 @@ const episodeRow = (
     episode_number: e.episode_number,
     name: e.name ?? null,
     overview: e.overview ?? null,
-    // Solo cuando hay traducción de verdad — ver textoEs: la clave ausente deja
-    // intacto lo que un refresco anterior escribió, mientras que un null
-    // explícito lo borraría.
-    ...textoEs(es),
+    /* Las dos columnas del español entran O NO ENTRAN, para toda la temporada
+       a la vez. Si la petición española llegó, se escribe lo que diga —texto o
+       null—; si falló, ninguna fila las lleva y quedan como estaban.
+       Lo que NO puede hacerse es decidirlo fila a fila: el upsert es un lote y
+       PostgREST une las claves, así que un episodio sin traducción recibiría
+       NULL igualmente en cuanto un vecino sí la tuviera. */
+    ...(hayEs ? textoEs(es) : {}),
     runtime: e.runtime ?? null,
     /* Los cuatro que ya venían en este mismo payload y se tiraban (0085). El
        fotograma es una ruta de TMDB como las demás; el equipo y los invitados
@@ -1145,7 +1152,7 @@ async function refreshSeason(
     ? await upsertReturning(
         admin,
         "episodes",
-        s.episodes.map((e: Any) => episodeRow(titleId, season.id, e, keep, esByNumber.get(e.episode_number))),
+        s.episodes.map((e: Any) => episodeRow(titleId, season.id, e, keep, esByNumber.get(e.episode_number), es !== null)),
         "title_id,season_number,episode_number",
       )
     : [];
