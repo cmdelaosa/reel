@@ -17,7 +17,7 @@ import {
   type Price,
 } from "@/domain/steamPortfolio";
 
-/* El inventario del mercado de Steam (0085). Hermano de lib/steam.ts, del que
+/* El inventario del mercado de Steam (0087). Hermano de lib/steam.ts, del que
    se separa en lo único que importa: aquel importa JUEGOS y este mira DINERO.
    Comparten la cuenta enlazada (`profiles.steam_id`) y nada más.
 

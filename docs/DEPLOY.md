@@ -51,7 +51,7 @@ en todas sus otras rutas.
 ruta `/by-steam` de `igdb-proxy`, que llega en 0076: desplegar solo `steam-sync`
 deja las importaciones colgadas en `applying` con un 404 en `job_runs`.
 
-`steam-market` (0085) es el inventario del mercado, y **no necesita ningún
+`steam-market` (0087) es el inventario del mercado, y **no necesita ningún
 secreto nuevo ni sale a internet**: recibe el volcado del navegador y escribe la
 foto del día, y nada más. Los precios los trae otro trabajo — ver
 [El cron de los precios de Steam](#el-cron-de-los-precios-de-steam), que **no va

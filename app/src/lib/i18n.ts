@@ -165,7 +165,7 @@ const ES: Record<string, string> = {
      pregunta se hace con esas tres palabras. */
   "Owned": "Lo tengo",
   "from Steam": "de Steam",
-  /* El inventario del mercado (0085). Dos decisiones de vocabulario que se
+  /* El inventario del mercado (0087). Dos decisiones de vocabulario que se
      repiten abajo y conviene dejar dichas:
 
      · "Worth" es «Vale» y "Sells for" es «Se vende por». No son sinónimos: el

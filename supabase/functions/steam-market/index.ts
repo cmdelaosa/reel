@@ -1,4 +1,4 @@
-// steam-market — Deno edge function. El inventario del mercado de Steam (0085).
+// steam-market — Deno edge function. El inventario del mercado de Steam (0087).
 //
 // Rutas (bajo /functions/v1/steam-market):
 //   POST /ingest    → { holdings, ledger, prices, history }  sube el volcado
@@ -461,7 +461,7 @@ async function writeClientPrices(
  *
  *  Sin verificar, porque no hay forma: `pricehistory` pide sesión. La contención
  *  es que esta tabla no toca ningún total — solo dibuja la curva de un objeto en
- *  su ficha. Ver la migración 0085. */
+ *  su ficha. Ver la migración 0087. */
 async function writeHistory(
   admin: SupabaseClient,
   rows: Any[],
