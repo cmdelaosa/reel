@@ -13,6 +13,16 @@ import {
 import { t as tr, tv } from "@/lib/i18n";
 import { dateLocale } from "@/lib/locale";
 
+/** Una de dos frases según la cifra. `tv` sustituye variables pero no conjuga,
+ *  y esta pantalla está llena de recuentos que pueden valer uno: «1 items» y «1
+ *  objetos» se leen como un fallo justo en las líneas que califican el dinero.
+ *
+ *  Aquí y no en lib/i18n porque el diccionario es plano a propósito —la clave ES
+ *  el inglés— y meterle plurales de verdad es rehacerlo. Dos claves y esta
+ *  función resuelven lo que hay, que son cuatro sitios. */
+const plural = (n: number, one: string, many: string) =>
+  n === 1 ? tr(one) : tv(many, { n });
+
 /* El inventario del mercado, dentro de la pestaña Steam (0085). Lo que la
    importación de juegos es a tu biblioteca, esto es a tu dinero — y son dos
    cosas distintas, así que van en dos bloques y no en uno.
@@ -126,14 +136,13 @@ function Totals({ data }: { data: NonNullable<ReturnType<typeof useSteamInventor
           style={{ marginTop: 10, fontSize: 12.5, color: "var(--warn, #d90)" }}
         >
           <AlertTriangle size={14} />
-          {/* Dos frases y no una con {n}: es la línea que califica el número
-              grande, y «1 items» ahí le quita autoridad justo donde hace falta
-              que la tenga. */}
-          {totals.missingPrices === 1
-            ? tr("One item has no price yet, and is not in that total.")
-            : tv("{n} items have no price yet, and are not in that total.", {
-                n: totals.missingPrices,
-              })}
+          {/* Es la línea que califica el número grande, y «1 items» ahí le
+              quita autoridad justo donde hace falta que la tenga. */}
+          {plural(
+            totals.missingPrices,
+            "One item has no price yet, and is not in that total.",
+            "{n} items have no price yet, and are not in that total.",
+          )}
         </div>
       )}
     </div>
@@ -232,10 +241,14 @@ function ValueChart({ snapshots }: { snapshots: SteamSnapshot[] }) {
         {gaps.map((p) => (
           <circle key={p.day} cx={p.x} cy={p.y} r={2.5} fill="var(--warn, #d90)">
             <title>
-              {tv("{n} items had no price on {day}", {
-                n: p.missing_prices,
-                day: new Date(p.day).toLocaleDateString(dateLocale()),
-              })}
+              {p.missing_prices === 1
+                ? tv("One item had no price on {day}", {
+                    day: new Date(p.day).toLocaleDateString(dateLocale()),
+                  })
+                : tv("{n} items had no price on {day}", {
+                    n: p.missing_prices,
+                    day: new Date(p.day).toLocaleDateString(dateLocale()),
+                  })}
             </title>
           </circle>
         ))}
@@ -536,9 +549,9 @@ function Footer({
 
 function UploadReceipt({ summary }: { summary: IngestSummary }) {
   const lines = [
-    summary.holdings ? tv("{n} items", { n: summary.holdings }) : null,
-    summary.ledger ? tv("{n} market rows", { n: summary.ledger }) : null,
-    summary.history ? tv("{n} price points", { n: summary.history }) : null,
+    summary.holdings ? plural(summary.holdings, "one item", "{n} items") : null,
+    summary.ledger ? plural(summary.ledger, "one market row", "{n} market rows") : null,
+    summary.history ? plural(summary.history, "one price point", "{n} price points") : null,
   ].filter(Boolean);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -550,9 +563,11 @@ function UploadReceipt({ summary }: { summary: IngestSummary }) {
           este año— y callarlo dejaría un descuadre sin explicación. */}
       {summary.undated ? (
         <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
-          {tv("{n} rows had a date Steam wrote in a way we couldn't read, and were left out rather than dated wrong.", {
-            n: summary.undated,
-          })}
+          {plural(
+            summary.undated,
+            "One row had a date Steam wrote in a way we couldn't read, and was left out rather than dated wrong.",
+            "{n} rows had a date Steam wrote in a way we couldn't read, and were left out rather than dated wrong.",
+          )}
         </p>
       ) : null}
     </div>

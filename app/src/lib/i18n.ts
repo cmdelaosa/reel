@@ -200,6 +200,12 @@ const ES: Record<string, string> = {
     "{n} objetos aún no tienen precio, y no están en ese total.",
   "One item has no price yet, and is not in that total.":
     "Un objeto aún no tiene precio, y no está en ese total.",
+  "One item had no price on {day}": "Un objeto no tenía precio el {day}",
+  "one item": "un objeto",
+  "one market row": "una fila de mercado",
+  "one price point": "un punto de precio",
+  "One row had a date Steam wrote in a way we couldn't read, and was left out rather than dated wrong.":
+    "Una fila traía una fecha que Steam escribió de una forma que no supimos leer, y se ha quedado fuera en vez de fecharse mal.",
   "{n} items had no price on {day}": "{n} objetos no tenían precio el {day}",
   "Inventory value from {from} to {to}": "Valor del inventario del {from} al {to}",
   "The value graph starts the day you first upload: nobody recorded what your inventory was worth before that.":
