@@ -35,6 +35,13 @@ name: steam-prices
 on:
   schedule:
     - cron: "10 4 * * *"
+  # TEMPORAL — se quita antes de fusionar. Solo para medir, en la PR, si Steam
+  # le habla a un runner de GitHub: `workflow_dispatch` no se puede lanzar desde
+  # una rama, así que no hay otra forma de tomar esa medida antes de decidir la
+  # arquitectura. El trabajo que escribe sigue siendo solo del cron.
+  pull_request:
+    paths:
+      - ".github/workflows/steam-prices.yml"
   workflow_dispatch:
     inputs:
       rounds:
@@ -44,25 +51,33 @@ on:
 permissions: {}
 
 jobs:
-  refresh:
+  # Si Steam le habla a ESTE runner. Es la medida que decide dónde puede vivir la
+  # petición: desde una IP doméstica `priceoverview` aguanta doce seguidas, y
+  # desde la IP de una edge function de Supabase devuelve 429 a la primera
+  # (medido el 27-08-2026). Nunca falla nada: solo deja el dato en el registro,
+  # y sirve para diagnosticar el día que los precios dejen de llegar.
+  sondeo:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
     steps:
-      # Antes de nada, si Steam le habla a ESTE runner. Es la medida que decide
-      # dónde puede vivir la petición: desde una IP doméstica `priceoverview`
-      # aguanta doce seguidas, y desde la IP de una edge function de Supabase
-      # devuelve 429 a la primera (medido el 27-08-2026). Un 200 aquí significa
-      # que el runner sí puede, y es la razón de que la petición se haga desde
-      # este trabajo. Nunca falla el job: solo deja el dato en el registro.
       - name: ¿Steam contesta a este runner?
         continue-on-error: true
         run: |
-          code=$(curl -s -o /tmp/po.json -w '%{http_code}' \
-            --get --data-urlencode 'market_hash_name=AK-47 | Redline (Field-Tested)' \
-            'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3')
-          echo "priceoverview desde el runner -> $code"
-          head -c 200 /tmp/po.json; echo
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /tmp/po.json -w '%{http_code}' \
+              --get --data-urlencode 'market_hash_name=AK-47 | Redline (Field-Tested)' \
+              'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3')
+            echo "intento $i -> $code  $(head -c 120 /tmp/po.json)"
+            sleep 2
+          done
 
+  refresh:
+    # En la PR no se refresca nada: escribir en producción desde una rama sin
+    # fusionar sería exactamente lo que nadie espera de abrir una PR.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
       - name: Refrescar precios y escribir la foto del día
         env:
           URL: ${{ secrets.SUPABASE_URL }}
