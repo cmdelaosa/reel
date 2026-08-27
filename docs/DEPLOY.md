@@ -57,9 +57,12 @@ supabase db push                                     # vuelve a pasar el fichero
 porque las de este caso usan `add column if not exists`. Una con un `insert` de
 semilla o un `add constraint` sin guarda duplicaría o reventaría.
 
-Y al verificar, dos columnas de control: una que exista seguro y otra inventada.
-Sin ellas, un 400 no distingue «falta la columna» de «no se lee la tabla», que es
-justo la confusión que alarga el diagnóstico.
+Y si verificas por la API en vez de con el SQL de arriba —que es lo que sale solo
+cuando no tienes la consola a mano—, pide **dos columnas de control**: una que
+exista seguro y otra inventada. Por la API un 400 no distingue «falta la columna»
+de «no se lee la tabla», así que sin las dos se concluye lo que uno ya sospecha.
+Con el `db query` de arriba no hace falta: `information_schema` no tiene esa
+ambigüedad.
 
 ⚠️ **Do not seed prod.** `supabase/seed/dev.sql` creates demo accounts
 (`password123`) and open invite codes — it's for local `supabase db reset` only.
