@@ -271,33 +271,35 @@ const STEAM_PLATFORMS = [
   "mac",
   "linux",
   "steamos",
-  "steam vr",
+  // `SteamVR`, sin espacio: es como lo escribe IGDB, comprobado contra las
+  // fichas del catálogo (27-ago-2026). Con "steam vr" esta línea no casaba con
+  // nada, y como Half-Life: Alyx y compañía no tienen más plataforma que esa,
+  // la comprobación les habría borrado el appid al primer refresco — es decir,
+  // se habría llevado por delante justo los juegos que SOLO existen en Steam.
+  "steamvr",
   "dos",
   "pc dos",
 ];
 
 /** ¿Puede este juego estar en Steam, a la vista de sus plataformas?
  *
- *  Nace de un fallo real (27-ago-2026): IGDB tiene el appid 374900 —el ABC
- *  Murders de 2016— colgado también de la ficha del ABC Murders de 2009, que es
- *  EXCLUSIVO de Nintendo DS. La importación de Steam se creyó ese vínculo, metió
- *  en la biblioteca el juego equivocado y dejó el appid escrito en la ficha
- *  incorrecta, con lo que la siguiente sincronización lo repetía sin volver a
- *  preguntar. El dato malo es de IGDB; lo que faltaba aquí era desconfiar.
+ *  **Solo para desempatar, nunca para vetar**, y esa distinción está pagada:
+ *  nació como veto —si las plataformas no son de ordenador, fuera el appid— y
+ *  duró unas horas. Lo que lo tumbó fue Maui Mallard in Cold Shadow, que se
+ *  vende en Steam y en IGDB es un juego de Super Nintendo del 96: las
+ *  reediciones cuelgan de la ficha ORIGINAL, así que "plataformas de consola"
+ *  no significa "no está en Steam". El veto le habría borrado el appid a los
+ *  clásicos reeditados, que son justo los que más cuesta volver a encontrar.
  *
- *  Dice que NO en un solo caso, y a propósito: un juego **que ya salió**, con
- *  plataformas sabidas, y ninguna de ordenador. Los otros dos noes que uno
- *  escribiría sin pensar son peores que el fallo que arreglan:
+ *  Lo que sí sirve es elegir cuando IGDB da DOS juegos para el mismo appid: a
+ *  igualdad de todo lo demás, el que puede estar en Steam es mejor candidato
+ *  que el que no. Si el candidato es único se acepta tal cual, aunque sea de
+ *  consola — puede ser una reedición, y perder el juego es peor que casarlo
+ *  raro.
  *
- *    · Sin plataformas no es que no, es que no lo sabemos —una ficha recién
- *      creada o un resultado de búsqueda no las traen—, y descartar por no
- *      saber pierde juegos de verdad.
- *    · Un juego SIN SALIR tiene la lista a medias por definición: se anuncia
- *      para consola, aparece en Steam meses después y IGDB lo añade cuando le
- *      llega. Vetarlo ahí sería borrarle el appid a media pestaña de novedades.
- *
- *  Lo que queda es lo imposible de verdad: una tienda de ordenador no vende un
- *  juego de 2009 que solo salió en Nintendo DS. */
+ *  Sin plataformas es que SÍ: una ficha recién creada o un resultado de
+ *  búsqueda no las traen, y "no lo sabemos" no es "no". Un juego sin salir,
+ *  igual: tiene la lista a medias por definición. */
 export function couldBeOnSteam(
   platforms: readonly string[] | null | undefined,
   releaseDate?: string | null,
@@ -392,13 +394,16 @@ export function gameRow(d: Any, ttb: Any = null) {
     // deja una sola columna que ordena las dos épocas sin ramas.
     popularity: (d.hypes ?? 0) + (d.total_rating_count ?? 0),
     ...(beats ? { beat_seconds: beats } : {}),
-    /* Y no el que IGDB diga a secas: un appid de Steam en un juego que solo
-       salió en consola es un vínculo roto de su catálogo, y escribirlo aquí lo
-       convierte en el puente por el que la siguiente sincronización importa el
-       juego equivocado sin preguntar a nadie. Ver `couldBeOnSteam`. */
-    steam_appid: couldBeOnSteam([...platformNames.values()], canonical.date)
-      ? steamAppid(d.external_games)
-      : null,
+    /* El que IGDB diga, sin filtrarlo por las plataformas del juego. Se probó
+       lo contrario durante unas horas y estaba mal: **una reedición cuelga de
+       la ficha original**. Maui Mallard in Cold Shadow se vende en Steam
+       (appid 987410) y en IGDB es un juego de Super Nintendo del 96, porque su
+       lista de plataformas es la del lanzamiento de entonces. Filtrando, se le
+       borraba el appid a los clásicos reeditados —justo los que más cuesta
+       volver a casar— para atrapar un vínculo roto que, encima, no se
+       distingue de este por ningún dato que tengamos. Ver `couldBeOnSteam`,
+       que sigue existiendo para lo único que sí sabe hacer: desempatar. */
+    steam_appid: steamAppid(d.external_games),
     last_refreshed_at: new Date().toISOString(),
   };
 }

@@ -11,8 +11,10 @@ import {
   useUnlinkSteam,
   type ApplyPick,
   type ImportState,
+  type MatchedTitle,
   type SteamItem,
 } from "@/lib/steam";
+import { byName, otherEdition, type MyGame } from "@/domain/steamMatch";
 import { formatPlaytime, type GameStatus } from "@/domain/gameStatus";
 import { useGameLibrary } from "@/lib/library";
 import { RatingStars } from "@/ui/RatingStars";
@@ -113,6 +115,23 @@ export default function SteamPage() {
   const { data: myGames } = useGameLibrary();
   const knownState = useMemo(
     () => new Map((myGames ?? []).map((g) => [g.title_id, g.status] as const)),
+    [myGames],
+  );
+
+  /* La ficha del catálogo con la que ha casado cada juego de Steam, y tu
+     biblioteca reducida a lo que hace falta para reconocer un mal casado
+     (domain/steamMatch). */
+  const matched = useMemo(() => draft?.matched ?? new Map<string, MatchedTitle>(), [draft]);
+  const mine = useMemo(
+    () =>
+      byName(
+        (myGames ?? []).map((g): MyGame => ({
+          titleId: g.title_id,
+          name: g.name,
+          year: g.first_air_date?.slice(0, 4) ?? null,
+          platform: g.played_platform ?? null,
+        })),
+      ),
     [myGames],
   );
 
@@ -274,6 +293,8 @@ export default function SteamPage() {
           items={items}
           rated={rated}
           known={knownState}
+          matched={matched}
+          mine={mine}
           pending={apply.isPending}
           onApply={(picks) => apply.mutate({ importId: run.id, items: picks })}
         />
@@ -415,7 +436,7 @@ const playedOn = (iso: string) =>
  *  del fichero). Lo que Reel YA sabe de cada juego —tu nota y tu estado— se
  *  enseña, pero en su propio lenguaje, y no como una casilla puesta por ti. */
 function ReviewList({
-  items, rated: already, known, onApply, pending,
+  items, rated: already, known, matched, mine, onApply, pending,
 }: {
   items: SteamItem[];
   /** La nota que YA tiene cada título en Reel, por title_id. No se siembra en
@@ -426,6 +447,11 @@ function ReviewList({
    *  nota, y con la misma regla: no se siembra en `states`, así que confirmar
    *  sin tocarlo no reescribe nada. */
   known: Map<string, GameStatus>;
+  /** Con qué ficha del catálogo ha casado cada juego, por title_id. */
+  matched: Map<string, MatchedTitle>;
+  /** Tus juegos indexados por nombre, para reconocer el casado que se fue a
+   *  otra edición sin recorrer la biblioteca en cada fila (domain/steamMatch). */
+  mine: ReadonlyMap<string, MyGame>;
   onApply: (picks: ApplyPick[]) => void;
   pending: boolean;
 }) {
@@ -597,6 +623,8 @@ function ReviewList({
                 rating={ratings.get(i.id) ?? 0}
                 already={(i.title_id && already.get(i.title_id)) || 0}
                 knownState={(i.title_id && known.get(i.title_id)) || null}
+                match={(i.title_id && matched.get(i.title_id)) || null}
+                mine={mine}
                 overwritten={overwrite.has(i.id)}
                 onToggle={() => onToggle(i.id)}
                 onState={(next) => setState(i.id, next)}
@@ -673,7 +701,8 @@ function BatchBar({
  *  la nota se van al margen derecho, alineadas entre sí: eran el hueco vacío de
  *  la tarjeta y ahora es donde se lee de un vistazo cuánto y qué tal. */
 function GameRow({
-  item, on, state, rating, already, knownState, overwritten, onToggle, onState, onRate, onOverwrite,
+  item, on, state, rating, already, knownState, match, mine,
+  overwritten, onToggle, onState, onRate, onOverwrite,
 }: {
   item: SteamItem;
   on: boolean;
@@ -684,6 +713,10 @@ function GameRow({
   already: number;
   /** Lo que Reel ya tiene apuntado de este juego, null si no lo tiene. */
   knownState: GameStatus | null;
+  /** La ficha del catálogo con la que ha casado. Null mientras no tenga: lo que
+   *  el catálogo no conocía se resuelve contra IGDB al confirmar. */
+  match: MatchedTitle | null;
+  mine: ReadonlyMap<string, MyGame>;
   overwritten: boolean;
   onToggle: () => void;
   onState: (next: ImportState | null) => void;
@@ -692,6 +725,9 @@ function GameRow({
 }) {
   const [noArt, setNoArt] = useState(false);
   const conflict = item.manual_minutes !== null;
+  /* Solo cuando la fila NO está ya en tu biblioteca: si esta ficha es la que
+     sigues, no hay dos ediciones de las que hablar. */
+  const twin = item.in_library ? null : otherEdition(match, mine);
 
   return (
     <article className={`card st-card ${on ? "" : "off"}`}>
@@ -730,6 +766,19 @@ function GameRow({
                 ? tv("last played {date}", { date: playedOn(item.last_played_at) })
                 : tr("never opened")}
             </div>
+
+            {/* Con qué ficha del catálogo casa, que es la decisión que esta
+                pantalla no enseñaba. El nombre de Steam y el de IGDB casi
+                siempre coinciden, así que lo que distingue una edición de otra
+                es el año y la plataforma — y eso es justo lo que aquí se lee.
+                Ver domain/steamMatch y lib/steam. */}
+            {match && (
+              <div className="mute" style={{ fontSize: 11.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {tv("matches {name}", { name: match.name })}
+                {match.first_air_date && ` · ${match.first_air_date.slice(0, 4)}`}
+                {match.platforms.length > 0 && ` · ${match.platforms.slice(0, 2).join(", ")}`}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col items-end gap-1" style={{ marginLeft: "auto", flex: "0 0 auto" }}>
@@ -789,6 +838,24 @@ function GameRow({
             <RatingStars value={rating || already} onRate={onRate} />
           </span>
         </div>
+
+        {/* El aviso que habría ahorrado el ABC Murders de 2009: ya sigues este
+            juego, y esto ha casado con OTRA ficha. No decide nada —puede ser una
+            reedición y estar bien— pero pone las dos ediciones juntas, con el
+            año y con la plataforma en la que has dicho que lo juegas. */}
+        {twin && (
+          <div className="flex items-start gap-1.5" style={{ fontSize: 11.5, color: "#e5484d" }}>
+            <AlertTriangle size={12} style={{ flex: "0 0 auto", marginTop: 2 }} />
+            <span>
+              {tv("you already follow this one as {year}", {
+                year: twin.year ?? tr("another edition"),
+              })}
+              {twin.platform && tv(", and you play it on {platform}", { platform: twin.platform })}
+              {". "}
+              {tr("Check the edition before importing it again.")}
+            </span>
+          </div>
+        )}
 
         {/* Lo que se va a escribir, dicho antes de confirmarlo: un watch_event
             con la fecha de tu última partida, y no la de hoy. */}

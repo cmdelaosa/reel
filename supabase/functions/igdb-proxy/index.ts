@@ -622,15 +622,19 @@ Deno.serve(async (req) => {
           ...new Set([...igdbIds.values()].flat()),
         ]);
         for (const [appid, candidates] of igdbIds) {
-          /* De los candidatos, el primero que PUEDA estar en Steam. Con uno solo
-             —el caso normal— esto es lo de siempre; con dos es lo que separa el
-             juego que tienes del homónimo de consola al que IGDB le colgó el
-             mismo appid. Y si ninguno puede, no hay match: quien llama lo marca
-             como no resuelto y lo dice, que es mejor que meter en tu biblioteca
-             un juego que no es. */
-          const row = candidates
-            .map((id) => rows.get(id))
-            .find((r) => r && couldBeOnSteam(r.platforms, r.first_air_date));
+          /* De los candidatos, el primero que PUEDA estar en Steam; y si
+             ninguno puede, el primero a secas. Con un solo candidato —el caso
+             normal— esto es exactamente lo de siempre. Con dos es lo que separa
+             el juego que tienes del homónimo de consola al que IGDB le colgó el
+             mismo appid.
+             El respaldo no es pereza: una ficha de consola con appid de Steam
+             puede ser un vínculo roto de IGDB o una reedición legítima —Maui
+             Mallard, de Super Nintendo, se vende en Steam— y no hay dato que
+             las distinga. Ante la duda, casar: dejar el juego fuera de tu
+             biblioteca es un daño seguro para evitar uno posible. */
+          const found = candidates.map((id) => rows.get(id)).filter(Boolean);
+          const row = found.find((r) => couldBeOnSteam(r.platforms, r.first_air_date)) ??
+            found[0];
           if (row) matches[String(appid)] = row;
         }
       }
