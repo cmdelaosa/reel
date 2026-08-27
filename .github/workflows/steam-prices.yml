@@ -16,12 +16,22 @@ name: steam-prices
 # primer paso de abajo vuelve a tomar esa medida en cada ejecución, para que el
 # día que Steam cambie de idea se vea en el registro y no haya que deducirlo.
 #
-# ── Por qué NO refresca el inventario ────────────────────────────────────
-# Porque no puede, ni desde aquí. `/inventory/<steamid>/…` está estrangulado
-# mucho más fuerte —429 hasta a la primera petición desde una IP doméstica
-# limpia— y encima `pricehistory` y `myhistory` piden la cookie de sesión. Lo que
-# tienes lo sube el recolector desde tu propio navegador, de uvas a peras. Lo que
-# cambia a diario no es lo que tienes: es lo que vale.
+# ── Por qué NO refresca el inventario, y esto está MEDIDO ────────────────
+# `/inventory/<steamid>/…` está estrangulado mucho más fuerte que los precios, y
+# la tentación de "pues que lo lea el cron y nos ahorramos el recolector" va a
+# reaparecer. No se puede. Sondeado desde este mismo runner el 27-08-2026:
+#
+#   · con un SteamID64 inventado:  404, 404, 404
+#   · con una cuenta real:         429, tanto en 730 como en 753
+#
+# El 404 engaña, y por poco me engaña a mí: Steam comprueba que la cuenta existe
+# ANTES de mirar el límite, así que sondear con un id falso hace creer que la IP
+# pasa. Con una cuenta de verdad, corta. Y encima `pricehistory` y `myhistory`
+# piden la cookie de sesión, que ninguna IP arregla.
+#
+# Lo que tienes lo sube el recolector desde tu propio navegador, de uvas a peras
+# (app/src/features/games/steamCollector.js). Lo que cambia a diario no es lo que
+# tienes: es lo que vale.
 #
 # A las 4:10 UTC: después de que el mercado europeo se calme, y a una hora en la
 # que un 429 no le estropea la pantalla a nadie. El minuto raro es para no caer
@@ -38,13 +48,6 @@ name: steam-prices
 on:
   schedule:
     - cron: "10 4 * * *"
-  # TEMPORAL — se quita antes de fusionar. Para preguntarle al runner, desde la
-  # PR, si Steam le deja leer INVENTARIOS y no solo precios. De la respuesta
-  # depende que haya que pegar código o no, y `workflow_dispatch` no se puede
-  # lanzar desde una rama.
-  pull_request:
-    paths:
-      - ".github/workflows/steam-prices.yml"
   workflow_dispatch:
     inputs:
       max_items:
@@ -58,59 +61,7 @@ permissions:
   contents: read
 
 jobs:
-  # TEMPORAL — se quita antes de fusionar.
-  #
-  # La pregunta que decide si hace falta pegar código: ¿le deja Steam a este
-  # runner leer un INVENTARIO? Los precios ya sabemos que sí. El inventario está
-  # estrangulado mucho más fuerte y desde una IP doméstica contesta 429 hasta a
-  # la primera petición.
-  #
-  # Va con un SteamID64 sintético —el primero del rango, que no es de nadie—,
-  # porque este repositorio es público y el de una persona real no se escribe
-  # aquí. Sirve igual: lo que se está midiendo es la IP, no la cuenta.
-  #   429 → la IP está cortada; no hay nada que hacer desde un servidor.
-  #   403 → la IP pasa y lo que falla es esa cuenta (privada o inexistente).
-  #   200 → la IP pasa.
-  sondeo-inventario:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: ¿Le deja Steam a este runner leer un inventario?
-        continue-on-error: true
-        run: |
-          for i in 1 2 3; do
-            code=$(curl -s --compressed -o /tmp/inv.json -w '%{http_code}' -A 'Mozilla/5.0' \
-              'https://steamcommunity.com/inventory/76561197960265728/730/2?l=spanish&count=5')
-            echo "cuenta inventada, intento $i -> $code  $(head -c 100 /tmp/inv.json)"
-            sleep 3
-          done
-
-      # Y con una cuenta REAL, sacada de la base como lo haría el código de
-      # verdad. El SteamID64 no se escribe en el repo —es público— sino que se
-      # lee al vuelo con el mismo secreto que ya usa el trabajo de al lado.
-      # Solo se imprime el código de respuesta y cuántos objetos han salido.
-      - name: ¿Y con una cuenta de verdad?
-        continue-on-error: true
-        env:
-          URL: ${{ secrets.SUPABASE_URL }}
-          KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          sid=$(curl -s "$URL/rest/v1/profiles?select=steam_id&steam_id=not.is.null&limit=1" \
-            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[0]["steam_id"] if d else "")')
-          if [ -z "$sid" ]; then echo "no hay ninguna cuenta enlazada"; exit 0; fi
-          for app in "730 2" "753 6"; do
-            set -- $app
-            code=$(curl -s --compressed -o /tmp/inv.json -w '%{http_code}' -A 'Mozilla/5.0' \
-              "https://steamcommunity.com/inventory/$sid/$1/$2?l=spanish&count=2000")
-            n=$(python3 -c "import json;d=json.load(open('/tmp/inv.json'));print(len(d.get('assets') or []),'objetos,',d.get('total_inventory_count'),'en total')" 2>/dev/null || echo "sin JSON")
-            echo "app $1 -> $code  $n"
-            sleep 3
-          done
-
   refresh:
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
