@@ -349,9 +349,14 @@ async function notasDeSteam(appid: number | null | undefined): Promise<SteamNota
   // en un juego retirado, con `data` ausente. Se lee así de defensivo porque la
   // forma es suya y puede cambiar sin avisarnos.
   const datos = detalle?.[String(appid)]?.success ? detalle[String(appid)].data : null;
+  /* Cada nota depende de SU petición, no de las dos. Son dos llamadas
+     independientes con su propio tope de tiempo, así que lo normal cuando algo
+     va mal no es que fallen las dos: es que falle una. Devolver la clave de la
+     que no contestó —con su null— borraría un dato bueno de ayer por un timeout
+     de hoy. Ausente es "no lo hemos preguntado", y el upsert no la toca. */
   return {
-    steam_reviews: steamReviews(reseñas?.query_summary),
-    metacritic: metacritic(datos),
+    ...(reseñas ? { steam_reviews: steamReviews(reseñas.query_summary) } : {}),
+    ...(detalle ? { metacritic: metacritic(datos) } : {}),
   };
 }
 
@@ -362,9 +367,10 @@ async function refreshGame(admin: SupabaseClient, igdbId: number) {
   // Las dos de fuera van en paralelo con los tiempos de IGDB: son de servicios
   // distintos y ninguna depende de la otra, así que encadenarlas solo sumaría
   // esperas a la petición que abre la ficha.
+  const appid = steamAppid(detail.external_games);
   const [ttb, steam] = await Promise.all([
     timeToBeat(igdbId),
-    notasDeSteam(steamAppid(detail.external_games)),
+    notasDeSteam(appid),
   ]);
   const [row] = await upsertReturning(admin, gameRow(detail, ttb, steam), "kind,tmdb_id");
   return row ?? null;

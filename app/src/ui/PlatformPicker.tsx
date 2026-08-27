@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { t as tr } from "@/lib/i18n";
 import { PlatformLogo } from "@/ui/PlatformLogo";
@@ -34,6 +34,9 @@ export function PlatformPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [activo, setActivo] = useState(0);
+  // Un id estable por instancia: dos fichas abiertas a la vez —la de un juego
+  // sobre la de otro— no pueden compartir los ids de sus opciones.
+  const idBase = useId();
   const ref = useRef<HTMLDivElement | null>(null);
 
   // Las opciones son las plataformas más «Ninguna» al final, que es lo que
@@ -80,6 +83,10 @@ export function PlatformPicker({
         className={`pick${open ? " pick-open" : ""}`}
         aria-haspopup="listbox"
         aria-expanded={open}
+        /* Sin esto, las flechas mueven un resaltado que un lector de pantalla
+           no anuncia: se oye el nombre del botón y nada más, así que quien no
+           ve la lista no sabe sobre qué va a caer el Enter. */
+        aria-activedescendant={open ? `${idBase}-${activo}` : undefined}
         onClick={() => setOpen((o) => !o)}
         onKeyDown={teclas}
       >
@@ -92,6 +99,7 @@ export function PlatformPicker({
           {opciones.map((p, i) => (
             <div
               key={p ?? "__ninguna"}
+              id={`${idBase}-${i}`}
               role="option"
               aria-selected={p === value}
               className={`pick-opt${p === value ? " on" : ""}${i === activo ? " activa" : ""}`}

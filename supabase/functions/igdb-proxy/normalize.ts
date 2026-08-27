@@ -617,9 +617,13 @@ export function webOficial(sites: readonly Any[] | null | undefined): string | n
  *  primero no significa nada fuera de Steam y el segundo es texto de interfaz
  *  en el idioma que la tienda respondiera ese día. La etiqueta la pone el
  *  cliente, en el idioma de quien mira. */
+/* Las dos notas de la tienda. OPCIONALES las dos, y eso es el contrato: una
+   clave ausente significa "esa petición no contestó, no toques la columna",
+   mientras que un null significa "contestó y no hay nota". Son dos peticiones
+   distintas, así que lo normal es que falle una sola. */
 export interface SteamNotas {
-  steam_reviews: { percent: number; count: number } | null;
-  metacritic: number | null;
+  steam_reviews?: { percent: number; count: number } | null;
+  metacritic?: number | null;
 }
 
 export function steamReviews(q: Any): { percent: number; count: number } | null {
