@@ -336,7 +336,12 @@ async function writeEntries(
  *  valor se queda como se escribe. Por eso tampoco hace falta migración.
  *
  *  Solo las filas con fecha: un juego que Steam dice que nunca abriste no tiene
- *  una que ofrecer, y escribir null ahí borraría la que pusiera la ficha. */
+ *  una que ofrecer, y escribir null ahí borraría la que pusiera la ficha.
+ *
+ *  Y solo aquellas cuyas HORAS venimos de escribir, que es la regla 2 de
+ *  merge.ts aplicada a la fecha: si tus 40 h de consola le ganan al 12 de Steam,
+ *  la última partida de Steam —2019— tampoco puede ganarle a lo que jugaste
+ *  ayer. Quien se queda con su cifra se queda con su fecha. */
 async function writePlayedAt(
   admin: SupabaseClient,
   userId: string,
@@ -783,7 +788,7 @@ Deno.serve(async (req) => {
         admin,
         userId,
         ready
-          .filter((i) => i.last_played_at)
+          .filter((i) => i.last_played_at && minutesFor(i) !== null)
           .map((i) => ({ titleId: i.title_id as string, at: i.last_played_at as string })),
       );
       /* La nota y el terminado van DESPUÉS de la biblioteca, y en ese orden: la
@@ -912,7 +917,7 @@ async function resolvePending(
         admin,
         userId,
         found
-          .filter((i) => i.last_played_at)
+          .filter((i) => i.last_played_at && minutesFor(i) !== null)
           .map((i) => ({ titleId: byAppid.get(i.appid)!, at: i.last_played_at as string })),
       );
       rated = await writeRatings(
