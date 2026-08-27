@@ -566,6 +566,63 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 .cast-edge.right { right: 2px; }
 @media (hover: none) { .cast-edge { display: none; } }
 
+/* ---- La ficha de un título, en dos columnas (0085) ----
+   De 760 a 1180. El ancho no es capricho: la lista de episodios tenía cuatro
+   columnas apretadas en 700px y ahora tiene cinco holgadas, y lo tuyo —seguir
+   por, progreso, amigos— deja de empujar hacia abajo lo de la serie.
+
+   El carril mide 296 y no 336: los 40 de diferencia se los queda la lista, que
+   es la que los aprovecha. Por debajo de 900 no hay dos columnas que valgan y
+   se apila, con el carril primero, que es donde está lo que se viene a hacer. */
+.detail-hero { height: 262px; flex: 0 0 auto; }
+.detail-hero-actions { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 8px; }
+.detail-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: grid; grid-template-columns: 296px minmax(0, 1fr); gap: 26px;
+  padding: 20px 26px 26px; align-items: start;
+}
+.detail-rail { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+.detail-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* Las notas del héroe. La tuya en caja de acento y las ajenas en una oscura:
+   sueltas sobre el arte, un fotograma claro se las comía. */
+.detail-scores { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 13px; }
+.detail-mine {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--accent) 20%, rgba(10, 12, 18, .5));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.detail-others {
+  display: inline-flex; align-items: center; gap: 16px;
+  padding: 8px 18px; border-radius: var(--r-sm); background: rgba(10, 12, 18, .5);
+}
+.detail-others-sep { width: 1px; height: 34px; background: rgba(255, 255, 255, .18); }
+.detail-out {
+  border-radius: var(--r-sm); white-space: nowrap;
+  background: rgba(10, 12, 18, .5); border-color: rgba(255, 255, 255, .28); color: #fff;
+}
+.detail-out:hover { background: rgba(10, 12, 18, .7); }
+
+/* Por dónde ibas */
+.detail-next { padding: 15px; display: flex; flex-direction: column; gap: 12px; }
+.detail-next-still { width: 86px; height: 50px; flex: 0 0 auto; border-radius: var(--r-sm); border: 1px solid var(--border); }
+.detail-next-se { display: block; font-size: 11.5px; font-weight: 700; color: var(--accent); }
+.detail-next-name { display: block; font-size: 14.5px; font-weight: 700; }
+.detail-next-date { display: block; font-size: 12px; color: var(--text-mute); }
+
+@media (max-width: 900px) {
+  .detail-body { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 18px; }
+  .detail-hero { height: 214px; }
+  .detail-scores { gap: 10px; }
+}
+@media (max-width: 560px) {
+  /* Solo el aire. Los rótulos se quedan: el grupo son dos botones con texto más
+     la X —nunca tres, porque «Quitar/Parar» y «Añadir/Ignorar» son excluyentes—
+     y eso mide 170px, que caben de sobra en la hoja incluso a 320. */
+  .detail-hero-actions { gap: 5px; }
+}
+
 /* Episode row */
 .ep-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--r); transition: background .15s ease; }
 .ep-row:hover { background: var(--surface-2); }
@@ -1930,3 +1987,24 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, .66));
 }
 .st-tick { position: absolute; top: 10px; left: 10px; z-index: 2; width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; }
+
+/* ---- «Vista», que es un estado cumplido y no una acción ----
+   Es el único botón de las tres fichas que representa algo YA HECHO, así que no
+   puede parecerse a los otros dos: el de acento invita a pulsar y el de
+   contorno no dice nada. Marco de acento y una trama diagonal muy suave por
+   debajo — se ve que está hecho sin gritarlo, y sigue siendo pulsable para
+   deshacerlo.
+
+   El rayado va en el fondo y no en un pseudoelemento para que el texto y el
+   icono queden por encima sin más capas. */
+.movie-seen {
+  color: var(--accent);
+  font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background:
+    repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--accent) 9%, transparent) 7px 14px),
+    color-mix(in srgb, var(--accent) 11%, transparent);
+}
+.movie-seen:hover { background:
+    repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--accent) 12%, transparent) 7px 14px),
+    color-mix(in srgb, var(--accent) 15%, transparent); }

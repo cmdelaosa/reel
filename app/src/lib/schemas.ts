@@ -55,6 +55,12 @@ export const titleRowSchema = z.object({
   // matched (no imdb_id, or absent from the dataset).
   imdb_rating: z.number().nullable().optional(),
   imdb_votes: z.number().int().nullable().optional(),
+  /* El tconst del título. Existe en la base desde 0051 —TMDB lo da y es el
+     puente por el que scripts/imdb-ratings encuentra la nota— pero no estaba
+     en este esquema, así que la fila lo traía y Zod lo tiraba. Lo expone ahora
+     porque la ficha enlaza a la página de IMDb del título, que es lo único que
+     falta para que ese enlace exista. */
+  imdb_id: z.string().nullable().optional(),
   // Present on full DB/proxy rows. Search fixtures and older persisted cache
   // entries may omit it, so keep it optional for backwards compatibility.
   //
