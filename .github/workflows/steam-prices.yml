@@ -38,6 +38,13 @@ name: steam-prices
 on:
   schedule:
     - cron: "10 4 * * *"
+  # TEMPORAL — se quita antes de fusionar. Para preguntarle al runner, desde la
+  # PR, si Steam le deja leer INVENTARIOS y no solo precios. De la respuesta
+  # depende que haya que pegar código o no, y `workflow_dispatch` no se puede
+  # lanzar desde una rama.
+  pull_request:
+    paths:
+      - ".github/workflows/steam-prices.yml"
   workflow_dispatch:
     inputs:
       max_items:
@@ -51,7 +58,36 @@ permissions:
   contents: read
 
 jobs:
+  # TEMPORAL — se quita antes de fusionar.
+  #
+  # La pregunta que decide si hace falta pegar código: ¿le deja Steam a este
+  # runner leer un INVENTARIO? Los precios ya sabemos que sí. El inventario está
+  # estrangulado mucho más fuerte y desde una IP doméstica contesta 429 hasta a
+  # la primera petición.
+  #
+  # Va con un SteamID64 sintético —el primero del rango, que no es de nadie—,
+  # porque este repositorio es público y el de una persona real no se escribe
+  # aquí. Sirve igual: lo que se está midiendo es la IP, no la cuenta.
+  #   429 → la IP está cortada; no hay nada que hacer desde un servidor.
+  #   403 → la IP pasa y lo que falla es esa cuenta (privada o inexistente).
+  #   200 → la IP pasa.
+  sondeo-inventario:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: ¿Le deja Steam a este runner leer un inventario?
+        continue-on-error: true
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s --compressed -o /tmp/inv.json -w '%{http_code}' -A 'Mozilla/5.0' \
+              'https://steamcommunity.com/inventory/76561197960265728/730/2?l=spanish&count=5')
+            echo "intento $i -> $code  $(head -c 100 /tmp/inv.json)"
+            sleep 3
+          done
+
   refresh:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
