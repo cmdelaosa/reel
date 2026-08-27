@@ -1,10 +1,17 @@
 /* Recolector del inventario de Steam.
  *
  * Esto NO se ejecuta en Reel. Es el texto que se copia de la pestaña Steam y se
- * pega en la consola de una pestaña abierta en `steamcommunity.com`. Vive aquí,
- * en el repo y en un solo sitio, porque la app lo importa con `?raw` para
- * ofrecerlo con su botón de copiar: tenerlo también en un README daría dos
- * copias y una de las dos envejecería.
+ * pega en la consola de una pestaña de Steam. Vive aquí, en el repo y en un solo
+ * sitio, porque la app lo importa con `?raw` para ofrecerlo con su botón de
+ * copiar: tenerlo también en un README daría dos copias y una envejecería.
+ *
+ * Se pega DOS VECES, en dos pestañas distintas, y hace algo distinto en cada
+ * una — mira `IS_STORE` más abajo para el porqué:
+ *
+ *   · en `steamcommunity.com`, el inventario, los precios, el histórico y tus
+ *     compras y ventas del mercado;
+ *   · en `store.steampowered.com/account/history/`, el movimiento de la cartera:
+ *     lo que metiste de tu bolsillo y lo que se te fue en juegos.
  *
  * ── Por qué se pega en una pestaña de Steam y no lo hace el servidor ──────
  * Tres barreras, y ninguna se rodea desde fuera:
@@ -62,14 +69,40 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /** El SteamID64 de quien está mirando. `g_steamID` lo pone Steam en cualquier
-   *  página de la comunidad cuando hay sesión; si vale false, no la hay. */
+  /** El SteamID64 de quien está mirando. `g_steamID` lo pone Steam tanto en la
+   *  comunidad como en la tienda cuando hay sesión; si vale false, no la hay. */
   const steamId = String(window.g_steamID || "");
   if (!/^\d{17}$/.test(steamId)) {
     alert(
       "No veo tu sesión de Steam.\n\n" +
         "Abre https://steamcommunity.com/market/ , confirma que arriba a la " +
         "derecha sale tu nombre, y vuelve a pegar esto en ESA pestaña.",
+    );
+    return;
+  }
+
+  /* ── Dónde se ha pegado esto, que decide qué se puede leer ─────────────── */
+  //
+  // El mismo texto sirve para las dos pestañas y hace una cosa distinta en cada
+  // una, porque no hay forma de que haga las dos desde ninguna:
+  //
+  //   · steamcommunity.com → inventario, precios, histórico y tus compras y
+  //     ventas del mercado.
+  //   · store.steampowered.com → el movimiento de la CARTERA: lo que metiste de
+  //     tu bolsillo y lo que se te fue en juegos.
+  //
+  // No se puede leer lo segundo desde lo primero. La CSP de la comunidad sí deja
+  // pedirle a la tienda —`store.steampowered.com` está en su `connect-src`—,
+  // pero la tienda no manda cabeceras CORS de vuelta, así que la petición sale y
+  // la respuesta no se puede leer. Son dos orígenes distintos y punto.
+  const WHERE = location.hostname.replace(/^www\./, "");
+  const IS_STORE = WHERE === "store.steampowered.com";
+  if (!IS_STORE && WHERE !== "steamcommunity.com") {
+    alert(
+      "Esto va pegado en una de estas dos pestañas:\n\n" +
+        "  · https://steamcommunity.com/market/  — tu inventario\n" +
+        "  · https://store.steampowered.com/account/history/  — tu cartera\n\n" +
+        "Hacen falta las dos, una cada vez.",
     );
     return;
   }
@@ -169,6 +202,133 @@
       b.textContent = "✓ " + label;
     };
     panel.querySelector("#reel-buttons").appendChild(b);
+  }
+
+  const base = {
+    version: 1,
+    steam_id: steamId,
+    currency: CURRENCY,
+    collected_at: new Date().toISOString(),
+  };
+
+  /* ── 0. La cartera, si esto se ha pegado en la tienda ──────────────────── */
+
+  /** El movimiento de la cartera, de `store.steampowered.com/account/history`.
+   *
+   *  Es la mitad del dinero que la pantalla enseña —lo que metiste de tu
+   *  bolsillo y lo que se te fue en juegos— y no hay ninguna API: es HTML, hay
+   *  que rascarlo, y es la parte MENOS verificada de todo esto. Por eso cuenta
+   *  las filas que ha entendido y las que no: unos ceros con "0 filas leídas"
+   *  delante son un aviso, y unos ceros a secas parecen un dato.
+   *
+   *  Lo del MERCADO se salta a propósito. Esas filas aparecen también aquí, y ya
+   *  las trae `myhistory` con su id estable y su nombre de objeto: contarlas dos
+   *  veces duplicaría cada compra y cada venta y dejaría el realizado al doble. */
+  if (IS_STORE) {
+    log("Leyendo el movimiento de tu cartera…");
+
+    const kindOf = (label) => {
+      const s = label.toLowerCase();
+      if (/mercado|market/.test(s)) return null; // ya viene por myhistory
+      if (/reembolso|refund/.test(s)) return "refund";
+      if (/fondos|funds|recarga|saldo|wallet credit|gift card/.test(s)) return "wallet_topup";
+      if (/compra|purchase|pedido|order/.test(s)) return "store_purchase";
+      return "other";
+    };
+
+    const rows = [];
+    let unknown = 0;
+    const seen = new Map();
+
+    const readTable = (doc) => {
+      for (const el of doc.querySelectorAll(".wallet_table_row")) {
+        const type = (el.querySelector(".wht_type")?.textContent || "").trim();
+        const kind = kindOf(type);
+        if (kind === null) continue;
+        const rawDate = (el.querySelector(".wht_date")?.textContent || "").trim();
+        /* El cambio de saldo es la cifra que importa; `wht_total` es lo que
+           costó el pedido, que con un pago con tarjeta no toca la cartera. */
+        const changeText = (el.querySelector(".wht_wallet_change")?.textContent || "").trim();
+        const amount = cents(changeText);
+        if (!rawDate || amount === null || amount === 0) {
+          unknown += 1;
+          continue;
+        }
+        /* El signo: Steam lo escribe delante, y cuando no lo escribe lo decide
+           el tipo de fila. Una recarga suma, todo lo demás resta. */
+        const negative = /^-|^−/.test(changeText)
+          ? true
+          : /^\+/.test(changeText)
+            ? false
+            : kind !== "wallet_topup" && kind !== "refund";
+        /* Un id que sobreviva a que la lista crezca por arriba: la posición no
+           vale —mañana esta fila estará una más abajo y se importaría dos
+           veces—, así que se compone con lo que no cambia. El saldo resultante
+           desempata dos filas idénticas de años distintos, y el contador
+           desempata dos idénticas del mismo día. */
+        const balance = (el.querySelector(".wht_total")?.textContent || "").trim();
+        const stem = `wallet_${rawDate}_${changeText}_${balance}_${kind}`;
+        const n = seen.get(stem) ?? 0;
+        seen.set(stem, n + 1);
+        rows.push({
+          external_id: `${stem}_${n}`,
+          raw_date: rawDate,
+          kind,
+          amount_cents: negative ? -Math.abs(amount) : Math.abs(amount),
+          order: rows.length,
+        });
+      }
+    };
+
+    readTable(document);
+    log(`  ${rows.length} filas en la página…`);
+
+    /* El resto llega por el botón de "cargar más", que es una petición con el
+       cursor de la última fila. Sin sessionid no hay nada que pedir, y eso pasa
+       si esto se pega en una página de la tienda que no es el historial. */
+    const sessionid = document.cookie.match(/sessionid=([^;]+)/)?.[1];
+    const cursorEl = document.querySelector("#load_more_button, [data-cursor]");
+    if (!sessionid || !cursorEl) {
+      log("  No veo el botón de «cargar más»: esto va pegado en");
+      log("  https://store.steampowered.com/account/history/");
+    } else {
+      let cursor = null;
+      try {
+        cursor = JSON.parse(cursorEl.getAttribute("data-cursor") || "null");
+      } catch {
+        cursor = null;
+      }
+      for (let page = 0; cursor && page < 60; page++) {
+        const body = new URLSearchParams({ sessionid });
+        for (const [k, v] of Object.entries(cursor)) body.set(`cursor[${k}]`, String(v));
+        const res = await fetch("/account/AjaxLoadMoreHistory/", {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body,
+        });
+        if (!res.ok) {
+          log(`  La tienda ha cortado en ${rows.length} filas (${res.status}).`);
+          break;
+        }
+        const data = await res.json();
+        if (!data.html) break;
+        readTable(new DOMParser().parseFromString(data.html, "text/html"));
+        log(`  ${rows.length} filas…`);
+        cursor = data.cursor ?? null;
+        await sleep(800);
+      }
+    }
+
+    log(`Cartera: ${rows.length} filas leídas${unknown ? `, ${unknown} sin entender` : ""}.`);
+    if (!rows.length) {
+      log("Ni una fila. Si estás en el historial y con sesión, avisa: el HTML");
+      log("de la tienda habrá cambiado y hay que ajustar el recolector.");
+      return;
+    }
+    offer("Guardar cartera", `reel-steam-cartera-${steamId}.json`, { ...base, ledger: rows });
+    log("Pulsa el botón y súbelo en Reel → Juegos → Steam.");
+    return;
   }
 
   /* ── 1. El inventario ─────────────────────────────────────────────────── */
@@ -336,18 +496,19 @@
     await sleep(3000);
   }
 
-  const totalCents = prices.reduce((sum, p) => {
-    const h = holdings.find((x) => x.market_hash_name === p.market_hash_name);
-    return sum + (p.median_cents ?? 0) * (h?.quantity ?? 0);
-  }, 0);
+  /* Por appid Y nombre, no por nombre solo: un cromo de 753 y una caja de 730
+     pueden llamarse igual y valen cosas distintas. Es la misma regla que la
+     clave de `steamPortfolio`, y aquí se colaba porque este total es solo un
+     rótulo — pero un rótulo equivocado en la única cifra que se lee al terminar
+     hace dudar de todo lo demás. */
+  const qty = new Map(holdings.map((h) => [`${h.appid}:${h.market_hash_name}`, h.quantity]));
+  const totalCents = prices.reduce(
+    (sum, p) =>
+      sum + (p.median_cents ?? 0) * (qty.get(`${p.appid}:${p.market_hash_name}`) ?? 0),
+    0,
+  );
   log(`Valor ahora mismo: ${(totalCents / 100).toFixed(2)} €`);
 
-  const base = {
-    version: 1,
-    steam_id: steamId,
-    currency: CURRENCY,
-    collected_at: new Date().toISOString(),
-  };
   offer("Guardar inventario", `reel-steam-${steamId}.json`, {
     ...base,
     holdings,
@@ -362,11 +523,14 @@
   /* En su propio fichero y con su propio botón por dos razones: pesa mucho más
      que todo lo anterior junto, y no hace falta para ver el valor de hoy. Si
      esta parte se cae a medias, lo de arriba ya está descargado. */
+  const medians = new Map(
+    prices.map((p) => [`${p.appid}:${p.market_hash_name}`, p.median_cents ?? 0]),
+  );
   const top = [...holdings]
-    .map((h) => {
-      const p = prices.find((x) => x.market_hash_name === h.market_hash_name);
-      return { ...h, value: (p?.median_cents ?? 0) * h.quantity };
-    })
+    .map((h) => ({
+      ...h,
+      value: (medians.get(`${h.appid}:${h.market_hash_name}`) ?? 0) * h.quantity,
+    }))
     .sort((a, b) => b.value - a.value)
     .slice(0, HISTORY_TOP);
 

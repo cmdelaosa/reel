@@ -210,13 +210,15 @@ const ES: Record<string, string> = {
     "Lo que valen tus objetos de CS2 y de Steam, lo que pagaste, y lo que el mercado te ha devuelto.",
   "Steam blocks servers from reading inventories — that's why the sites that do this work so badly — and your purchase history needs your own session. So the reading happens in your browser, and Reel keeps the result. Nothing of your Steam session ever leaves your machine.":
     "Steam no deja que un servidor lea inventarios —por eso funcionan tan mal las webs que hacen esto— y tu historial de compras necesita tu propia sesión. Así que la lectura ocurre en tu navegador y Reel se queda el resultado. Nada de tu sesión de Steam sale de tu máquina.",
-  "Open steamcommunity.com in another tab, signed in.":
-    "Abre steamcommunity.com en otra pestaña, con tu sesión.",
+  "Open steamcommunity.com/market in another tab, signed in.":
+    "Abre steamcommunity.com/market en otra pestaña, con tu sesión.",
+  "Then do the same on store.steampowered.com/account/history — the wallet lives there, on the other side of a wall the first tab can't reach, and that's where \"out of your own pocket\" and \"spent on games\" come from.":
+    "Repite lo mismo en store.steampowered.com/account/history — la cartera vive ahí, al otro lado de un muro que la primera pestaña no puede cruzar, y de ahí salen «de tu bolsillo» y «gastado en juegos».",
+  "Come back here and upload the files.": "Vuelve aquí y sube los ficheros.",
   "Open the browser console there (⌥⌘J on Chrome for Mac) and paste this.":
     "Abre ahí la consola del navegador (⌥⌘J en Chrome para Mac) y pega esto.",
   "Wait — it asks Steam one price at a time on purpose — then press its buttons to save the files.":
     "Espera —pregunta los precios de uno en uno a propósito— y pulsa sus botones para guardar los ficheros.",
-  "Come back here and upload them.": "Vuelve aquí y súbelos.",
   "Copy the collector": "Copiar el recolector",
   "Show the collector": "Ver el recolector",
   "Hide the collector": "Ocultar el recolector",

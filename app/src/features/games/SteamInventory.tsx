@@ -449,10 +449,15 @@ function CollectorSteps({ onCopy, copied }: { onCopy: () => void; copied: boolea
   return (
     <>
       <ol className="mute" style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
-        <li>{tr("Open steamcommunity.com in another tab, signed in.")}</li>
+        <li>{tr("Open steamcommunity.com/market in another tab, signed in.")}</li>
         <li>{tr("Open the browser console there (⌥⌘J on Chrome for Mac) and paste this.")}</li>
         <li>{tr("Wait — it asks Steam one price at a time on purpose — then press its buttons to save the files.")}</li>
-        <li>{tr("Come back here and upload them.")}</li>
+        {/* El segundo pase es un paso aparte y no una nota al pie: sin él, «de
+            tu bolsillo» y «gastado en juegos» salen a cero, y un cero se lee
+            como un dato y no como algo que falta. Son dos orígenes distintos y
+            uno no puede leer al otro. */}
+        <li>{tr("Then do the same on store.steampowered.com/account/history — the wallet lives there, on the other side of a wall the first tab can't reach, and that's where \"out of your own pocket\" and \"spent on games\" come from.")}</li>
+        <li>{tr("Come back here and upload the files.")}</li>
       </ol>
       <button className="btn" onClick={onCopy}>
         <Clipboard size={15} />

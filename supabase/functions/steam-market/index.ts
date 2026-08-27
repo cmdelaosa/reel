@@ -66,6 +66,36 @@ function chunk<T>(xs: T[], n: number): T[][] {
  *  por tamaño. */
 const PAGE = 500;
 
+/** Nombres por `.in(...)`. Mucho más corto que PAGE, y por un motivo distinto:
+ *  esa lista viaja en la QUERY STRING. Un `market_hash_name` de CS son 40 o 50
+ *  caracteres —"Sticker | Natus Vincere (Holo) | Katowice 2019"—, así que 500
+ *  nombres son más de veinte mil caracteres de URL y hay proxies que cortan por
+ *  mucho menos. El mismo motivo por el que steam-sync mira los title_id de cien
+ *  en cien. */
+const NAME_PAGE = 100;
+
+/** Una lectura entera, por páginas.
+ *
+ *  PostgREST corta en 1.000 filas SIN AVISAR: no da error, devuelve mil y se
+ *  queda tan ancho. Es la avería que ya se comió las horas de One Piece, y aquí
+ *  sería peor que perder filas — un `select` de `steam_holdings` truncado deja
+ *  fuera del TOTAL todo lo que pase de la fila mil, y el número que sale es
+ *  plausible y falso. Cualquier lectura de esta función que pueda pasar de mil
+ *  filas va por aquí. */
+async function readAll<T>(
+  build: (from: number, to: number) => Any,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as T[];
+    out.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return out;
+}
+
 // ── steam money and dates ────────────────────────────────────────────────
 //
 // Bloque canónico. La función `steam-market` lo copia LITERAL entre estos dos
@@ -270,15 +300,35 @@ async function writeHoldings(
       icon_url: h.icon_url ? String(h.icon_url) : null,
       item_type: h.item_type ? String(h.item_type) : null,
       marketable: Boolean(h.marketable ?? true),
-      collected_at: new Date().toISOString(),
     }))
     .filter((h) => h.appid !== null && h.market_hash_name && h.quantity > 0);
 
-  await admin.from("steam_holdings").delete().eq("user_id", userId);
-  for (const part of chunk(clean, PAGE)) {
-    const { error } = await admin.from("steam_holdings").insert(part);
+  /* Escribe PRIMERO y borra después, y no al revés.
+
+     Borrando antes, un fallo en cualquiera de las tandas de escritura —un
+     tiempo agotado a la mitad de un inventario de mil— te deja con el
+     inventario BORRADO y nada en su sitio: la pantalla pasa a decir cero, y
+     recuperarlo exige volver a pasar el recolector entero. En este orden, lo
+     peor que puede pasar es quedarse con un superconjunto: lo nuevo escrito y
+     algo viejo sin barrer, que el siguiente volcado limpia y que mientras tanto
+     como mucho cuenta de más. Sobrar es recuperable; faltar no. */
+  const stamp = new Date().toISOString();
+  for (const part of chunk(clean.map((h) => ({ ...h, collected_at: stamp })), PAGE)) {
+    const { error } = await admin
+      .from("steam_holdings")
+      .upsert(part, { onConflict: "user_id,appid,market_hash_name" });
     if (error) throw new Error(`holdings: ${error.message}`);
   }
+  /* Lo que ya no tienes: lo que quedó con la marca de tiempo de un volcado
+     anterior. Comparar por `collected_at` en vez de mandar la lista de nombres
+     a excluir evita una URL de veinte mil caracteres con los `market_hash_name`
+     dentro. */
+  const { error: e } = await admin
+    .from("steam_holdings")
+    .delete()
+    .eq("user_id", userId)
+    .lt("collected_at", stamp);
+  if (e) throw new Error(`holdings: ${e.message}`);
   return clean.length;
 }
 
@@ -375,7 +425,7 @@ async function writeClientPrices(
   if (!clean.length) return 0;
 
   const known = new Set<string>();
-  for (const part of chunk(clean, PAGE)) {
+  for (const part of chunk(clean, NAME_PAGE)) {
     const { data } = await admin
       .from("steam_market_prices")
       .select("appid, market_hash_name")
@@ -455,6 +505,15 @@ const PRICE_BUDGET = 150;
  *  cuesta nada, porque esto lo lanza un cron de madrugada. */
 const PRICE_GAP_MS = 700;
 
+/** Cuándo un precio de servidor se considera rancio y vuelve a pedirse.
+ *
+ *  20 h y no 24: el cron va todos los días a la misma hora, y con el umbral
+ *  clavado en 24 h la carrera se pierde por segundos —la pasada de hoy ve el
+ *  precio de ayer con 23 h y 59 min y no lo toca—, así que un precio se
+ *  refrescaría en días alternos. Cuatro horas de holgura lo evitan sin permitir
+ *  dos pasadas útiles el mismo día. */
+const STALE_MS = 20 * 60 * 60 * 1000;
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function refreshPrices(
@@ -463,11 +522,14 @@ async function refreshPrices(
   budget: number,
 ): Promise<{ refreshed: number; failed: number; remaining: number }> {
   /* Qué precios hacen falta: los de lo que alguien tiene. La lista sale de
-     `steam_holdings` y no del catálogo entero, que no existe. */
-  const { data: held, error } = await admin
-    .from("steam_holdings")
-    .select("appid, market_hash_name");
-  if (error) throw new Error(`holdings: ${error.message}`);
+     `steam_holdings` y no del catálogo entero, que no existe. Paginada: un solo
+     inventario de CS pasa de mil nombres, y ahí PostgREST corta en silencio. */
+  const held = await readAll<{ appid: number; market_hash_name: string }>((from, to) =>
+    admin.from("steam_holdings").select("appid, market_hash_name")
+      .order("appid", { ascending: true })
+      .order("market_hash_name", { ascending: true })
+      .range(from, to),
+  );
 
   const wanted = new Map<string, { appid: number; name: string }>();
   for (const h of held ?? []) {
@@ -477,13 +539,22 @@ async function refreshPrices(
     });
   }
 
-  const { data: have } = await admin
-    .from("steam_market_prices")
-    .select("appid, market_hash_name, fetched_at, source")
-    .eq("currency", currency);
+  const have = await readAll<{
+    appid: number;
+    market_hash_name: string;
+    fetched_at: string;
+    source: string;
+  }>((from, to) =>
+    admin.from("steam_market_prices")
+      .select("appid, market_hash_name, fetched_at, source")
+      .eq("currency", currency)
+      .order("appid", { ascending: true })
+      .order("market_hash_name", { ascending: true })
+      .range(from, to),
+  );
 
   const freshness = new Map<string, { at: number; source: string }>();
-  for (const p of have ?? []) {
+  for (const p of have) {
     freshness.set(`${p.appid}:${p.market_hash_name}`, {
       at: Date.parse(p.fetched_at),
       source: p.source,
@@ -494,12 +565,20 @@ async function refreshPrices(
      después lo que solo tiene uno de cliente —que es provisional por
      definición—, y por último lo más rancio. Sin este orden, un inventario
      grande deja objetos nuevos sin precio durante días mientras se refrescan
-     cajas de tres céntimos. */
+     cajas de tres céntimos.
+
+     Y la COLA SOLO LLEVA LO QUE HACE FALTA REFRESCAR, que es lo que hace que
+     `remaining` llegue a cero. Metiendo en ella todo lo que alguien tiene,
+     `remaining` valía siempre "los que tengas menos 150": el bucle del cron no
+     paraba nunca por esa condición, agotaba sus ocho vueltas todos los días y
+     se gastaba mil peticiones a Steam volviendo a preguntar precios que había
+     traído hace diez minutos. */
   const queue = [...wanted.entries()]
     .map(([k, v]) => {
       const f = freshness.get(k);
       return { ...v, rank: !f ? 0 : f.source === "client" ? 1 : 2, at: f?.at ?? 0 };
     })
+    .filter((x) => x.rank < 2 || Date.now() - x.at > STALE_MS)
     .sort((a, b) => a.rank - b.rank || a.at - b.at);
 
   let refreshed = 0;
@@ -562,24 +641,54 @@ async function refreshPrices(
 async function writeSnapshots(
   admin: SupabaseClient,
   currency: number,
+  /** Solo esta persona, o todas si no se dice.
+   *
+   *  El cron las quiere todas; una subida quiere la suya y nada más. Sin este
+   *  filtro, cada volcado que sube cualquiera recorre los inventarios de TODO
+   *  el mundo para recalcular una foto que ya estaba bien — y reescribe el punto
+   *  de hoy de gente que no ha tocado nada. */
+  onlyUser?: string,
 ): Promise<{ users: number; written: number }> {
-  const { data: held, error } = await admin
-    .from("steam_holdings")
-    .select("user_id, appid, market_hash_name, quantity");
-  if (error) throw new Error(`holdings: ${error.message}`);
+  /* Las dos lecturas, paginadas. Es lo más importante de esta función: un
+     `select` truncado a mil filas aquí no da error ni se nota — escribe un
+     `value_cents` que le falta todo lo que pasara de la fila mil, y ese número
+     se pinta como el valor de tu cartera y se queda en la serie para siempre.
+     Un total equivocado es peor que no tenerlo. */
+  const held = await readAll<{
+    user_id: string;
+    appid: number;
+    market_hash_name: string;
+    quantity: number;
+  }>((from, to) => {
+    const q = admin.from("steam_holdings")
+      .select("user_id, appid, market_hash_name, quantity")
+      .order("user_id", { ascending: true })
+      .order("appid", { ascending: true })
+      .order("market_hash_name", { ascending: true })
+      .range(from, to);
+    return onlyUser ? q.eq("user_id", onlyUser) : q;
+  });
 
-  const { data: prices } = await admin
-    .from("steam_market_prices")
-    .select("appid, market_hash_name, median_cents")
-    .eq("currency", currency);
+  const prices = await readAll<{
+    appid: number;
+    market_hash_name: string;
+    median_cents: number | null;
+  }>((from, to) =>
+    admin.from("steam_market_prices")
+      .select("appid, market_hash_name, median_cents")
+      .eq("currency", currency)
+      .order("appid", { ascending: true })
+      .order("market_hash_name", { ascending: true })
+      .range(from, to),
+  );
 
   const median = new Map<string, number | null>();
-  for (const p of prices ?? []) {
+  for (const p of prices) {
     median.set(`${p.appid}:${p.market_hash_name}`, p.median_cents);
   }
 
   const byUser = new Map<string, Any>();
-  for (const h of held ?? []) {
+  for (const h of held) {
     const acc = byUser.get(h.user_id) ?? {
       value_cents: 0,
       item_count: 0,
@@ -663,7 +772,7 @@ Deno.serve(async (req) => {
       /* La foto de hoy, en el acto. Sin esto, subir el volcado deja la gráfica
          vacía hasta que pase el cron, y la primera impresión de la pantalla es
          que no ha funcionado. */
-      if (summary.holdings) await writeSnapshots(admin, currency);
+      if (summary.holdings) await writeSnapshots(admin, currency, userId);
 
       await admin.from("job_runs").insert({
         job: "steam-market/ingest",
