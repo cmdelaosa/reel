@@ -225,6 +225,12 @@ const ES: Record<string, string> = {
   "in Reel": "en Reel",
   "your rating": "tu nota",
   "what Reel already has": "lo que Reel ya tenía apuntado",
+  "matches {name}": "casa con {name}",
+  "you already follow this one as {year}": "ya sigues este juego con la ficha de {year}",
+  "another edition": "otra edición",
+  ", and you play it on {platform}": ", y lo juegas en {platform}",
+  "Check the edition before importing it again.":
+    "Mira la edición antes de importarlo otra vez.",
   /* El estado de UN juego, en la ficha de la pantalla de confirmar. Claves
      propias por lo mismo que "Finished it": los cubos de la pestaña Juegos van
      en plural, y "en Reel · Terminadas" habla de un juego en femenino plural. */
