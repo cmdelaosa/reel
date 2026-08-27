@@ -581,6 +581,18 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
   padding: 20px 26px 26px; align-items: start;
 }
 .detail-rail { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+/* Una sola columna cuando el carril no tiene nada que llevar. `display: contents`
+   y no `display: none`: lo que sobra es la COLUMNA, no su contenido — el bloque
+   de amigos sigue apareciendo si lo hay, ahora en el flujo de la única columna,
+   en vez de desaparecer con el carril. */
+.detail-body-sola { grid-template-columns: minmax(0, 1fr); }
+.detail-body-sola .detail-rail { display: contents; }
+/* Y con tope: a 1.126 px el tráiler mide 633 px de alto —se come la ficha
+   entera— y la sinopsis sale en renglones que no se leen. 860 px lo deja algo
+   más ancho que en la ficha de dos columnas (804), que es lo que se quería, y
+   centrado el hueco se reparte a los dos lados: eso se lee como margen y no
+   como la columna vacía que veníamos a quitar. */
+.detail-body-sola .detail-main { max-width: 860px; margin-inline: auto; width: 100%; }
 .detail-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 /* Las notas del héroe. La tuya en caja de acento y las ajenas en una oscura:

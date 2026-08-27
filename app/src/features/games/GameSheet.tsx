@@ -396,7 +396,12 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
             </div>
 
             {/* Cuerpo — lo tuyo a la izquierda, el juego a la derecha */}
-            <div className="detail-body">
+            {/* Sin la tarjeta de Estado —o sea, con un juego que no tienes
+                añadido— el carril se queda con los amigos y a veces con nada, y
+                una columna vacía de 296 px al lado del tráiler es puro hueco.
+                Ahí la ficha pasa a UNA columna y el tráiler ocupa el ancho, que
+                es lo que se viene a ver de un juego que aún no es tuyo. */}
+            <div className={`detail-body${added && entry ? "" : " detail-body-sola"}`}>
               <div className="detail-rail">
                 {/* «Estado», una palabra: la tarjeta no lleva solo el estado,
                     lleva también dónde lo juegas y el botón de terminarlo, y es
