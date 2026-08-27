@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { fetchPaged } from "@/lib/paging";
+import type { PlayState } from "@/domain/gameStatus";
 import type { Medium } from "@/domain/tasteScope";
 
 /* Rich friend-profile data for the friend page (/friend/:id): the friend's full
@@ -18,6 +19,14 @@ const followRowSchema = z.object({
      PENDIENTES o a su BIBLIOTECA, y no lo decide el medio (domain/mediumCopy).
      Opcional porque la columna llegó con una migración que se aplica a mano. */
   owned: z.boolean().nullable().optional(),
+  /* Lo que ha dicho a mano de un juego suyo (0073) y cuándo lo tocó por última
+     vez (0075). Es de dónde sale «Jugando ahora» en su ficha: en juegos no hay
+     nada que contar —el progreso de una partida no está en ninguna tabla— así
+     que o lo dice él o no se sabe. Opcionales, como `owned`: una base anterior a
+     esas migraciones no trae las columnas. */
+  play_state: z.enum(["backlog", "playing", "ongoing", "dropped"]).nullable().optional(),
+  minutes_played: z.number().int().nullable().optional(),
+  played_at: z.string().nullable().optional(),
   titles: z.object({
     id: z.string().uuid(),
     tmdb_id: z.number().int(),
@@ -35,6 +44,10 @@ const followRowSchema = z.object({
        la de series. Vacío en los otros dos medios, y opcional para una base
        anterior a esa migración. */
     platforms: z.array(z.string()).nullable().optional(),
+    /* Cuánto se tarda en terminarlo, según IGDB (0071). Es el denominador de la
+       barra de horas de «Jugando ahora»; sin él se enseñan las horas a secas,
+       que es lo que hace domain/gameStatus con un null aquí. */
+    beat_seconds: z.object({ normally: z.number().nullable().optional() }).nullable().optional(),
     vote_average: z.number().nullable(),
     episode_run_time: z.number().int().nullable(),
     status: z.string().nullable(),
@@ -68,11 +81,16 @@ export interface FriendFollow {
   genres: string[];
   network: string | null;
   platforms?: string[] | null;
+  beat_seconds?: { normally?: number | null } | null;
   vote_average: number | null;
   episode_run_time: number | null;
   status: string | null;
   added_at: string;
   owned: boolean | null;
+  /** Solo juegos, y solo si lo dijo a mano (0073, 0075). */
+  play_state?: PlayState | null;
+  minutes_played?: number | null;
+  played_at?: string | null;
 }
 
 export interface FriendRating {
@@ -150,6 +168,41 @@ export function useFriendWatchHistory(friendId: string, limit = 60) {
   });
 }
 
+/** Lo último que ha visto de UN medio.
+ *
+ *  Existe aparte de `useFriendWatchHistory` porque aquel reparte su `limit`
+ *  entre los tres medios y esta pregunta no admite reparto: "lo último que vio
+ *  de cine" tiene que salir aunque lleve dos meses de maratón de series. Con las
+ *  sesenta filas del muro, un amigo que se haya metido cuatro temporadas no
+ *  tiene ni una película dentro, y su bloque de cine desaparecía de la ficha
+ *  diciendo, sin decirlo, que no ve películas.
+ *
+ *  El filtro va sobre el `kind` del título —dos niveles dentro del embebido— y
+ *  se apoya en los `!inner` de siempre: sin ellos PostgREST devuelve la fila con
+ *  el embebido a null en vez de descartarla. */
+export function useFriendLastWatched(friendId: string, kind: Medium, limit = 6) {
+  return useQuery({
+    queryKey: ["friendLastWatched", friendId, kind, limit],
+    enabled: Boolean(friendId),
+    queryFn: async (): Promise<FriendWatch[]> => {
+      const { data, error } = await supabase
+        .from("watch_events")
+        .select("watched_at, episodes!inner(season_number, episode_number, titles!inner(tmdb_id, kind, name, poster_path))")
+        .eq("user_id", friendId)
+        .eq("episodes.titles.kind", kind)
+        .order("watched_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return z.array(watchRowSchema).parse(data).map((r) => ({
+        watched_at: r.watched_at,
+        season_number: r.episodes.season_number,
+        episode_number: r.episodes.episode_number,
+        ...r.episodes.titles,
+      }));
+    },
+  });
+}
+
 /** Per-followed-title progress (watched/aired) for a friend, keyed by tmdb id.
  *  rpc_friend_progress is security invoker — 0015 friend-read RLS gates it, so
  *  a non-friend / private profile just yields an empty map. */
@@ -196,7 +249,7 @@ export function useFriendProfile(friendId: string) {
         fetchPaged((from, to) =>
           supabase
             .from("library_entries")
-            .select("added_at, owned, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres, network, platforms, vote_average, episode_run_time, status)")
+            .select("added_at, owned, play_state, minutes_played, played_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres, network, platforms, beat_seconds, vote_average, episode_run_time, status)")
             .eq("user_id", friendId)
             .eq("followed", true)
             .order("title_id")
@@ -213,7 +266,14 @@ export function useFriendProfile(friendId: string) {
       const follows: FriendFollow[] = z
         .array(followRowSchema)
         .parse(followsData)
-        .map((r) => ({ ...r.titles, added_at: r.added_at, owned: r.owned ?? null }));
+        .map((r) => ({
+          ...r.titles,
+          added_at: r.added_at,
+          owned: r.owned ?? null,
+          play_state: r.play_state ?? null,
+          minutes_played: r.minutes_played ?? null,
+          played_at: r.played_at ?? null,
+        }));
       const ratings: FriendRating[] = z
         .array(ratingRowSchema)
         .parse(ratingsData)

@@ -667,7 +667,20 @@ const ES: Record<string, string> = {
   "Highest first": "Las mejores primero",
   "Lowest first": "Las peores primero",
   "On": "Por",
+  /* Los tres bloques de "ahora mismo" de la ficha de un amigo. Cada uno dice lo
+     que se puede decir de SU medio: de una serie, que le quedan episodios; de
+     un juego, que lo está jugando; y de cine, lo último — una película no se
+     deja a medias, así que "viendo ahora" de una peli no significa nada. */
   "Watching now": "Viendo ahora",
+  "Playing now": "Jugando ahora",
+  "Recently watched": "Vistas hace poco",
+  /* El verbo de la línea de debajo del nombre en la lista de amigos, uno por
+     estado (domain/friendNow). Prefijados porque nombran un significado y no
+     una palabra: el "Watching" sin prefijo es el cubo de Mis series. */
+  "friends: Watching": "Viendo",
+  "friends: Just watched": "Acaba de ver",
+  "friends: Playing": "Jugando a",
+  "friends: Just finished": "Se ha terminado",
   "Shows": "Series",
   "Episodes": "Episodios",
   /* La cifra de "todo lo que ha visto" de la cabecera de un amigo. Prefijada,
@@ -1002,6 +1015,13 @@ const EN: Record<string, string> = {
   /* Los estados de un amigo. En inglés el prefijo es lo único que sobra —el
      género no arrastra— pero la entrada tiene que estar igual, o la ficha
      enseñaría la clave con los dos puntos delante. */
+  /* Los verbos de la lista de amigos. En inglés el prefijo es lo único que
+     sobra, pero la entrada tiene que estar o la tarjeta enseñaría la clave con
+     los dos puntos delante. */
+  "friends: Watching": "Watching",
+  "friends: Just watched": "Just watched",
+  "friends: Playing": "Playing",
+  "friends: Just finished": "Just finished",
   "friend: Not out yet": "Not out yet",
   "friend: On their watchlist": "On their watchlist",
   "friend: Watched it": "Watched it",

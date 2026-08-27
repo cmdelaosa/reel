@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router";
 import {
   Activity, ArrowDownWideNarrow, ArrowUpNarrowWide, Check, Clock, Eye, Heart,
-  LayoutGrid, Play, Plus, Scale, Star, User,
+  LayoutGrid, Plus, Scale, Star, User,
 } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
@@ -15,17 +15,20 @@ import { FriendAvatar } from "@/ui/FriendAvatar";
 import { MediumGlyph } from "@/ui/MediumGlyph";
 import { relativeTime } from "@/domain/time";
 import {
-  useFriendProfile, useFriendProgress, useFriendWatchHistory,
+  useFriendLastWatched, useFriendProfile, useFriendProgress, useFriendWatchHistory,
   type FriendFollow, type FriendProgress, type FriendRating,
 } from "@/lib/friendProfile";
 import { useLibraryRows, useFollow } from "@/lib/library";
 import { buildWall } from "@/domain/activityWall";
+import { lastWatched, mediaFirst, playingNow } from "@/domain/friendNow";
+import { formatPlaytime, hoursProgress } from "@/domain/gameStatus";
 import { mediumPlural } from "@/domain/mediumCopy";
 import { tasteBlocks } from "@/domain/tasteProfile";
 import { MEDIA, ofMedium, tasteCopy, type Medium } from "@/domain/tasteScope";
 import { useMyRatings } from "@/lib/ratings";
 import { tasteAffinity, type Affinity } from "@/lib/taste";
 import { timeSpentLabel } from "@/lib/stats";
+import { useMedium } from "@/lib/medium";
 import { useOpenSheet } from "@/lib/useOpenTitle";
 import { ActivityWall } from "@/features/social/ActivityWall";
 import { TasteBlocks } from "@/features/social/TasteBlocks";
@@ -42,13 +45,21 @@ import type { TitleRow } from "@/lib/schemas";
    stays pinned under the top bar. Opening a title stacks the detail sheet on
    top via the shell's global ?title= / ?movie= / ?game= param.
 
-   Esta página NO mira el conmutador de medio, y ese cambio es el que arregla
-   "el perfil solo enseña series": lo miraba, así que entrar en la ficha de un
-   amigo desde Videojuegos te contaba sus juegos y ni una de sus series, y desde
-   Series al revés. Ahora enseña a la persona entera, y lo que se reparte por
-   medio son las cosas que NO se pueden mezclar: hay tres afinidades, tres
+   Esta página NO FILTRA por el conmutador de medio, y ese cambio es el que
+   arregla "el perfil solo enseña series": lo hacía, así que entrar en la ficha
+   de un amigo desde Videojuegos te contaba sus juegos y ni una de sus series, y
+   desde Series al revés. Ahora enseña a la persona entera, y lo que se reparte
+   por medio son las cosas que NO se pueden mezclar: hay tres afinidades, tres
    bloques de gustos y tres secciones de biblioteca, porque un `tmdb_id` solo es
-   único dentro de su medio (domain/tasteScope). */
+   único dentro de su medio (domain/tasteScope).
+
+   El modo sí decide una cosa: el ORDEN de los tres bloques de "ahora mismo",
+   con el suyo delante (domain/friendNow). Y son tres desde esta rama, porque
+   "Viendo ahora" era de series y solo de series: `rpc_friend_snapshot` lo saca
+   de tener un episodio emitido sin ver, y eso ni una película ni un juego lo
+   tienen. Entrar aquí desde Videojuegos y encontrarse solo sus series era
+   enseñar media persona; a qué juega sale de lo que él dijo a mano (0073) y de
+   cine, de lo último que vio. */
 
 /** La identidad de un título en una lista de los tres medios. El número solo no
  *  vale: la serie 1399 y la película 1399 son cosas distintas (0067). */
@@ -207,9 +218,17 @@ export default function FriendPage() {
   const { data: fp } = useFriendProfile(friendId);
   const { data: progressMap } = useFriendProgress(friendId);
   const { data: watchHistory = [] } = useFriendWatchHistory(friendId);
+  /* Las últimas películas se piden aparte y no se sacan del muro: ver
+     `useFriendLastWatched`. Doce para que al quitar los revisionados sigan
+     quedando seis. */
+  const { data: movieHistory = [] } = useFriendLastWatched(friendId, "movie", 12);
   const { data: library = [] } = useLibraryRows();
   const { data: myRatings = [] } = useMyRatings();
   const follow = useFollow();
+
+  /* Lo ÚNICO que esta página mira del conmutador: en qué orden se enseñan los
+     bloques de "ahora mismo". Ver la cabecera del fichero. */
+  const medium = useMedium();
 
   const [section, setSection] = useState<SectionKey>("overview");
   const esNames = useEsNames();
@@ -380,6 +399,26 @@ export default function FriendPage() {
     [fp],
   );
 
+  /* Los juegos que ya se terminó, que es lo que saca a uno de "está jugando"
+     aunque la etiqueta siga puesta (domain/gameStatus: los créditos mandan).
+     Dos fuentes porque ninguna sola los tiene todos: `rpc_friend_progress` solo
+     cuenta lo que SIGUE —un juego terminado y quitado de la biblioteca no está—
+     y su muro solo llega hasta donde llega el `limit` de la consulta. */
+  const finishedGameIds = useMemo(() => {
+    const ids = new Set(ofMedium(watchHistory, "game").map((w) => w.tmdb_id));
+    for (const f of ofMedium(fp?.follows ?? [], "game")) {
+      if ((progressOf(f.tmdb_id)?.watched ?? 0) > 0) ids.add(f.tmdb_id);
+    }
+    return ids;
+  }, [fp, watchHistory, progressOf]);
+
+  /* A qué está jugando y qué ha visto hace poco: las otras dos mitades de
+     "ahora mismo", que hasta hoy no se enseñaban en ningún sitio de su ficha.
+     La de juegos no sale de contar nada —el progreso de una partida no está en
+     ninguna tabla— sino de lo que él mismo dijo (0073). */
+  const playingGames = useMemo(() => playingNow(fp?.follows ?? [], finishedGameIds), [fp, finishedGameIds]);
+  const recentMovies = useMemo(() => lastWatched(movieHistory, "movie"), [movieHistory]);
+
   const hue = hueOf(friendId);
   const estMinutes = snap ? Math.round(snap.stats.episodes * avgRuntime) : 0;
 
@@ -457,6 +496,68 @@ export default function FriendPage() {
     );
   });
 
+  const gameCards = playingGames.map((g) => {
+    const gName = locName(esNames, g.tmdb_id, g.name, "game");
+    const minutes = g.minutes_played ?? 0;
+    /* El estado que se le pinta es el que él dijo, y solo importa para la barra:
+       'ongoing' no tiene denominador honesto porque el juego no se acaba, y
+       hoursProgress devuelve null para que las horas salgan a secas. */
+    const state = g.play_state === "ongoing" ? "ongoing" : "playing";
+    const pct = hoursProgress(minutes, g.beat_seconds, state);
+    const line = [
+      minutes > 0 ? formatPlaytime(minutes) : null,
+      g.played_at ? relativeTime(g.played_at, new Date(), dateLocale()) : null,
+    ].filter(Boolean).join(" · ");
+    return (
+      <div key={g.tmdb_id} className="card mq-row" onClick={() => openSheet(g.tmdb_id, "game")}>
+        <MiniArt kind="game" poster={g.poster_path} name={gName} style={{ width: 52, height: 76 }} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{gName}</div>
+          <div className="dim truncate" style={{ fontSize: 12.5 }}>
+            {/* Sin horas ni fecha —lo marcó y no ha apuntado nada más— la fila
+                dice al menos qué hace con él, en vez de quedarse en blanco. */}
+            {line || tr(state === "ongoing" ? "friend: Keeps playing it" : "friend: Playing it")}
+          </div>
+          {pct != null && minutes > 0 && (
+            <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
+              <div className="fr-matchbar" style={{ flex: 1, height: 5 }}><i style={{ width: `${Math.min(100, pct)}%` }} /></div>
+              <span className="mute" style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", flex: "0 0 auto" }}>{pct}%</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  });
+
+  const movieCards = recentMovies.map((m) => {
+    const mName = locName(esNames, m.tmdb_id, m.name, "movie");
+    return (
+      <div key={m.tmdb_id} className="card mq-row" onClick={() => openSheet(m.tmdb_id, "movie")}>
+        <MiniArt kind="movie" poster={m.poster_path} name={mName} style={{ width: 52, height: 76 }} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{mName}</div>
+          <div className="dim truncate" style={{ fontSize: 12.5 }}>
+            {tr("activity: watched")} {relativeTime(m.watched_at, new Date(), dateLocale())}
+          </div>
+        </div>
+      </div>
+    );
+  });
+
+  /* Los tres bloques de "ahora mismo", con el del modo delante (domain/friendNow).
+     Cada medio dice lo suyo y no lo mismo tres veces: una serie se está VIENDO
+     —le quedan episodios—, un juego se está jugando porque él lo dijo, y una
+     película ni se está viendo ni se deja a medias, así que de cine lo que hay
+     que contar es lo último. Los vacíos no pintan cabecera. */
+  const nowBlocks: { medium: Medium; label: string; cards: React.ReactNode[] }[] =
+    mediaFirst(medium)
+      .map((m) => ({
+        medium: m,
+        label: m === "tv" ? tr("Watching now") : m === "game" ? tr("Playing now") : tr("Recently watched"),
+        cards: m === "tv" ? watchingCards : m === "game" ? gameCards : movieCards,
+      }))
+      .filter((b) => b.cards.length > 0);
+
   /* Las cifras de su cabecera, desglosadas por medio en el cliente.
      `rpc_friend_snapshot.stats.shows` cuenta TODO lo que sigue —cine y juegos
      incluidos— bajo la etiqueta "series", porque 0016 y 0038 son de cuando solo
@@ -510,15 +611,19 @@ export default function FriendPage() {
       <div className="flex flex-col gap-6">
         {section === "overview" && (
           <>
-            {/* Watching now — the first thing you see */}
-            {watchingCards.length > 0 && (
-              <section className="flex flex-col gap-2.5">
-                <div className="eyebrow flex items-center gap-1.5"><Play size={13} />{tr("Watching now")}</div>
+            {/* Ahora mismo — lo primero que ves, y en los tres medios: entrar
+                aquí desde Videojuegos y encontrar solo sus series era enseñar
+                media persona. El del modo va delante. */}
+            {nowBlocks.map((b) => (
+              <section key={b.medium} className="flex flex-col gap-2.5" data-tint={b.medium}>
+                <div className="eyebrow flex items-center gap-1.5">
+                  <MediumGlyph kind={b.medium} tone="accent" />{b.label}
+                </div>
                 <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))" }}>
-                  {watchingCards}
+                  {b.cards}
                 </div>
               </section>
-            )}
+            ))}
 
             {/* Stats */}
             <div className="fr-stats">

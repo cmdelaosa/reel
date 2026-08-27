@@ -5,7 +5,9 @@ import {
   useAcceptRequest, useFindProfile, useFriendships, useRemoveFriend, useSendRequest,
   type Friendship, type FoundProfile,
 } from "@/lib/friends";
-import { t as tr, tv } from "@/lib/i18n";
+import { friendActivityOf, friendActivityVerb } from "@/domain/friendNow";
+import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
+import { useMedium } from "@/lib/medium";
 import { FriendAvatar } from "@/ui/FriendAvatar";
 
 /* You → Friends: add by handle, incoming requests atop, then the friends list. */
@@ -127,15 +129,34 @@ export function FriendsSection() {
   );
 }
 
+/* La línea de debajo del nombre habla del medio en el que estás: en
+   Videojuegos, a qué juega; en Series, qué está viendo o qué acaba de terminar;
+   en Cine, la última que ha visto. Antes decía «Viendo» de lo último que
+   marcara fuera lo que fuera, y por eso anunciaba «Viendo Dave the Diver» —un
+   juego, y terminado— en el modo Series (0084 lo cuenta entero).
+
+   Sin nada suyo de este medio se queda con su @usuario, que es lo que había
+   antes de que hubiera nada que contar: es mejor no decir nada que rellenar el
+   hueco con lo de otro modo, que es justo el fallo que esto arregla. */
 function FriendCard({ r, onOpen }: { r: Friendship; onOpen: () => void }) {
+  const medium = useMedium();
+  /* El título en español si lo tiene, como el muro de justo debajo: la RPC
+     devuelve el nombre original, así que sin esto la misma serie salía
+     "Severance" aquí y "Separación" dos dedos más abajo. El medio es el del
+     modo porque es de ese medio de lo que habla la fila. */
+  const name = locName(useEsNames(), r.watching_tmdb, r.watching_title ?? "", medium);
+  /* La fila que quedó del modo anterior mientras llega la de este se queda sin
+     verbo, en vez de decir "Jugando a" de una serie durante un fotograma: es el
+     precio de que la lista no parpadee a cero al cambiar de modo (lib/friends). */
+  const said = r.medium === medium ? r.watching_title : null;
   return (
     <div className="card mq-row" onClick={onOpen}>
       <FriendAvatar f={{ id: r.other_id, name: r.display_name, avatarUrl: r.avatar_url }} size={44} />
       <div className="flex-1 min-w-0">
         <div className="truncate" style={{ fontSize: 14.5, fontWeight: 700 }}>{r.display_name}</div>
         <div className="dim truncate" style={{ fontSize: 12.5 }}>
-          {r.watching_title
-            ? <>{tr("Watching")} <b style={{ fontWeight: 650 }}>{r.watching_title}</b></>
+          {said
+            ? <>{tr(friendActivityVerb(friendActivityOf(r.activity, medium)))} <b style={{ fontWeight: 650 }}>{name}</b></>
             : `@${r.handle}`}
         </div>
       </div>
