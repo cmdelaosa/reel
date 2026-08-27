@@ -55,6 +55,12 @@ export const titleRowSchema = z.object({
   // matched (no imdb_id, or absent from the dataset).
   imdb_rating: z.number().nullable().optional(),
   imdb_votes: z.number().int().nullable().optional(),
+  /* El tconst del título. Existe en la base desde 0051 —TMDB lo da y es el
+     puente por el que scripts/imdb-ratings encuentra la nota— pero no estaba
+     en este esquema, así que la fila lo traía y Zod lo tiraba. Lo expone ahora
+     porque la ficha enlaza a la página de IMDb del título, que es lo único que
+     falta para que ese enlace exista. */
+  imdb_id: z.string().nullable().optional(),
   // Present on full DB/proxy rows. Search fixtures and older persisted cache
   // entries may omit it, so keep it optional for backwards compatibility.
   //
@@ -88,6 +94,21 @@ export const seasonRowSchema = z.object({
 });
 export type SeasonRow = z.infer<typeof seasonRowSchema>;
 
+/** Una persona de la ficha de un episodio: dirección, guion o invitado.
+ *
+ *  `role` es el puesto ("Director", "Writer") cuando viene del equipo y el
+ *  PERSONAJE cuando viene de los invitados. Una sola forma para las dos listas
+ *  porque se pintan con la misma fila de caras, y el `id` es lo que deja que
+ *  cada una enlace a /person/:id. El recorte lo hace el proxy
+ *  (supabase/functions/tmdb-proxy/episodio.ts), que es donde están sus tests. */
+export const personaSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  profile_path: z.string().nullable(),
+  role: z.string(),
+});
+export type Persona = z.infer<typeof personaSchema>;
+
 export const episodeRowSchema = z.object({
   id: z.string().uuid(),
   title_id: z.string().uuid(),
@@ -108,6 +129,22 @@ export const episodeRowSchema = z.object({
   imdb_rating: z.number().nullable().optional(),
   imdb_votes: z.number().int().nullable().optional(),
   imdb_id: z.string().nullable().optional(),
+  /* La ficha del episodio (0085). Los cuatro venían ya en el payload de
+     temporada y se descartaban en el ingest; el par _es sigue la misma regla
+     que en `titles` — la columna canónica manda y la traducción solo existe
+     cuando TMDB la tiene.
+
+     Opcionales por lo de siempre (una caché persistida anterior a la
+     migración) y nulos mientras no se hayan traído. La interfaz lee la
+     ausencia como "no enseñar", nunca como una lista vacía: un episodio sin
+     emitir no tiene reparto porque TMDB lo publica al emitirse, y eso la ficha
+     lo dice con palabras en vez de con un hueco. */
+  still_path: z.string().nullable().optional(),
+  episode_type: z.string().nullable().optional(),
+  crew: z.array(personaSchema).nullable().optional(),
+  guest_stars: z.array(personaSchema).nullable().optional(),
+  name_es: z.string().nullable().optional(),
+  overview_es: z.string().nullable().optional(),
 });
 export type EpisodeRow = z.infer<typeof episodeRowSchema>;
 

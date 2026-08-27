@@ -438,6 +438,40 @@ const ES: Record<string, string> = {
     "Notas de IMDb de los episodios de esta temporada, con media {avg}",
   "E{ep} · {rating}": "E{ep} · {rating}",
   "No synopsis yet.": "Aún no hay sinopsis.",
+
+  /* ---- La ficha de un episodio (0085) ---- */
+  "Directing and writing": "Dirección y guion",
+  /* El puesto que llega dentro de `episodes.crew`. "Director" ya está más
+     abajo (la ficha de cine lo dice), pero esa usa "Writers" en plural y aquí
+     el puesto viene de TMDB en singular. */
+  "Writer": "Guion",
+  "My rating": "Mi nota",
+  "Continue with": "Continuar por",
+  "Whole show": "Toda la serie",
+  "Season {n}": "Temporada {n}",
+  "Mark the whole show watched": "Marcar toda la serie vista",
+  "{votes} votes": "{votes} votos",
+  "Guest stars": "Invitados",
+  "Unwatch": "Desmarcar",
+  "Not watched": "Sin ver",
+  "Aired {date}": "Se emitió el {date}",
+  "Watched on {date}": "Visto el {date}",
+  "Premieres on {date}": "Se estrena el {date}",
+  "No still yet": "Sin fotograma todavía",
+  /* De dónde salió la marca de visto. 'app' no se dice: marcarlo tú es lo
+     normal y no necesita explicación; lo que sí explica algo es que la marca
+     venga de una importación, porque es lo que justifica una fecha vieja. */
+  "imported from TV Time": "importado de TV Time",
+  "from the initial import": "de la importación inicial",
+  "Cast and crew arrive when the episode airs.": "El reparto y la dirección llegan cuando el episodio se emite.",
+  "We'll tell you on premiere day": "Te avisaremos el día del estreno",
+  "you follow the show and you're up to date": "sigues la serie y estás al día",
+  "Runtime to be confirmed": "Duración por confirmar",
+  "View on IMDb": "Ver en IMDb",
+  /* episode_type de TMDB. 'standard' no se enseña: es el caso de casi todos y
+     poner "estándar" en una ficha no dice nada de ese episodio. Las tres
+     palabras que sí se usan ya están en el diccionario, más abajo — el
+     calendario las dice desde antes. */
   "Episode {n}": "Episodio {n}",
   "Episode S{season} · E{episode}": "Episodio T{season} · E{episode}",
   "{votes} votes on IMDb": "{votes} votos en IMDb",
