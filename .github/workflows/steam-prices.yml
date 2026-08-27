@@ -82,7 +82,30 @@ jobs:
           for i in 1 2 3; do
             code=$(curl -s --compressed -o /tmp/inv.json -w '%{http_code}' -A 'Mozilla/5.0' \
               'https://steamcommunity.com/inventory/76561197960265728/730/2?l=spanish&count=5')
-            echo "intento $i -> $code  $(head -c 100 /tmp/inv.json)"
+            echo "cuenta inventada, intento $i -> $code  $(head -c 100 /tmp/inv.json)"
+            sleep 3
+          done
+
+      # Y con una cuenta REAL, sacada de la base como lo haría el código de
+      # verdad. El SteamID64 no se escribe en el repo —es público— sino que se
+      # lee al vuelo con el mismo secreto que ya usa el trabajo de al lado.
+      # Solo se imprime el código de respuesta y cuántos objetos han salido.
+      - name: ¿Y con una cuenta de verdad?
+        continue-on-error: true
+        env:
+          URL: ${{ secrets.SUPABASE_URL }}
+          KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          sid=$(curl -s "$URL/rest/v1/profiles?select=steam_id&steam_id=not.is.null&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[0]["steam_id"] if d else "")')
+          if [ -z "$sid" ]; then echo "no hay ninguna cuenta enlazada"; exit 0; fi
+          for app in "730 2" "753 6"; do
+            set -- $app
+            code=$(curl -s --compressed -o /tmp/inv.json -w '%{http_code}' -A 'Mozilla/5.0' \
+              "https://steamcommunity.com/inventory/$sid/$1/$2?l=spanish&count=2000")
+            n=$(python3 -c "import json;d=json.load(open('/tmp/inv.json'));print(len(d.get('assets') or []),'objetos,',d.get('total_inventory_count'),'en total')" 2>/dev/null || echo "sin JSON")
+            echo "app $1 -> $code  $n"
             sleep 3
           done
 
