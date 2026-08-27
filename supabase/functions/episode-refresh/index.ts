@@ -41,6 +41,10 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { needsEpisodeRefresh } from "./stale.ts";
 import { pageAll } from "./paging.ts";
 import { redactCredential, tmdbFetch } from "../_shared/tmdb.ts";
+// En _shared porque las escriben DOS funciones: esta y tmdb-proxy, sobre la
+// misma fila de `episodes`. Recortar el equipo de dos maneras distintas sería
+// que un episodio cambiara de reparto según quién lo hubiera refrescado.
+import { crewRecortado, invitadosRecortados, textoEs } from "../_shared/episodio.ts";
 
 const TVMAZE = "https://api.tvmaze.com";
 const LIMIT = 40;
@@ -758,7 +762,19 @@ async function refreshTitle(
       .single();
     if (se || !season) throw new Error(`season upsert: ${se?.message}`);
 
-    const sd = await tmdb(key, `/tv/${row.tmdb_id}/season/${s.season_number}`);
+    /* La canónica y la española, esta última tolerante a fallo. Mismo par que
+       tmdb-proxy — y hace falta AQUÍ tanto como allí: este cron es quien sella
+       `episodes_refreshed_at`, así que una serie que él refresca deja de pasar
+       por el proxy y sin esto sus episodios se quedarían para siempre sin
+       fotograma, sin equipo y sin traducción. */
+    const [sd, sdEs] = await Promise.all([
+      tmdb(key, `/tv/${row.tmdb_id}/season/${s.season_number}`),
+      tmdb(key, `/tv/${row.tmdb_id}/season/${s.season_number}?language=es-ES`).catch(() => null),
+    ]);
+    const esByNumber = new Map<number, Any>();
+    for (const e of ((sdEs as Any)?.episodes ?? []) as Any[]) {
+      if (typeof e?.episode_number === "number") esByNumber.set(e.episode_number, e);
+    }
     const eps = (sd.episodes ?? []).map((e: Any) => {
       // Never downgrade an air time we already know; only new episodes get the
       // placeholder. Value and provenance move together, always.
@@ -778,7 +794,15 @@ async function refreshTitle(
         episode_number: e.episode_number,
         name: e.name ?? null,
         overview: e.overview ?? null,
+        /* Las dos del español, o ninguna, para toda la temporada: el upsert es
+           un lote y PostgREST une las claves de sus filas (ver textoEs). */
+        ...(sdEs !== null ? textoEs(esByNumber.get(e.episode_number)) : {}),
         runtime: e.runtime ?? null,
+        // Los cuatro de 0085, que ya venían en este payload y se tiraban.
+        still_path: e.still_path ?? null,
+        episode_type: e.episode_type ?? null,
+        crew: crewRecortado(e.crew),
+        guest_stars: invitadosRecortados(e.guest_stars),
         // Per-episode TMDB score — free, already in this payload; the second
         // source behind the episode graph. IMDb ratings come from the weekly
         // dataset import (scripts/imdb-ratings), which owns those columns.
