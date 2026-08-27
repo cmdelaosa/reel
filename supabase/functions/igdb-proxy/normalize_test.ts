@@ -15,8 +15,8 @@ import {
   gameRow,
   platformReleases,
   precisionOf,
-  rating10,
   couldBeOnSteam,
+  rating10,
   steamAppid,
   studio,
   windowEnd,
@@ -262,6 +262,12 @@ Deno.test("un juego de ordenador puede estar en Steam", () => {
   assertEquals(couldBeOnSteam(["Linux", "Mac", "PlayStation 4"]), true);
   // Como los nombra IGDB, y en cualquier caja: la lista viene de su catálogo.
   assertEquals(couldBeOnSteam(["pc (microsoft windows)"]), true);
+});
+
+Deno.test("los de DOS que Steam vende envueltos en DOSBox, también", () => {
+  // Sin esta línea la comprobación se llevaría por delante el Doom del 93 y
+  // medio catálogo de los noventa, que en IGDB son de "DOS" y en Steam están.
+  assertEquals(couldBeOnSteam(["DOS"], "1993-12-10"), true);
 });
 
 Deno.test("un exclusivo de consola YA SALIDO no", () => {

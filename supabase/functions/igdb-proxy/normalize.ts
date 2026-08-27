@@ -259,13 +259,21 @@ export function steamAppid(externals: readonly Any[] | null | undefined): number
  *
  *  Steam es una tienda de ordenador: lo que vende corre en Windows, en Mac, en
  *  Linux o en su propio SteamOS. No hay un juego de Steam que sea solo de
- *  Nintendo DS, y esa imposibilidad es justo la comprobación que faltaba. */
+ *  Nintendo DS, y esa imposibilidad es justo la comprobación que faltaba.
+ *
+ *  `DOS` está en la lista y no es un descuido: Steam vende cientos de juegos de
+ *  los noventa —el Doom del 93, los Monkey Island— envueltos en DOSBox, y para
+ *  IGDB la plataforma de aquello es "DOS" a secas. Sin esta línea, la
+ *  comprobación se llevaría por delante justo los juegos viejos de una
+ *  biblioteca vieja. */
 const STEAM_PLATFORMS = [
   "pc (microsoft windows)",
   "mac",
   "linux",
   "steamos",
   "steam vr",
+  "dos",
+  "pc dos",
 ];
 
 /** ¿Puede este juego estar en Steam, a la vista de sus plataformas?
