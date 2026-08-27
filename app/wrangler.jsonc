@@ -7,7 +7,7 @@
   // sirve sin pasar por aquí. La única excepción es la vuelta de Steam, que
   // tiene que aterrizar en NUESTRO dominio para que la pantalla de OpenID diga
   // "Sign in to reel-app.com" y no el host del proyecto de Supabase — el
-  // motivo entero está en src/worker/index.ts.
+  // motivo entero está en src/worker/steamReturn.ts.
   "main": "./src/worker/index.ts",
 
   // `single-page-application` devuelve index.html (200) para cualquier ruta que

@@ -84,15 +84,20 @@ describe("la vuelta de Steam", () => {
     expect(calls.length).toBe(0);
   });
 
-  it("un POST a la ruta no se reenvía", async () => {
-    const calls = upstream();
-    const res = await worker.fetch(
-      new Request(`https://reel-app.com${RETURN_PATH}`, { method: "POST" }),
-      env(),
-    );
+  /* Ni POST ni HEAD llegan a la función. El HEAD no es celo: el pagaré es de un
+     solo uso y la función lo quema en cuanto pregunta a Steam, así que un
+     rastreador de enlaces dejaría a la persona en `steam=expired`. */
+  it("solo GET se reenvía: lo demás se para aquí", async () => {
+    for (const method of ["POST", "HEAD"]) {
+      const calls = upstream();
+      const res = await worker.fetch(
+        new Request(`https://reel-app.com${RETURN_PATH}${QUERY}`, { method }),
+        env(),
+      );
 
-    expect(res.status).toBe(405);
-    expect(calls.length).toBe(0);
+      expect(res.status).toBe(405);
+      expect(calls.length).toBe(0);
+    }
   });
 });
 

@@ -59,7 +59,7 @@ export function authUrl(returnTo: string): string {
  *  esa pantalla dice "vas a identificarte ante <ref>.supabase.co" — un dominio
  *  que quien usa la app no ha visto nunca, justo donde lo que se juzga es si el
  *  sitio es de fiar. Con `STEAM_RETURN_BASE` apuntando al proxy del dominio
- *  propio (`https://reel-app.com/api/steam`, ver app/src/worker/index.ts), el
+ *  propio (`https://reel-app.com/api/steam`, ver app/src/worker/steamReturn.ts), el
  *  realm pasa a ser el de la app.
  *
  *  Es opcional a propósito: sin el secreto —en local, o en un despliegue sin

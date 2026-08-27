@@ -56,7 +56,13 @@ export const RETURN_PATH = "/api/steam/return";
 const FUNCTION_PATH = "/functions/v1/steam-sync/return";
 
 export async function steamReturn(request: Request, env: Env): Promise<Response> {
-  if (request.method !== "GET" && request.method !== "HEAD") {
+  /* Solo GET, y el HEAD queda fuera a propósito. La vuelta de Steam es una
+     navegación, así que nada legítimo llega aquí de otra forma — y el pagaré es
+     de un solo uso: la función pregunta a Steam y lo quema, así que un HEAD de
+     un rastreador de enlaces dejaría a la persona aterrizando en
+     `steam=expired` sin nada que lo explicara. Reenviarlo como HEAD no arregla
+     eso: la ruta de la función no mira el método. */
+  if (request.method !== "GET") {
     return new Response("method not allowed", { status: 405 });
   }
 
