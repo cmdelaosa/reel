@@ -271,7 +271,12 @@ const STEAM_PLATFORMS = [
   "mac",
   "linux",
   "steamos",
-  "steam vr",
+  // `SteamVR`, sin espacio: es como lo escribe IGDB, comprobado contra las
+  // fichas del catálogo (27-ago-2026). Con "steam vr" esta línea no casaba con
+  // nada, y como Half-Life: Alyx y compañía no tienen más plataforma que esa,
+  // la comprobación les habría borrado el appid al primer refresco — es decir,
+  // se habría llevado por delante justo los juegos que SOLO existen en Steam.
+  "steamvr",
   "dos",
   "pc dos",
 ];
