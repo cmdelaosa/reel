@@ -1,126 +1,96 @@
 name: steam-prices
 
 # Refresco diario de los precios del mercado de Steam y la foto del inventario
-# (migración 0085, función supabase/functions/steam-market).
+# (migración 0085, guión scripts/steam-prices).
 #
-# ── Por qué aquí y no en pg_cron ─────────────────────────────────────────
-# Porque el trabajo son peticiones a steamcommunity.com con un hueco entre
-# ellas, no una consulta: un inventario de 500 objetos son unos seis minutos de
-# reloj repartidos en varias invocaciones, y encadenarlas es un bucle con su
-# condición de parada. Eso en un runner son diez líneas de `curl`; en pg_cron es
-# un disparador que no puede leer la respuesta anterior.
+# ── Por qué el trabajo corre AQUÍ y no en una edge function ──────────────
+# Porque Steam elige por IP a quién le contesta, y a la de las edge functions de
+# Supabase no le contesta. La misma petición, el 27-08-2026, contra producción:
+#
+#   · desde la edge function:     429 a la primera, cero precios traídos;
+#   · desde un runner de GitHub:  5 de 5 con 200 y precios reales;
+#   · desde una IP doméstica:     12 seguidas sin un corte.
+#
+# La primera versión de esto era un bucle de `curl` contra una ruta `/prices` de
+# la función, y habría devuelto ceros todas las noches sin que nada fallara. El
+# primer paso de abajo vuelve a tomar esa medida en cada ejecución, para que el
+# día que Steam cambie de idea se vea en el registro y no haya que deducirlo.
 #
 # ── Por qué NO refresca el inventario ────────────────────────────────────
-# Porque no puede. `/inventory/<steamid>/…` está estrangulado por IP y contesta
-# 429 hasta a la primera petición desde una IP limpia; desde un runner de GitHub,
-# que es una IP de nube compartida, no hay nada que intentar. Lo que tienes lo
-# sube el recolector desde tu propio navegador, de uvas a peras. Lo que cambia a
-# diario no es lo que tienes: es lo que vale.
+# Porque no puede, ni desde aquí. `/inventory/<steamid>/…` está estrangulado
+# mucho más fuerte —429 hasta a la primera petición desde una IP doméstica
+# limpia— y encima `pricehistory` y `myhistory` piden la cookie de sesión. Lo que
+# tienes lo sube el recolector desde tu propio navegador, de uvas a peras. Lo que
+# cambia a diario no es lo que tienes: es lo que vale.
 #
-# Lo que sí funciona desde fuera es `market/priceoverview`, y es lo único que
-# este trabajo pide.
-#
-# A las 4:10 UTC: después de que el mercado europeo se haya calmado, y a una hora
-# en la que un 429 no le estropea la pantalla a nadie. El minuto raro es para no
-# caer en el pico de trabajos programados en punto.
+# A las 4:10 UTC: después de que el mercado europeo se calme, y a una hora en la
+# que un 429 no le estropea la pantalla a nadie. El minuto raro es para no caer
+# en el pico de trabajos programados en punto.
 #
 # SECRETS (repo → Settings → Secrets and variables → Actions):
 #   SUPABASE_URL                — https://<ref>.supabase.co
 #   SUPABASE_SERVICE_ROLE_KEY   — la sb_secret_… (SUPABASE_DEFAULT_KEY en el
 #                                 CLI), no el JWT service_role legacy: ver
 #                                 docs/DEPLOY.md.
-# Sin ellos el trabajo falla a la primera vuelta en vez de escribir nada en
+# Sin ellos el guión se planta en la primera línea en vez de escribir nada en
 # silencio.
 
 on:
   schedule:
     - cron: "10 4 * * *"
-  # TEMPORAL — se quita antes de fusionar. Solo para medir, en la PR, si Steam
-  # le habla a un runner de GitHub: `workflow_dispatch` no se puede lanzar desde
-  # una rama, así que no hay otra forma de tomar esa medida antes de decidir la
-  # arquitectura. El trabajo que escribe sigue siendo solo del cron.
-  pull_request:
-    paths:
-      - ".github/workflows/steam-prices.yml"
   workflow_dispatch:
     inputs:
-      rounds:
-        description: "Tandas de precios como mucho (150 objetos cada una)"
-        default: "8"
+      max_items:
+        description: "Tope de precios que pedir en esta pasada"
+        default: "1500"
 
 permissions: {}
 
 jobs:
-  # Si Steam le habla a ESTE runner. Es la medida que decide dónde puede vivir la
-  # petición: desde una IP doméstica `priceoverview` aguanta doce seguidas, y
-  # desde la IP de una edge function de Supabase devuelve 429 a la primera
-  # (medido el 27-08-2026). Nunca falla nada: solo deja el dato en el registro,
-  # y sirve para diagnosticar el día que los precios dejen de llegar.
-  sondeo:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: ¿Steam contesta a este runner?
-        continue-on-error: true
-        run: |
-          for i in 1 2 3 4 5; do
-            code=$(curl -s -o /tmp/po.json -w '%{http_code}' \
-              --get --data-urlencode 'market_hash_name=AK-47 | Redline (Field-Tested)' \
-              'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3')
-            echo "intento $i -> $code  $(head -c 120 /tmp/po.json)"
-            sleep 2
-          done
-
   refresh:
-    # En la PR no se refresca nada: escribir en producción desde una rama sin
-    # fusionar sería exactamente lo que nadie espera de abrir una PR.
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Refrescar precios y escribir la foto del día
+      # La medida que justifica que este trabajo exista, tomada cada vez. Nunca
+      # falla el job: si sale 429, el paso siguiente lo dirá con sus propias
+      # cifras y esto es la explicación que ahorra media hora de diagnóstico.
+      - name: ¿Steam contesta a este runner?
+        continue-on-error: true
+        run: |
+          code=$(curl -s -o /tmp/po.json -w '%{http_code}' \
+            --get --data-urlencode 'market_hash_name=AK-47 | Redline (Field-Tested)' \
+            'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3')
+          echo "priceoverview desde este runner -> $code"
+          head -c 200 /tmp/po.json; echo
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Instalar
+        working-directory: scripts/steam-prices
+        run: npm install --no-audit --no-fund
+
+      - name: Refrescar precios
+        working-directory: scripts/steam-prices
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MAX_ITEMS: ${{ github.event.inputs.max_items || '1500' }}
+        run: npm start
+
+      # La foto del día se escribe SIEMPRE, aunque falten precios: el hueco se
+      # cuenta en `missing_prices` y la gráfica lo dice. Saltársela dejaría un
+      # agujero en la serie, que es peor — un día sin punto no se distingue de un
+      # día a cero. Esto sí va en la función: no sale a Steam, solo suma.
+      - name: Escribir la foto del día
         env:
           URL: ${{ secrets.SUPABASE_URL }}
           KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          ROUNDS: ${{ github.event.inputs.rounds || '8' }}
         run: |
           set -euo pipefail
-          if [ -z "${URL:-}" ] || [ -z "${KEY:-}" ]; then
-            echo "Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY." >&2
-            exit 1
-          fi
-
-          fn="$URL/functions/v1/steam-market"
-
-          # Cada tanda pide como mucho 150 precios y devuelve cuántos quedan.
-          # Se para cuando no queda nada o cuando se agotan las vueltas — el
-          # tope existe para que un inventario enorme, o un 429 que corte cada
-          # tanda a la primera, no dejen esto girando media hora.
-          for i in $(seq 1 "$ROUNDS"); do
-            out=$(curl -sS -X POST "$fn/prices" \
-              -H "Authorization: Bearer $KEY" -H "apikey: $KEY")
-            echo "tanda $i: $out"
-            remaining=$(printf '%s' "$out" | sed -n 's/.*"remaining":\([0-9]*\).*/\1/p')
-            refreshed=$(printf '%s' "$out" | sed -n 's/.*"refreshed":\([0-9]*\).*/\1/p')
-            # Sin `remaining` en la respuesta es que no fue una respuesta: la
-            # función devolvió un error, y seguir pidiendo no lo va a arreglar.
-            if [ -z "$remaining" ]; then
-              echo "La función no ha contestado con lo esperado." >&2
-              exit 1
-            fi
-            [ "$remaining" = "0" ] && break
-            # Una tanda que no refresca NADA y aún tiene cola es Steam diciendo
-            # 429. Insistir alarga el bloqueo; se deja para mañana.
-            if [ "${refreshed:-0}" = "0" ]; then
-              echo "Steam ha cortado la tanda; lo que queda ($remaining) va mañana."
-              break
-            fi
-          done
-
-          # La foto del día se escribe SIEMPRE, aunque falten precios: el hueco
-          # se cuenta en `missing_prices` y la gráfica lo dice. Saltársela dejaría
-          # un agujero en la serie, que es peor — un día sin punto no se distingue
-          # de un día a cero.
-          curl -sS -X POST "$fn/snapshot" \
+          curl -sS --fail-with-body -X POST "$URL/functions/v1/steam-market/snapshot" \
             -H "Authorization: Bearer $KEY" -H "apikey: $KEY"
           echo

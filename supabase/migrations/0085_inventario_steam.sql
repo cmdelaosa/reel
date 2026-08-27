@@ -26,11 +26,20 @@
 -- `steamLoginSecure` es una credencial de toma de cuenta, y esto es una pantalla
 -- para mirar gráficas.
 --
--- Lo que SÍ funciona desde el servidor es `market/priceoverview` — 12 seguidas
--- sin un corte en la misma prueba. De ahí el reparto: el inventario y el
--- historial los trae el navegador de uvas a peras, y los PRECIOS los refresca un
--- cron a diario (scripts/steam-prices). Comprar un objeto es raro; que suba de
--- precio, no.
+-- ── Los precios: ni el navegador solo, ni el servidor ────────────────────
+-- `market/priceoverview` es mucho más blando que el inventario, pero Steam sigue
+-- eligiendo por IP, y hay tres respuestas distintas a la misma petición (medido
+-- el 27-08-2026 contra producción):
+--
+--   · desde una edge function de Supabase: 429 a la primera, cero precios;
+--   · desde un runner de GitHub:           5 de 5 con 200 y precios reales;
+--   · desde una IP doméstica:              12 seguidas sin un corte.
+--
+-- De ahí el reparto final: el inventario y el historial los trae tu navegador de
+-- uvas a peras, y los PRECIOS los refresca a diario `scripts/steam-prices` desde
+-- un runner de GitHub Actions — no desde una edge function, que es donde la
+-- primera versión los ponía y donde habría fallado en silencio cada noche.
+-- Comprar un objeto es raro; que suba de precio, no.
 --
 -- ── Dinero: enteros de céntimos, y el signo significa algo ────────────────
 -- Nada de `numeric` para dinero que se suma en pantalla: céntimos en `integer`.
@@ -319,3 +328,36 @@ create policy "steam_portfolio_snapshots: owner all"
   on public.steam_portfolio_snapshots for all to authenticated
   using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
+
+-- ============================================================
+-- 6. Los permisos, dichos y no heredados
+-- ============================================================
+-- RLS decide QUÉ FILAS ve cada uno; el `grant` decide si el rol puede tocar la
+-- tabla siquiera. Son dos rejas distintas y hacen falta las dos: sin grant,
+-- PostgREST contesta «permission denied for table» antes de mirar una sola
+-- política.
+--
+-- Van escritos porque 0076 los escribe y porque apoyarse en los privilegios por
+-- defecto del esquema es apoyarse en cómo se inicializó cada entorno. Esta
+-- migración se aplicó el 27-08-2026 en producción, donde los heredó, y en la
+-- pila local, donde NO: allí las cinco tablas salieron con REFERENCES, TRIGGER y
+-- TRUNCATE y sin una sola operación útil, y la ingesta murió con «permission
+-- denied» en una migración que en producción funcionaba. Una migración que
+-- depende del entorno no es una migración.
+--
+-- Quién necesita qué:
+--   · `authenticated` escribe lo SUYO —el volcado sube por la función, pero la
+--     app lee estas tablas directamente— y de que sea suyo ya se encarga RLS.
+--   · Los precios y el histórico son de lectura para todo el mundo: los escribe
+--     el cron con la clave de servicio, que se salta RLS pero NO los grants.
+grant select on public.steam_market_prices to authenticated;
+grant select on public.steam_price_history to authenticated;
+grant select, insert, update, delete on public.steam_holdings to authenticated;
+grant select, insert, update, delete on public.steam_ledger to authenticated;
+grant select, insert, update, delete on public.steam_portfolio_snapshots to authenticated;
+
+grant all on public.steam_market_prices to service_role;
+grant all on public.steam_price_history to service_role;
+grant all on public.steam_holdings to service_role;
+grant all on public.steam_ledger to service_role;
+grant all on public.steam_portfolio_snapshots to service_role;

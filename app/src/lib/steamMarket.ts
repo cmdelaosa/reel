@@ -119,9 +119,6 @@ export interface Inventory {
   /** Cuándo se subió el último volcado. Null si no hay ninguno, que es el
    *  estado de estreno de la pantalla. */
   collectedAt: string | null;
-  /** Precios que todavía no ha traído el servidor. Es lo que decide si la
-   *  pantalla ofrece el botón de "traer los que faltan". */
-  provisionalCount: number;
 }
 
 const key = (appid: number, name: string) => `${appid}:${name}`;
@@ -233,10 +230,6 @@ export function useSteamInventory() {
         gain: unrealized(asHoldings, asPrices, basis),
         snapshots,
         collectedAt: holdings[0]?.collected_at ?? null,
-        /* Los que faltan cuentan igual que los provisionales: los dos son
-           "esto todavía no lo ha mirado el servidor", y es la misma acción la
-           que los arregla. */
-        provisionalCount: rows.filter((r) => r.provisional || r.medianCents === null).length,
       };
     },
   });
@@ -293,30 +286,6 @@ export function useUploadSteamDump() {
         method: "POST",
         body: JSON.stringify(dump),
       })) as IngestSummary;
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: qk.steamInventory }),
-  });
-}
-
-/** Pide una tanda de precios al servidor.
- *
- *  Una tanda son 150 objetos y unos dos minutos; la respuesta dice cuántos
- *  quedan y la pantalla puede volver a llamar. Se hace por tandas y no de una
- *  porque el límite de la plataforma es de segundos y el de Steam es de
- *  peticiones por minuto: una sola llamada larga se muere a la mitad y deja
- *  medio inventario sin refrescar sin decirlo. */
-export function useRefreshSteamPrices() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      const data = await call("/prices", { method: "POST" });
-      return z
-        .object({
-          refreshed: z.number(),
-          failed: z.number(),
-          remaining: z.number(),
-        })
-        .parse(data);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: qk.steamInventory }),
   });

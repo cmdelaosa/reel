@@ -52,10 +52,10 @@ ruta `/by-steam` de `igdb-proxy`, que llega en 0076: desplegar solo `steam-sync`
 deja las importaciones colgadas en `applying` con un 404 en `job_runs`.
 
 `steam-market` (0085) es el inventario del mercado, y **no necesita ningún
-secreto nuevo**: lo único que le pide a Steam es `market/priceoverview`, que es
-público. Lo que sí necesita es que su cron esté puesto — ver
+secreto nuevo ni sale a internet**: recibe el volcado del navegador y escribe la
+foto del día, y nada más. Los precios los trae otro trabajo — ver
 [El cron de los precios de Steam](#el-cron-de-los-precios-de-steam), que **no va
-en pg_cron** como los otros cuatro.
+en pg_cron** como los otros cuatro, y tampoco en una edge function.
 
 Lo que esa función *no* hace, y conviene saber antes de que alguien lo dé por
 roto: no lee inventarios. No puede. Steam estrangula
@@ -234,17 +234,26 @@ El quinto trabajo periódico **no vive en pg_cron**: es
 sus dos secretos de Actions (`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` — la
 `sb_secret_…`, ver abajo).
 
-Está ahí y no en la base porque el trabajo son peticiones a
-`steamcommunity.com` con un hueco entre ellas, encadenadas hasta que no queda
-cola: unos seis minutos de reloj para un inventario de 500 objetos, repartidos en
-varias invocaciones que se llaman mirando la respuesta de la anterior. En un
-runner eso son diez líneas de `curl`; en pg_cron es un disparador que no puede
-leer lo que contestó la llamada previa.
+**Está en un runner porque Steam elige por IP a quién le contesta, y a Supabase
+no le contesta.** La misma petición a `market/priceoverview`, el 27-08-2026,
+contra producción:
+
+| desde dónde | respuesta |
+|---|---|
+| una edge function de Supabase | **429 a la primera**, cero precios |
+| un runner de GitHub | 5 de 5 con 200 y precios reales |
+| una IP doméstica | 12 seguidas sin un corte |
+
+La primera versión de esto era una ruta `/prices` de `steam-market` llamada en
+bucle, y habría devuelto ceros todas las noches sin que nada fallara. Por eso el
+workflow abre con un paso que vuelve a tomar esa medida en cada ejecución: el día
+que Steam cambie de idea, estará en el registro y no habrá que deducirlo.
 
 Comprobarlo después del primer despliegue: en la pestaña Actions, que
-`steam-prices` haya corrido y que su salida diga `"remaining":0`. Si dice
-`refreshed: 0` con cola pendiente, Steam está cortando por 429 — no es una avería
-del trabajo, y lo que quede se refresca al día siguiente.
+`steam-prices` haya corrido y que su salida diga `Refrescados N`. Si dice
+`Refrescados 0, cortado por Steam`, mira el primer paso — si ahí sale 429, es la
+IP del runner y no el guión, y lo que quede se refresca al día siguiente por
+orden de rancio.
 
 ### Which service key
 

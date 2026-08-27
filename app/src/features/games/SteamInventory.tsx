@@ -1,10 +1,9 @@
 import { useMemo, useRef, useState } from "react";
-import { AlertTriangle, Clipboard, Loader2, RefreshCw, Upload } from "lucide-react";
+import { AlertTriangle, Clipboard, Loader2, Upload } from "lucide-react";
 import collectorSource from "@/features/games/steamCollector.js?raw";
 import {
   euros,
   iconUrl,
-  useRefreshSteamPrices,
   useSteamInventory,
   useUploadSteamDump,
   type IngestSummary,
@@ -28,7 +27,6 @@ import { dateLocale } from "@/lib/locale";
 export function SteamInventory() {
   const { data, isLoading } = useSteamInventory();
   const upload = useUploadSteamDump();
-  const refresh = useRefreshSteamPrices();
   const fileInput = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -65,7 +63,6 @@ export function SteamInventory() {
           <Items rows={data.rows} />
           <Footer
             collectedAt={data.collectedAt}
-            provisionalCount={data.provisionalCount}
             onPick={() => fileInput.current?.click()}
             onCopy={() => {
               navigator.clipboard.writeText(collectorSource);
@@ -73,9 +70,6 @@ export function SteamInventory() {
             }}
             copied={copied}
             uploading={upload.isPending}
-            refreshing={refresh.isPending}
-            onRefresh={() => refresh.mutate()}
-            lastRefresh={refresh.data ?? null}
           />
         </>
       )}
@@ -500,24 +494,16 @@ function Onboarding({
 
 function Footer({
   collectedAt,
-  provisionalCount,
   onPick,
   onCopy,
   copied,
   uploading,
-  refreshing,
-  onRefresh,
-  lastRefresh,
 }: {
   collectedAt: string | null;
-  provisionalCount: number;
   onPick: () => void;
   onCopy: () => void;
   copied: boolean;
   uploading: boolean;
-  refreshing: boolean;
-  onRefresh: () => void;
-  lastRefresh: { refreshed: number; failed: number; remaining: number } | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -534,29 +520,10 @@ function Footer({
           {uploading ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
           {tr("Upload a new dump")}
         </button>
-        {provisionalCount > 0 && (
-          <button className="btn" onClick={onRefresh} disabled={refreshing}>
-            {refreshing ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />}
-            {tv("Fetch the {n} missing prices", { n: provisionalCount })}
-          </button>
-        )}
         <button className="btn" onClick={() => setOpen((v) => !v)}>
           {open ? tr("Hide the collector") : tr("Show the collector")}
         </button>
       </div>
-      {/* Una tanda son 150 y puede quedarse corta; decir cuántos quedan es lo
-          que hace evidente que hay que volver a pulsar, en vez de parecer que
-          el botón no ha hecho nada. */}
-      {lastRefresh && (
-        <div className="mute" style={{ fontSize: 12.5 }}>
-          {lastRefresh.remaining > 0
-            ? tv("Fetched {n}. {left} to go — press again.", {
-                n: lastRefresh.refreshed,
-                left: lastRefresh.remaining,
-              })
-            : tv("Fetched {n}. Everything has a price now.", { n: lastRefresh.refreshed })}
-        </div>
-      )}
       {open && <CollectorSteps onCopy={onCopy} copied={copied} />}
     </div>
   );

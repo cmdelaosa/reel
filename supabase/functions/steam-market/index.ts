@@ -2,7 +2,6 @@
 //
 // Rutas (bajo /functions/v1/steam-market):
 //   POST /ingest    → { holdings, ledger, prices, history }  sube el volcado
-//   POST /prices    → { refreshed, remaining }  refresca precios desde Steam
 //   POST /snapshot  → { users, written }  escribe la foto del día
 //
 // ── Por qué hay un volcado y no una sincronización ────────────────────────
@@ -20,18 +19,28 @@
 //  3. Y el volcado no puede subirse solo desde la pestaña de Steam: su CSP trae
 //     un `connect-src` de lista blanca que no incluye a Supabase.
 //
-// Lo único que SÍ funciona desde aquí es `market/priceoverview` — 12 seguidas
-// sin un corte en la misma prueba. De ahí el reparto de esta función: /ingest
-// recibe lo que el navegador no puede evitar traer a mano, y /prices y /snapshot
-// hacen a diario lo único que el servidor puede hacer solo.
+// ── Y esta función tampoco pide PRECIOS ──────────────────────────────────
+// Los pedía, en la primera versión, y estaba mal. `priceoverview` es mucho más
+// blando que el inventario, pero Steam sigue eligiendo por IP y la de las edge
+// functions no está entre las que atiende. Medido el 27-08-2026 contra
+// producción, con una fila de prueba en `steam_holdings`:
+//
+//   · desde esta función:         429 a la primera, cero precios;
+//   · desde un runner de GitHub:  5 de 5 con 200 y precios reales;
+//   · desde una IP doméstica:     12 seguidas sin un corte.
+//
+// Habría fallado en silencio todas las noches. Así que lo que sale a Steam vive
+// en `scripts/steam-prices`, que corre en el runner, y aquí solo queda lo que
+// necesita la clave de servicio y la base: recibir el volcado y escribir la foto
+// del día.
 //
 // ── La regla que protege a los demás ──────────────────────────────────────
 // `steam_market_prices` es GLOBAL: alimenta el total de todo el mundo. Así que
-// un precio subido por un cliente NO se acepta igual que uno pedido aquí:
+// un precio subido por un cliente NO se acepta igual que uno del cron:
 //
-//   · 'server' — lo trajo /prices. Es el único que puede pisar una fila.
+//   · 'server' — lo trajo el cron. Es el único que puede pisar una fila.
 //   · 'client' — vino en un volcado. Solo se acepta para un nombre que no tenga
-//     ya precio, y /prices lo sustituye en su siguiente pasada.
+//     ya precio, y el cron lo sustituye en su siguiente pasada.
 //
 // Lo peor que puede hacer entonces un cliente hostil es inventarse el precio de
 // un objeto que nadie más tiene, durante menos de un día. `steam_price_history`
@@ -96,6 +105,12 @@ async function readAll<T>(
   return out;
 }
 
+/* Del bloque de abajo esta función solo usa `datesWithYear`; `priceCents` se
+   quedó sin llamador cuando la petición de precios se mudó al runner
+   (scripts/steam-prices). Se copia entero de todas formas, y a propósito: lo que
+   la prueba del espejo compara son los bytes, y recortar la copia a lo que hoy
+   hace falta convierte una comparación literal en una discusión sobre qué mitad
+   toca copiar. Sale más barato arrastrar una función de veinte líneas. */
 // ── steam money and dates ────────────────────────────────────────────────
 //
 // Bloque canónico. La función `steam-market` lo copia LITERAL entre estos dos
@@ -487,145 +502,6 @@ async function writeHistory(
   return written;
 }
 
-/* ─────────────────────────── /prices ────────────────────────────────────── */
-
-/** Cuántos precios se piden como mucho en una invocación.
- *
- *  A ~700 ms por petición, 150 son unos 105 s: cabe de sobra en el límite de la
- *  plataforma y deja margen para las escrituras. Un inventario más grande se
- *  termina en varias llamadas — la respuesta dice cuántos quedan, y quien llama
- *  vuelve a llamar. Preferible a una invocación que se muere a la mitad y deja
- *  medio catálogo sin refrescar sin decirlo. */
-const PRICE_BUDGET = 150;
-
-/** El hueco entre peticiones a Steam.
- *
- *  700 ms sale de la medida del 27-08-2026: 12 seguidas sin hueco pasaron, pero
- *  el margen no se conoce y el castigo del 429 dura minutos. Ir despacio aquí no
- *  cuesta nada, porque esto lo lanza un cron de madrugada. */
-const PRICE_GAP_MS = 700;
-
-/** Cuándo un precio de servidor se considera rancio y vuelve a pedirse.
- *
- *  20 h y no 24: el cron va todos los días a la misma hora, y con el umbral
- *  clavado en 24 h la carrera se pierde por segundos —la pasada de hoy ve el
- *  precio de ayer con 23 h y 59 min y no lo toca—, así que un precio se
- *  refrescaría en días alternos. Cuatro horas de holgura lo evitan sin permitir
- *  dos pasadas útiles el mismo día. */
-const STALE_MS = 20 * 60 * 60 * 1000;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-async function refreshPrices(
-  admin: SupabaseClient,
-  currency: number,
-  budget: number,
-): Promise<{ refreshed: number; failed: number; remaining: number }> {
-  /* Qué precios hacen falta: los de lo que alguien tiene. La lista sale de
-     `steam_holdings` y no del catálogo entero, que no existe. Paginada: un solo
-     inventario de CS pasa de mil nombres, y ahí PostgREST corta en silencio. */
-  const held = await readAll<{ appid: number; market_hash_name: string }>((from, to) =>
-    admin.from("steam_holdings").select("appid, market_hash_name")
-      .order("appid", { ascending: true })
-      .order("market_hash_name", { ascending: true })
-      .range(from, to),
-  );
-
-  const wanted = new Map<string, { appid: number; name: string }>();
-  for (const h of held ?? []) {
-    wanted.set(`${h.appid}:${h.market_hash_name}`, {
-      appid: h.appid,
-      name: h.market_hash_name,
-    });
-  }
-
-  const have = await readAll<{
-    appid: number;
-    market_hash_name: string;
-    fetched_at: string;
-    source: string;
-  }>((from, to) =>
-    admin.from("steam_market_prices")
-      .select("appid, market_hash_name, fetched_at, source")
-      .eq("currency", currency)
-      .order("appid", { ascending: true })
-      .order("market_hash_name", { ascending: true })
-      .range(from, to),
-  );
-
-  const freshness = new Map<string, { at: number; source: string }>();
-  for (const p of have) {
-    freshness.set(`${p.appid}:${p.market_hash_name}`, {
-      at: Date.parse(p.fetched_at),
-      source: p.source,
-    });
-  }
-
-  /* El orden es la política de esta función: primero lo que no tiene precio,
-     después lo que solo tiene uno de cliente —que es provisional por
-     definición—, y por último lo más rancio. Sin este orden, un inventario
-     grande deja objetos nuevos sin precio durante días mientras se refrescan
-     cajas de tres céntimos.
-
-     Y la COLA SOLO LLEVA LO QUE HACE FALTA REFRESCAR, que es lo que hace que
-     `remaining` llegue a cero. Metiendo en ella todo lo que alguien tiene,
-     `remaining` valía siempre "los que tengas menos 150": el bucle del cron no
-     paraba nunca por esa condición, agotaba sus ocho vueltas todos los días y
-     se gastaba mil peticiones a Steam volviendo a preguntar precios que había
-     traído hace diez minutos. */
-  const queue = [...wanted.entries()]
-    .map(([k, v]) => {
-      const f = freshness.get(k);
-      return { ...v, rank: !f ? 0 : f.source === "client" ? 1 : 2, at: f?.at ?? 0 };
-    })
-    .filter((x) => x.rank < 2 || Date.now() - x.at > STALE_MS)
-    .sort((a, b) => a.rank - b.rank || a.at - b.at);
-
-  let refreshed = 0;
-  let failed = 0;
-  const batch: Any[] = [];
-  for (const item of queue.slice(0, budget)) {
-    try {
-      const url =
-        `https://steamcommunity.com/market/priceoverview/?appid=${item.appid}` +
-        `&currency=${currency}&market_hash_name=${encodeURIComponent(item.name)}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-      if (!res.ok) {
-        /* Un 429 aquí no es "este objeto falla": es "para de pedir". Seguir
-           insistiendo alarga el bloqueo, así que se corta la tanda entera y se
-           deja el resto para la siguiente. */
-        if (res.status === 429) break;
-        failed += 1;
-        continue;
-      }
-      const p = await res.json();
-      batch.push({
-        appid: item.appid,
-        market_hash_name: item.name,
-        currency,
-        lowest_cents: priceCents(p.lowest_price),
-        median_cents: priceCents(p.median_price),
-        volume: p.volume ? Number(String(p.volume).replace(/[^\d]/g, "")) : null,
-        source: "server",
-        fetched_at: new Date().toISOString(),
-      });
-      refreshed += 1;
-    } catch {
-      failed += 1;
-    }
-    await sleep(PRICE_GAP_MS);
-  }
-
-  for (const part of chunk(batch, PAGE)) {
-    const { error: e } = await admin
-      .from("steam_market_prices")
-      .upsert(part, { onConflict: "appid,market_hash_name,currency" });
-    if (e) throw new Error(`prices: ${e.message}`);
-  }
-
-  return { refreshed, failed, remaining: Math.max(0, queue.length - refreshed - failed) };
-}
-
 /* ─────────────────────────── /snapshot ──────────────────────────────────── */
 
 /** La foto del día, para todo el que tenga inventario.
@@ -785,19 +661,6 @@ Deno.serve(async (req) => {
       return json({ ok: true, ...summary });
     }
 
-    /* Las dos de abajo las llama el cron con la clave de servicio, y también la
-       app: refrescar precios es lo que hace útil el primer volcado, y esperar a
-       mañana para verlos no lo es. Una persona solo puede pedir la tanda; qué
-       entra en ella lo decide el orden de `refreshPrices`, no quien llama. */
-    if (path === "/prices") {
-      if (!isService(req) && !(await userOf(req))) return json({ error: "unauthorized" }, 401);
-      const currency = Number(url.searchParams.get("currency")) || DEFAULT_CURRENCY;
-      const budget = Math.min(
-        Number(url.searchParams.get("budget")) || PRICE_BUDGET,
-        PRICE_BUDGET,
-      );
-      return json(await refreshPrices(admin, currency, budget));
-    }
 
     if (path === "/snapshot") {
       if (!isService(req)) return json({ error: "unauthorized" }, 401);
