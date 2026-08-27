@@ -130,6 +130,18 @@
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
+/* Lo que YA hay apuntado, frente a lo que estás eligiendo ahora. Dos cosas
+   distintas con la misma forma —un chip— necesitan dos lenguajes, y el acento ya
+   está cogido por "esto lo has encendido tú" (.chip-active). De ahí el punteado:
+   se lee como un hueco relleno de antes, no como un botón pulsado. Nace en la
+   pantalla de confirmar de Steam, que enseña tu estado de Reel al lado de los
+   cinco que puedes marcar. */
+.chip-known {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
 /* ---- Discover toolbar (Explore) ---- */
 /* One row, always: tabs shrink and scroll internally (.segmented.scroll) so the
    Filters chip + view toggle never wrap under them, even at 375px. */
@@ -1894,9 +1906,16 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 }
 
 .st-card { display: flex; align-items: stretch; gap: 0; overflow: hidden; padding: 0; min-height: 158px; }
-/* Sin marcar sigue leyéndose, pero no compite: la lista llega con lo que ya
-   sigues marcado y el resto es lo que estás decidiendo. */
-.st-card.off { opacity: .55; }
+/* Marcado y sin marcar, ahora al revés. Cuando la lista llegaba con lo que ya
+   seguías marcado, apagar el resto ordenaba la pantalla; desde que llega vacía,
+   apagar "lo no marcado" apaga los trescientos y la revisión entera parece
+   deshabilitada. Así que lo señalado es lo ELEGIDO, con el acento de
+   .chip-active, que es lo que ya significa "esto lo has encendido tú". */
+.st-card.off { opacity: .88; }
+.st-card:not(.off) {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
 .st-card-body { flex: 1 1 auto; min-width: 0; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 
 /* La carátula, a sangre y a todo el alto. La casilla va ENCIMA porque la

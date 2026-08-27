@@ -224,6 +224,7 @@ const ES: Record<string, string> = {
   "Import {name}": "Importar {name}",
   "in Reel": "en Reel",
   "your rating": "tu nota",
+  "what Reel already has": "lo que Reel ya tenía apuntado",
   "last played {date}": "última partida {date}",
   "never opened": "sin tocar nunca",
   "use Steam's {hours}": "usar las {hours} de Steam",
