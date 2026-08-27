@@ -294,27 +294,19 @@ Deno.test("sin plataformas es que no lo sabemos, no que no", () => {
   assertEquals(couldBeOnSteam(undefined, "2009-11-09"), true);
 });
 
-Deno.test("gameRow no escribe un appid que sus plataformas desmienten", () => {
-  // La otra mitad de la avería: escrito en `titles`, ese appid es el puente por
-  // el que la SIGUIENTE sincronización importa el juego equivocado sin
-  // preguntarle a IGDB.
-  const ds = gameRow({
-    id: 19657,
-    name: "Agatha Christie: The ABC Murders",
-    platforms: [{ id: 20, name: "Nintendo DS" }],
-    release_dates: [{ platform: 20, date: 1257724800, date_format: { id: 0 } }],
-    external_games: [{ category: 1, uid: "374900" }],
+Deno.test("gameRow escribe el appid aunque el juego sea de consola", () => {
+  // Maui Mallard in Cold Shadow: se vende en Steam (987410) y en IGDB es un
+  // juego de Super Nintendo del 96, porque las reediciones cuelgan de la ficha
+  // ORIGINAL. Filtrar el appid por las plataformas —que es lo que esto hacía
+  // durante unas horas— le borra el puente a los clásicos reeditados.
+  const snes = gameRow({
+    id: 8448,
+    name: "Maui Mallard in Cold Shadow",
+    platforms: [{ id: 19, name: "Super Nintendo Entertainment System" }],
+    release_dates: [{ platform: 19, date: 849139200, date_format: { id: 0 } }],
+    external_games: [{ category: 1, uid: "987410" }],
   });
-  assertEquals(ds.steam_appid, null);
-
-  const pc = gameRow({
-    id: 17470,
-    name: "Agatha Christie: The ABC Murders",
-    platforms: [{ id: 6, name: "PC (Microsoft Windows)" }],
-    release_dates: [{ platform: 6, date: 1454544000, date_format: { id: 0 } }],
-    external_games: [{ category: 1, uid: "374900" }],
-  });
-  assertEquals(pc.steam_appid, 374_900);
+  assertEquals(snes.steam_appid, 987_410);
 });
 
 Deno.test("el estudio es el desarrollador, no la distribuidora", () => {

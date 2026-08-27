@@ -153,8 +153,14 @@ export function useSteamImport() {
         .limit(1);
       if (error) throw new Error(error.message);
       const run = runs?.[0] ? steamImportSchema.parse(runs[0]) : null;
-      if (!run || run.state === "scanning")
-        return { run, items: [] as SteamItem[], rated: new Map<string, number>() };
+      if (!run || run.state === "scanning") {
+        return {
+          run,
+          items: [] as SteamItem[],
+          rated: new Map<string, number>(),
+          matched: new Map<string, MatchedTitle>(),
+        };
+      }
 
       /* PostgREST corta en 1.000 filas sin avisar, y una biblioteca de Steam de
          mil y pico juegos existe (la de One Piece nos lo enseñó con los
@@ -175,9 +181,56 @@ export function useSteamImport() {
         items.push(...page);
         if (page.length < PAGE) break;
       }
-      return { run, items, rated: await myGameRatings(session!.user.id) };
+      return {
+        run,
+        items,
+        rated: await myGameRatings(session!.user.id),
+        matched: await matchedTitles(items.map((i) => i.title_id)),
+      };
     },
   });
+}
+
+/** La ficha del catálogo con la que ha casado un juego de Steam. */
+export const matchedTitleSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  first_air_date: z.string().nullable(),
+  platforms: z.array(z.string()).default([]),
+});
+export type MatchedTitle = z.infer<typeof matchedTitleSchema>;
+
+/** Las fichas con las que ha casado la importación, por title_id.
+ *
+ *  Existe porque el nombre de Steam y el del catálogo casi siempre coinciden, y
+ *  eso esconde el único error que esta pantalla no puede dejar pasar: casar con
+ *  el juego EQUIVOCADO. Pasó el 27-ago-2026 con ABC Murders — IGDB cuelga el
+ *  appid del juego de 2016 de la ficha del de 2009, exclusivo de Nintendo DS —
+ *  y desde la lista no se veía: mismo nombre, misma carátula de Steam. Con el
+ *  año y la plataforma de la ficha delante, un "2009 · Nintendo DS" salta a la
+ *  vista antes de confirmar, que es donde se puede hacer algo.
+ *
+ *  Se probó adivinarlo en el servidor y se descartó: ninguna regla distingue un
+ *  vínculo roto de una reedición legítima (ver igdb-proxy/normalize.ts). Esto no
+ *  adivina — enseña. */
+async function matchedTitles(ids: (string | null)[]): Promise<Map<string, MatchedTitle>> {
+  const wanted = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  const out = new Map<string, MatchedTitle>();
+  /* Por tandas, porque la lista de ids viaja en la URL: trescientos uuid son
+     once mil caracteres y hay proxies que cortan por mucho menos. */
+  const IDS = 100;
+  for (let i = 0; i < wanted.length; i += IDS) {
+    const { data, error } = await supabase
+      .from("titles")
+      .select("id, name, first_air_date, platforms")
+      .in("id", wanted.slice(i, i + IDS));
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      const title = matchedTitleSchema.parse(row);
+      out.set(title.id, title);
+    }
+  }
+  return out;
 }
 
 const gameRatingSchema = z.object({ title_id: z.string().uuid(), score: z.number() });
