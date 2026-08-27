@@ -13,7 +13,8 @@ import {
   type ImportState,
   type SteamItem,
 } from "@/lib/steam";
-import { formatPlaytime } from "@/domain/gameStatus";
+import { formatPlaytime, type GameStatus } from "@/domain/gameStatus";
+import { useGameLibrary } from "@/lib/library";
 import { RatingStars } from "@/ui/RatingStars";
 import { posterBg } from "@/ui/posterBg";
 import { dateLocale } from "@/lib/locale";
@@ -27,8 +28,13 @@ import { t as tr, tv } from "@/lib/i18n";
    Una cuenta de Steam tiene cientos de juegos, y muchos son una demo que
    abriste una vez en 2014. Volcarlos todos convierte tu biblioteca en el
    catálogo de Steam, que no es lo que nadie quiere ver al abrir Reel. Así que
-   la lista viene con marcado lo que YA sigues aquí —lo que ya dijiste que te
-   importa— y el resto lo marcas tú.
+   la lista llega SIN NADA marcado y lo que entra lo eliges tú, montón a montón,
+   con las tres pastillas de marcar. Vino marcado lo que ya seguías aquí hasta
+   que se vio en uso lo que eso significa: confirmar sin mirar reimportaba media
+   biblioteca, y desmarcar cien juegos para importar tres es más trabajo que
+   marcar los tres. Lo que ya está en Reel sigue dicho —el rótulo de la ficha,
+   su montón en el raíl y "Solo lo que sigo", que lo marca de una tacada—, pero
+   ya no decide por ti.
 
    Eso además ahorra la parte cara: el nombre y las horas los da Steam, así que
    pintar los trescientos no cuesta ni una petición a IGDB. Solo lo que marques
@@ -97,6 +103,18 @@ export default function SteamPage() {
   const items = useMemo(() => draft?.items ?? [], [draft]);
   /* Las notas que ya le pusiste a estos juegos, por título (lib/steam). */
   const rated = useMemo(() => draft?.rated ?? new Map<string, number>(), [draft]);
+
+  /* Y el estado que ya tienen en Reel, por título. Sale de tu biblioteca y no
+     de una consulta nueva: `useGameLibrary` es la misma lectura que pinta "Tus
+     juegos" —caché compartida, cero peticiones de más— y trae el estado ya
+     derivado, o sea con "terminado" incluido, que no es un `play_state` sino el
+     watch_event (domain/gameStatus). Cualquier otra forma de traerlo aquí
+     habría sido esa derivación escrita por segunda vez. */
+  const { data: myGames } = useGameLibrary();
+  const knownState = useMemo(
+    () => new Map((myGames ?? []).map((g) => [g.title_id, g.status] as const)),
+    [myGames],
+  );
 
   /* La vuelta de Steam aterriza con ?steam=confirm&n=… y NO con la cuenta ya
      enlazada: escribirla es el segundo paso, y lo dispara esta sesión para que
@@ -255,6 +273,7 @@ export default function SteamPage() {
           key={run.id}
           items={items}
           rated={rated}
+          known={knownState}
           pending={apply.isPending}
           onApply={(picks) => apply.mutate({ importId: run.id, items: picks })}
         />
@@ -351,6 +370,34 @@ const STATES: { key: ImportState; label: string }[] = [
   { key: "dropped", label: "Dropped" },
 ];
 
+/** Cómo se dice, DE UN JUEGO, el estado que ya tiene en Reel.
+ *
+ *  Claves propias y no las de los cubos de la pestaña Juegos, que era lo obvio y
+ *  está mal: esas etiquetan una lista, así que en español van en plural —y
+ *  "Finished" es además "Terminadas", el femenino de las series—. "en Reel ·
+ *  Terminadas" de un solo juego es la misma avería que ya obligó a separar
+ *  "Finished it" de "Finished" (ver i18n.ts). Aquí se habla de uno. */
+const KNOWN_LABEL: Record<GameStatus, string> = {
+  upcoming: "not out yet",
+  backlog: "on your backlog",
+  playing: "you're playing it",
+  ongoing: "no ending",
+  finished: "you finished it",
+  dropped: "you dropped it",
+  owned: "yours, untouched",
+};
+
+/** El chip que ese estado enciende, si tiene uno. 'owned' y 'upcoming' no lo
+ *  tienen —el primero es el suelo de esta pantalla y el segundo sale de la
+ *  fecha—, así que esos se cuentan en el rótulo y ahí se quedan. */
+const KNOWN_CHIP: Partial<Record<GameStatus, ImportState>> = {
+  backlog: "backlog",
+  playing: "playing",
+  ongoing: "ongoing",
+  finished: "finished",
+  dropped: "dropped",
+};
+
 /** La carátula de Steam por appid. Es el mismo arte que ves en tu biblioteca de
  *  Steam, servido por su CDN: ni una fila en la base, ni una petición a IGDB.
  *  Lo que no la tiene —demos, herramientas, juegos retirados— cae al degradado
@@ -364,22 +411,25 @@ const playedOn = (iso: string) =>
 /** Lo marcado es estado de ESTA lista y no se guarda: la pantalla se rellena
  *  una vez y se confirma una vez, y una casilla persistida sería una casilla
  *  que hay que sincronizar. Vale igual para el estado y la nota que para las
- *  casillas. La semilla —lo que ya sigues en Reel— se calcula en el estado
- *  inicial, que es lo que el `key` del padre deja hacer bien. */
+ *  casillas. Y arranca vacía: nada marcado hasta que lo marques (ver la cabecera
+ *  del fichero). Lo que Reel YA sabe de cada juego —tu nota y tu estado— se
+ *  enseña, pero en su propio lenguaje, y no como una casilla puesta por ti. */
 function ReviewList({
-  items, rated: already, onApply, pending,
+  items, rated: already, known, onApply, pending,
 }: {
   items: SteamItem[];
   /** La nota que YA tiene cada título en Reel, por title_id. No se siembra en
    *  `ratings`: eso la reenviaría al confirmar y la contaría como nota nueva en
    *  el recibo. Se enseña, y se manda solo lo que toques tú. */
   rated: Map<string, number>;
+  /** El estado que cada título YA tiene en Reel. Se enseña por lo mismo que la
+   *  nota, y con la misma regla: no se siembra en `states`, así que confirmar
+   *  sin tocarlo no reescribe nada. */
+  known: Map<string, GameStatus>;
   onApply: (picks: ApplyPick[]) => void;
   pending: boolean;
 }) {
-  const [chosen, setChosen] = useState(
-    () => new Set(items.filter((i) => i.in_library).map((i) => i.id)),
-  );
+  const [chosen, setChosen] = useState(() => new Set<string>());
   const [overwrite, setOverwrite] = useState(() => new Set<string>());
   const [states, setStates] = useState(() => new Map<string, ImportState>());
   const [ratings, setRatings] = useState(() => new Map<string, number>());
@@ -460,6 +510,31 @@ function ReviewList({
   const decided = items.filter((i) => chosen.has(i.id) && states.has(i.id)).length;
   const rated = items.filter((i) => chosen.has(i.id) && ratings.has(i.id)).length;
 
+  /* El mismo botón arriba y abajo, y no dos botones parecidos: con trescientos
+     juegos la lista mide varias pantallas, así que el de abajo queda a un
+     scroll largo de donde estás marcando. Se guarda como elemento —React los
+     trata como descripciones inmutables— para que no haya forma de que las dos
+     copias se separen. */
+  const importButton = (
+    <button
+      className="btn btn-accent"
+      disabled={!chosen.size || pending}
+      onClick={() =>
+        onApply(
+          [...chosen].map((id) => ({
+            id,
+            overwrite: overwrite.has(id),
+            state: states.get(id) ?? null,
+            rating: ratings.get(id) ?? null,
+          })),
+        )
+      }
+    >
+      {pending && <Loader2 size={16} className="spin" />}
+      {tv("Import {n} games", { n: chosen.size })}
+    </button>
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <BatchBar count={chosenHere.length} onApply={applyToBatch} />
@@ -503,6 +578,7 @@ function ReviewList({
               <div className="seg" onClick={() => pick("all")}>{tr("All")}</div>
               <div className="seg" onClick={() => pick("none")}>{tr("None")}</div>
             </div>
+            {importButton}
           </div>
 
           {conflicts.length > 0 && bucket !== "conflict" && (
@@ -520,6 +596,7 @@ function ReviewList({
                 state={states.get(i.id) ?? null}
                 rating={ratings.get(i.id) ?? 0}
                 already={(i.title_id && already.get(i.title_id)) || 0}
+                knownState={(i.title_id && known.get(i.title_id)) || null}
                 overwritten={overwrite.has(i.id)}
                 onToggle={() => onToggle(i.id)}
                 onState={(next) => setState(i.id, next)}
@@ -532,25 +609,10 @@ function ReviewList({
       </div>
 
       <div className="flex items-center justify-center gap-3 flex-wrap">
-        <button
-          className="btn btn-accent"
-          disabled={!chosen.size || pending}
-          onClick={() =>
-            onApply(
-              [...chosen].map((id) => ({
-                id,
-                overwrite: overwrite.has(id),
-                state: states.get(id) ?? null,
-                rating: ratings.get(id) ?? null,
-              })),
-            )
-          }
-        >
-          {pending && <Loader2 size={16} className="spin" />}
-          {tv("Import {n} games", { n: chosen.size })}
-        </button>
+        {importButton}
         <span className="mute" style={{ fontSize: 12.5 }}>
-          {tr("Anything without a state comes in as yours, undecided.")}
+          {tr("Anything without a state comes in as yours, undecided.")}{" "}
+          {tr("What you import is dated with your last session on Steam, not with today.")}
         </span>
       </div>
     </div>
@@ -611,7 +673,7 @@ function BatchBar({
  *  la nota se van al margen derecho, alineadas entre sí: eran el hueco vacío de
  *  la tarjeta y ahora es donde se lee de un vistazo cuánto y qué tal. */
 function GameRow({
-  item, on, state, rating, already, overwritten, onToggle, onState, onRate, onOverwrite,
+  item, on, state, rating, already, knownState, overwritten, onToggle, onState, onRate, onOverwrite,
 }: {
   item: SteamItem;
   on: boolean;
@@ -620,6 +682,8 @@ function GameRow({
   /** La nota que ya le habías puesto, 0 si ninguna. Manda la tuya de ahora en
    *  cuanto tocas las estrellas. */
   already: number;
+  /** Lo que Reel ya tiene apuntado de este juego, null si no lo tiene. */
+  knownState: GameStatus | null;
   overwritten: boolean;
   onToggle: () => void;
   onState: (next: ImportState | null) => void;
@@ -653,7 +717,14 @@ function GameRow({
             </h3>
             <div className="mute" style={{ fontSize: 12.5, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {item.in_library && (
-                <span style={{ color: "var(--accent)", fontWeight: 650 }}>{tr("in Reel")} · </span>
+                <span style={{ color: "var(--accent)", fontWeight: 650 }}>
+                  {tr("in Reel")}
+                  {/* Con la palabra de tu biblioteca detrás: "en Reel" a secas
+                      decía que el juego está, pero no en qué punto lo dejaste,
+                      que es justo lo que hace falta para saber si esta fila hay
+                      que tocarla o pasar de largo. */}
+                  {knownState && ` · ${tr(KNOWN_LABEL[knownState])}`} ·{" "}
+                </span>
               )}
               {item.last_played_at
                 ? tv("last played {date}", { date: playedOn(item.last_played_at) })
@@ -687,16 +758,25 @@ function GameRow({
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: "auto" }}>
-          {STATES.map((s) => (
-            <button
-              key={s.key}
-              className={`chip chip-sm ${state === s.key ? "chip-active" : ""}`}
-              aria-pressed={state === s.key}
-              onClick={() => onState(state === s.key ? null : s.key)}
-            >
-              {tr(s.label)}
-            </button>
-          ))}
+          {STATES.map((s) => {
+            /* Dos cosas distintas con la misma forma, así que dos lenguajes: el
+               acento (.chip-active) es lo que ELIGES ahora, y el punteado
+               (.chip-known) es lo que Reel YA tenía. Mientras no toques nada no
+               se manda ningún estado, así que el punteado no reescribe nada —y
+               en cuanto eliges, deja de pintarse: manda lo tuyo de ahora. */
+            const known = state === null && knownState !== null && KNOWN_CHIP[knownState] === s.key;
+            return (
+              <button
+                key={s.key}
+                className={`chip chip-sm ${state === s.key ? "chip-active" : ""}${known ? " chip-known" : ""}`}
+                aria-pressed={state === s.key}
+                title={known ? tr("what Reel already has") : undefined}
+                onClick={() => onState(state === s.key ? null : s.key)}
+              >
+                {tr(s.label)}
+              </button>
+            );
+          })}
           <span className="flex items-center gap-2" style={{ marginLeft: "auto" }}>
             {/* Lo que ya dijiste de este juego, dicho antes de que lo vuelvas a
                 decir: las estrellas arrancan en tu nota, y el rótulo aclara que
@@ -712,11 +792,13 @@ function GameRow({
 
         {/* Lo que se va a escribir, dicho antes de confirmarlo: un watch_event
             con la fecha de tu última partida, y no la de hoy. */}
-        {state === "finished" && (
+        {state !== null && (
           <div className="mute flex items-center gap-1.5" style={{ fontSize: 11.5 }}>
             <Clock size={12} />
             {item.last_played_at
-              ? tv("saved as finished on {date}, your last session", { date: playedOn(item.last_played_at) })
+              ? state === "finished"
+                ? tv("saved as finished on {date}, your last session", { date: playedOn(item.last_played_at) })
+                : tv("dated {date}, your last session", { date: playedOn(item.last_played_at) })
               : tr("Steam has no last session for this one, so it'll be saved with today's date")}
           </div>
         )}

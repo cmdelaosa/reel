@@ -224,6 +224,17 @@ const ES: Record<string, string> = {
   "Import {name}": "Importar {name}",
   "in Reel": "en Reel",
   "your rating": "tu nota",
+  "what Reel already has": "lo que Reel ya tenía apuntado",
+  /* El estado de UN juego, en la ficha de la pantalla de confirmar. Claves
+     propias por lo mismo que "Finished it": los cubos de la pestaña Juegos van
+     en plural, y "en Reel · Terminadas" habla de un juego en femenino plural. */
+  "not out yet": "aún no ha salido",
+  "on your backlog": "pendiente",
+  "you're playing it": "jugándolo",
+  "no ending": "sin final",
+  "you finished it": "terminado",
+  "you dropped it": "abandonado",
+  "yours, untouched": "tuyo, sin tocar",
   "last played {date}": "última partida {date}",
   "never opened": "sin tocar nunca",
   "use Steam's {hours}": "usar las {hours} de Steam",
@@ -231,6 +242,9 @@ const ES: Record<string, string> = {
   "saved as finished on {date}, your last session": "se guardará como terminado el {date}, tu última partida",
   "Steam has no last session for this one, so it'll be saved with today's date":
     "Steam no sabe cuándo lo jugaste por última vez, así que se guardará con la fecha de hoy",
+  "What you import is dated with your last session on Steam, not with today.":
+    "Lo que importes queda fechado con tu última partida en Steam, no con hoy.",
+  "dated {date}, your last session": "queda fechado el {date}, tu última partida",
   "Anything without a state comes in as yours, undecided.":
     "Lo que no lleve estado entra como tuyo y sin decidir.",
   "Marked finished": "Marcados terminados",

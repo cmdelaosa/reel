@@ -45,6 +45,10 @@
 // haber terminado — ese último fechado con `rtime_last_played`, la última vez
 // que lo jugó, y no con el día de la importación.
 //
+// Esa misma fecha va también a `played_at` de la biblioteca (ver
+// `writePlayedAt`): sin ella, importar fecha los trescientos juegos HOY, y "lo
+// que estabas jugando" pasa a ordenar por el minuto en que le diste al botón.
+//
 // ── El puente Steam↔IGDB ya existe ───────────────────────────────────────
 // `titles.steam_appid` lo llena `igdb-proxy` en cada ficha desde el
 // `external_games` de IGDB. Así que casar lo que ya está en el catálogo es un
@@ -311,6 +315,47 @@ async function writeEntries(
   }
 
   return written;
+}
+
+/** La fecha de tu última partida, escrita en la biblioteca.
+ *
+ *  Steam dice cuándo abriste cada juego por última vez —`rtime_last_played`, en
+ *  la misma respuesta que las horas—, y es la fecha que `played_at` (0075)
+ *  quiere decir: "cuándo tocaste esto". Sin esto la importación fecha los
+ *  trescientos HOY, porque el disparador `game_progress_touch` escribe `now()`
+ *  en cuanto cambian las horas o el estado. O sea que después de sincronizar,
+ *  "vuelve a lo que estabas jugando" (domain/gameTonight) ordena por el minuto
+ *  en que le diste al botón; y un juego que marcas ABANDONADO queda fechado el
+ *  día que lo dijiste, no el día que lo dejaste. Es la misma regla que 0078 ya
+ *  aplicó a lo terminado (ver `writeFinished`), que era la otra mitad.
+ *
+ *  Va en una escritura APARTE y detrás, y esa es toda la gracia: en el mismo
+ *  upsert que las horas, el disparador la pisaría con `now()` —cambian los
+ *  minutos, luego dispara—. Un update que solo toca `played_at` no cumple su
+ *  WHEN (`minutes_played` o `play_state` distintos), así que no dispara y el
+ *  valor se queda como se escribe. Por eso tampoco hace falta migración.
+ *
+ *  Solo las filas con fecha: un juego que Steam dice que nunca abriste no tiene
+ *  una que ofrecer, y escribir null ahí borraría la que pusiera la ficha.
+ *
+ *  Y solo aquellas cuyas HORAS venimos de escribir, que es la regla 2 de
+ *  merge.ts aplicada a la fecha: si tus 40 h de consola le ganan al 12 de Steam,
+ *  la última partida de Steam —2019— tampoco puede ganarle a lo que jugaste
+ *  ayer. Quien se queda con su cifra se queda con su fecha. */
+async function writePlayedAt(
+  admin: SupabaseClient,
+  userId: string,
+  rows: { titleId: string; at: string }[],
+): Promise<number> {
+  if (!rows.length) return 0;
+  for (const part of chunk(rows, PAGE)) {
+    const { error } = await admin.from("library_entries").upsert(
+      part.map((r) => ({ user_id: userId, title_id: r.titleId, played_at: r.at })),
+      { onConflict: "user_id,title_id" },
+    );
+    if (error) throw new Error(`played_at upsert: ${error.message}`);
+  }
+  return rows.length;
 }
 
 /** Las notas que la persona puso en la pantalla de confirmar.
@@ -737,6 +782,15 @@ Deno.serve(async (req) => {
           playState: pickFor(i).playState,
         })),
       );
+      /* Y la fecha de la última partida encima de la que acaba de poner el
+         disparador, que es hoy. Ver writePlayedAt. */
+      await writePlayedAt(
+        admin,
+        userId,
+        ready
+          .filter((i) => i.last_played_at && minutesFor(i) !== null)
+          .map((i) => ({ titleId: i.title_id as string, at: i.last_played_at as string })),
+      );
       /* La nota y el terminado van DESPUÉS de la biblioteca, y en ese orden: la
          fila de `library_entries` es lo que hace que el juego exista en tu
          biblioteca, y una nota o un final colgando de un juego que no sigues
@@ -858,6 +912,13 @@ async function resolvePending(
           minutes: minutesFor(i),
           playState: pickFor(i).playState,
         })),
+      );
+      await writePlayedAt(
+        admin,
+        userId,
+        found
+          .filter((i) => i.last_played_at && minutesFor(i) !== null)
+          .map((i) => ({ titleId: byAppid.get(i.appid)!, at: i.last_played_at as string })),
       );
       rated = await writeRatings(
         admin,
