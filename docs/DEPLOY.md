@@ -47,13 +47,27 @@ supabase db push
 ```
 
 `repair` solo toca el registro, no el esquema; el `push` vuelve a pasar el
-fichero de verdad. Todas las migraciones de este repo se escriben idempotentes
-(`add column if not exists`, `drop policy if exists`), así que re-aplicar una es
-inofensivo. Después, comprobar el HECHO y no el registro:
+fichero de verdad. **Antes de reparar, mira que la migración que se va a repetir
+sea idempotente** — la de este caso lo era (`add column if not exists`), pero eso
+no se puede dar por hecho de una cualquiera, y `repair` es la única palanca que
+hace que una migración ya registrada se vuelva a ejecutar.
+
+Después, comprobar el HECHO y no el registro, que es el que miente. Con la clave
+de **servicio** (ver [Which service key](#which-service-key)), no con la anónima:
+`episodes` no se lee sin sesión, y un 401 por RLS se parece demasiado a un 400
+por columna inexistente.
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' \
-  "$URL/rest/v1/episodes?select=still_path&limit=1" -H "apikey: $KEY"   # 200
+key=$(supabase projects api-keys --project-ref <ref> --reveal -o env \
+  | grep '^SUPABASE_DEFAULT_KEY=' | cut -d= -f2- | tr -d '"')
+for col in id still_path columna_que_no_existe; do
+  printf '%s -> ' "$col"
+  curl -s -o /dev/null -w '%{http_code}\n' \
+    "https://<ref>.supabase.co/rest/v1/episodes?select=$col&limit=1" \
+    -H "apikey: $key" -H "Authorization: Bearer $key"
+done
+# id -> 200 (la tabla se lee), still_path -> 200 (entró), la inventada -> 400.
+# Sin las dos columnas de control, esta comprobación no comprueba nada.
 ```
 
 ⚠️ **Do not seed prod.** `supabase/seed/dev.sql` creates demo accounts
