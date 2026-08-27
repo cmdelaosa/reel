@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Check, ExternalLink, Eye, EyeOff, Library, Minus, Plus, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Library, Minus, Plus, Star, X } from "lucide-react";
 import { igdbImg, useGame, useSetGameProgress } from "@/lib/igdb";
 import { dateLocale, isEs, t as tr, tGenre, tv } from "@/lib/i18n";
 import { useFollow, useGameLibrary, useUnfollow } from "@/lib/library";
@@ -11,7 +11,6 @@ import { useWatched } from "@/features/detail/data";
 import {
   deriveGameStatus,
   formatPlaytime,
-  hoursProgress,
   type PlayState,
 } from "@/domain/gameStatus";
 import { formatRelease, isReleased } from "@/domain/gameRelease";
@@ -20,10 +19,11 @@ import { RatingStars } from "@/ui/RatingStars";
 import { PlatformLogo } from "@/ui/PlatformLogo";
 import { PlatformPicker } from "@/ui/PlatformPicker";
 import { Trailer } from "@/ui/Trailer";
-import { SteamIcon } from "@/ui/icons/SteamIcon";
 import { FriendsOnTitle } from "@/features/social/FriendsOnTitle";
 import { posterBg } from "@/ui/posterBg";
 import { useFocusTrap } from "@/ui/useFocusTrap";
+import { Lightbox } from "@/ui/Lightbox";
+import { useFriendsOnTitle } from "@/lib/friendsOnTitle";
 
 /* Ficha de un juego — la tercera hermana de DetailSheet y MovieSheet, abierta
    por el parámetro global ?game= (un id de IGDB, ver 0071).
@@ -132,11 +132,23 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
     owned,
     minutesPlayed: minutes,
   });
-  const progress = hoursProgress(minutes, title?.beat_seconds, status);
 
   /* El campo de horas es un borrador local: escribir "1" mientras tecleas "18"
      no puede escribir 1 en la base y volver. Se confirma al salir del campo o
      con Enter. Los botones de +30 min sí escriben directos, que es su gracia. */
+  /* La carátula a tamaño completo, las capturas y la lista de amigos: los tres
+     plegados. La media de amigos sale de las MISMAS filas que pinta
+     FriendsOnTitle al desplegarla, no de la consulta de gustos, para que el
+     número resuma exactamente esa lista. */
+  const [coverOpen, setCoverOpen] = useState(false);
+  const [shotOpen, setShotOpen] = useState<number | null>(null);
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const amigos = useFriendsOnTitle({ titleId: title?.id ?? null, episodeId, kind: "game", tmdbId: title?.tmdb_id ?? 0 });
+  const puntuadas = amigos.map((f) => f.score).filter((s): s is number => s != null);
+  const friendsAvg = puntuadas.length
+    ? puntuadas.reduce((suma, s) => suma + s, 0) / puntuadas.length
+    : null;
+
   const [draft, setDraft] = useState<string | null>(null);
   const shownHours = draft ?? (minutes > 0 ? String(+(minutes / 60).toFixed(1)) : "");
 
@@ -172,6 +184,9 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
 
 
   const cover = igdbImg(title?.poster_path, "cover_big");
+  /* Para el visor, el tamaño grande de IGDB: `cover_big` mide 264px de
+     ancho y a pantalla completa se ve el pixelado. */
+  const coverFull = igdbImg(title?.poster_path, "1080p");
   const art = igdbImg(title?.backdrop_path, "screenshot_big");
   const es = isEs();
   const releaseLabel = formatRelease(title?.first_air_date, title?.release_precision, { es });
@@ -241,7 +256,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
         className="detail-sheet sheet-center fixed z-[70] card overflow-hidden flex flex-col"
         style={{
           left: "50%", top: "50%", transform: "translate(-50%,-50%)",
-          width: "min(1180px, 94vw)", maxHeight: "90vh", borderRadius: "var(--r-xl)",
+          width: "min(760px, 94vw)", maxHeight: "90vh", borderRadius: "var(--r-xl)",
         }}
       >
         {isPending || !title ? (
@@ -272,20 +287,20 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                 {added && entry ? (
                   <button className="btn btn-sm badge-glass" style={{ color: "#fff", borderRadius: "var(--r-sm)" }}
                           onClick={() => unfollow.mutate(entry.title_id)}>
-                    <Minus size={14} />{tr("Remove")}
+                    <Minus size={14} /><span className="btn-label">{tr("Remove")}</span>
                   </button>
                 ) : (
                   <>
                     <button className="btn btn-sm badge-glass" style={{ color: "#fff", borderRadius: "var(--r-sm)" }}
                             onClick={() => follow.mutate(title)}>
-                      <Plus size={14} />{tr("Add")}
+                      <Plus size={14} /><span className="btn-label">{tr("Add")}</span>
                     </button>
                     <button
                       className="btn btn-sm badge-glass"
                       style={{ color: "#fff", borderRadius: "var(--r-sm)" }}
                       onClick={() => (isIgnored(title.tmdb_id, "game") ? unignore.mutate(title.id) : ignore.mutate(title.id))}
                     >
-                      {isIgnored(title.tmdb_id, "game") ? <><Eye size={14} />{tr("Un-ignore")}</> : <><EyeOff size={14} />{tr("Ignore")}</>}
+                      {isIgnored(title.tmdb_id, "game") ? <><Eye size={14} /><span className="btn-label">{tr("Un-ignore")}</span></> : <><EyeOff size={14} /><span className="btn-label">{tr("Ignore")}</span></>}
                     </button>
                   </>
                 )}
@@ -294,24 +309,29 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                 </button>
               </div>
 
-              <div className="absolute flex items-end gap-5" style={{ left: 26, right: 26, bottom: 16 }}>
+              <div className="detail-hero-foot">
                 <div
-                  className="poster"
-                  style={{ width: 152, height: 228, flex: "0 0 auto", aspectRatio: "auto", background: posterBg(title.name + "x") }}
+                  className={`poster detail-poster${cover ? " zoomable" : ""}`}
+                  role={cover ? "button" : undefined}
+                  tabIndex={cover ? 0 : undefined}
+                  aria-label={cover ? tr("View cover") : undefined}
+                  onClick={cover ? () => setCoverOpen(true) : undefined}
+                  onKeyDown={cover ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCoverOpen(true); } } : undefined}
+                  style={{ background: posterBg(title.name + "x") }}
                 >
                   {cover && <img className="poster-img" src={cover} alt="" />}
                   <div className="poster-sheen" />
                 </div>
                 <div className="pb-1 min-w-0 flex-1">
-                  {/* «Lo tengo» pegado al título, no perdido entre los controles
-                      (0083 lo dejaba abajo), y a su derecha las plataformas en
-                      las que SALE, solo como logotipos: es un dato del juego, no
-                      algo que tú decidas. */}
-                  <div className="flex items-center gap-2.5 mb-2">
+                  {/* «Lo tengo» encima de los logos y pegado a la carátula: es
+                      lo primero que se mira de un juego —si está en tu
+                      estantería o no—, y es un botón, no una etiqueta. Debajo,
+                      las plataformas en las que SALE, solo como logotipos: eso
+                      es un dato del juego, no algo que tú decidas. */}
+                  <div className="game-badges">
                     <button
                       type="button"
-                      className={`chip${owned ? " chip-active" : ""}`}
-                      style={{ height: 26, fontSize: 11.5, padding: "0 11px" }}
+                      className={`game-own ${owned ? "si" : "no"}`}
                       aria-pressed={owned}
                       disabled={!entry}
                       title={entry ? undefined : tr("Add it to your library first")}
@@ -319,137 +339,126 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                     >
                       {owned ? <><Library size={12} />{tr("Owned")}</> : <><Plus size={12} />{tr("Not owned")}</>}
                     </button>
-                    {platforms.length > 0 && (
-                      <span className="flex items-center gap-1.5">
-                        {platforms.map((p) => (
-                          <PlatformLogo
-                            key={p}
-                            name={p}
-                            size={16}
-                            hint={perPlatform.find(([name]) => name === p)?.[1]
-                              ? formatRelease(perPlatform.find(([name]) => name === p)![1].date, perPlatform.find(([name]) => name === p)![1].precision as never, { es })
-                              : null}
-                          />
-                        ))}
-                      </span>
-                    )}
-                    {!released && <span className="badge badge-accent">{releaseLabel}</span>}
+                    <span className="flex items-center gap-1.5">
+                      {platforms.map((p) => (
+                        <PlatformLogo
+                          key={p}
+                          name={p}
+                          size={16}
+                          hint={perPlatform.find(([name]) => name === p)?.[1]
+                            ? formatRelease(perPlatform.find(([name]) => name === p)![1].date, perPlatform.find(([name]) => name === p)![1].precision as never, { es })
+                            : null}
+                        />
+                      ))}
+                      {!released && <span className="badge badge-accent">{releaseLabel}</span>}
+                    </span>
                   </div>
-                  <h2 style={{ fontSize: 32, fontWeight: 850, letterSpacing: "-0.02em", textShadow: "0 2px 12px rgba(0,0,0,.5)", color: "#fff", margin: 0 }}>
-                    {title.name}
-                  </h2>
-                  <div style={{ fontSize: 14, color: "rgba(255,255,255,.85)", marginTop: 2 }}>
+                  <h2 className="detail-title">{title.name}</h2>
+                  <div className="detail-meta">
                     {[releaseLabel, title.genres.map(tGenre).join(" · "), title.network].filter(Boolean).join(" · ")}
                   </div>
-
-                  {/* Mi nota la primera y en caja de acento —se pone, no se
-                      lee—; las ajenas juntas en una oscura al lado. */}
-                  <div className="detail-scores">
-                    <div className="detail-mine">
-                      <div className="eyebrow" style={{ fontSize: 10, color: "#fff" }}>{tr("My rating")}</div>
-                      <RatingStars value={myRating ?? 0} size={30} onRate={(score) => rate.mutate(score)} />
-                    </div>
-                    <div className="detail-others">
-                      <div className="ratings-cell">
-                        <div className="eyebrow" style={{ fontSize: 10, color: "rgba(255,255,255,.7)" }}>IGDB</div>
-                        <div className="ratings-value" style={{ color: "#fff" }}>
-                          {title.vote_average ? title.vote_average.toFixed(1) : "—"}
-                        </div>
-                      </div>
-                      {title.steam_reviews && (
-                        <>
-                          <span className="detail-others-sep" />
-                          <div className="ratings-cell">
-                            <div className="eyebrow" style={{ fontSize: 10, color: "rgba(255,255,255,.7)" }}>Steam</div>
-                            <div className="ratings-value" style={{ color: steamReviewColor(title.steam_reviews.percent) }}>
-                              {title.steam_reviews.percent} %
-                            </div>
-                            <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.55)" }}>
-                              {steamLabel ? tr(steamLabel) : tv("{votes} reviews", { votes: title.steam_reviews.count.toLocaleString(dateLocale()) })}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                      {title.metacritic != null && (
-                        <>
-                          <span className="detail-others-sep" />
-                          <div className="ratings-cell">
-                            <div className="eyebrow" style={{ fontSize: 10, color: "rgba(255,255,255,.7)" }}>Metacritic</div>
-                            <span className="metacritic">{title.metacritic}</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    {/* Steam si lo hay; si no, la web oficial. Nunca los dos:
-                        el botón responde «¿dónde lo consigo?» y esa pregunta
-                        tiene una respuesta. */}
-                    {tienda && (
-                      <a className="btn btn-outline btn-sm detail-out" href={tienda.url} target="_blank" rel="noreferrer noopener">
-                        {tienda.steam ? <SteamIcon size={14} /> : <ExternalLink size={13} />}
-                        {tienda.steam ? tr("View on Steam") : tr("Official site")}
-                        <ExternalLink size={12} />
-                      </a>
-                    )}
-                  </div>
+                  {edad && (
+                    <div className="detail-orig">{edad.org} {edad.rating}</div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Cuerpo — lo tuyo a la izquierda, el juego a la derecha */}
-            {/* Sin la tarjeta de Estado —o sea, con un juego que no tienes
-                añadido— el carril se queda con los amigos y a veces con nada, y
-                una columna vacía de 296 px al lado del tráiler es puro hueco.
-                Ahí la ficha pasa a UNA columna y el tráiler ocupa el ancho, que
-                es lo que se viene a ver de un juego que aún no es tuyo. */}
-            <div className={`detail-body${added && entry ? "" : " detail-body-sola"}`}>
-              <div className="detail-rail">
-                {/* «Estado», una palabra: la tarjeta no lleva solo el estado,
-                    lleva también dónde lo juegas y el botón de terminarlo, y es
-                    lo que se toca. Sin el juego en la biblioteca no se pinta: no
-                    hay fila donde escribir nada. */}
-                {added && entry && (
-                  <div className="card game-state">
-                    <span className="eyebrow">{tr("Status")}</span>
-                    <div className="game-states">
-                      {PLAY_STATES.map((s) => (
-                        <button
-                          key={s.key}
-                          type="button"
-                          className={`chip${playState === s.key ? " chip-active" : ""}`}
-                          aria-pressed={playState === s.key}
-                          onClick={() => pickState(s.key)}
-                        >
-                          {tr(s.label)}
-                        </button>
-                      ))}
-                    </div>
-                    {/* Terminado no se ofrece en un juego sin final: no tiene
-                        créditos y el botón prometería algo imposible. */}
-                    {episodeId && status !== "ongoing" && (
+            {/* Cuerpo, en una sola columna */}
+            <div className="detail-body">
+              {/* Las notas, sobre el fondo. La tuya manda y las cuatro de fuera
+                  van juntas a la derecha, con la de tus amigos a su izquierda.
+                  El enlace a la tienda no es un botón aparte: es la propia
+                  celda de Steam, con su flecha. */}
+              <div className="detail-scores">
+                <div className="detail-mine">
+                  <span className="eyebrow" style={{ fontSize: 10.5 }}>{tr("My rating")}</span>
+                  <RatingStars value={myRating ?? 0} size={28} onRate={(score) => rate.mutate(score)} />
+                </div>
+                <div className="detail-others">
+                  {friendsAvg != null && (
+                    <>
                       <button
-                        className={`btn ${finished ? "btn-outline" : "btn-accent"} w-full`}
-                        disabled={markWatched.isPending || unmarkWatched.isPending}
-                        onClick={() => (watchEventId ? unmarkWatched.mutate(watchEventId) : markWatched.mutate(episodeId))}
+                        className="detail-cell detail-friends"
+                        aria-expanded={friendsOpen}
+                        onClick={() => setFriendsOpen((v) => !v)}
                       >
-                        <Check size={16} />
-                        {finished ? tr("Finished — tap to clear") : tr("Mark finished")}
+                        <span className="eyebrow" style={{ fontSize: 10 }}>{tr("Friends")}</span>
+                        <span className="detail-cellval">
+                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                          {friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 })}
+                          {friendsOpen ? <ChevronUp size={14} style={{ color: "var(--text-mute)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-mute)" }} />}
+                        </span>
                       </button>
-                    )}
-                    <div style={{ height: 1, background: "var(--border)" }} />
-                    <div className="flex items-center justify-between gap-2.5">
-                      <span className="eyebrow" style={{ fontSize: 11 }}>{tr("Platform")}</span>
-                      <PlatformPicker
-                        platforms={platforms}
-                        value={playedPlatform}
-                        onPick={(name) => setProgress.mutate({ titleId: entry.title_id, playedPlatform: name })}
-                        width={150}
-                      />
-                    </div>
+                      <span className="detail-others-sep" />
+                    </>
+                  )}
+                  <div className="detail-cell">
+                    <span className="eyebrow" style={{ fontSize: 10 }}>IGDB</span>
+                    <span className="detail-cellval">
+                      <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                      {title.vote_average ? title.vote_average.toFixed(1) : "—"}
+                    </span>
                   </div>
-                )}
+                  {title.steam_reviews && (
+                    <>
+                      <span className="detail-others-sep" />
+                      {/* La etiqueta larga («Extremadamente positivas») pasa al
+                          title: escrita bajo el número hacía esta fila más alta
+                          que la de las otras dos fichas, y el porcentaje ya
+                          dice lo mismo con un vistazo. */}
+                      {tienda?.steam ? (
+                        <a
+                          className="detail-cell detail-out"
+                          href={tienda.url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          title={steamLabel ? tr(steamLabel) : tv("{votes} reviews", { votes: title.steam_reviews.count.toLocaleString(dateLocale()) })}
+                        >
+                          <span className="eyebrow" style={{ fontSize: 10 }}>Steam</span>
+                          <span className="detail-cellval" style={{ color: steamReviewColor(title.steam_reviews.percent) }}>
+                            {title.steam_reviews.percent} %
+                            <ExternalLink size={12} />
+                          </span>
+                        </a>
+                      ) : (
+                        <div
+                          className="detail-cell"
+                          title={steamLabel ? tr(steamLabel) : tv("{votes} reviews", { votes: title.steam_reviews.count.toLocaleString(dateLocale()) })}
+                        >
+                          <span className="eyebrow" style={{ fontSize: 10 }}>Steam</span>
+                          <span className="detail-cellval" style={{ color: steamReviewColor(title.steam_reviews.percent) }}>
+                            {title.steam_reviews.percent} %
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {title.metacritic != null && (
+                    <>
+                      <span className="detail-others-sep" />
+                      <div className="detail-cell">
+                        <span className="eyebrow" style={{ fontSize: 10 }}>Metacritic</span>
+                        <span className="metacritic">{title.metacritic}</span>
+                      </div>
+                    </>
+                  )}
+                  {/* Sin Steam, la web oficial: el enlace responde «¿dónde lo
+                      consigo?» y esa pregunta tiene una sola respuesta. */}
+                  {tienda && !tienda.steam && (
+                    <>
+                      <span className="detail-others-sep" />
+                      <a className="detail-cell detail-out" href={tienda.url} target="_blank" rel="noreferrer noopener">
+                        <span className="eyebrow" style={{ fontSize: 10 }}>{tr("Official site")}</span>
+                        <span className="detail-cellval"><ExternalLink size={14} /></span>
+                      </a>
+                    </>
+                  )}
+                </div>
+              </div>
 
-                {/* Quién de los tuyos anda con esto. La media va junto al
-                    rótulo, que es lo que resume la lista de debajo. */}
+              {/* Quién de los tuyos anda con esto, al desplegar su celda. */}
+              {friendsOpen && (
                 <FriendsOnTitle
                   kind="game"
                   titleId={title.id}
@@ -458,16 +467,68 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                   released={released}
                   onOpen={(id) => { onClose(); navigate(`/friend/${id}`); }}
                 />
-              </div>
+              )}
+
+              {/* En qué punto estás: los cuatro estados en una fila y, debajo,
+                  terminarlo junto a en cuál lo juegas — las dos cosas que se
+                  tocan cuando ya lo tienes. Sin rótulo «Estado» encima: las
+                  cuatro palabras ya dicen lo que son. Sin el juego en la
+                  biblioteca no se pinta: no hay fila donde escribir nada. */}
+              {added && entry && (
+                <div className="card game-state">
+                  <div className="game-states">
+                    {PLAY_STATES.map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        className={`chip${playState === s.key ? " chip-active" : ""}`}
+                        aria-pressed={playState === s.key}
+                        onClick={() => pickState(s.key)}
+                      >
+                        {tr(s.label)}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="game-done">
+                    {/* Terminado no se ofrece en un juego sin final: no tiene
+                        créditos y el botón prometería algo imposible. */}
+                    {episodeId && status !== "ongoing" && (
+                      <button
+                        className={`btn ${finished ? "btn-outline" : "btn-accent"}`}
+                        disabled={markWatched.isPending || unmarkWatched.isPending}
+                        onClick={() => (watchEventId ? unmarkWatched.mutate(watchEventId) : markWatched.mutate(episodeId))}
+                      >
+                        <Check size={16} />
+                        {finished ? tr("Finished — tap to clear") : tr("Mark finished")}
+                      </button>
+                    )}
+                    <span className="game-plat">
+                      <span className="eyebrow">{tr("Platform")}:</span>
+                      <PlatformPicker
+                        platforms={platforms}
+                        value={playedPlatform}
+                        onPick={(name) => setProgress.mutate({ titleId: entry.title_id, playedPlatform: name })}
+                        width={148}
+                      />
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="detail-main">
-                {trailer && <Trailer videoId={trailer.video_id} name={trailer.name} still={shots[0] ?? title.backdrop_path} />}
+                {trailer && <Trailer videoId={trailer.video_id} name={trailer.name} portada={igdbImg(shots[0] ?? title.backdrop_path, "screenshot_big")} />}
                 {shots.length > 0 && (
                   <div className="game-shots">
-                    {shots.slice(0, 5).map((id) => (
-                      <span key={id} className="game-shot">
+                    {shots.slice(0, 5).map((id, i) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className="game-shot zoomable"
+                        aria-label={tv("Screenshot {n}", { n: i + 1 })}
+                        onClick={() => setShotOpen(i)}
+                      >
                         <img src={igdbImg(id, "screenshot_med")} alt="" loading="lazy" />
-                      </span>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -476,93 +537,106 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                   <p className="dim" style={{ fontSize: 14, lineHeight: 1.55, margin: 0 }}>{title.overview}</p>
                 )}
 
-                {/* Time to beat: las estimaciones de IGDB y tus horas juntas, y
-                    aquí —y en ningún otro sitio— los controles para cambiarlas.
-                    Salían dos veces, en el carril y aquí. */}
+                {/* Tus horas mandan y las de fuera se arriman: una tarjeta con
+                    lo tuyo grande a la izquierda —y aquí, y en ningún otro
+                    sitio, los controles para cambiarlo— y las tres de How Long
+                    To Beat apiladas y pequeñas a la derecha.
+
+                    Estuvieron las cuatro en fila, con una barra de progreso
+                    debajo: comparar tus horas con las de una partida normal
+                    pedía mirar a dos sitios, y la barra decía en porcentaje lo
+                    que los dos números ya dicen mejor. */}
                 {(beats.length > 0 || added) && (
                   <div className="flex flex-col gap-2.5">
-                    <div className="flex items-baseline justify-between gap-2.5">
-                      <span className="eyebrow">Time to beat</span>
-                      {ttbCount != null && (
-                        <span className="mute" style={{ fontSize: 11 }}>
-                          {tv("{n} estimates from IGDB", { n: ttbCount.toLocaleString(dateLocale()) })}
-                        </span>
-                      )}
-                    </div>
+                    <span className="eyebrow">{tr("My playtime")}</span>
                     <div className="ttb">
-                      {beats.map((b) => (
-                        <div key={b.label} className="ttb-cell">
-                          <span className="ttb-num">{formatPlaytime(Math.round(b.seconds / 60))}</span>
-                          <span className="mute" style={{ fontSize: 11 }}>{tr(b.label)}</span>
-                        </div>
-                      ))}
-                      {added && (
-                        <div className="ttb-cell mine">
-                          <span className="ttb-num">{formatPlaytime(minutes)}</span>
-                          <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>{tr("My playtime")}</span>
-                        </div>
+                      <div className="ttb-mine">
+                        {added ? (
+                          <>
+                            <span className="ttb-num">{formatPlaytime(minutes)}</span>
+                            <input
+                              className="input"
+                              style={{ width: 74, textAlign: "right", fontVariantNumeric: "tabular-nums" }}
+                              inputMode="decimal"
+                              aria-label={tr("Hours played")}
+                              value={shownHours}
+                              placeholder="0"
+                              disabled={!entry}
+                              onChange={(e) => setDraft(e.target.value)}
+                              onBlur={commitHours}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                if (e.key === "Escape") setDraft(null);
+                              }}
+                            />
+                            {BUMPS.map((m) => (
+                              <button key={m} className="btn btn-outline btn-sm" onClick={() => bump(m)}>
+                                +{formatPlaytime(m)}
+                              </button>
+                            ))}
+                            {fromSteam && <span className="mute" style={{ fontSize: 11.5 }}>{tr("from Steam")}</span>}
+                          </>
+                        ) : (
+                          <span className="mute" style={{ fontSize: 12.5 }}>{tr("Add it to your library first")}</span>
+                        )}
+                      </div>
+                      {beats.length > 0 && (
+                        <>
+                          <span className="ttb-sep" />
+                          <div className="ttb-list">
+                            <span
+                              className="eyebrow"
+                              style={{ fontSize: 10, marginBottom: 3 }}
+                              title={ttbCount != null ? tv("{n} estimates from IGDB", { n: ttbCount.toLocaleString(dateLocale()) }) : undefined}
+                            >
+                              How Long To Beat
+                            </span>
+                            {beats.map((b) => (
+                              <span key={b.label} className="ttb-row">
+                                <span className="mute">{tr(b.label)}</span>
+                                <span>{formatPlaytime(Math.round(b.seconds / 60))}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </>
                       )}
                     </div>
-                    {progress != null && (
-                      <div className="flex items-center gap-2">
-                        <span className="pbar pbar-inline flex-1"><i style={{ width: `${Math.min(progress, 100)}%` }} /></span>
-                        <span className="mute" style={{ fontSize: 11.5, fontVariantNumeric: "tabular-nums" }}>{progress} %</span>
-                      </div>
-                    )}
-                    {added && entry && (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <input
-                          className="input"
-                          style={{ width: 74, textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-                          inputMode="decimal"
-                          aria-label={tr("Hours played")}
-                          value={shownHours}
-                          placeholder="0"
-                          onChange={(e) => setDraft(e.target.value)}
-                          onBlur={commitHours}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                            if (e.key === "Escape") setDraft(null);
-                          }}
-                        />
-                        <span className="mute" style={{ fontSize: 12.5 }}>
-                          {tr("hours played")}
-                          {fromSteam && <span style={{ fontSize: 11.5 }}> · {tr("from Steam")}</span>}
-                        </span>
-                        {BUMPS.map((m) => (
-                          <button key={m} className="btn btn-outline btn-sm" onClick={() => bump(m)}>
-                            +{formatPlaytime(m)}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
 
-                {/* La edad y la ficha, en una línea al pie. */}
-                <div className="game-foot">
-                  {edad && (
-                    <span className="age">
-                      <span className="age-box">{edad.rating}</span>
-                      <span style={{ fontSize: 12.5, fontWeight: 700 }}>{edad.org} {edad.rating}</span>
-                    </span>
-                  )}
-                  {edad && <span className="game-foot-sep" />}
-                  <div className="game-facts">
-                    <div><span className="mute">{tr("Developer")}</span><span>{title.network ?? "—"}</span></div>
-                    <div><span className="mute">{tr("Publisher")}</span><span>{title.publisher ?? "—"}</span></div>
-                  </div>
-                  <span className="game-foot-sep" />
-                  <div className="game-facts">
-                    <div><span className="mute">{tr("Genres")}</span><span>{title.genres.map(tGenre).join(" · ") || "—"}</span></div>
-                    <div><span className="mute">{tr("Modes")}</span><span>{(title.game_modes ?? []).map((m) => tr(m)).join(" · ") || "—"}</span></div>
-                  </div>
+                {/* La ficha del juego, al pie. */}
+                <div className="game-facts">
+                  <div><span className="mute">{tr("Developer")}</span><span>{title.network ?? "—"}</span></div>
+                  <div><span className="mute">{tr("Genres")}</span><span>{title.genres.map(tGenre).join(" · ") || "—"}</span></div>
+                  <div><span className="mute">{tr("Publisher")}</span><span>{title.publisher ?? "—"}</span></div>
+                  <div><span className="mute">{tr("Modes")}</span><span>{(title.game_modes ?? []).map((m) => tr(m)).join(" · ") || "—"}</span></div>
                 </div>
               </div>
             </div>
           </>
         )}
       </div>
+
+      {/* La carátula y las capturas, a tamaño completo. Las capturas comparten
+          visor y se pasan con las flechas: mirarlas de una en una, cerrando y
+          abriendo, era el mismo gesto cinco veces. */}
+      {coverOpen && coverFull && (
+        <Lightbox
+          imagenes={[coverFull]}
+          indice={0}
+          onClose={() => setCoverOpen(false)}
+          etiqueta={`${title?.name ?? ""} — ${tr("View cover")}`}
+        />
+      )}
+      {shotOpen != null && shots.length > 0 && (
+        <Lightbox
+          imagenes={shots.slice(0, 5).map((id) => igdbImg(id, "1080p")!)}
+          indice={shotOpen}
+          onIndice={setShotOpen}
+          onClose={() => setShotOpen(null)}
+          etiqueta={tv("Screenshot {n}", { n: shotOpen + 1 })}
+        />
+      )}
     </>
   );
 }

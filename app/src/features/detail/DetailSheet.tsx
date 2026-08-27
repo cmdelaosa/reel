@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { Check, CheckCheck, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Minus, Pause, Play, Plus, Star, X } from "lucide-react";
+import { Check, CheckCheck, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Minus, Pause, Play, Plus, Star, X , ChevronDown, ChevronUp } from "lucide-react";
 import { getCredits, tmdbImg } from "@/lib/tmdb";
 import { fmtAirDate, fmtPlainDate } from "@/lib/region";
 import { dateLocale, isEs, t as tr, tGenre, tv } from "@/lib/i18n";
@@ -16,6 +16,7 @@ import type { SeasonRow, EpisodeRow } from "@/lib/schemas";
 import { WatchOn } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useFocusTrap } from "@/ui/useFocusTrap";
+import { Lightbox } from "@/ui/Lightbox";
 import { CastRail } from "@/ui/CastRail";
 import { personaDelReparto } from "@/ui/railPerson";
 import { RatingStars } from "@/ui/RatingStars";
@@ -97,21 +98,6 @@ function SeasonTabs({ seasons, active, onPick }: { seasons: SeasonRow[]; active:
   );
 }
 
-/** Una barra de progreso con su cuenta. Dos en la ficha —la temporada y la
- *  serie— y se leen juntas: la de arriba dice por dónde va esta temporada y la
- *  de abajo cuánto queda de todo. */
-function Progress({ label, done, total }: { label: string; done: number; total: number }) {
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-2.5" style={{ marginBottom: 5 }}>
-        <span className="eyebrow" style={{ fontSize: 11 }}>{label}</span>
-        <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{done} / {total}</span>
-      </div>
-      <span className="pbar pbar-inline"><i style={{ width: `${Math.min(100, Math.round((done / total) * 100))}%` }} /></span>
-    </div>
-  );
-}
-
 export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () => void }) {
   const trapRef = useFocusTrap<HTMLDivElement>();
   const queryClient = useQueryClient();
@@ -174,6 +160,9 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const [episodeOpen, setEpisodeOpen] = useState<EpisodeRow | null>(null);
   const [toast, setToast] = useState<{ ids: string[]; count: number } | null>(null);
   const [posterOpen, setPosterOpen] = useState(false);
+  /* La lista de amigos vive plegada tras su nota: la media responde
+     «¿está bien?» y solo si quieres saber quién, se abre. */
+  const [friendsOpen, setFriendsOpen] = useState(false);
 
 
   useEffect(() => {
@@ -261,8 +250,6 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
      pantalla; la de la serie sale del rollup de la biblioteca (aired_count /
      watched_count), que es quien lleva esa cuenta para toda la app — recontarla
      aquí a mano daría un número distinto al de la carátula. */
-  const seasonAired = episodes.filter((e) => e.air_datetime && e.air_datetime <= nowIso).length;
-  const seasonWatched = episodes.filter((e) => e.air_datetime && e.air_datetime <= nowIso && watched?.has(e.id)).length;
 
   // Every accepted friend's rating for this show (shares the taste page's
   // one-round-trip ratings query; the friend-read RLS scopes the rows).
@@ -300,8 +287,6 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   /* La barra de toda la serie sale del rollup de la biblioteca, que es quien
      lleva esa cuenta para el resto de la app — recontarla aquí daría un número
      distinto al de la carátula. */
-  const seriesAired = entry?.aired_count ?? 0;
-  const seriesWatched = entry?.watched_count ?? 0;
   const isUpcoming = !title?.first_air_date || title.first_air_date > new Date().toISOString().slice(0, 10);
   const displayName = title ? (isEs() && title.name_es) || title.name : "";
   const displayOverview = title ? (isEs() && title.overview_es) || title.overview : null;
@@ -342,28 +327,28 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
         className="detail-sheet sheet-center fixed z-[70] card overflow-hidden flex flex-col"
         style={{
           left: "50%", top: "50%", transform: "translate(-50%,-50%)",
-          width: "min(1180px, 94vw)", maxHeight: "90vh", borderRadius: "var(--r-xl)",
+          width: "min(760px, 94vw)", maxHeight: "90vh", borderRadius: "var(--r-xl)",
         }}
       >
         {isPending || !title ? (
           <Skeleton />
         ) : (
           <>
-            {/* Hero */}
+            {/* Héroe */}
             <div
               className="relative detail-hero"
               style={{ background: backdrop ? `url(${backdrop}) center/cover` : posterBg(title.name) }}
             >
               <div className="poster-sheen" />
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 30%, var(--surface) 100%)" }} />
-              {/* Las acciones de gestión, agrupadas con la de salir. Arriba y no
-                  en el cuerpo: no gastan alto de la ficha y quedan donde están
-                  también en la de cine y en la de juego. */}
+              {/* Las acciones de gestión, agrupadas con la de salir. Aquí está
+                  también la de dar la serie entera por vista: es un acto raro y
+                  definitivo, y en el cuerpo se pasaba el día ocupando sitio. */}
               <div className="detail-hero-actions">
                 {added && entry ? (
                   <>
                     <button className="btn btn-sm badge-glass" style={{ color: "#fff", borderRadius: "var(--r-sm)" }} onClick={toggleFollow}>
-                      <Minus size={14} />{tr("Remove")}
+                      <Minus size={14} /><span className="btn-label">{tr("Remove")}</span>
                     </button>
                     <button
                       className="btn btn-sm badge-glass"
@@ -371,13 +356,15 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       title={tr(entry.stopped ? "Resume — back in Tonight & calendar" : "Stop watching — keeps history, hides from Tonight")}
                       onClick={() => setStopped.mutate({ titleId: entry.title_id, stopped: !entry.stopped })}
                     >
-                      {entry.stopped ? <><Play size={14} />{tr("Resume")}</> : <><Pause size={14} />{tr("Stop")}</>}
+                      {entry.stopped
+                        ? <><Play size={14} /><span className="btn-label">{tr("Resume")}</span></>
+                        : <><Pause size={14} /><span className="btn-label">{tr("Stop")}</span></>}
                     </button>
                   </>
                 ) : (
                   <>
                     <button className="btn btn-sm badge-glass" style={{ color: "#fff", borderRadius: "var(--r-sm)" }} onClick={toggleFollow}>
-                      <Plus size={14} />{tr("Add")}
+                      <Plus size={14} /><span className="btn-label">{tr("Add")}</span>
                     </button>
                     <button
                       className="btn btn-sm badge-glass"
@@ -385,23 +372,39 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       title={tr(isIgnored(title.tmdb_id, "tv") ? "Un-ignore — show in suggestions again" : "Ignore — hide from suggestions")}
                       onClick={() => (isIgnored(title.tmdb_id, "tv") ? unignore.mutate(title.id) : ignore.mutate(title.id))}
                     >
-                      {isIgnored(title.tmdb_id, "tv") ? <><Eye size={14} />{tr("Un-ignore")}</> : <><EyeOff size={14} />{tr("Ignore")}</>}
+                      {isIgnored(title.tmdb_id, "tv")
+                        ? <><Eye size={14} /><span className="btn-label">{tr("Un-ignore")}</span></>
+                        : <><EyeOff size={14} /><span className="btn-label">{tr("Ignore")}</span></>}
                     </button>
                   </>
+                )}
+                {unwatchedAired > 0 && (
+                  <button
+                    className="btn btn-sm badge-glass"
+                    style={{ color: "#fff", borderRadius: "var(--r-sm)" }}
+                    disabled={markSeries.isPending}
+                    onClick={markWholeSeries}
+                    title={unwatchedAired === 1
+                      ? tr("Mark the last aired episode as seen — for shows you've already watched")
+                      : tv("Mark all {count} aired episodes as seen — for shows you've already watched", { count: unwatchedAired })}
+                  >
+                    <CheckCheck size={14} /><span className="btn-label">{markSeries.isPending ? tr("Marking…") : tr("All watched")}</span>
+                  </button>
                 )}
                 <button className="btn btn-icon badge-glass" style={{ color: "#fff" }} aria-label={tr("Close")} onClick={onClose}>
                   <X size={18} />
                 </button>
               </div>
-              <div className="absolute flex items-end gap-5" style={{ left: 26, right: 26, bottom: 16 }}>
+
+              <div className="detail-hero-foot">
                 <div
-                  className="poster"
+                  className={`poster detail-poster${poster ? " zoomable" : ""}`}
                   role={poster ? "button" : undefined}
                   tabIndex={poster ? 0 : undefined}
                   aria-label={poster ? tr("View poster") : undefined}
                   onClick={poster ? () => setPosterOpen(true) : undefined}
                   onKeyDown={poster ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPosterOpen(true); } } : undefined}
-                  style={{ width: 152, height: 228, flex: "0 0 auto", aspectRatio: "auto", background: posterBg(title.name + "x"), cursor: poster ? "zoom-in" : undefined }}
+                  style={{ background: posterBg(title.name + "x") }}
                 >
                   {poster && <img className="poster-img" src={poster} alt="" />}
                   <div className="poster-sheen" />
@@ -415,162 +418,147 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       </span>
                     )}
                   </div>
-                  <h2 style={{ fontSize: 32, fontWeight: 850, letterSpacing: "-0.02em", textShadow: "0 2px 12px rgba(0,0,0,.5)", color: "#fff", margin: 0 }}>
-                    {displayName}
-                  </h2>
-                  <div style={{ fontSize: 14, color: "rgba(255,255,255,.85)" }}>
+                  <h2 className="detail-title">{displayName}</h2>
+                  <div className="detail-meta">
                     {[title.first_air_date?.slice(0, 4) ?? tr("TBA"), title.genres.map(tGenre).join(" · "), title.episode_run_time ? `${title.episode_run_time} min` : null]
                       .filter(Boolean)
                       .join(" · ")}
                   </div>
                   {originalTitle && (
-                    <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.65)", marginTop: 2 }}>
-                      {tr("Original title")}: {originalTitle}
-                    </div>
+                    <div className="detail-orig">{tr("Original title")}: {originalTitle}</div>
                   )}
-                  {/* Las notas. La tuya la primera y en caja de acento —se pone,
-                      no se lee—, y las ajenas juntas en una caja oscura al lado.
-                      Sueltas sobre el arte, un fotograma claro las borraba. */}
-                  <div className="detail-scores">
-                    <div className="detail-mine">
-                      <div className="eyebrow" style={{ fontSize: 10, color: "#fff" }}>{tr("My rating")}</div>
-                      <div className="flex items-center gap-2">
-                        <RatingStars value={rating} size={30} onRate={(v) => rateTitle.mutate(v)} />
-                      </div>
-                    </div>
-                    <div className="detail-others">
-                      <div className="ratings-cell">
-                        <div className="eyebrow" style={{ fontSize: 10, color: "rgba(255,255,255,.7)" }}>TMDB</div>
-                        <div className="ratings-value" style={{ color: "#fff" }}>
-                          <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                          <span>{title.vote_average ? title.vote_average.toFixed(1) : "—"}</span>
-                        </div>
-                      </div>
-                      <span className="detail-others-sep" />
-                      <div className="ratings-cell">
-                        <div className="eyebrow" style={{ fontSize: 10, color: "rgba(255,255,255,.7)" }}>IMDb</div>
-                        <div
-                          className="ratings-value"
-                          style={{ color: "#fff" }}
-                          title={title.imdb_votes ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : undefined}
-                        >
-                          <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: "var(--imdb)" }} />
-                          <span>{title.imdb_rating != null ? title.imdb_rating.toFixed(1) : "—"}</span>
-                        </div>
-                      </div>
-                    </div>
-                    {/* El enlace de fuera, donde en cine y en juegos está el
-                        suyo. Solo cuando hay tconst: sin él no hay página a la
-                        que llevar y un botón muerto es peor que ninguno. */}
-                    {title.imdb_id && (
-                      <a
-                        className="btn btn-outline btn-sm detail-out"
-                        href={`https://www.imdb.com/title/${title.imdb_id}/`}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                      >
-                        <Star size={13} fill="currentColor" strokeWidth={0} style={{ color: "var(--imdb)" }} />
-                        {tr("View on IMDb")}
-                        <ExternalLink size={12} />
-                      </a>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Cuerpo — dos columnas: lo tuyo a la izquierda, la serie a la
-                derecha. El carril mide 296 y no más: los píxeles que se le
-                quitan se los queda la lista de episodios, que es la que los
-                aprovecha. */}
+            {/* Cuerpo, en una sola columna */}
             <div className="detail-body">
-              <div className="detail-rail">
-                {/* Por dónde ibas. La acción principal de la ficha, arriba del
-                    todo, con el progreso de la temporada y el de la serie
-                    debajo — un juego de dos barras que responde "¿cuánto me
-                    queda?" sin tener que contar la lista. */}
-                {nextPending && !entry?.stopped && (
-                  <div className="card detail-next">
-                    <div className="eyebrow">{tr("Continue with")}</div>
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span
-                        className="detail-next-still"
-                        style={{ background: nextStill ? `url(${nextStill}) center/cover` : posterBg(title.name) }}
-                      />
-                      <span className="min-w-0">
-                        <span className="detail-next-se">S{nextPending.season_number} · E{nextPending.episode_number}</span>
-                        <span className="detail-next-name truncate">{nextPendingName}</span>
-                        <span className="detail-next-date">{fmtDate(nextPending.air_datetime)}</span>
+              {/* Las notas, sobre el fondo y no en una tarjeta. La tuya manda:
+                  se pone, no se lee, y por eso lleva las estrellas grandes. Las
+                  de fuera van juntas a la derecha, con la de tus amigos a su
+                  izquierda — puede no haber ninguno, y así lo que falta encoge
+                  por dentro de la caja en vez de dejar un hueco. */}
+              <div className="detail-scores">
+                <div className="detail-mine">
+                  <span className="eyebrow" style={{ fontSize: 10.5 }}>{tr("My rating")}</span>
+                  <RatingStars value={rating} size={28} onRate={(v) => rateTitle.mutate(v)} />
+                </div>
+                <div className="detail-others">
+                  {friendsAvg != null && (
+                    <>
+                      <button
+                        className="detail-cell detail-friends"
+                        aria-expanded={friendsOpen}
+                        onClick={() => setFriendsOpen((v) => !v)}
+                      >
+                        <span className="eyebrow" style={{ fontSize: 10 }}>{tr("Friends")}</span>
+                        <span className="detail-cellval">
+                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                          {friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 })}
+                          {friendsOpen ? <ChevronUp size={14} style={{ color: "var(--text-mute)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-mute)" }} />}
+                        </span>
+                      </button>
+                      <span className="detail-others-sep" />
+                    </>
+                  )}
+                  <div className="detail-cell">
+                    <span className="eyebrow" style={{ fontSize: 10 }}>TMDB</span>
+                    <span className="detail-cellval">
+                      <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                      {title.vote_average ? title.vote_average.toFixed(1) : "—"}
+                    </span>
+                  </div>
+                  <span className="detail-others-sep" />
+                  {/* La celda de IMDb ES el enlace, con su flecha: un botón
+                      aparte para lo mismo era una cosa más que leer. Sin tconst
+                      no hay a dónde ir y se queda en número. */}
+                  {title.imdb_id ? (
+                    <a
+                      className="detail-cell detail-out"
+                      href={`https://www.imdb.com/title/${title.imdb_id}/`}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      title={title.imdb_votes ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : tr("View on IMDb")}
+                    >
+                      <span className="eyebrow" style={{ fontSize: 10 }}>IMDb</span>
+                      <span className="detail-cellval">
+                        <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--imdb)" }} />
+                        {title.imdb_rating != null ? title.imdb_rating.toFixed(1) : "—"}
+                        <ExternalLink size={12} />
+                      </span>
+                    </a>
+                  ) : (
+                    <div className="detail-cell">
+                      <span className="eyebrow" style={{ fontSize: 10 }}>IMDb</span>
+                      <span className="detail-cellval">
+                        <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--imdb)" }} />
+                        {title.imdb_rating != null ? title.imdb_rating.toFixed(1) : "—"}
                       </span>
                     </div>
-                    <button
-                      className="btn btn-accent w-full"
-                      disabled={markWatched.isPending}
-                      onClick={() => markWatched.mutate(nextPending.id)}
-                      title={nextPending.name ?? undefined}
-                    >
-                      <Check size={16} />{tr("Mark watched")}
-                    </button>
-                    {(seasonAired > 0 || seriesAired > 0) && (
-                      <div className="flex flex-col gap-2.5 pt-0.5">
-                        {seasonAired > 0 && activeSeason != null && (
-                          <Progress label={tv("Season {n}", { n: activeSeason })} done={seasonWatched} total={seasonAired} />
-                        )}
-                        {seriesAired > 0 && (
-                          <Progress label={tr("Whole show")} done={seriesWatched} total={seriesAired} />
-                        )}
-                      </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Quién de los tuyos la ha puntuado, al desplegar su celda. */}
+              {friendsOpen && friendRaters.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-baseline justify-between gap-2.5">
+                    <span className="eyebrow">{tr("Friends")}</span>
+                    {friendsAvg != null && (
+                      <span className="friends-title-score">
+                        <Star size={12} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                        {friendsAvg.toFixed(1)}
+                      </span>
                     )}
                   </div>
-                )}
-
-                {unwatchedAired > 0 && (
-                  <button
-                    className="btn btn-outline btn-sm w-full"
-                    disabled={markSeries.isPending}
-                    onClick={markWholeSeries}
-                    title={unwatchedAired === 1
-                      ? tr("Mark the last aired episode as seen — for shows you've already watched")
-                      : tv("Mark all {count} aired episodes as seen — for shows you've already watched", { count: unwatchedAired })}
-                  >
-                    <CheckCheck size={14} />{markSeries.isPending ? tr("Marking…") : tr("Mark the whole show watched")}
-                  </button>
-                )}
-
-                {/* Los amigos que la han puntuado. La media va junto al rótulo
-                    —es lo que resume la lista— y cada fila abre su perfil. */}
-                {friendRaters.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-baseline justify-between gap-2.5">
-                      <span className="eyebrow">{tr("Friends")}</span>
-                      {friendsAvg != null && (
+                  <div className="card friends-title-list">
+                    {friendRaters.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        className="btn-reset friends-title-row"
+                        title={tv("Open {name}'s profile", { name: r.name })}
+                        onClick={() => { onClose(); navigate(`/friend/${r.id}`); }}
+                      >
+                        <FriendAvatar f={r} size={26} />
+                        <span className="friends-title-name">{r.name}</span>
                         <span className="friends-title-score">
                           <Star size={12} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                          {friendsAvg.toFixed(1)}
+                          {r.score}
                         </span>
-                      )}
-                    </div>
-                    <div className="card friends-title-list">
-                      {friendRaters.map((r) => (
-                        <button
-                          key={r.id}
-                          type="button"
-                          className="btn-reset friends-title-row"
-                          title={tv("Open {name}'s profile", { name: r.name })}
-                          onClick={() => { onClose(); navigate(`/friend/${r.id}`); }}
-                        >
-                          <FriendAvatar f={r} size={26} />
-                          <span className="friends-title-name">{r.name}</span>
-                          <span className="friends-title-score">
-                            <Star size={12} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                            {r.score}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                      </button>
+                    ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* Por dónde ibas: el fotograma, qué episodio es y el botón. Es
+                  lo que se viene a hacer, así que va lo primero del cuerpo. */}
+              {nextPending && !entry?.stopped && (
+                <div className="card detail-next">
+                  <img
+                    className="detail-next-still"
+                    src={nextStill ?? undefined}
+                    alt=""
+                    style={nextStill ? undefined : { background: posterBg(title.name) }}
+                  />
+                  <span className="detail-next-txt">
+                    <span className="detail-next-se">
+                      S{nextPending.season_number} · E{nextPending.episode_number} · {tr("Continue with")}
+                    </span>
+                    <span className="detail-next-name truncate">{nextPendingName}</span>
+                    <span className="detail-next-date">{fmtDate(nextPending.air_datetime)}</span>
+                  </span>
+                  <button
+                    className="btn btn-accent btn-sm"
+                    disabled={markWatched.isPending}
+                    onClick={() => markWatched.mutate(nextPending.id)}
+                    title={nextPending.name ?? undefined}
+                  >
+                    <Check size={15} />{tr("Mark watched")}
+                  </button>
+                </div>
+              )}
 
               <div className="detail-main">
                 {displayOverview && (
@@ -742,36 +730,14 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
         );
       })()}
 
-      {/* Full-size poster lightbox (poster click in the hero) */}
+      {/* El cartel a tamaño completo, al pulsarlo en el héroe. */}
       {posterOpen && posterFull && (
-        <>
-          <div className="backdrop" style={{ zIndex: 90 }} onClick={() => setPosterOpen(false)} />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={displayName ? `${displayName} — ${tr("View poster")}` : tr("View poster")}
-            className="fixed"
-            style={{ zIndex: 91, left: "50%", top: "50%", transform: "translate(-50%,-50%)" }}
-          >
-            <img
-              src={posterFull}
-              alt=""
-              onClick={() => setPosterOpen(false)}
-              style={{
-                display: "block", maxWidth: "92vw", maxHeight: "88vh", cursor: "zoom-out",
-                borderRadius: "var(--r-lg)", border: "1px solid var(--border)", boxShadow: "0 24px 80px rgba(0,0,0,.6)",
-              }}
-            />
-            <button
-              className="btn btn-icon badge-glass absolute"
-              style={{ top: 10, right: 10, color: "#fff" }}
-              aria-label={tr("Close")}
-              onClick={() => setPosterOpen(false)}
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </>
+        <Lightbox
+          imagenes={[posterFull]}
+          indice={0}
+          onClose={() => setPosterOpen(false)}
+          etiqueta={displayName ? `${displayName} — ${tr("View poster")}` : tr("View poster")}
+        />
       )}
 
       {/* Undo toast after a bulk mark */}

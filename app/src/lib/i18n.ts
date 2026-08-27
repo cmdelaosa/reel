@@ -565,6 +565,12 @@ const ES: Record<string, string> = {
     "Notas de IMDb de los episodios de esta temporada, con media {avg}",
   "E{ep} · {rating}": "E{ep} · {rating}",
   "No synopsis yet.": "Aún no hay sinopsis.",
+  /* El visor a tamaño completo (ui/Lightbox). "Next" ya está más arriba —lo
+     dice el carrusel— y "Previous" no, porque hasta ahora nada iba hacia atrás. */
+  "Previous": "Anterior",
+  "View cover": "Ver la carátula",
+  "Screenshot {n}": "Captura {n}",
+  "{n} of {total}": "{n} de {total}",
 
   /* ---- La ficha de un episodio (0088) ---- */
   "Directing and writing": "Dirección y guion",

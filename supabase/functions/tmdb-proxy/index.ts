@@ -58,6 +58,7 @@
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { boostSpanish, capNonWestern } from "./rank.ts";
+import { videosDeTmdb } from "./videos.ts";
 import { crewRecortado, invitadosRecortados, textoEs } from "../_shared/episodio.ts";
 import { redactCredential, tmdbFetch as callTmdb } from "../_shared/tmdb.ts";
 
@@ -704,6 +705,10 @@ function movieRow(d: Any) {
     episode_run_time: d.runtime ?? null,
     vote_average: d.vote_average ?? null,
     popularity: d.popularity ?? null,
+    /* El tráiler, del append de arriba. Presente solo cuando el payload lo
+       trajo, como los proveedores: así una llamada sin el append no vacía lo
+       que un detalle completo ya escribió. */
+    ...(d.videos ? { videos: videosDeTmdb(d.videos) } : {}),
     // Las dos fechas por país (0068), del mismo append. Como los proveedores:
     // presente solo cuando el payload lo trajo, para que una llamada sin el
     // append no vacíe lo que un detalle completo ya escribió.
@@ -1091,7 +1096,7 @@ async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: numbe
  *  vía. Los logos que la ficha sí enseña son los de las plataformas, y esos
  *  vienen en `providers`, no de aquí. */
 async function refreshMovie(admin: SupabaseClient, apiKey: string, tmdbId: number) {
-  const d = await fetchTmdb(apiKey, `/movie/${tmdbId}?append_to_response=translations,watch/providers,release_dates`);
+  const d = await fetchTmdb(apiKey, `/movie/${tmdbId}?append_to_response=translations,watch/providers,release_dates,videos`);
   const [title] = await upsertReturning(admin, "titles", movieRow(d), "kind,tmdb_id");
   // El upsert no puede devolver el episodio que su propio trigger acaba de
   // escribir, así que en el camino frío sí hay un viaje más — uno, y solo la
