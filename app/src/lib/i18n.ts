@@ -485,7 +485,7 @@ const ES: Record<string, string> = {
   "E{ep} · {rating}": "E{ep} · {rating}",
   "No synopsis yet.": "Aún no hay sinopsis.",
 
-  /* ---- La ficha de un episodio (0085) ---- */
+  /* ---- La ficha de un episodio (0087) ---- */
   "Directing and writing": "Dirección y guion",
   /* El puesto que llega dentro de `episodes.crew`. "Director" ya está más
      abajo (la ficha de cine lo dice), pero esa usa "Writers" en plural y aquí

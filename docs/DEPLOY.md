@@ -28,6 +28,22 @@ supabase link --project-ref <ref>
 supabase db push          # applies every migration in supabase/migrations
 ```
 
+⚠️ **`db push` skips a version number that prod already has, and says
+nothing.** It matches by NUMBER, not by file. On 27-ago-2026 `0085_ficha_de_episodio`
+never ran because prod already carried an `0085` named `inventario_steam`, pushed
+from a branch that had not been merged. `supabase migration list` showed `remote`
+and `supabase db diff` said "No schema changes found" — both compare numbers too.
+The only thing that told the truth:
+
+```bash
+supabase db query --linked "select version, name from supabase_migrations.schema_migrations order by version desc limit 5;"
+supabase db query --linked "select column_name from information_schema.columns where table_schema='public' and table_name='<tabla>';"
+```
+
+So: **after a push that adds columns, check one of the new columns is really
+there** — and never push a migration from an unmerged branch, which is what took
+the number in the first place.
+
 ⚠️ **Do not seed prod.** `supabase/seed/dev.sql` creates demo accounts
 (`password123`) and open invite codes — it's for local `supabase db reset` only.
 `supabase db push` does not run it; never run `supabase db reset` against the

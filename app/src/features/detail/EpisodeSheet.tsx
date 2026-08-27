@@ -14,7 +14,7 @@ import { useWatchedAt } from "@/features/detail/data";
 
    ── Qué enseña, y por qué esto y no más ────────────────────────────────────
    El fotograma, quién lo dirigió y lo firmó, los invitados, las dos notas y la
-   sinopsis. Los cuatro primeros son nuevos (0085) y no cuestan una petición:
+   sinopsis. Los cuatro primeros son nuevos (0087) y no cuestan una petición:
    ya venían en el payload de temporada y el ingest los tiraba.
 
    NO hay nota por episodio. `ratings.episode_id` existe en el esquema desde

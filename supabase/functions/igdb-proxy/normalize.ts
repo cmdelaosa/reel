@@ -491,7 +491,7 @@ export function distribuidora(involved: readonly Any[] | null | undefined): stri
  * la biblioteca y en el muro, y `videos` llega con nueve entradas y
  * `screenshots` con dieciséis.
  *
- * Todas devuelven null cuando no hay nada, nunca [] — igual que en 0085. Null
+ * Todas devuelven null cuando no hay nada, nunca [] — igual que en 0087. Null
  * es "este juego no tiene", que la ficha lee como "no pintes esa sección";
  * una lista vacía se pintaría como una sección con un hueco dentro. */
 

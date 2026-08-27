@@ -153,7 +153,7 @@ export const episodeRowSchema = z.object({
   imdb_rating: z.number().nullable().optional(),
   imdb_votes: z.number().int().nullable().optional(),
   imdb_id: z.string().nullable().optional(),
-  /* La ficha del episodio (0085). Los cuatro venían ya en el payload de
+  /* La ficha del episodio (0087). Los cuatro venían ya en el payload de
      temporada y se descartaban en el ingest; el par _es sigue la misma regla
      que en `titles` — la columna canónica manda y la traducción solo existe
      cuando TMDB la tiene.

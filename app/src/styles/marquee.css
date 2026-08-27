@@ -568,7 +568,7 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 .cast-edge.right { right: 2px; }
 @media (hover: none) { .cast-edge { display: none; } }
 
-/* ---- La ficha de un título, en dos columnas (0085) ----
+/* ---- La ficha de un título, en dos columnas (0087) ----
    De 760 a 1180. El ancho no es capricho: la lista de episodios tenía cuatro
    columnas apretadas en 700px y ahora tiene cinco holgadas, y lo tuyo —seguir
    por, progreso, amigos— deja de empujar hacia abajo lo de la serie.
@@ -774,7 +774,7 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 
 /* Episode sub-sheet — a small card over the detail sheet: synopsis + per-episode
    scores from both sources, and mark-watched. Reuses the sheet/backdrop system. */
-/* 552 y no 460: desde 0085 la ficha lleva dos filas de caras de 96px, y a 460
+/* 552 y no 460: desde 0087 la ficha lleva dos filas de caras de 96px, y a 460
    se veían cuatro y media. A 552 entran cinco enteras y sigue sin competir con
    la ficha de la serie que hay debajo, que mide 1180. */
 .ep-sheet { width: min(552px, 92vw); max-height: 88vh; border-radius: var(--r-lg); display: flex; flex-direction: column; overflow: hidden; }

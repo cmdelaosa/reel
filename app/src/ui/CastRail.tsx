@@ -6,7 +6,7 @@ import type { RailPerson } from "@/ui/railPerson";
 
 /* Una fila de caras redondas con su nombre y una línea debajo.
    Compartida por las tres cosas que la usan, que son la misma fila con datos
-   distintos: el reparto de una serie, el de una película y —desde 0085— la
+   distintos: el reparto de una serie, el de una película y —desde 0087— la
    dirección, el guion y los invitados de un episodio.
 
    Antes recibía `CastMember[]` de TMDB. Ahora recibe una forma mínima
