@@ -16,6 +16,12 @@
 -- Reaplicarla es inofensivo donde ya entró: las seis sentencias son
 -- `add column if not exists` y no hay nada más en el fichero.
 --
+-- La 0086 la sigue citando como «0085» en un comentario, y se queda así a
+-- propósito: `supabase_migrations.schema_migrations` guarda el SQL aplicado
+-- COMENTARIOS INCLUIDOS, así que retocar una migración que ya corrió separa el
+-- fichero de lo que producción tiene escrito. Una migración aplicada es un
+-- registro histórico; se lee, no se edita.
+--
 -- La ficha de un episodio enseñaba número, nombre, sinopsis, duración, fecha y
 -- las dos notas, y nada más. El rediseño le añade el fotograma y quién lo hizo
 -- —dirección, guion e invitados—, con la misma fila de caras redondas que ya

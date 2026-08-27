@@ -29,7 +29,7 @@
 -- consola sin Steam se queda sin esas dos notas, y eso es correcto: no existen.
 --
 -- ── Por qué jsonb otra vez, y por qué recortado ────────────────────────────
--- Mismo razonamiento que 0087 con el reparto de un episodio: estas listas se
+-- Mismo razonamiento que 0085 con el reparto de un episodio: estas listas se
 -- leen enteras, de un solo juego, para pintarlas, y nunca al revés. Lo que sí
 -- importa es el TAMAÑO: `videos` llega con nueve entradas y `screenshots` con
 -- dieciséis, y esta fila viaja en la rejilla de la biblioteca y en el muro. Se
