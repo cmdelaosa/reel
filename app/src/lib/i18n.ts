@@ -198,6 +198,8 @@ const ES: Record<string, string> = {
     "{items} objetos · {distinct} distintos · unos {quick} si lo vendieras todo hoy",
   "{n} items have no price yet, and are not in that total.":
     "{n} objetos aún no tienen precio, y no están en ese total.",
+  "One item has no price yet, and is not in that total.":
+    "Un objeto aún no tiene precio, y no está en ese total.",
   "{n} items had no price on {day}": "{n} objetos no tenían precio el {day}",
   "Inventory value from {from} to {to}": "Valor del inventario del {from} al {to}",
   "The value graph starts the day you first upload: nobody recorded what your inventory was worth before that.":

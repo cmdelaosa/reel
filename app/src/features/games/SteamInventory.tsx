@@ -126,9 +126,14 @@ function Totals({ data }: { data: NonNullable<ReturnType<typeof useSteamInventor
           style={{ marginTop: 10, fontSize: 12.5, color: "var(--warn, #d90)" }}
         >
           <AlertTriangle size={14} />
-          {tv("{n} items have no price yet, and are not in that total.", {
-            n: totals.missingPrices,
-          })}
+          {/* Dos frases y no una con {n}: es la línea que califica el número
+              grande, y «1 items» ahí le quita autoridad justo donde hace falta
+              que la tenga. */}
+          {totals.missingPrices === 1
+            ? tr("One item has no price yet, and is not in that total.")
+            : tv("{n} items have no price yet, and are not in that total.", {
+                n: totals.missingPrices,
+              })}
         </div>
       )}
     </div>
