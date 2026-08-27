@@ -124,6 +124,51 @@ const ES: Record<string, string> = {
      abajo también son plataformas, y lo que separa a las dos no es la palabra
      sino de quién habla cada una — las del juego y la TUYA. */
   "You play it on": "En cuál lo juegas",
+
+  /* ---- La ficha ampliada de un juego (0086) ---- */
+  "My rating": "Mi nota",
+  "Status": "Estado",
+  "Platform": "Plataforma",
+  "Not set": "Ninguna",
+  "Not owned": "No lo tengo",
+  "Add it to your library first": "Añádelo a tu biblioteca primero",
+  "Play trailer": "Ver el tráiler",
+  "View on Steam": "Ver en Steam",
+  "Official site": "Web oficial",
+  "Developer": "Desarrollador",
+  "Publisher": "Distribuidora",
+  /* "Genres" ya está más abajo, en los filtros de Explorar. */
+  "Modes": "Modos",
+  "{votes} reviews": "{votes} reseñas",
+  /* Time to beat. Los rótulos NO se traducen del inglés de IGDB ("Hastily",
+     "Normally", "Completely"): esas palabras describen al jugador y aquí lo que
+     se compara son tres duraciones, así que se nombran por lo que son. */
+  "Rushed": "Rápido",
+  "Normal": "Normal",
+  "Completionist": "Al 100 %",
+  "My playtime": "Mis horas",
+  "{n} estimates from IGDB": "{n} estimaciones de IGDB",
+  "hours played": "horas jugadas",
+  /* Los modos de juego, tal y como los nombra IGDB. Sin clave para los que no
+     salen traducidos: t() cae al inglés y eso es mejor que una traducción a
+     medias que solo cubra los cuatro más comunes. */
+  "Single player": "Un jugador",
+  "Multiplayer": "Multijugador",
+  "Co-operative": "Cooperativo",
+  "Split screen": "Pantalla partida",
+  "Massively Multiplayer Online (MMO)": "MMO",
+  "Battle Royale": "Battle royale",
+  /* La escala de reseñas de Steam, con sus tramos. Prefijadas porque
+     "Positive" a secas colisionaría con cualquier otro uso de la palabra. */
+  "steam: Overwhelmingly Positive": "Extremadamente positivas",
+  "steam: Very Positive": "Muy positivas",
+  "steam: Positive": "Positivas",
+  "steam: Mostly Positive": "Mayormente positivas",
+  "steam: Mixed": "Mixtas",
+  "steam: Mostly Negative": "Mayormente negativas",
+  "steam: Very Negative": "Muy negativas",
+  "steam: Overwhelmingly Negative": "Extremadamente negativas",
+  "steam: Negative": "Negativas",
   "mark as where you play it": "marcar como donde lo juegas",
   "where you play it — tap to clear": "donde lo juegas — toca para quitarlo",
   "Library": "Biblioteca",

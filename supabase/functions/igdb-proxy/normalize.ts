@@ -320,7 +320,11 @@ export function couldBeOnSteam(
  *  puede borrarlo. */
 export function beatSeconds(ttb: Any): Record<string, number> | undefined {
   const out: Record<string, number> = {};
-  for (const key of ["hastily", "normally", "completely"] as const) {
+  /* `count` viaja con las tres cifras y no es un extra: es DE CUÁNTA GENTE
+     salen. Sin él, tres números redondos se leen como un hecho, y aquí son a
+     veces veintiocho estimaciones — que es además el motivo de que el «al
+     100 %» llegue a veces disparatado. La ficha lo enseña en letra pequeña. */
+  for (const key of ["hastily", "normally", "completely", "count"] as const) {
     const v = ttb?.[key];
     if (typeof v === "number" && v > 0) out[key] = v;
   }
@@ -365,7 +369,16 @@ export function platformIndex(platforms: readonly Any[] | null | undefined): Map
  *  estudio, y `providers` / `release_dates` / `collection_*` son de TMDB y se
  *  quedan nulas — la saga de un juego es su `collections`, que llega con la
  *  rama de la ficha. */
-export function gameRow(d: Any, ttb: Any = null) {
+/** `steam` son las dos notas de la tienda, ya normalizadas, o null si el juego
+ *  no está en Steam o la tienda no contestó. Se pasa en vez de leerse aquí
+ *  porque esto es una traducción pura y aquello es una petición de red — y
+ *  además llega de OTRA fuente, así que confundirlas haría que un mal minuto
+ *  de Steam borrara media ficha de IGDB.
+ *
+ *  Cuando es null las dos columnas NO viajan en el upsert: la ficha conserva lo
+ *  que se guardó la última vez que la tienda sí contestó, en vez de quedarse
+ *  sin notas por un fallo pasajero. */
+export function gameRow(d: Any, ttb: Any = null, steam: SteamNotas | null = null) {
   const platformNames = platformIndex(d?.platforms);
   const byPlatform = platformReleases(d?.release_dates, platformNames);
   const canonical = canonicalRelease(byPlatform);
@@ -388,6 +401,9 @@ export function gameRow(d: Any, ttb: Any = null) {
     platforms: [...platformNames.values()].sort(),
     platform_releases: byPlatform,
     network: studio(d.involved_companies),
+    // La otra mitad de `involved_companies`, que se leía a medias.
+    publisher: distribuidora(d.involved_companies),
+    game_modes: (d.game_modes ?? []).map((m: Any) => m?.name).filter(Boolean),
     vote_average: rating10(d),
     // `hypes` es el número de seguidores ANTES de salir y es lo único que IGDB
     // da para un juego sin lanzar; después manda el número de votos. Sumarlos
@@ -404,6 +420,16 @@ export function gameRow(d: Any, ttb: Any = null) {
        distingue de este por ningún dato que tengamos. Ver `couldBeOnSteam`,
        que sigue existiendo para lo único que sí sabe hacer: desempatar. */
     steam_appid: steamAppid(d.external_games),
+    /* La ficha ampliada (0086). Las cuatro van siempre, con su null cuando el
+       juego no las tiene: son de este payload y solo las escribe el detalle,
+       así que un null aquí significa "IGDB no tiene", no "no preguntamos".
+       Ojo con imitarlo en gameSearchRow: allí la búsqueda NO pide estos campos
+       y escribirlos borraría lo que el detalle guardó. */
+    screenshots: capturasRecortadas(d.screenshots),
+    videos: videosRecortados(d.videos),
+    age_ratings: edades(d.age_ratings),
+    official_url: webOficial(d.websites),
+    ...(steam ?? {}),
     last_refreshed_at: new Date().toISOString(),
   };
 }
@@ -444,4 +470,170 @@ export function gameSearchRow(r: Any) {
     // llega a la biblioteca con su popularidad puesta, sin abrir la ficha.
     popularity: (r?.hypes ?? 0) + (r?.total_rating_count ?? 0),
   };
+}
+
+/** La distribuidora, que es la otra mitad de `involved_companies`.
+ *
+ *  `studio` de arriba se queda con el desarrollador y cae al primero que haya
+ *  si nadie está marcado; aquí NO se hace esa concesión. Un juego sin editora
+ *  marcada es un juego autodistribuido o mal fichado, y en los dos casos
+ *  inventarle una —la primera empresa de la lista, que puede ser el estudio de
+ *  soporte que hizo el port— sería peor que dejar la línea sin poner. */
+export function distribuidora(involved: readonly Any[] | null | undefined): string | null {
+  const pub = (involved ?? []).find((c) => c?.publisher)?.company?.name;
+  return typeof pub === "string" && pub ? pub : null;
+}
+
+/* ─────────────────── La ficha ampliada del juego (0086) ───────────────────
+ *
+ * Cuatro listas que IGDB manda largas y aquí se recortan a lo que la ficha
+ * pinta. El motivo es el tamaño, no el gusto: esta fila viaja en la rejilla de
+ * la biblioteca y en el muro, y `videos` llega con nueve entradas y
+ * `screenshots` con dieciséis.
+ *
+ * Todas devuelven null cuando no hay nada, nunca [] — igual que en 0085. Null
+ * es "este juego no tiene", que la ficha lee como "no pintes esa sección";
+ * una lista vacía se pintaría como una sección con un hueco dentro. */
+
+/* El orden de los vídeos, que es toda la decisión: la ficha pinta UNO.
+ *
+ * El del payload no sirve — IGDB los devuelve como se subieron, así que el
+ * primero suele ser el teaser del anuncio, de años antes de salir.
+ *
+ * Va primero el de lanzamiento, porque enseña el juego que se vende hoy y no
+ * el que se prometió; después gameplay, porque para decidir si te lo pones
+ * importa más ver cómo se juega que un corto cinemático; después cualquier
+ * otro tráiler; y al final lo que no lo es (diarios de desarrollo, etc.). */
+const RANGO_VIDEO = (nombre: string): number => {
+  const n = nombre.toLowerCase();
+  if (n.includes("launch")) return 0;
+  if (n.includes("gameplay")) return 1;
+  if (n.includes("trailer")) return 2;
+  return 3;
+};
+
+/** Los vídeos, con el mejor tráiler primero. Cuatro y no uno: cuestan cuarenta
+ *  bytes cada uno y ahorran un refresco entero el día que la ficha quiera
+ *  ofrecer "ver más vídeos". */
+export function videosRecortados(
+  videos: readonly Any[] | null | undefined,
+): { name: string; video_id: string }[] | null {
+  const out = (videos ?? [])
+    .filter((v) => typeof v?.video_id === "string" && v.video_id)
+    .map((v) => ({
+      name: typeof v?.name === "string" && v.name ? v.name : "Trailer",
+      video_id: v.video_id as string,
+    }));
+  // Ordenación ESTABLE: dentro del mismo rango se respeta el orden de IGDB, que
+  // es cronológico de subida. Entre dos tráileres de lanzamiento gana el que
+  // subieron antes, que es el del lanzamiento de verdad y no el del port.
+  out.sort((a, b) => RANGO_VIDEO(a.name) - RANGO_VIDEO(b.name));
+  return out.length ? out.slice(0, 4) : null;
+}
+
+/** Los hashes de las capturas. Ocho: la ficha enseña cinco y el resto es
+ *  margen para que el carrusel no se quede corto en un juego con pocas. */
+export function capturasRecortadas(shots: readonly Any[] | null | undefined): string[] | null {
+  const out = (shots ?? [])
+    .map((s) => s?.image_id)
+    .filter((id): id is string => typeof id === "string" && Boolean(id))
+    .slice(0, 8);
+  return out.length ? out : null;
+}
+
+/* Los dos enums de clasificación por edad, LEÍDOS DE LA API (27-ago-2026) y no
+   de la documentación, por lo mismo que los formatos de fecha de más arriba: la
+   tabla publicada y lo que responde el servidor no siempre coinciden.
+
+   `rating_category` es único en toda la tabla de IGDB, no por organismo, así
+   que un solo mapa basta y no hay que cruzar los dos. */
+const ORGANISMO: Record<number, string> = {
+  1: "ESRB",
+  2: "PEGI",
+  3: "CERO",
+  4: "USK",
+  5: "GRAC",
+  6: "CLASS_IND",
+  7: "ACB",
+};
+
+const CATEGORIA: Record<number, string> = {
+  1: "RP", 2: "EC", 3: "E", 4: "E10+", 5: "T", 6: "M", 7: "AO",
+  8: "3", 9: "7", 10: "12", 11: "16", 12: "18",
+  13: "A", 14: "B", 15: "C", 16: "D", 17: "Z",
+  18: "0", 19: "6", 20: "12", 21: "16", 22: "18",
+  23: "ALL", 24: "12+", 25: "15+", 26: "19+",
+  28: "L", 29: "10", 30: "12", 31: "14", 32: "16", 33: "18",
+  34: "G", 35: "PG", 36: "M", 37: "MA 15+", 38: "R 18+", 39: "RC", 40: "18+",
+};
+
+/** Las clasificaciones por edad, con los nombres ya resueltos.
+ *
+ *  Se guardan TODAS las que IGDB dé y no solo la europea: quien pinta elige
+ *  —hoy PEGI, con ESRB de respaldo— y esa preferencia es de interfaz, no un
+ *  dato. Un juego clasificado solo en Japón se quedaría sin edad si el filtro
+ *  se hiciera aquí.
+ *
+ *  La fila a la que le falte organismo o categoría se descarta: "PEGI" sin
+ *  número, o un número sin saber de quién, no se puede pintar. */
+export function edades(
+  ratings: readonly Any[] | null | undefined,
+): { org: string; rating: string }[] | null {
+  const out: { org: string; rating: string }[] = [];
+  for (const r of ratings ?? []) {
+    const org = ORGANISMO[r?.organization];
+    const rating = CATEGORIA[r?.rating_category];
+    if (org && rating) out.push({ org, rating });
+  }
+  return out.length ? out : null;
+}
+
+/** La web oficial del juego, que es el respaldo del enlace a Steam.
+ *
+ *  Tipo 1 de `websites`. Con preferencia por las que IGDB marca `trusted`: la
+ *  lista la edita la comunidad y un juego viejo arrastra a veces un dominio
+ *  caducado que hoy es otra cosa. Entre dos de confianza, la primera. */
+export function webOficial(sites: readonly Any[] | null | undefined): string | null {
+  const oficiales = (sites ?? []).filter(
+    (w) => w?.type === 1 && typeof w?.url === "string" && w.url,
+  );
+  const elegida = oficiales.find((w) => w?.trusted) ?? oficiales[0];
+  return elegida?.url ?? null;
+}
+
+/* ─────────────────────────── Lo que dice Steam ────────────────────────────
+ *
+ * Dos rutas públicas de la tienda, sin clave. Se piden solo cuando el juego
+ * tiene `steam_appid`, y lo que devuelven se normaliza aquí para que index.ts
+ * no tenga que saber cómo es de rara la respuesta de appdetails.
+ *
+ * Las dos son tolerantes: un juego retirado de la tienda, o una respuesta a
+ * medias, devuelve null y la ficha simplemente no enseña esa nota. */
+
+/** El porcentaje de reseñas positivas y cuántas hay.
+ *
+ *  Se guarda el porcentaje CALCULADO de positivas y negativas, no el
+ *  `review_score` de Steam (un 0-9 propio suyo) ni su `review_score_desc`: el
+ *  primero no significa nada fuera de Steam y el segundo es texto de interfaz
+ *  en el idioma que la tienda respondiera ese día. La etiqueta la pone el
+ *  cliente, en el idioma de quien mira. */
+export interface SteamNotas {
+  steam_reviews: { percent: number; count: number } | null;
+  metacritic: number | null;
+}
+
+export function steamReviews(q: Any): { percent: number; count: number } | null {
+  const pos = q?.total_positive;
+  const total = q?.total_reviews;
+  if (typeof pos !== "number" || typeof total !== "number" || total <= 0) return null;
+  return { percent: Math.round((pos / total) * 100), count: total };
+}
+
+/** La nota de la crítica que Steam ya trae dentro de appdetails.
+ *
+ *  Solo 0-100: un `score` fuera de ese rango es la tienda diciendo algo que no
+ *  entendemos, y pintarlo sería peor que no pintarlo. */
+export function metacritic(data: Any): number | null {
+  const score = data?.metacritic?.score;
+  return typeof score === "number" && score >= 0 && score <= 100 ? score : null;
 }

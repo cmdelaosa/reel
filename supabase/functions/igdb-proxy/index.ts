@@ -61,7 +61,10 @@ import {
   couldBeOnSteam,
   gameRow,
   gameSearchRow,
+  metacritic,
+  type SteamNotas,
   steamAppid,
+  steamReviews,
 } from "./normalize.ts";
 import { GAME_TYPE_FILTER, mergeResults, rankSearch } from "./rank.ts";
 import {
@@ -253,6 +256,17 @@ const DETAIL_FIELDS = [
   "external_games.category",
   "external_games.uid",
   "external_games.external_game_source.name",
+  /* Lo de 0086. Campos MÁS en la consulta que la ficha ya hace, no una
+     petición nueva: el límite de IGDB son cuatro por segundo para toda la app,
+     así que lo que no quepa aquí no cabe en ninguna parte. */
+  "videos.name",
+  "videos.video_id",
+  "age_ratings.organization",
+  "age_ratings.rating_category",
+  "websites.type",
+  "websites.url",
+  "websites.trusted",
+  "game_modes.name",
 ].join(",");
 
 /* `hypes` y `total_rating_count` no se pintan en ningún sitio: son lo que
@@ -298,11 +312,61 @@ async function timeToBeat(igdbId: number): Promise<Any | null> {
   }
 }
 
+/* ─────────────────── Las dos notas que no son de IGDB (0086) ──────────────
+ *
+ * El porcentaje de reseñas positivas y la nota de Metacritic salen de dos rutas
+ * PÚBLICAS de la tienda de Steam. Sin clave, sin registro y sin acuerdo con
+ * Metacritic: su nota viaja dentro de la respuesta de appdetails.
+ *
+ * Solo se piden con `steam_appid` delante, o sea con el vínculo que 0076 ya
+ * guarda. Un juego de consola no las tiene y eso no es un hueco que rellenar:
+ * es que no existen.
+ *
+ * ── Por qué best-effort, y qué pasa cuando falla ──────────────────────────
+ * Steam no es la fuente de esta app: si la tienda tarda, contesta a medias o
+ * quita el juego del catálogo, lo que NO puede pasar es que la ficha deje de
+ * abrirse. Un fallo devuelve null, `gameRow` omite las dos columnas y la ficha
+ * conserva lo que se guardó la última vez que sí contestó. Vaciarlas sería
+ * cambiar un dato bueno de ayer por ninguno.
+ *
+ * Y con su propio tope de tiempo: `fetch` sin señal espera para siempre, y esto
+ * corre dentro de la petición que abre una ficha. */
+const STEAM_TIMEOUT_MS = 4_000;
+
+async function notasDeSteam(appid: number | null | undefined): Promise<SteamNotas | null> {
+  if (typeof appid !== "number") return null;
+  const señal = () => AbortSignal.timeout(STEAM_TIMEOUT_MS);
+  const [reseñas, detalle] = await Promise.all([
+    fetch(`https://store.steampowered.com/appreviews/${appid}?json=1&language=all&purchase_type=all&num_per_page=0`, { signal: señal() })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+    fetch(`https://store.steampowered.com/api/appdetails?appids=${appid}`, { signal: señal() })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+  ]);
+  if (!reseñas && !detalle) return null;
+  // appdetails responde { "<appid>": { success, data } } — y `success: false`
+  // en un juego retirado, con `data` ausente. Se lee así de defensivo porque la
+  // forma es suya y puede cambiar sin avisarnos.
+  const datos = detalle?.[String(appid)]?.success ? detalle[String(appid)].data : null;
+  return {
+    steam_reviews: steamReviews(reseñas?.query_summary),
+    metacritic: metacritic(datos),
+  };
+}
+
 /** Trae la ficha de IGDB y la escribe. Devuelve la fila guardada. */
 async function refreshGame(admin: SupabaseClient, igdbId: number) {
   const [detail] = await igdb("games", `fields ${DETAIL_FIELDS}; where id = ${igdbId};`);
   if (!detail) return null;
-  const [row] = await upsertReturning(admin, gameRow(detail, await timeToBeat(igdbId)), "kind,tmdb_id");
+  // Las dos de fuera van en paralelo con los tiempos de IGDB: son de servicios
+  // distintos y ninguna depende de la otra, así que encadenarlas solo sumaría
+  // esperas a la petición que abre la ficha.
+  const [ttb, steam] = await Promise.all([
+    timeToBeat(igdbId),
+    notasDeSteam(steamAppid(detail.external_games)),
+  ]);
+  const [row] = await upsertReturning(admin, gameRow(detail, ttb, steam), "kind,tmdb_id");
   return row ?? null;
 }
 
