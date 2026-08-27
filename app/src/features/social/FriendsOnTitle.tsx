@@ -59,9 +59,27 @@ export function FriendsOnTitle({
   const friends = useFriendsOnTitle({ titleId, episodeId, kind, tmdbId });
   if (!friends.length) return null;
 
+  /* La media de los que SÍ han puntuado, junto al rótulo. Se calcula de estas
+     mismas filas y no de la consulta de gustos: así el número resume exactamente
+     la lista que hay debajo, en vez de una selección parecida pero distinta.
+     Sin nadie que haya puntuado no se pinta —una media de cero no es cero— y la
+     lista se queda con los que lo tienen pendiente, que también dicen algo. */
+  const puntuadas = friends.map((f) => f.score).filter((s): s is number => s != null);
+  const media = puntuadas.length
+    ? puntuadas.reduce((suma, s) => suma + s, 0) / puntuadas.length
+    : null;
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="eyebrow">{tr("Friends")}</div>
+      <div className="flex items-baseline justify-between gap-2.5">
+        <span className="eyebrow">{tr("Friends")}</span>
+        {media != null && (
+          <span className="friends-title-score">
+            <Star size={12} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+            {media.toFixed(1)}
+          </span>
+        )}
+      </div>
       <div className="card friends-title-list">
         {friends.map((f) => {
           const state = stateLabel(kind, { entry: f.entry, finished: f.finished, released });

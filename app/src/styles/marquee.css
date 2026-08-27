@@ -2041,6 +2041,27 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 }
 .st-tick { position: absolute; top: 10px; left: 10px; z-index: 2; width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; }
 
+/* ---- «Vista», que es un estado cumplido y no una acción ----
+   Es el único botón de las tres fichas que representa algo YA HECHO, así que no
+   puede parecerse a los otros dos: el de acento invita a pulsar y el de
+   contorno no dice nada. Marco de acento y una trama diagonal muy suave por
+   debajo — se ve que está hecho sin gritarlo, y sigue siendo pulsable para
+   deshacerlo.
+
+   El rayado va en el fondo y no en un pseudoelemento para que el texto y el
+   icono queden por encima sin más capas. */
+.movie-seen {
+  color: var(--accent);
+  font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background:
+    repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--accent) 9%, transparent) 7px 14px),
+    color-mix(in srgb, var(--accent) 11%, transparent);
+}
+.movie-seen:hover { background:
+    repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--accent) 12%, transparent) 7px 14px),
+    color-mix(in srgb, var(--accent) 15%, transparent); }
+
 /* ---- La ficha de un juego, ampliada (0086) ----
    Comparte con la de series y la de cine el diálogo de 1180, el héroe de 262,
    el carril de 296 y las cajas de notas: son la misma ficha con otro contenido,
