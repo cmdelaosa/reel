@@ -37,7 +37,7 @@ linked hosted DB.
 
 ```bash
 supabase functions deploy tmdb-proxy igdb-proxy episode-refresh alerts importer export \
-  friend-request-email steam-sync
+  friend-request-email steam-sync steam-market
 ```
 
 `steam-sync` es la única función que se despliega **sin la reja de JWT de la
@@ -50,6 +50,20 @@ en todas sus otras rutas.
 ⚠️ **`steam-sync` e `igdb-proxy` van juntos.** La importación resuelve contra la
 ruta `/by-steam` de `igdb-proxy`, que llega en 0076: desplegar solo `steam-sync`
 deja las importaciones colgadas en `applying` con un 404 en `job_runs`.
+
+`steam-market` (0085) es el inventario del mercado, y **no necesita ningún
+secreto nuevo**: lo único que le pide a Steam es `market/priceoverview`, que es
+público. Lo que sí necesita es que su cron esté puesto — ver
+[El cron de los precios de Steam](#el-cron-de-los-precios-de-steam), que **no va
+en pg_cron** como los otros cuatro.
+
+Lo que esa función *no* hace, y conviene saber antes de que alguien lo dé por
+roto: no lee inventarios. No puede. Steam estrangula
+`/inventory/<steamid>/<appid>/<ctx>` por IP y contesta 429 hasta a la primera
+petición desde una IP limpia, así que desde la IP compartida de una edge function
+no hay nada que intentar; y `market/pricehistory` y `market/myhistory` piden la
+cookie de sesión de la persona. Todo eso lo trae el recolector desde el navegador
+(`app/src/features/games/steamCollector.js`) y se sube a mano por `/ingest`.
 
 Deploy migrations before the functions. `tmdb-proxy` uses the
 `is_current_user_invited()` function introduced in migration 0033 to combine
@@ -212,6 +226,25 @@ Then confirm:
 ```sql
 select jobname, schedule, active from cron.job;   -- expect all four, active
 ```
+
+### El cron de los precios de Steam
+
+El quinto trabajo periódico **no vive en pg_cron**: es
+`.github/workflows/steam-prices.yml`, y se enciende solo en cuanto el repo tenga
+sus dos secretos de Actions (`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` — la
+`sb_secret_…`, ver abajo).
+
+Está ahí y no en la base porque el trabajo son peticiones a
+`steamcommunity.com` con un hueco entre ellas, encadenadas hasta que no queda
+cola: unos seis minutos de reloj para un inventario de 500 objetos, repartidos en
+varias invocaciones que se llaman mirando la respuesta de la anterior. En un
+runner eso son diez líneas de `curl`; en pg_cron es un disparador que no puede
+leer lo que contestó la llamada previa.
+
+Comprobarlo después del primer despliegue: en la pestaña Actions, que
+`steam-prices` haya corrido y que su salida diga `"remaining":0`. Si dice
+`refreshed: 0` con cola pendiente, Steam está cortando por 429 — no es una avería
+del trabajo, y lo que quede se refresca al día siguiente.
 
 ### Which service key
 

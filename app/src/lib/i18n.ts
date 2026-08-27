@@ -165,6 +165,77 @@ const ES: Record<string, string> = {
      pregunta se hace con esas tres palabras. */
   "Owned": "Lo tengo",
   "from Steam": "de Steam",
+  /* El inventario del mercado (0085). Dos decisiones de vocabulario que se
+     repiten abajo y conviene dejar dichas:
+
+     · "Worth" es «Vale» y "Sells for" es «Se vende por». No son sinónimos: el
+       primero es la mediana de lo que se ha vendido de verdad y el segundo el
+       listing más barato que hay puesto ahora. Toda la pantalla se apoya en que
+       esa diferencia se lea de un vistazo, así que no pueden llamarse las dos
+       "precio".
+     · "Made trading" es «Sacado con el mercado» y no «Ganado»: el saldo de la
+       cartera de Steam no se puede sacar, y «ganado» sugiere un ingreso. */
+  "Market inventory": "Inventario del mercado",
+  "Item": "Objeto",
+  "How many": "Cuántos",
+  "Worth": "Vale",
+  "Sells for": "Se vende por",
+  "Cost": "Costó",
+  "Total": "Total",
+  "Total value": "Valor total",
+  "Unit price": "Precio por unidad",
+  "Name": "Nombre",
+  "Filter by name": "Filtrar por nombre",
+  "Nothing matches that.": "No hay nada que case con eso.",
+  "locked": "bloqueado",
+  "price not confirmed yet": "precio sin confirmar",
+  "Value over time": "Valor con el tiempo",
+  "Out of your own pocket": "De tu bolsillo",
+  "Spent on games": "Gastado en juegos",
+  "Made trading": "Sacado con el mercado",
+  "Unrealised, on what you still hold": "Sin realizar, en lo que aún tienes",
+  "{items} items · {distinct} different · about {quick} if you sold it all today":
+    "{items} objetos · {distinct} distintos · unos {quick} si lo vendieras todo hoy",
+  "{n} items have no price yet, and are not in that total.":
+    "{n} objetos aún no tienen precio, y no están en ese total.",
+  "{n} items had no price on {day}": "{n} objetos no tenían precio el {day}",
+  "Inventory value from {from} to {to}": "Valor del inventario del {from} al {to}",
+  "The value graph starts the day you first upload: nobody recorded what your inventory was worth before that.":
+    "La gráfica del valor empieza el día que subes el primer volcado: nadie guardó lo que valía tu inventario antes de eso.",
+  "{n} of what you've spent on games didn't come from your pocket — the market paid for it.":
+    "{n} de lo que has gastado en juegos no salió de tu bolsillo — lo puso el mercado.",
+  "Unrealised covers the {covered} items you actually bought. The other {uncovered} came out of cases or trades and never cost you anything, so there's no gain to compute.":
+    "Lo sin realizar es de los {covered} objetos que compraste. Los otros {uncovered} salieron de cajas o de intercambios y no te costaron nada, así que no hay ganancia que calcular.",
+  "What your CS2 and Steam items are worth, what you paid, and what the market has given back.":
+    "Lo que valen tus objetos de CS2 y de Steam, lo que pagaste, y lo que el mercado te ha devuelto.",
+  "Steam blocks servers from reading inventories — that's why the sites that do this work so badly — and your purchase history needs your own session. So the reading happens in your browser, and Reel keeps the result. Nothing of your Steam session ever leaves your machine.":
+    "Steam no deja que un servidor lea inventarios —por eso funcionan tan mal las webs que hacen esto— y tu historial de compras necesita tu propia sesión. Así que la lectura ocurre en tu navegador y Reel se queda el resultado. Nada de tu sesión de Steam sale de tu máquina.",
+  "Open steamcommunity.com in another tab, signed in.":
+    "Abre steamcommunity.com en otra pestaña, con tu sesión.",
+  "Open the browser console there (⌥⌘J on Chrome for Mac) and paste this.":
+    "Abre ahí la consola del navegador (⌥⌘J en Chrome para Mac) y pega esto.",
+  "Wait — it asks Steam one price at a time on purpose — then press its buttons to save the files.":
+    "Espera —pregunta los precios de uno en uno a propósito— y pulsa sus botones para guardar los ficheros.",
+  "Come back here and upload them.": "Vuelve aquí y súbelos.",
+  "Copy the collector": "Copiar el recolector",
+  "Show the collector": "Ver el recolector",
+  "Hide the collector": "Ocultar el recolector",
+  "Upload the file": "Subir el fichero",
+  "Upload a new dump": "Subir un volcado nuevo",
+  "Fetch the {n} missing prices": "Traer los {n} precios que faltan",
+  "Fetched {n}. {left} to go — press again.":
+    "Traídos {n}. Quedan {left} — vuelve a pulsar.",
+  "Fetched {n}. Everything has a price now.":
+    "Traídos {n}. Ya tienen precio todos.",
+  "Your items as of {when}. Prices refresh on their own every day.":
+    "Tus objetos a {when}. Los precios se refrescan solos a diario.",
+  "Prices refresh on their own every day.": "Los precios se refrescan solos a diario.",
+  "Uploaded: {what}.": "Subido: {what}.",
+  "{n} items": "{n} objetos",
+  "{n} market rows": "{n} filas de mercado",
+  "{n} price points": "{n} puntos de precio",
+  "{n} rows had a date Steam wrote in a way we couldn't read, and were left out rather than dated wrong.":
+    "{n} filas traían una fecha que Steam escribió de una forma que no supimos leer, y se han quedado fuera en vez de fecharse mal.",
   "Steam account": "Cuenta de Steam",
   "Connect Steam": "Conectar Steam",
   "Connected": "Conectada",

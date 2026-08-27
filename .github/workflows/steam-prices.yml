@@ -1,0 +1,96 @@
+name: steam-prices
+
+# Refresco diario de los precios del mercado de Steam y la foto del inventario
+# (migración 0085, función supabase/functions/steam-market).
+#
+# ── Por qué aquí y no en pg_cron ─────────────────────────────────────────
+# Porque el trabajo son peticiones a steamcommunity.com con un hueco entre
+# ellas, no una consulta: un inventario de 500 objetos son unos seis minutos de
+# reloj repartidos en varias invocaciones, y encadenarlas es un bucle con su
+# condición de parada. Eso en un runner son diez líneas de `curl`; en pg_cron es
+# un disparador que no puede leer la respuesta anterior.
+#
+# ── Por qué NO refresca el inventario ────────────────────────────────────
+# Porque no puede. `/inventory/<steamid>/…` está estrangulado por IP y contesta
+# 429 hasta a la primera petición desde una IP limpia; desde un runner de GitHub,
+# que es una IP de nube compartida, no hay nada que intentar. Lo que tienes lo
+# sube el recolector desde tu propio navegador, de uvas a peras. Lo que cambia a
+# diario no es lo que tienes: es lo que vale.
+#
+# Lo que sí funciona desde fuera es `market/priceoverview`, y es lo único que
+# este trabajo pide.
+#
+# A las 4:10 UTC: después de que el mercado europeo se haya calmado, y a una hora
+# en la que un 429 no le estropea la pantalla a nadie. El minuto raro es para no
+# caer en el pico de trabajos programados en punto.
+#
+# SECRETS (repo → Settings → Secrets and variables → Actions):
+#   SUPABASE_URL                — https://<ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY   — la sb_secret_… (SUPABASE_DEFAULT_KEY en el
+#                                 CLI), no el JWT service_role legacy: ver
+#                                 docs/DEPLOY.md.
+# Sin ellos el trabajo falla a la primera vuelta en vez de escribir nada en
+# silencio.
+
+on:
+  schedule:
+    - cron: "10 4 * * *"
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: "Tandas de precios como mucho (150 objetos cada una)"
+        default: "8"
+
+permissions: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Refrescar precios y escribir la foto del día
+        env:
+          URL: ${{ secrets.SUPABASE_URL }}
+          KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ROUNDS: ${{ github.event.inputs.rounds || '8' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${URL:-}" ] || [ -z "${KEY:-}" ]; then
+            echo "Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY." >&2
+            exit 1
+          fi
+
+          fn="$URL/functions/v1/steam-market"
+
+          # Cada tanda pide como mucho 150 precios y devuelve cuántos quedan.
+          # Se para cuando no queda nada o cuando se agotan las vueltas — el
+          # tope existe para que un inventario enorme, o un 429 que corte cada
+          # tanda a la primera, no dejen esto girando media hora.
+          for i in $(seq 1 "$ROUNDS"); do
+            out=$(curl -sS -X POST "$fn/prices" \
+              -H "Authorization: Bearer $KEY" -H "apikey: $KEY")
+            echo "tanda $i: $out"
+            remaining=$(printf '%s' "$out" | sed -n 's/.*"remaining":\([0-9]*\).*/\1/p')
+            refreshed=$(printf '%s' "$out" | sed -n 's/.*"refreshed":\([0-9]*\).*/\1/p')
+            # Sin `remaining` en la respuesta es que no fue una respuesta: la
+            # función devolvió un error, y seguir pidiendo no lo va a arreglar.
+            if [ -z "$remaining" ]; then
+              echo "La función no ha contestado con lo esperado." >&2
+              exit 1
+            fi
+            [ "$remaining" = "0" ] && break
+            # Una tanda que no refresca NADA y aún tiene cola es Steam diciendo
+            # 429. Insistir alarga el bloqueo; se deja para mañana.
+            if [ "${refreshed:-0}" = "0" ]; then
+              echo "Steam ha cortado la tanda; lo que queda ($remaining) va mañana."
+              break
+            fi
+          done
+
+          # La foto del día se escribe SIEMPRE, aunque falten precios: el hueco
+          # se cuenta en `missing_prices` y la gráfica lo dice. Saltársela dejaría
+          # un agujero en la serie, que es peor — un día sin punto no se distingue
+          # de un día a cero.
+          curl -sS -X POST "$fn/snapshot" \
+            -H "Authorization: Bearer $KEY" -H "apikey: $KEY"
+          echo

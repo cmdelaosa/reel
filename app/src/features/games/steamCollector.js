@@ -1,0 +1,416 @@
+/* Recolector del inventario de Steam.
+ *
+ * Esto NO se ejecuta en Reel. Es el texto que se copia de la pestaña Steam y se
+ * pega en la consola de una pestaña abierta en `steamcommunity.com`. Vive aquí,
+ * en el repo y en un solo sitio, porque la app lo importa con `?raw` para
+ * ofrecerlo con su botón de copiar: tenerlo también en un README daría dos
+ * copias y una de las dos envejecería.
+ *
+ * ── Por qué se pega en una pestaña de Steam y no lo hace el servidor ──────
+ * Tres barreras, y ninguna se rodea desde fuera:
+ *
+ *  1. `/inventory/…` está estrangulado por IP con una mano durísima. Medido el
+ *     27-08-2026: la PRIMERA petición desde una IP doméstica limpia ya devuelve
+ *     429. Desde la IP compartida de una edge function no es un riesgo, es el
+ *     caso normal.
+ *  2. `market/pricehistory` y `market/myhistory` contestan 400 sin la cookie de
+ *     sesión. El truco antiguo de leer la serie incrustada en la página del
+ *     listing (`var line1=[[…]]`) murió: hoy esa página son 5 MB sin una sola
+ *     vela dentro.
+ *  3. Y no vale con pegar esto y que suba solo: la CSP de `steamcommunity.com`
+ *     trae un `connect-src` con lista blanca —Steam, Valve y poco más— que no
+ *     incluye a Supabase. Un `fetch` desde aquí a Reel lo corta el navegador,
+ *     venga de la consola o de donde venga. Por eso el resultado sale en
+ *     FICHEROS y se sube a mano.
+ *
+ * ── Y por qué botones en vez de descargar solo ────────────────────────────
+ * Chrome bloquea la SEGUNDA descarga automática de un sitio sin avisar de nada
+ * (ya nos pasó con la importación de FilmAffinity: el fichero simplemente no
+ * aparece en ~/Downloads). Una descarga disparada por un clic de verdad no
+ * entra en esa cuenta, así que esto pinta un panel y espera a que pulses.
+ */
+
+(async () => {
+  "use strict";
+
+  /* ── Qué se recoge ────────────────────────────────────────────────────── */
+
+  /* 730/2 es CS2 (skins, cápsulas y pegatinas) y 753/6 es el inventario de la
+     comunidad de Steam (cromos, fondos, emoticonos y las pegatinas del punto).
+     Son los dos que tienen mercado; el resto de appids son objetos de juego que
+     no se venden y que solo alargarían la pasada. */
+  const APPS = [
+    { appid: 730, context: 2, label: "CS2" },
+    { appid: 753, context: 6, label: "Steam" },
+  ];
+
+  /* 3 = EUR. Es el id de moneda de Valve, no ISO 4217. Steam no convierte: cada
+     mercado regional tiene su propia oferta, así que pedir otra moneda no
+     traduce el mismo precio, trae otro precio distinto. */
+  const CURRENCY = 3;
+
+  /* Cuánto histórico se trae por objeto. Steam guarda desde 2013, y traerlo
+     entero para un inventario grande son megas de JSON que luego hay que subir.
+     Dos años cubren cualquier gráfica que se vaya a mirar. */
+  const HISTORY_DAYS = 730;
+
+  /* Para cuántos objetos. Los más valiosos primero: la curva de una caja de
+     0,03 € no la va a abrir nadie, y son las que más filas meten. */
+  const HISTORY_TOP = 60;
+
+  /* ── Herramientas ─────────────────────────────────────────────────────── */
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /** El SteamID64 de quien está mirando. `g_steamID` lo pone Steam en cualquier
+   *  página de la comunidad cuando hay sesión; si vale false, no la hay. */
+  const steamId = String(window.g_steamID || "");
+  if (!/^\d{17}$/.test(steamId)) {
+    alert(
+      "No veo tu sesión de Steam.\n\n" +
+        "Abre https://steamcommunity.com/market/ , confirma que arriba a la " +
+        "derecha sale tu nombre, y vuelve a pegar esto en ESA pestaña.",
+    );
+    return;
+  }
+
+  /** Un `fetch` que se rinde con criterio.
+   *
+   *  El 429 de Steam no es un error que reintentar deprisa: es "para". Se espera
+   *  cada vez más (2s, 4s, 8s…) porque insistir cada segundo alarga el bloqueo
+   *  en vez de acortarlo. Y `credentials: "include"` porque media pasada
+   *  depende de tu cookie. */
+  async function get(url, { tries = 5 } = {}) {
+    let wait = 2000;
+    for (let i = 0; i < tries; i++) {
+      const res = await fetch(url, { credentials: "include" });
+      if (res.ok) return res.json();
+      if (res.status === 429 || res.status >= 500) {
+        log(`  Steam dice "espera" (${res.status}); reintento en ${wait / 1000}s…`);
+        await sleep(wait);
+        wait *= 2;
+        continue;
+      }
+      /* 403 en el inventario es el caso que más confunde, y no es un fallo del
+         guión: es tu privacidad. Se dice con esas palabras. */
+      if (res.status === 403) throw new Error("403 (¿inventario privado?)");
+      throw new Error(String(res.status));
+    }
+    throw new Error("Steam sigue diciendo 429 después de varios intentos");
+  }
+
+  /** "32,93€" → 3293. También "€32.93", "$1,234.56" y "1 234,56 руб.".
+   *
+   *  Steam devuelve el precio ya formateado en el idioma de tu cuenta y no da la
+   *  cifra cruda por ningún lado, así que hay que deshacer el formato. La regla
+   *  que lo resuelve sin saber el idioma: el ÚLTIMO separador que tenga
+   *  exactamente dos dígitos detrás son los decimales; cualquier otro punto o
+   *  coma es de los miles y sobra.
+   *
+   *  El `replace` de la cola no es adorno: el rublo se escribe "1 234,56 руб."
+   *  y ese punto final de la abreviatura sobrevive al primer filtro, rompe el
+   *  match de los decimales y manda la cifra por la rama de "no hay decimales",
+   *  que multiplica por cien. Un precio cien veces mayor sin que nada falle.
+   *
+   *  (Esta función está repetida en app/src/domain/steamPortfolio.ts, que es
+   *  donde tiene sus pruebas. La copia vive aquí porque este fichero se pega
+   *  entero en una consola ajena y no puede importar nada.) */
+  function cents(text) {
+    if (typeof text === "number") return Math.round(text * 100);
+    if (!text) return null;
+    const digits = String(text).replace(/[^\d.,]/g, "").replace(/[.,]+$/, "");
+    if (!digits) return null;
+    const m = digits.match(/[.,](\d{2})$/);
+    if (!m) return Math.round(Number(digits.replace(/[.,]/g, "")) * 100);
+    const whole = digits.slice(0, m.index).replace(/[.,]/g, "");
+    return Number(whole || "0") * 100 + Number(m[1]);
+  }
+
+  /* ── El panel, que es toda la interfaz que hay ────────────────────────── */
+
+  document.getElementById("reel-collector")?.remove();
+  const panel = document.createElement("div");
+  panel.id = "reel-collector";
+  panel.style.cssText =
+    "position:fixed;right:16px;bottom:16px;z-index:99999;width:380px;max-height:70vh;" +
+    "overflow:auto;background:#1b2838;color:#c7d5e0;border:1px solid #66c0f4;" +
+    "border-radius:8px;padding:14px;font:13px/1.5 system-ui,sans-serif;" +
+    "box-shadow:0 8px 32px rgba(0,0,0,.6)";
+  panel.innerHTML =
+    '<div style="font-weight:700;color:#66c0f4;margin-bottom:8px">Reel · inventario de Steam</div>' +
+    '<pre id="reel-log" style="margin:0;white-space:pre-wrap;font:12px/1.45 ui-monospace,monospace"></pre>' +
+    '<div id="reel-buttons" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"></div>';
+  document.body.appendChild(panel);
+
+  const logEl = panel.querySelector("#reel-log");
+  function log(line) {
+    logEl.textContent += line + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log("[reel]", line);
+  }
+
+  /** Un botón que descarga un JSON. Con clic de por medio, que es lo que
+   *  esquiva el bloqueo de descargas múltiples de Chrome. */
+  function offer(label, name, payload) {
+    const json = JSON.stringify(payload);
+    const size = (json.length / 1024 / 1024).toFixed(2);
+    const b = document.createElement("button");
+    b.textContent = `${label} (${size} MB)`;
+    b.style.cssText =
+      "background:#66c0f4;color:#1b2838;border:0;border-radius:4px;padding:7px 12px;" +
+      "font-weight:700;cursor:pointer";
+    b.onclick = () => {
+      const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      b.textContent = "✓ " + label;
+    };
+    panel.querySelector("#reel-buttons").appendChild(b);
+  }
+
+  /* ── 1. El inventario ─────────────────────────────────────────────────── */
+
+  /** Junta `assets` con `descriptions` y agrega por nombre de mercado.
+   *
+   *  Steam devuelve las dos listas por separado y el puente es
+   *  `classid_instanceid`: `assets` son las unidades (una fila por objeto que
+   *  tienes) y `descriptions` es el catálogo (una por tipo). Lo que se sube es
+   *  la agregación por `market_hash_name`, porque esa es la unidad de precio.
+   *
+   *  Lo que no tiene `market_hash_name` se cae, y tiene que caerse: son los
+   *  objetos no vendibles —regalos, cosas de evento, cromos ya usados— que no
+   *  cotizan en ningún sitio y que sumados darían un total inventado. */
+  async function inventory(app) {
+    const out = new Map();
+    let start = "";
+    let pages = 0;
+    for (;;) {
+      const url =
+        `/inventory/${steamId}/${app.appid}/${app.context}` +
+        `?l=spanish&count=2000${start ? `&start_assetid=${start}` : ""}`;
+      const data = await get(url);
+      const byClass = new Map();
+      for (const d of data.descriptions ?? []) {
+        byClass.set(`${d.classid}_${d.instanceid}`, d);
+      }
+      for (const a of data.assets ?? []) {
+        const d = byClass.get(`${a.classid}_${a.instanceid}`);
+        if (!d?.market_hash_name) continue;
+        const key = d.market_hash_name;
+        const row = out.get(key) ?? {
+          appid: app.appid,
+          market_hash_name: key,
+          quantity: 0,
+          /* El hash pelado, no la URL: el prefijo del CDN lo pone Reel al
+             pintar, y así un cambio de CDN de Valve no obliga a re-volcar. */
+          icon_url: d.icon_url ?? null,
+          item_type: d.type ?? null,
+          marketable: Boolean(d.marketable),
+        };
+        row.quantity += Number(a.amount ?? 1);
+        out.set(key, row);
+      }
+      pages++;
+      log(`  ${app.label}: ${out.size} objetos distintos (${pages} página(s))`);
+      if (!data.more_items) break;
+      start = data.last_assetid;
+      /* Entre páginas se respira. Es el endpoint que muerde. */
+      await sleep(1500);
+    }
+    return [...out.values()];
+  }
+
+  log("Leyendo tu inventario…");
+  const holdings = [];
+  for (const app of APPS) {
+    try {
+      holdings.push(...(await inventory(app)));
+    } catch (e) {
+      /* Que 753 falle no puede tirar la pasada de 730, que es la que importa.
+         Se dice cuál se cayó y se sigue. */
+      log(`  ${app.label}: no ha podido ser — ${e.message}`);
+    }
+    await sleep(1500);
+  }
+  if (!holdings.length) {
+    log("No ha salido ni un objeto vendible. Si tu inventario es privado, está");
+    log("en Perfil → Editar perfil → Privacidad → Inventario → Público.");
+    return;
+  }
+  const units = holdings.reduce((n, h) => n + h.quantity, 0);
+  log(`Total: ${holdings.length} objetos distintos, ${units} unidades.`);
+
+  /* ── 2. El libro: compras, ventas y cartera ───────────────────────────── */
+
+  /** El historial del mercado, de `market/myhistory/render`.
+   *
+   *  La respuesta trae `results_html` con las filas, NO datos: hay que parsear.
+   *  Cada fila lleva `id="history_row_<listing>_<evento>"`, que es estable, y es
+   *  lo que se sube como `external_id` para que re-volcar no duplique nada.
+   *
+   *  Las dos fechas de la fila son "cuándo se puso" y "cuándo se cerró"; la que
+   *  vale es la SEGUNDA. Y el signo lo da el rótulo de la izquierda, que dice
+   *  "Vendido"/"Comprado" en tu idioma — así que no se lee el texto, se lee la
+   *  clase `market_listing_gainorloss`, que es "+" o "-" en todos. */
+  function parseHistory(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const rows = [];
+    for (const el of doc.querySelectorAll(".market_listing_row")) {
+      const id = el.id;
+      if (!id) continue;
+      const sign = (el.querySelector(".market_listing_gainorloss")?.textContent || "").trim();
+      if (sign !== "+" && sign !== "-") continue; // filas de "puesto a la venta", sin dinero
+      const amount = cents(el.querySelector(".market_listing_price")?.textContent);
+      if (amount === null) continue;
+      const dates = [...el.querySelectorAll(".market_listing_listed_date")]
+        .map((d) => (d.textContent || "").trim())
+        .filter(Boolean);
+      const name = (el.querySelector(".market_listing_item_name")?.textContent || "").trim();
+      const appEl = el.querySelector(".market_listing_game_name");
+      rows.push({
+        external_id: id,
+        /* La fecha de Steam es "24 ago" sin año: la reconstruye el servidor
+           con el orden de las filas, que llegan de más nueva a más vieja. Aquí
+           se sube tal cual y también el índice, que es lo que no se puede
+           recuperar después. */
+        raw_date: dates[dates.length - 1] ?? null,
+        kind: sign === "+" ? "market_sell" : "market_buy",
+        /* Signo desde tu cartera: una venta la llena, una compra la vacía. */
+        amount_cents: sign === "+" ? amount : -amount,
+        market_hash_name: name || null,
+        app_name: (appEl?.textContent || "").trim() || null,
+      });
+    }
+    return rows;
+  }
+
+  log("Leyendo tus compras y ventas…");
+  const ledger = [];
+  for (let start = 0; ; start += 100) {
+    let data;
+    try {
+      data = await get(`/market/myhistory/render/?query=&start=${start}&count=100`);
+    } catch (e) {
+      log(`  El historial se ha cortado en ${ledger.length} filas — ${e.message}`);
+      break;
+    }
+    const rows = parseHistory(data.results_html || "");
+    ledger.push(...rows.map((r, i) => ({ ...r, order: start + i })));
+    log(`  ${ledger.length} de ${data.total_count ?? "?"}…`);
+    if (!rows.length || start + 100 >= (data.total_count ?? 0)) break;
+    await sleep(1200);
+  }
+
+  /* ── 3. Precios de ahora ──────────────────────────────────────────────── */
+
+  /* Los trae también el cron de Reel a diario, y los del cron son los que
+     mandan. Estos son para que la pantalla enseñe algo el primer día en vez de
+     una tabla de guiones: Reel solo los acepta para objetos de los que todavía
+     no sabe el precio, y los sustituye en cuanto el cron pasa. */
+  log(`Preguntando precios (${holdings.length}; esto es lo que más tarda)…`);
+  const prices = [];
+  for (let i = 0; i < holdings.length; i++) {
+    const h = holdings[i];
+    try {
+      const p = await get(
+        `/market/priceoverview/?appid=${h.appid}&currency=${CURRENCY}` +
+          `&market_hash_name=${encodeURIComponent(h.market_hash_name)}`,
+        { tries: 3 },
+      );
+      prices.push({
+        appid: h.appid,
+        market_hash_name: h.market_hash_name,
+        lowest_cents: cents(p.lowest_price),
+        median_cents: cents(p.median_price),
+        volume: p.volume ? Number(String(p.volume).replace(/[^\d]/g, "")) : null,
+      });
+    } catch (e) {
+      log(`  sin precio: ${h.market_hash_name} (${e.message})`);
+    }
+    if (i % 25 === 24) log(`  ${i + 1}/${holdings.length}…`);
+    /* ~3s por petición. Parece lento y es lo que hace que termine: por debajo
+       de eso llega el 429 y entonces sí que se tarda. */
+    await sleep(3000);
+  }
+
+  const totalCents = prices.reduce((sum, p) => {
+    const h = holdings.find((x) => x.market_hash_name === p.market_hash_name);
+    return sum + (p.median_cents ?? 0) * (h?.quantity ?? 0);
+  }, 0);
+  log(`Valor ahora mismo: ${(totalCents / 100).toFixed(2)} €`);
+
+  const base = {
+    version: 1,
+    steam_id: steamId,
+    currency: CURRENCY,
+    collected_at: new Date().toISOString(),
+  };
+  offer("Guardar inventario", `reel-steam-${steamId}.json`, {
+    ...base,
+    holdings,
+    prices,
+    ledger,
+  });
+  log("");
+  log("Listo. Pulsa el botón y sube el fichero en Reel → Juegos → Steam.");
+
+  /* ── 4. El histórico, aparte y opcional ───────────────────────────────── */
+
+  /* En su propio fichero y con su propio botón por dos razones: pesa mucho más
+     que todo lo anterior junto, y no hace falta para ver el valor de hoy. Si
+     esta parte se cae a medias, lo de arriba ya está descargado. */
+  const top = [...holdings]
+    .map((h) => {
+      const p = prices.find((x) => x.market_hash_name === h.market_hash_name);
+      return { ...h, value: (p?.median_cents ?? 0) * h.quantity };
+    })
+    .sort((a, b) => b.value - a.value)
+    .slice(0, HISTORY_TOP);
+
+  log("");
+  log(`Trayendo el histórico de los ${top.length} más valiosos…`);
+  const cutoff = Date.now() - HISTORY_DAYS * 864e5;
+  const history = [];
+  for (let i = 0; i < top.length; i++) {
+    const h = top[i];
+    try {
+      const p = await get(
+        `/market/pricehistory/?country=ES&currency=${CURRENCY}&appid=${h.appid}` +
+          `&market_hash_name=${encodeURIComponent(h.market_hash_name)}`,
+        { tries: 3 },
+      );
+      /* Steam da ["Jul 12 2014 01: +0", 1.234, "5"], y el último mes viene POR
+         HORA. Se agrega a día aquí —media ponderada por volumen— porque subir
+         720 velas donde caben 30 sesga la curva hacia las horas de más
+         movimiento y multiplica por 24 lo que hay que subir. */
+      const byDay = new Map();
+      for (const [when, price, vol] of p.prices ?? []) {
+        const t = Date.parse(String(when).replace(/ (\d{2}): \+0$/, " $1:00:00 GMT"));
+        if (!Number.isFinite(t) || t < cutoff) continue;
+        const day = new Date(t).toISOString().slice(0, 10);
+        const n = Number(vol) || 0;
+        const acc = byDay.get(day) ?? { cents: 0, vol: 0 };
+        acc.cents += Math.round(price * 100) * Math.max(n, 1);
+        acc.vol += Math.max(n, 1);
+        byDay.set(day, acc);
+      }
+      history.push({
+        appid: h.appid,
+        market_hash_name: h.market_hash_name,
+        days: [...byDay.entries()].map(([day, a]) => [day, Math.round(a.cents / a.vol), a.vol]),
+      });
+    } catch (e) {
+      log(`  sin histórico: ${h.market_hash_name} (${e.message})`);
+    }
+    if (i % 10 === 9) log(`  ${i + 1}/${top.length}…`);
+    await sleep(3000);
+  }
+
+  if (history.length) {
+    offer("Guardar histórico", `reel-steam-historico-${steamId}.json`, { ...base, history });
+    log("Histórico listo — segundo botón, y súbelo también.");
+  }
+})();
