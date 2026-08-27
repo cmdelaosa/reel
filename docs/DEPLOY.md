@@ -28,47 +28,38 @@ supabase link --project-ref <ref>
 supabase db push          # applies every migration in supabase/migrations
 ```
 
-⚠️ **No empujes una migración desde una rama sin fusionar.** El registro de
-Supabase va por NÚMERO, no por fichero, así que ocupar un número desde una rama
-hace que la migración que acabe llevando ese número en `main` **se salte sin
-decir nada** — `db push` la da por aplicada y sigue con la siguiente.
-
-Pasó el 27-08-2026: `0087_inventario_steam` se desplegó desde su rama como 0085,
-y cuando se fusionó `0085_ficha_de_episodio` su push lo saltó y aplicó solo el
-0086. Producción se quedó sin las seis columnas de `episodes`, con el registro
-diciendo "0085 aplicada" — que era cierto, pero de otra.
-
-**Cómo se repara**, desde un checkout de `main` (no desde el worktree de la
-rama, donde ese número es otro fichero):
+⚠️ **`db push` skips a version number that prod already has, and says
+nothing.** It matches by NUMBER, not by file. On 27-ago-2026 `0085_ficha_de_episodio`
+never ran because prod already carried an `0085` named `inventario_steam`, pushed
+from a branch that had not been merged. `supabase migration list` showed `remote`
+and `supabase db diff` said "No schema changes found" — both compare numbers too.
+The only thing that told the truth:
 
 ```bash
-supabase migration repair --status reverted 0085
-supabase db push
+supabase db query --linked "select version, name from supabase_migrations.schema_migrations order by version desc limit 5;"
+supabase db query --linked "select column_name from information_schema.columns where table_schema='public' and table_name='<tabla>';"
 ```
 
-`repair` solo toca el registro, no el esquema; el `push` vuelve a pasar el
-fichero de verdad. **Antes de reparar, mira que la migración que se va a repetir
-sea idempotente** — la de este caso lo era (`add column if not exists`), pero eso
-no se puede dar por hecho de una cualquiera, y `repair` es la única palanca que
-hace que una migración ya registrada se vuelva a ejecutar.
+So: **after a push that adds columns, check one of the new columns is really
+there** — and never push a migration from an unmerged branch, which is what took
+the number in the first place.
 
-Después, comprobar el HECHO y no el registro, que es el que miente. Con la clave
-de **servicio** (ver [Which service key](#which-service-key)), no con la anónima:
-`episodes` no se lee sin sesión, y un 401 por RLS se parece demasiado a un 400
-por columna inexistente.
+**Cómo se repara**, si vuelve a pasar. Desde un checkout de `main`, nunca desde
+el worktree de la rama —ahí ese número es otro fichero—:
 
 ```bash
-key=$(supabase projects api-keys --project-ref <ref> --reveal -o env \
-  | grep '^SUPABASE_DEFAULT_KEY=' | cut -d= -f2- | tr -d '"')
-for col in id still_path columna_que_no_existe; do
-  printf '%s -> ' "$col"
-  curl -s -o /dev/null -w '%{http_code}\n' \
-    "https://<ref>.supabase.co/rest/v1/episodes?select=$col&limit=1" \
-    -H "apikey: $key" -H "Authorization: Bearer $key"
-done
-# id -> 200 (la tabla se lee), still_path -> 200 (entró), la inventada -> 400.
-# Sin las dos columnas de control, esta comprobación no comprueba nada.
+supabase migration repair --status reverted <NNNN>   # solo el registro
+supabase db push                                     # vuelve a pasar el fichero
 ```
+
+⚠️ **Antes de reparar, mira que esa migración se pueda repetir.** `repair` es la
+única palanca que hace que una ya registrada se vuelva a ejecutar, y aquí colaba
+porque las de este caso usan `add column if not exists`. Una con un `insert` de
+semilla o un `add constraint` sin guarda duplicaría o reventaría.
+
+Y al verificar, dos columnas de control: una que exista seguro y otra inventada.
+Sin ellas, un 400 no distingue «falta la columna» de «no se lee la tabla», que es
+justo la confusión que alarga el diagnóstico.
 
 ⚠️ **Do not seed prod.** `supabase/seed/dev.sql` creates demo accounts
 (`password123`) and open invite codes — it's for local `supabase db reset` only.
@@ -93,7 +84,7 @@ en todas sus otras rutas.
 ruta `/by-steam` de `igdb-proxy`, que llega en 0076: desplegar solo `steam-sync`
 deja las importaciones colgadas en `applying` con un 404 en `job_runs`.
 
-`steam-market` (0087) es el inventario del mercado, y **no necesita ningún
+`steam-market` (0088) es el inventario del mercado, y **no necesita ningún
 secreto nuevo ni sale a internet**: recibe el volcado del navegador y escribe la
 foto del día, y nada más. Los precios los trae otro trabajo — ver
 [El cron de los precios de Steam](#el-cron-de-los-precios-de-steam), que **no va
@@ -135,6 +126,7 @@ supabase secrets set IGDB_CLIENT_ID=...       # Twitch app Client ID  (videojueg
 supabase secrets set IGDB_CLIENT_SECRET=...   # Twitch app Client Secret
 supabase secrets set STEAM_API_KEY=...        # Steam Web API key   (videojuegos)
 supabase secrets set APP_URL=https://...      # origen público de la app (vuelta de Steam)
+supabase secrets set STEAM_RETURN_BASE=https://<dominio>/api/steam   # proxy de la vuelta
 supabase secrets set RESEND_API_KEY=...       # Resend API key
 supabase secrets set RESEND_FROM="Reel <alerts@yourdomain.com>"   # verified domain
 ```
@@ -175,6 +167,21 @@ y confundirlas es el error que cuesta una tarde:
   con una cuenta de Steam que tenga algo comprado (Valve no la da a cuentas sin
   compras); el dominio que pide el formulario es informativo. Sin este secreto,
   `/scan` responde 502 y la pantalla dice que Steam no ha contestado.
+
+`STEAM_RETURN_BASE` es **dónde aterriza Steam**, y `APP_URL` es a dónde se
+manda a la persona después: dos cosas distintas que es fácil confundir. Steam le
+enseña a quien se identifica el `openid.realm`, y ese realm sale del origen del
+`return_to`. Sin este secreto la vuelta cae directamente en la edge function y
+la pantalla de Steam dice **"Sign in to `<ref>.supabase.co`"** — un dominio que
+nadie reconoce, justo en la pantalla donde lo único que se juzga es si el sitio
+es de fiar. Con él apuntando al proxy del Worker (`https://reel-app.com/api/steam`,
+sin barra final) la pantalla dice el dominio de Reel.
+
+Las dos mitades tienen que casar: este secreto y `RETURN_PATH` en
+`app/src/worker/index.ts` describen la misma URL, y si discrepan la función
+rechaza la vuelta por `return_to` y el enlace acaba en `steam=invalid`. En local
+se deja sin poner: sin Worker delante, la vuelta va a la función y todo sigue
+como estaba.
 
 `APP_URL` es el origen al que Steam devuelve a la persona cuando termina
 (`https://reel-app.com`, sin barra final; en local, `http://localhost:5173` en
@@ -423,6 +430,16 @@ select count(*) from episodes where season_number > 0 and tmdb_vote_average is n
   only if you enabled Google in step 4.
 - Do **not** set `VITE_DEV_AUTOLOGIN_*` — dev-only, and inert in a prod build
   anyway (`import.meta.env.DEV` is false).
+- Nothing to set by hand for the Steam-return proxy: `SUPABASE_URL` — what
+  `src/worker/steamReturn.ts` forwards to — is declared in `wrangler.jsonc` and
+  ships with the Worker.
+
+  ⚠️ It was first set as a runtime **Secret** in the dashboard, and the very
+  next Workers Build dropped it: the route answered `SUPABASE_URL not
+  configured` and nothing in the build said why (27-Aug-2026). Config that the
+  repo declares survives a deploy; config that only lives in the console depends
+  on nobody overwriting it. And this value is not a credential — it is the
+  public project origin, already inlined in the browser bundle by Vite.
 
 ⚠️ Missing build vars do **not** fail the build: it goes green and serves a
 blank app from a vendor-only bundle (~30 KB of JS). Verify by bundle size

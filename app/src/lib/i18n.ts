@@ -124,6 +124,52 @@ const ES: Record<string, string> = {
      abajo también son plataformas, y lo que separa a las dos no es la palabra
      sino de quién habla cada una — las del juego y la TUYA. */
   "You play it on": "En cuál lo juegas",
+
+  /* ---- La ficha ampliada de un juego (0086) ----
+     "My rating" no está aquí: lo trajo antes la ficha de serie y es la misma
+     frase, con el mismo rótulo, sobre la misma caja de acento. */
+  "Status": "Estado",
+  "Platform": "Plataforma",
+  "Not set": "Ninguna",
+  "Not owned": "No lo tengo",
+  "Add it to your library first": "Añádelo a tu biblioteca primero",
+  "Play trailer": "Ver el tráiler",
+  "View on Steam": "Ver en Steam",
+  "Official site": "Web oficial",
+  "Developer": "Desarrollador",
+  "Publisher": "Distribuidora",
+  /* "Genres" ya está más abajo, en los filtros de Explorar. */
+  "Modes": "Modos",
+  "{votes} reviews": "{votes} reseñas",
+  /* Time to beat. Los rótulos NO se traducen del inglés de IGDB ("Hastily",
+     "Normally", "Completely"): esas palabras describen al jugador y aquí lo que
+     se compara son tres duraciones, así que se nombran por lo que son. */
+  "Rushed": "Rápido",
+  "Normal": "Normal",
+  "Completionist": "Al 100 %",
+  "My playtime": "Mis horas",
+  "{n} estimates from IGDB": "{n} estimaciones de IGDB",
+  "hours played": "horas jugadas",
+  /* Los modos de juego, tal y como los nombra IGDB. Sin clave para los que no
+     salen traducidos: t() cae al inglés y eso es mejor que una traducción a
+     medias que solo cubra los cuatro más comunes. */
+  "Single player": "Un jugador",
+  "Multiplayer": "Multijugador",
+  "Co-operative": "Cooperativo",
+  "Split screen": "Pantalla partida",
+  "Massively Multiplayer Online (MMO)": "MMO",
+  "Battle Royale": "Battle royale",
+  /* La escala de reseñas de Steam, con sus tramos. Prefijadas porque
+     "Positive" a secas colisionaría con cualquier otro uso de la palabra. */
+  "steam: Overwhelmingly Positive": "Extremadamente positivas",
+  "steam: Very Positive": "Muy positivas",
+  "steam: Positive": "Positivas",
+  "steam: Mostly Positive": "Mayormente positivas",
+  "steam: Mixed": "Mixtas",
+  "steam: Mostly Negative": "Mayormente negativas",
+  "steam: Very Negative": "Muy negativas",
+  "steam: Overwhelmingly Negative": "Extremadamente negativas",
+  "steam: Negative": "Negativas",
   "mark as where you play it": "marcar como donde lo juegas",
   "where you play it — tap to clear": "donde lo juegas — toca para quitarlo",
   "Library": "Biblioteca",
@@ -165,7 +211,7 @@ const ES: Record<string, string> = {
      pregunta se hace con esas tres palabras. */
   "Owned": "Lo tengo",
   "from Steam": "de Steam",
-  /* El inventario del mercado (0087). Dos decisiones de vocabulario que se
+  /* El inventario del mercado (0088). Dos decisiones de vocabulario que se
      repiten abajo y conviene dejar dichas:
 
      · "Worth" es «Vale» y "Sells for" es «Se vende por». No son sinónimos: el
@@ -519,6 +565,40 @@ const ES: Record<string, string> = {
     "Notas de IMDb de los episodios de esta temporada, con media {avg}",
   "E{ep} · {rating}": "E{ep} · {rating}",
   "No synopsis yet.": "Aún no hay sinopsis.",
+
+  /* ---- La ficha de un episodio (0088) ---- */
+  "Directing and writing": "Dirección y guion",
+  /* El puesto que llega dentro de `episodes.crew`. "Director" ya está más
+     abajo (la ficha de cine lo dice), pero esa usa "Writers" en plural y aquí
+     el puesto viene de TMDB en singular. */
+  "Writer": "Guion",
+  "My rating": "Mi nota",
+  "Continue with": "Continuar por",
+  "Whole show": "Toda la serie",
+  "Season {n}": "Temporada {n}",
+  "Mark the whole show watched": "Marcar toda la serie vista",
+  "{votes} votes": "{votes} votos",
+  "Guest stars": "Invitados",
+  "Unwatch": "Desmarcar",
+  "Not watched": "Sin ver",
+  "Aired {date}": "Se emitió el {date}",
+  "Watched on {date}": "Visto el {date}",
+  "Premieres on {date}": "Se estrena el {date}",
+  "No still yet": "Sin fotograma todavía",
+  /* De dónde salió la marca de visto. 'app' no se dice: marcarlo tú es lo
+     normal y no necesita explicación; lo que sí explica algo es que la marca
+     venga de una importación, porque es lo que justifica una fecha vieja. */
+  "imported from TV Time": "importado de TV Time",
+  "from the initial import": "de la importación inicial",
+  "Cast and crew arrive when the episode airs.": "El reparto y la dirección llegan cuando el episodio se emite.",
+  "We'll tell you on premiere day": "Te avisaremos el día del estreno",
+  "you follow the show and you're up to date": "sigues la serie y estás al día",
+  "Runtime to be confirmed": "Duración por confirmar",
+  "View on IMDb": "Ver en IMDb",
+  /* episode_type de TMDB. 'standard' no se enseña: es el caso de casi todos y
+     poner "estándar" en una ficha no dice nada de ese episodio. Las tres
+     palabras que sí se usan ya están en el diccionario, más abajo — el
+     calendario las dice desde antes. */
   "Episode {n}": "Episodio {n}",
   "Episode S{season} · E{episode}": "Episodio T{season} · E{episode}",
   "{votes} votes on IMDb": "{votes} votos en IMDb",

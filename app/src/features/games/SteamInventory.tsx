@@ -23,7 +23,7 @@ import { dateLocale } from "@/lib/locale";
 const plural = (n: number, one: string, many: string) =>
   n === 1 ? tr(one) : tv(many, { n });
 
-/* El inventario del mercado, dentro de la pestaña Steam (0087). Lo que la
+/* El inventario del mercado, dentro de la pestaña Steam (0088). Lo que la
    importación de juegos es a tu biblioteca, esto es a tu dinero — y son dos
    cosas distintas, así que van en dos bloques y no en uno.
 

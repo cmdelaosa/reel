@@ -1,4 +1,4 @@
--- 0087_inventario_steam.sql
+-- 0088_inventario_steam.sql
 -- El inventario del mercado de Steam: qué objetos tienes, cuánto valen hoy,
 -- cuánto valían y qué dinero ha entrado y salido por ellos.
 --

@@ -1,7 +1,7 @@
 name: steam-prices
 
 # Refresco diario de los precios del mercado de Steam y la foto del inventario
-# (migración 0087, guión scripts/steam-prices).
+# (migración 0088, guión scripts/steam-prices).
 #
 # ── Por qué el trabajo corre AQUÍ y no en una edge function ──────────────
 # Porque Steam elige por IP a quién le contesta, y a la de las edge functions de

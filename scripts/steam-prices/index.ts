@@ -1,4 +1,4 @@
-/* Cron diario de los precios del mercado de Steam (0087).
+/* Cron diario de los precios del mercado de Steam (0088).
  *
  * ── Por qué esto es un guión y no una ruta de la edge function ────────────
  * Porque Steam elige a quién le contesta por IP, y la de las edge functions de

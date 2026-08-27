@@ -57,7 +57,7 @@
 // por lotes, y con su fila en `job_runs` como los crons.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { authUrl, checkReturn, isValid, STEAM_OPENID, verifyBody } from "./openid.ts";
+import { authUrl, checkReturn, isValid, returnBase, STEAM_OPENID, verifyBody } from "./openid.ts";
 import {
   finishedAt,
   isConflict,
@@ -489,15 +489,17 @@ async function resolveAppids(
 
 /** La URL a la que Steam devuelve a la persona, con su pagaré.
  *
- *  Se construye desde `SUPABASE_URL` y NO desde la URL de la petición. Las dos
- *  suelen coincidir, pero solo la primera es la dirección pública: si el
- *  isolate ve un host interno (una pasarela por delante, un dominio propio de
- *  funciones), el `return_to` que se le da a Steam apuntaría a un sitio al que
- *  el navegador no puede volver — y el fallo aparecería en producción y no
- *  aquí. Además, las dos mitades del ida y vuelta la calculan igual, que es lo
- *  que hace que la comprobación del `return_to` compare lo mismo. */
+ *  Sale de secretos y NO de la URL de la petición, y esa es la parte que
+ *  importa: con el proxy del Worker delante (`STEAM_RETURN_BASE`), el isolate
+ *  ve el host de Supabase mientras que Steam vuelve al dominio de la app, así
+ *  que `req.url` daría una respuesta distinta en cada mitad del ida y vuelta —
+ *  y la comprobación del `return_to` al volver dejaría de comparar lo mismo.
+ *
+ *  `STEAM_RETURN_BASE` existe porque el `realm` que Steam le enseña a la
+ *  persona sale del origen de esto: sin él, la pantalla de Steam dice
+ *  `<ref>.supabase.co` en vez de Reel. Ver `returnBase` en openid.ts. */
 const returnTo = (nonce: string) =>
-  `${Deno.env.get("SUPABASE_URL")}/functions/v1/steam-sync/return?n=${nonce}`;
+  `${returnBase(Deno.env.get("STEAM_RETURN_BASE"), Deno.env.get("SUPABASE_URL"))}/return?n=${nonce}`;
 
 /** Adónde se devuelve a la persona una vez Steam ha contestado.
  *

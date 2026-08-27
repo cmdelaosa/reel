@@ -2,17 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, User } from "lucide-react";
 import { tmdbImg } from "@/lib/tmdb";
 import { t as tr } from "@/lib/i18n";
-import type { CastMember } from "@/lib/schemas";
+import type { RailPerson } from "@/ui/railPerson";
 
-/* El reparto, en una fila. Compartido por las dos fichas: en series el reparto
-   es agregado de toda la serie y en cine es el de la película, pero la fila y
-   su comportamiento son los mismos. Vivía dentro de DetailSheet hasta que hubo
-   una segunda ficha. */
+/* Una fila de caras redondas con su nombre y una línea debajo.
+   Compartida por las tres cosas que la usan, que son la misma fila con datos
+   distintos: el reparto de una serie, el de una película y —desde 0087— la
+   dirección, el guion y los invitados de un episodio.
 
-/* Top-billed cast on one scrollable row. Arrows float over the row's edges
-   (hidden on touch, where you swipe) and only render when there's more to
-   scroll on that side. */
-export function CastRail({ cast, onPick }: { cast: CastMember[]; onPick: (id: number) => void }) {
+   Antes recibía `CastMember[]` de TMDB. Ahora recibe una forma mínima
+   (`RailPerson`) porque el equipo de un episodio no es un CastMember: no tiene
+   `character` sino puesto, y ese puesto se pinta en acento para distinguir "lo
+   que hizo" de "a quién hace". Traducir al pasar es una línea en cada llamada
+   y evita tener dos carruseles casi iguales.
+
+   Las flechas flotan sobre los bordes de la fila y solo aparecen cuando queda
+   sitio hacia ese lado; en táctil se esconden y se desliza. */
+
+export function CastRail({ people, onPick }: { people: RailPerson[]; onPick: (id: number) => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [canL, setCanL] = useState(false);
   const [canR, setCanR] = useState(false);
@@ -27,17 +33,17 @@ export function CastRail({ cast, onPick }: { cast: CastMember[]; onPick: (id: nu
   return (
     <div className="cast-rail">
       <div className="flex gap-3 overflow-x-auto no-scrollbar" ref={ref} onScroll={update} style={{ paddingBottom: 4 }}>
-        {cast.map((c) => (
+        {people.map((p) => (
           <div
-            key={c.id}
+            key={`${p.id}-${p.sub ?? ""}`}
             role="button"
             tabIndex={0}
             className="flex flex-col items-center gap-1.5"
             style={{ width: 96, flex: "0 0 auto", cursor: "pointer", textAlign: "center" }}
-            title={c.name}
-            onClick={() => onPick(c.id)}
+            title={p.name}
+            onClick={() => onPick(p.id)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(c.id); }
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(p.id); }
             }}
           >
             <span
@@ -47,9 +53,9 @@ export function CastRail({ cast, onPick }: { cast: CastMember[]; onPick: (id: nu
                 border: "1px solid var(--border)", flex: "0 0 auto", color: "var(--text-dim)",
               }}
             >
-              {tmdbImg(c.profile_path, "w180_and_h180_face") ? (
+              {tmdbImg(p.profile_path, "w180_and_h180_face") ? (
                 <img
-                  src={tmdbImg(c.profile_path, "w180_and_h180_face")}
+                  src={tmdbImg(p.profile_path, "w180_and_h180_face")}
                   alt=""
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
@@ -57,9 +63,18 @@ export function CastRail({ cast, onPick }: { cast: CastMember[]; onPick: (id: nu
                 <User size={32} />
               )}
             </span>
-            <span className="truncate" style={{ fontSize: 12, fontWeight: 650, width: "100%" }}>{c.name}</span>
-            {c.character && (
-              <span className="mute truncate" style={{ fontSize: 11, width: "100%", marginTop: -4 }}>{c.character}</span>
+            <span className="truncate" style={{ fontSize: 12, fontWeight: 650, width: "100%" }}>{p.name}</span>
+            {p.sub && (
+              <span
+                className="truncate"
+                style={{
+                  fontSize: 11, width: "100%", marginTop: -4,
+                  color: p.subAccent ? "var(--accent)" : "var(--text-mute)",
+                  fontWeight: p.subAccent ? 700 : undefined,
+                }}
+              >
+                {p.sub}
+              </span>
             )}
           </div>
         ))}

@@ -252,7 +252,7 @@ export default function SteamPage() {
         )}
       </div>
 
-      {/* ── El inventario del mercado (0087) ──────────────────────────────── */}
+      {/* ── El inventario del mercado (0088) ──────────────────────────────── */}
       {/* Debajo de la importación de juegos y no en una pestaña propia: las dos
           cuelgan de la misma cuenta enlazada, y una pestaña "Steam" que no
           enseñara lo de Steam obligaría a recordar en cuál de las dos está cada

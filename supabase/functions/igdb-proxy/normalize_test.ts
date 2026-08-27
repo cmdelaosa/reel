@@ -9,7 +9,13 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   apicalypseTerm,
+  capturasRecortadas,
+  edades,
   gameSearchRow,
+  metacritic,
+  steamReviews,
+  videosRecortados,
+  webOficial,
   beatSeconds,
   canonicalRelease,
   gameRow,
@@ -421,4 +427,108 @@ Deno.test("la fila de búsqueda lleva SIEMPRE las mismas claves", () => {
 
 Deno.test("sin tiempos de IGDB la columna no viaja en el upsert", () => {
   assertEquals("beat_seconds" in gameRow(DETAIL, null), false);
+});
+
+/* ─────────────────── La ficha ampliada del juego (0086) ─────────────────── */
+
+Deno.test("vídeos: el de lanzamiento va primero, aunque IGDB lo mande el sexto", () => {
+  // El orden del payload es el de subida, así que el teaser del anuncio —de
+  // años antes— sale primero. Es exactamente el vídeo que NO hay que pintar.
+  const out = videosRecortados([
+    { name: "Announcement Trailer", video_id: "a" },
+    { name: "Dev Diary", video_id: "b" },
+    { name: "Cinematic Trailer", video_id: "c" },
+    { name: "Launch Trailer", video_id: "d" },
+  ]);
+  assertEquals(out?.[0], { name: "Launch Trailer", video_id: "d" });
+});
+
+Deno.test("vídeos: gameplay por delante de un tráiler cualquiera", () => {
+  const out = videosRecortados([
+    { name: "Cinematic Trailer", video_id: "a" },
+    { name: "Gameplay Overview", video_id: "b" },
+  ]);
+  assertEquals(out?.map((v) => v.video_id), ["b", "a"]);
+});
+
+Deno.test("vídeos: dentro del mismo rango manda el orden de IGDB", () => {
+  // Ordenación estable: entre dos de lanzamiento gana el que se subió antes,
+  // que es el del lanzamiento de verdad y no el del port de tres años después.
+  const out = videosRecortados([
+    { name: "Launch Trailer", video_id: "primero" },
+    { name: "Switch Launch Trailer", video_id: "segundo" },
+  ]);
+  assertEquals(out?.map((v) => v.video_id), ["primero", "segundo"]);
+});
+
+Deno.test("vídeos: se descarta el que no trae id, y se cortan en cuatro", () => {
+  const muchos = Array.from({ length: 9 }, (_, i) => ({ name: "Trailer", video_id: `v${i}` }));
+  assertEquals(videosRecortados(muchos)?.length, 4);
+  assertEquals(videosRecortados([{ name: "Sin id" }]), null);
+  assertEquals(videosRecortados([]), null);
+});
+
+Deno.test("vídeos: sin nombre se le pone uno, no se descarta", () => {
+  const out = videosRecortados([{ video_id: "x" }]);
+  assertEquals(out, [{ name: "Trailer", video_id: "x" }]);
+});
+
+Deno.test("capturas: solo hashes, ocho como mucho", () => {
+  const muchas = Array.from({ length: 16 }, (_, i) => ({ image_id: `sc${i}` }));
+  assertEquals(capturasRecortadas(muchas)?.length, 8);
+  assertEquals(capturasRecortadas(muchas)?.[0], "sc0");
+  assertEquals(capturasRecortadas([{ url: "//sin-hash" }]), null);
+  assertEquals(capturasRecortadas(null), null);
+});
+
+Deno.test("edad: se resuelven los dos enums, y se guardan todas", () => {
+  // Los siete organismos de Baldur's Gate 3, tal cual los devuelve la API.
+  const out = edades([
+    { organization: 2, rating_category: 12 },
+    { organization: 1, rating_category: 6 },
+    { organization: 3, rating_category: 17 },
+  ]);
+  assertEquals(out, [
+    { org: "PEGI", rating: "18" },
+    { org: "ESRB", rating: "M" },
+    { org: "CERO", rating: "Z" },
+  ]);
+});
+
+Deno.test("edad: media fila no se pinta, así que no se guarda", () => {
+  assertEquals(edades([{ organization: 2 }, { rating_category: 12 }, { organization: 99, rating_category: 12 }]), null);
+});
+
+Deno.test("web oficial: gana la de confianza sobre la que no lo es", () => {
+  const url = webOficial([
+    { type: 13, url: "https://store.steampowered.com/app/1", trusted: true },
+    { type: 1, url: "https://dominio-caducado.example", trusted: false },
+    { type: 1, url: "https://oficial.example", trusted: true },
+  ]);
+  assertEquals(url, "https://oficial.example");
+});
+
+Deno.test("web oficial: sin ninguna de confianza vale la primera oficial", () => {
+  assertEquals(webOficial([{ type: 1, url: "https://a.example" }]), "https://a.example");
+  assertEquals(webOficial([{ type: 13, url: "https://steam.example" }]), null);
+  assertEquals(webOficial(null), null);
+});
+
+Deno.test("Steam: el porcentaje se calcula, no se copia el review_score", () => {
+  // Los números reales de Baldur's Gate 3 el 27-ago-2026.
+  assertEquals(steamReviews({ total_positive: 827336, total_reviews: 854808 }), { percent: 97, count: 854808 });
+});
+
+Deno.test("Steam: sin reseñas no hay porcentaje, y no se divide entre cero", () => {
+  assertEquals(steamReviews({ total_positive: 0, total_reviews: 0 }), null);
+  assertEquals(steamReviews({}), null);
+  assertEquals(steamReviews(null), null);
+});
+
+Deno.test("Metacritic: solo 0-100", () => {
+  assertEquals(metacritic({ metacritic: { score: 96 } }), 96);
+  assertEquals(metacritic({ metacritic: { score: 0 } }), 0);
+  assertEquals(metacritic({ metacritic: { score: 120 } }), null);
+  assertEquals(metacritic({ metacritic: { score: "96" } }), null);
+  assertEquals(metacritic({}), null);
 });
