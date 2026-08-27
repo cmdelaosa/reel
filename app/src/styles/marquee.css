@@ -584,15 +584,18 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 /* Una sola columna cuando el carril no tiene nada que llevar. `display: contents`
    y no `display: none`: lo que sobra es la COLUMNA, no su contenido — el bloque
    de amigos sigue apareciendo si lo hay, ahora en el flujo de la única columna,
-   en vez de desaparecer con el carril. */
-.detail-body-sola { grid-template-columns: minmax(0, 1fr); }
+   en vez de desaparecer con el carril.
+
+   El tope va en la PISTA y no en `.detail-main`: al disolver el carril, sus
+   bloques pasan a ser celdas de esta misma rejilla, y un tope puesto solo en la
+   columna principal los dejaba a ellos al ancho entero (1.126 px) sobre un
+   tráiler de 860 centrado, cada uno empezando en una equis distinta. Y 860 y no
+   el ancho entero porque a 1.126 el tráiler mide 633 px de alto —se come la
+   ficha— y la sinopsis sale en renglones que no se leen; 860 queda algo más
+   ancho que la columna de la ficha de dos (804), y el hueco repartido a los dos
+   lados se lee como margen, no como la columna vacía que veníamos a quitar. */
+.detail-body-sola { grid-template-columns: minmax(0, 860px); justify-content: center; }
 .detail-body-sola .detail-rail { display: contents; }
-/* Y con tope: a 1.126 px el tráiler mide 633 px de alto —se come la ficha
-   entera— y la sinopsis sale en renglones que no se leen. 860 px lo deja algo
-   más ancho que en la ficha de dos columnas (804), que es lo que se quería, y
-   centrado el hueco se reparte a los dos lados: eso se lee como margen y no
-   como la columna vacía que veníamos a quitar. */
-.detail-body-sola .detail-main { max-width: 860px; margin-inline: auto; width: 100%; }
 .detail-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 /* Las notas del héroe. La tuya en caja de acento y las ajenas en una oscura:
