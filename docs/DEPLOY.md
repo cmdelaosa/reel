@@ -28,6 +28,34 @@ supabase link --project-ref <ref>
 supabase db push          # applies every migration in supabase/migrations
 ```
 
+⚠️ **No empujes una migración desde una rama sin fusionar.** El registro de
+Supabase va por NÚMERO, no por fichero, así que ocupar un número desde una rama
+hace que la migración que acabe llevando ese número en `main` **se salte sin
+decir nada** — `db push` la da por aplicada y sigue con la siguiente.
+
+Pasó el 27-08-2026: `0087_inventario_steam` se desplegó desde su rama como 0085,
+y cuando se fusionó `0085_ficha_de_episodio` su push lo saltó y aplicó solo el
+0086. Producción se quedó sin las seis columnas de `episodes`, con el registro
+diciendo "0085 aplicada" — que era cierto, pero de otra.
+
+**Cómo se repara**, desde un checkout de `main` (no desde el worktree de la
+rama, donde ese número es otro fichero):
+
+```bash
+supabase migration repair --status reverted 0085
+supabase db push
+```
+
+`repair` solo toca el registro, no el esquema; el `push` vuelve a pasar el
+fichero de verdad. Todas las migraciones de este repo se escriben idempotentes
+(`add column if not exists`, `drop policy if exists`), así que re-aplicar una es
+inofensivo. Después, comprobar el HECHO y no el registro:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  "$URL/rest/v1/episodes?select=still_path&limit=1" -H "apikey: $KEY"   # 200
+```
+
 ⚠️ **Do not seed prod.** `supabase/seed/dev.sql` creates demo accounts
 (`password123`) and open invite codes — it's for local `supabase db reset` only.
 `supabase db push` does not run it; never run `supabase db reset` against the
