@@ -611,7 +611,8 @@ function ReviewList({
       <div className="flex items-center justify-center gap-3 flex-wrap">
         {importButton}
         <span className="mute" style={{ fontSize: 12.5 }}>
-          {tr("Anything without a state comes in as yours, undecided.")}
+          {tr("Anything without a state comes in as yours, undecided.")}{" "}
+          {tr("What you import is dated with your last session on Steam, not with today.")}
         </span>
       </div>
     </div>
@@ -791,11 +792,13 @@ function GameRow({
 
         {/* Lo que se va a escribir, dicho antes de confirmarlo: un watch_event
             con la fecha de tu última partida, y no la de hoy. */}
-        {state === "finished" && (
+        {state !== null && (
           <div className="mute flex items-center gap-1.5" style={{ fontSize: 11.5 }}>
             <Clock size={12} />
             {item.last_played_at
-              ? tv("saved as finished on {date}, your last session", { date: playedOn(item.last_played_at) })
+              ? state === "finished"
+                ? tv("saved as finished on {date}, your last session", { date: playedOn(item.last_played_at) })
+                : tv("dated {date}, your last session", { date: playedOn(item.last_played_at) })
               : tr("Steam has no last session for this one, so it'll be saved with today's date")}
           </div>
         )}

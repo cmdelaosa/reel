@@ -242,6 +242,9 @@ const ES: Record<string, string> = {
   "saved as finished on {date}, your last session": "se guardará como terminado el {date}, tu última partida",
   "Steam has no last session for this one, so it'll be saved with today's date":
     "Steam no sabe cuándo lo jugaste por última vez, así que se guardará con la fecha de hoy",
+  "What you import is dated with your last session on Steam, not with today.":
+    "Lo que importes queda fechado con tu última partida en Steam, no con hoy.",
+  "dated {date}, your last session": "queda fechado el {date}, tu última partida",
   "Anything without a state comes in as yours, undecided.":
     "Lo que no lleve estado entra como tuyo y sin decidir.",
   "Marked finished": "Marcados terminados",
