@@ -48,6 +48,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # Antes de nada, si Steam le habla a ESTE runner. Es la medida que decide
+      # dónde puede vivir la petición: desde una IP doméstica `priceoverview`
+      # aguanta doce seguidas, y desde la IP de una edge function de Supabase
+      # devuelve 429 a la primera (medido el 27-08-2026). Un 200 aquí significa
+      # que el runner sí puede, y es la razón de que la petición se haga desde
+      # este trabajo. Nunca falla el job: solo deja el dato en el registro.
+      - name: ¿Steam contesta a este runner?
+        continue-on-error: true
+        run: |
+          code=$(curl -s -o /tmp/po.json -w '%{http_code}' \
+            --get --data-urlencode 'market_hash_name=AK-47 | Redline (Field-Tested)' \
+            'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3')
+          echo "priceoverview desde el runner -> $code"
+          head -c 200 /tmp/po.json; echo
+
       - name: Refrescar precios y escribir la foto del día
         env:
           URL: ${{ secrets.SUPABASE_URL }}
