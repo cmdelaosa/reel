@@ -45,10 +45,34 @@ export const titleRowSchema = z.object({
       hastily: z.number().optional(),
       normally: z.number().optional(),
       completely: z.number().optional(),
+      /* De cuántas estimaciones salen las tres cifras. La ficha lo enseña
+         porque con veintiocho no es lo mismo que con dos mil. */
+      count: z.number().optional(),
     })
     .nullable()
     .optional(),
   steam_appid: z.number().int().nullable().optional(),
+  /* La ficha ampliada de un juego (0086). Todas opcionales por lo de siempre
+     —una caché persistida anterior a la migración— y nulas cuando IGDB o Steam
+     no tienen ese dato, que la ficha lee como "no pintes esa sección". En
+     series y películas llegan nulas.
+
+     `screenshots` y `videos` son hashes e ids de YouTube, no rutas: los pinta
+     igdbImg() y el reproductor. `age_ratings` viene con los nombres ya
+     resueltos ("PEGI", "18") porque el mapa de enums es de IGDB y cambia allí,
+     no aquí. De `steam_reviews` NO viaja la etiqueta: la pone el cliente en el
+     idioma de quien mira (ver domain/steamReviews). */
+  screenshots: z.array(z.string()).nullable().optional(),
+  videos: z.array(z.object({ name: z.string(), video_id: z.string() })).nullable().optional(),
+  age_ratings: z.array(z.object({ org: z.string(), rating: z.string() })).nullable().optional(),
+  official_url: z.string().nullable().optional(),
+  steam_reviews: z.object({ percent: z.number(), count: z.number().int() }).nullable().optional(),
+  metacritic: z.number().int().nullable().optional(),
+  /* `network` guarda el desarrollador (studio() lo resuelve así desde 0071);
+     esta es la otra mitad de involved_companies. Se guardan las dos aunque
+     coincidan: que un juego se autodistribuya es un dato, no un duplicado. */
+  publisher: z.string().nullable().optional(),
+  game_modes: z.array(z.string()).nullable().optional(),
   // IMDb score (0057), imported from IMDb's published datasets by
   // scripts/imdb-ratings. Optional so rows from a DB that predates the column —
   // or older persisted cache — still parse, and null while a title hasn't been
@@ -94,6 +118,21 @@ export const seasonRowSchema = z.object({
 });
 export type SeasonRow = z.infer<typeof seasonRowSchema>;
 
+/** Una persona de la ficha de un episodio: dirección, guion o invitado.
+ *
+ *  `role` es el puesto ("Director", "Writer") cuando viene del equipo y el
+ *  PERSONAJE cuando viene de los invitados. Una sola forma para las dos listas
+ *  porque se pintan con la misma fila de caras, y el `id` es lo que deja que
+ *  cada una enlace a /person/:id. El recorte lo hace el proxy
+ *  (supabase/functions/tmdb-proxy/episodio.ts), que es donde están sus tests. */
+export const personaSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  profile_path: z.string().nullable(),
+  role: z.string(),
+});
+export type Persona = z.infer<typeof personaSchema>;
+
 export const episodeRowSchema = z.object({
   id: z.string().uuid(),
   title_id: z.string().uuid(),
@@ -114,6 +153,22 @@ export const episodeRowSchema = z.object({
   imdb_rating: z.number().nullable().optional(),
   imdb_votes: z.number().int().nullable().optional(),
   imdb_id: z.string().nullable().optional(),
+  /* La ficha del episodio (0085). Los cuatro venían ya en el payload de
+     temporada y se descartaban en el ingest; el par _es sigue la misma regla
+     que en `titles` — la columna canónica manda y la traducción solo existe
+     cuando TMDB la tiene.
+
+     Opcionales por lo de siempre (una caché persistida anterior a la
+     migración) y nulos mientras no se hayan traído. La interfaz lee la
+     ausencia como "no enseñar", nunca como una lista vacía: un episodio sin
+     emitir no tiene reparto porque TMDB lo publica al emitirse, y eso la ficha
+     lo dice con palabras en vez de con un hueco. */
+  still_path: z.string().nullable().optional(),
+  episode_type: z.string().nullable().optional(),
+  crew: z.array(personaSchema).nullable().optional(),
+  guest_stars: z.array(personaSchema).nullable().optional(),
+  name_es: z.string().nullable().optional(),
+  overview_es: z.string().nullable().optional(),
 });
 export type EpisodeRow = z.infer<typeof episodeRowSchema>;
 
@@ -195,6 +250,9 @@ export const libraryRowSchema = z.object({
       hastily: z.number().optional(),
       normally: z.number().optional(),
       completely: z.number().optional(),
+      /* De cuántas estimaciones salen las tres cifras. La ficha lo enseña
+         porque con veintiocho no es lo mismo que con dos mil. */
+      count: z.number().optional(),
     })
     .nullable()
     .optional(),

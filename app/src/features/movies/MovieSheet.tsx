@@ -15,6 +15,7 @@ import type { TitleRow } from "@/lib/schemas";
 import { externalScore, scoreColor, scoreLabel } from "@/domain/externalScore";
 import { FriendsOnTitle } from "@/features/social/FriendsOnTitle";
 import { CastRail } from "@/ui/CastRail";
+import { personaDelReparto } from "@/ui/railPerson";
 import { RatingStars } from "@/ui/RatingStars";
 import { WatchOn } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
@@ -320,7 +321,7 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                 {cast.length > 0 && (
                   <div>
                     <div className="eyebrow" style={{ marginBottom: 10 }}>{tr("Cast")}</div>
-                    <CastRail cast={cast} onPick={openPerson} />
+                    <CastRail people={cast.map(personaDelReparto)} onPick={openPerson} />
                   </div>
                 )}
 

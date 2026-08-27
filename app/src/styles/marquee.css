@@ -423,7 +423,9 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
    cell width. Without flex: 0 0 auto they shrink while the 24px <svg> inside
    them doesn't, so the glyphs overlap and the row reads as broken. */
 .rating-stars { display: inline-flex; gap: 3px; flex-wrap: nowrap; }
-.rating-star { flex: 0 0 auto; position: relative; display: inline-block; width: 24px; height: 24px; line-height: 0; color: var(--text-mute); }
+/* El lado lo pone el componente con --star (por defecto 24). Sin esto, subir
+   el tamaño del <svg> dejaba la caja en 24 y las estrellas se solapaban. */
+.rating-star { flex: 0 0 auto; position: relative; display: inline-block; width: var(--star, 24px); height: var(--star, 24px); line-height: 0; color: var(--text-mute); }
 .rating-star-bg { display: block; }
 .rating-star-fg { position: absolute; inset: 0; overflow: hidden; color: var(--accent); pointer-events: none; }
 .rating-star-fg svg { display: block; }
@@ -582,6 +584,21 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
   padding: 20px 26px 26px; align-items: start;
 }
 .detail-rail { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+/* Una sola columna cuando el carril no tiene nada que llevar. `display: contents`
+   y no `display: none`: lo que sobra es la COLUMNA, no su contenido — el bloque
+   de amigos sigue apareciendo si lo hay, ahora en el flujo de la única columna,
+   en vez de desaparecer con el carril.
+
+   El tope va en la PISTA y no en `.detail-main`: al disolver el carril, sus
+   bloques pasan a ser celdas de esta misma rejilla, y un tope puesto solo en la
+   columna principal los dejaba a ellos al ancho entero (1.126 px) sobre un
+   tráiler de 860 centrado, cada uno empezando en una equis distinta. Y 860 y no
+   el ancho entero porque a 1.126 el tráiler mide 633 px de alto —se come la
+   ficha— y la sinopsis sale en renglones que no se leen; 860 queda algo más
+   ancho que la columna de la ficha de dos (804), y el hueco repartido a los dos
+   lados se lee como margen, no como la columna vacía que veníamos a quitar. */
+.detail-body-sola { grid-template-columns: minmax(0, 860px); justify-content: center; }
+.detail-body-sola .detail-rail { display: contents; }
 .detail-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 /* Las notas del héroe. La tuya en caja de acento y las ajenas en una oscura:
@@ -692,7 +709,7 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .ep-main {
   flex: 1 1 auto; min-width: 0;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 44px 76px;
+  grid-template-columns: 34px minmax(0, 1fr) 44px 42px 84px;
   align-items: center; gap: 12px;
   padding: 0; border: 0; background: none; cursor: pointer;
   color: inherit; font: inherit; text-align: left;
@@ -719,11 +736,19 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   font-size: 12.5px; font-weight: 750; font-variant-numeric: tabular-nums;
 }
 .ep-imdb svg { color: var(--imdb); }
+/* La de TMDB, sin estrella: la estrella dorada ES la identidad de IMDb, y dos
+   estrellas seguidas de distinto color en la misma fila no distinguen nada. */
+.ep-tmdb { font-size: 12.5px; font-weight: 700; color: var(--text-dim);
+  font-variant-numeric: tabular-nums; text-align: right; }
 .ep-imdb > span { text-align: right; }
 /* Narrow phones: the sheet is ~92vw, so give the title back some room. */
 @media (max-width: 480px) {
   /* 44px, not 40: the score badge is 12 + 3 + 26 and must not be clipped. */
   .ep-main { grid-template-columns: 26px minmax(0, 1fr) 44px 54px; gap: 8px; }
+  /* En un teléfono la columna de TMDB se cae: entre ella y el nombre del
+     episodio, gana el nombre. La nota de TMDB sigue en la ficha del
+     episodio, que es donde se va a mirar de todas formas. */
+  .ep-tmdb { display: none; }
   .ep-row { gap: 8px; padding: 12px 10px; }
 }
 
@@ -749,10 +774,38 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 
 /* Episode sub-sheet — a small card over the detail sheet: synopsis + per-episode
    scores from both sources, and mark-watched. Reuses the sheet/backdrop system. */
-.ep-sheet { width: min(460px, 92vw); max-height: 86vh; border-radius: var(--r-lg); display: flex; flex-direction: column; }
-.ep-sheet-body { overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+/* 552 y no 460: desde 0085 la ficha lleva dos filas de caras de 96px, y a 460
+   se veían cuatro y media. A 552 entran cinco enteras y sigue sin competir con
+   la ficha de la serie que hay debajo, que mide 1180. */
+.ep-sheet { width: min(552px, 92vw); max-height: 88vh; border-radius: var(--r-lg); display: flex; flex-direction: column; overflow: hidden; }
+.ep-sheet-body { overflow-y: auto; padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 16px; }
 .ep-sheet-scores { display: flex; align-items: stretch; gap: 8px; }
 .ep-sheet-overview { font-size: 14px; line-height: 1.6; color: var(--text-dim); margin: 0; }
+
+/* ---- El fotograma, y la marca de visto encima ----
+   La tira va SOBRE la imagen y no en una franja aparte: la franja costaba 54px
+   de alto antes de empezar, y con ellos las caras tuvieron que bajar de 76 a
+   68. Sobre la imagen no cuesta nada y la marca sigue siendo lo primero.
+
+   El degradado no es decoración: es lo único que hace legible el texto blanco
+   sobre un fotograma que puede ser de cualquier color. */
+.ep-still { position: relative; flex: 0 0 auto; }
+.ep-still img { display: block; width: 100%; height: 246px; object-fit: cover; }
+.ep-still-empty { display: grid; place-items: center; height: 158px; font-size: 12.5px; }
+.ep-still-scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(6,8,12,.42) 0%, transparent 30%, transparent 48%, rgba(6,8,12,.76) 100%);
+}
+.ep-still-close { position: absolute; top: 12px; right: 12px; color: #fff; }
+.ep-state { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; align-items: center; gap: 11px; }
+.ep-state .check { box-shadow: 0 6px 18px -6px rgba(0,0,0,.7); }
+.ep-state-title { display: block; font-size: 13.5px; font-weight: 750; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.65); }
+.ep-state-sub { display: block; font-size: 11.5px; color: rgba(255,255,255,.74); text-shadow: 0 1px 5px rgba(0,0,0,.6); }
+/* Un teléfono no aguanta 246px de imagen antes del título. */
+@media (max-width: 480px) {
+  .ep-still img { height: 206px; }
+  .ep-sheet-body { padding: 16px 14px 18px; gap: 13px; }
+}
 
 /* Profile header — the same hue wash the friend header uses, over the whole
    block rather than a 64px band. The band faded to transparent horizontally but
@@ -2008,3 +2061,138 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .movie-seen:hover { background:
     repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--accent) 12%, transparent) 7px 14px),
     color-mix(in srgb, var(--accent) 15%, transparent); }
+
+/* ---- La ficha de un juego, ampliada (0086) ----
+   Comparte con la de series y la de cine el diálogo de 1180, el héroe de 262,
+   el carril de 296 y las cajas de notas: son la misma ficha con otro contenido,
+   y que se parezcan es el punto. Lo de aquí abajo es solo lo suyo. */
+
+/* El tráiler. Hasta que se pulsa es una imagen y un botón — el iframe cuesta un
+   mega y una docena de peticiones a Google, y esta ficha se abre muchas veces
+   para mirar las horas y no el vídeo (ver ui/Trailer.tsx). */
+.trailer {
+  position: relative; display: block; width: 100%; aspect-ratio: 16 / 9;
+  border-radius: var(--r); overflow: hidden; border: 1px solid var(--border);
+  background: #000; cursor: pointer;
+}
+.trailer-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.trailer-empty { background: var(--surface-2); }
+.trailer-frame { display: block; width: 100%; height: 100%; border: 0; }
+.trailer-scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(6,8,12,.1) 0%, transparent 40%, rgba(6,8,12,.55) 100%);
+}
+/* El rojo de YouTube, que es lo que hace que se lea como «esto es un vídeo» sin
+   ponerle la palabra al lado. */
+.trailer-play {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 62px; height: 44px; border-radius: 12px; background: rgba(220, 32, 32, .92);
+  display: grid; place-items: center; color: #fff;
+  box-shadow: 0 8px 26px -8px rgba(0, 0, 0, .8);
+  transition: transform .16s ease, background .16s ease;
+}
+.trailer:hover .trailer-play { transform: translate(-50%, -50%) scale(1.06); background: rgb(220, 32, 32); }
+.trailer-name {
+  position: absolute; left: 10px; bottom: 10px;
+  display: inline-flex; align-items: center; height: 24px; padding: 0 9px;
+  border-radius: 999px; background: rgba(10, 12, 18, .72); color: #fff;
+  font-size: 11px; font-weight: 700;
+}
+
+/* Las capturas. Cinco de las ocho guardadas: es lo que cabe sin que cada una
+   quede tan pequeña que no se distinga de la de al lado. */
+.game-shots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.game-shot {
+  display: block; aspect-ratio: 16 / 9; border-radius: var(--r-sm);
+  overflow: hidden; border: 1px solid var(--border);
+}
+.game-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* Estado: los cuatro del mismo tamaño en rejilla 2×2 y centrados. En una sola
+   fila cada uno mediría 64px en el carril de 296 y «Abandonados» no cabría; en
+   2×2 los cuatro miden lo mismo diga lo que diga la palabra. */
+.game-state { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.game-states { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.game-states .chip { width: 100%; justify-content: center; }
+.game-states .chip-active { font-weight: 750; }
+
+/* Time to beat: las estimaciones de IGDB y tus horas en la misma fila, que es
+   lo que deja compararlas de un vistazo. La tuya, teñida. */
+.ttb { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
+.ttb-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 6px; border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--border); text-align: center;
+}
+.ttb-num { font-size: 19px; font-weight: 850; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.ttb-cell.mine {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* La nota de Metacritic, en su cuadrado verde: es como la publican ellos y como
+   la reconoce la gente. Sin gradiente de color por tramos — el número ya dice
+   lo que dice, y tres verdes distintos serían un código que nadie se aprende. */
+.metacritic {
+  display: inline-grid; place-items: center; min-width: 30px; height: 24px; padding: 0 6px;
+  border-radius: 5px; background: #66cc33; color: #12240a; font-size: 14px; font-weight: 850;
+}
+
+/* La clasificación por edad */
+.age { display: inline-flex; align-items: center; gap: 7px; }
+.age-box {
+  display: grid; place-items: center; min-width: 34px; height: 34px; padding: 0 7px;
+  border-radius: 7px; background: var(--surface-3); border: 1px solid var(--border-strong);
+  font-size: 13px; font-weight: 850; letter-spacing: -0.02em;
+}
+
+/* El pie: edad, quién lo hizo, quién lo vende, géneros y modos. */
+.game-foot { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.game-foot-sep { width: 1px; height: 32px; background: var(--border); flex: 0 0 auto; }
+.game-facts { width: 240px; flex: 0 0 auto; font-size: 12.5px; line-height: 1.85; }
+.game-facts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.game-facts > div > :last-child { font-weight: 650; text-align: right; }
+
+/* ---- El desplegable con logotipo (ui/PlatformPicker) ----
+   La app tiene `.field-select`, que es un <select> nativo, y no sirve: un
+   <option> solo admite texto y el logotipo es justo lo que hace legible una
+   lista de seis plataformas parecidas. */
+.pick-wrap { position: relative; display: inline-flex; }
+.pick {
+  display: inline-flex; align-items: center; gap: 9px; width: 100%;
+  height: var(--ctl-h); padding: 0 12px; border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--border-strong);
+  font-size: 13.5px; font-weight: 650; color: var(--text); cursor: pointer;
+  transition: border-color .16s ease;
+}
+.pick:hover { border-color: var(--accent); }
+.pick-open { border-color: var(--accent); }
+.pick-value { flex: 1 1 auto; min-width: 0; text-align: left; }
+.pick-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; min-width: 100%;
+  /* Opaco, como .filter-menu y .friends-pop: bajo el look de cristal un menú
+     translúcido deja pasar el texto de debajo y se vuelve ilegible. */
+  background: color-mix(in srgb, var(--bg) 90%, #ffffff 5%);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--border-strong); border-radius: var(--r);
+  box-shadow: var(--shadow-lg); padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.pick-opt {
+  display: flex; align-items: center; gap: 9px; padding: 7px 10px;
+  border-radius: var(--r-sm); font-size: 13.5px; font-weight: 600;
+  color: var(--text-dim); white-space: nowrap; cursor: pointer;
+}
+/* `.activa` la mueven las flechas y el ratón por igual, así que teclado y ratón
+   resaltan lo mismo y no hay dos marcas a la vez. */
+.pick-opt.activa { background: var(--surface-2); color: var(--text); }
+.pick-opt.on { background: var(--surface-3); color: var(--text); }
+.pick-hueco { width: 15px; flex: 0 0 auto; }
+
+@media (max-width: 900px) {
+  .game-shots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .game-shots > :nth-child(n + 4) { display: none; }
+  .game-foot { gap: 14px; }
+  .game-foot-sep { display: none; }
+  .game-facts { width: 100%; }
+}
