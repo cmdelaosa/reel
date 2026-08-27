@@ -264,6 +264,16 @@ Deno.test("un juego de ordenador puede estar en Steam", () => {
   assertEquals(couldBeOnSteam(["pc (microsoft windows)"]), true);
 });
 
+Deno.test("un exclusivo de SteamVR es lo más de Steam que hay", () => {
+  // El nombre es el de IGDB y va sin espacio. Escrito "steam vr" la línea no
+  // casaba con nada, y Half-Life: Alyx —que no tiene otra plataforma— habría
+  // perdido su appid al primer refresco de su ficha.
+  assertEquals(couldBeOnSteam(["SteamVR"], "2020-03-23"), true);
+  assertEquals(couldBeOnSteam(["Oculus Rift", "SteamVR"], "2018-07-31"), true);
+  // Y uno de VR que no pasa por Steam sigue siendo un no.
+  assertEquals(couldBeOnSteam(["Oculus Quest", "PlayStation VR"], "2019-11-07"), false);
+});
+
 Deno.test("los de DOS que Steam vende envueltos en DOSBox, también", () => {
   // Sin esta línea la comprobación se llevaría por delante el Doom del 93 y
   // medio catálogo de los noventa, que en IGDB son de "DOS" y en Steam están.
