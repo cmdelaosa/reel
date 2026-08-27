@@ -798,7 +798,7 @@ async function refreshTitle(
            un lote y PostgREST une las claves de sus filas (ver textoEs). */
         ...(sdEs !== null ? textoEs(esByNumber.get(e.episode_number)) : {}),
         runtime: e.runtime ?? null,
-        // Los cuatro de 0085, que ya venían en este payload y se tiraban.
+        // Los cuatro de 0087, que ya venían en este payload y se tiraban.
         still_path: e.still_path ?? null,
         episode_type: e.episode_type ?? null,
         crew: crewRecortado(e.crew),

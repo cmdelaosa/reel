@@ -834,7 +834,7 @@ const episodeRow = (
        NULL igualmente en cuanto un vecino sí la tuviera. */
     ...(hayEs ? textoEs(es) : {}),
     runtime: e.runtime ?? null,
-    /* Los cuatro que ya venían en este mismo payload y se tiraban (0085). El
+    /* Los cuatro que ya venían en este mismo payload y se tiraban (0087). El
        fotograma es una ruta de TMDB como las demás; el equipo y los invitados
        van recortados a lo que la ficha pinta, que es lo que evita meter 28
        personas de doce campos por episodio en la consulta más caliente. */

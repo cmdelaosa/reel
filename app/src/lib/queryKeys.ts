@@ -28,7 +28,7 @@ export const qk = {
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,
   library: ["library"] as const,
   watched: (titleId: string) => ["watched", titleId] as const,
-  /* Cuándo viste UN episodio (0085). Clave propia y no una parte de `watched`:
+  /* Cuándo viste UN episodio (0087). Clave propia y no una parte de `watched`:
      esa se invalida entera al marcar cualquier episodio de la serie, y esto
      solo cambia para el episodio que se acaba de tocar. */
   watchedAt: (episodeId: string) => ["watched-at", episodeId] as const,

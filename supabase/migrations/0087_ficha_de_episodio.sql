@@ -1,5 +1,20 @@
--- 0085_ficha_de_episodio.sql
+-- 0087_ficha_de_episodio.sql
 -- Lo que TMDB manda de cada episodio y hasta ahora tirábamos.
+--
+-- ── Por qué 0087 y no 0085, que es como nació ──────────────────────────────
+-- El 27-ago-2026 esta migración se empujó como 0085 y NO se aplicó, sin que
+-- nada avisara: producción ya tenía una fila 0085 —`inventario_steam`, de una
+-- rama sin fusionar que se desplegó por su cuenta—, así que `db push` la dio
+-- por hecha y saltó a la 0086. `supabase migration list` decía `remote` y
+-- `db diff` decía «No schema changes found»: los dos comparan por número. Lo
+-- único que lo destapó fue preguntarle a `information_schema.columns`.
+--
+-- El coste no fue solo que faltaran las columnas: el `tmdb-proxy` nuevo ya
+-- escribía `still_path` y compañía, y PostgREST rechaza el upsert ENTERO
+-- cuando una columna no está, así que refrescar una temporada fallaba.
+--
+-- Reaplicarla es inofensivo donde ya entró: las seis sentencias son
+-- `add column if not exists` y no hay nada más en el fichero.
 --
 -- La ficha de un episodio enseñaba número, nombre, sinopsis, duración, fecha y
 -- las dos notas, y nada más. El rediseño le añade el fotograma y quién lo hizo
