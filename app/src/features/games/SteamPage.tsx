@@ -14,7 +14,7 @@ import {
   type MatchedTitle,
   type SteamItem,
 } from "@/lib/steam";
-import { otherEdition, type MyGame } from "@/domain/steamMatch";
+import { byName, otherEdition, type MyGame } from "@/domain/steamMatch";
 import { formatPlaytime, type GameStatus } from "@/domain/gameStatus";
 import { useGameLibrary } from "@/lib/library";
 import { RatingStars } from "@/ui/RatingStars";
@@ -122,14 +122,16 @@ export default function SteamPage() {
      biblioteca reducida a lo que hace falta para reconocer un mal casado
      (domain/steamMatch). */
   const matched = useMemo(() => draft?.matched ?? new Map<string, MatchedTitle>(), [draft]);
-  const mine = useMemo<MyGame[]>(
+  const mine = useMemo(
     () =>
-      (myGames ?? []).map((g) => ({
-        titleId: g.title_id,
-        name: g.name,
-        year: g.first_air_date?.slice(0, 4) ?? null,
-        platform: g.played_platform ?? null,
-      })),
+      byName(
+        (myGames ?? []).map((g): MyGame => ({
+          titleId: g.title_id,
+          name: g.name,
+          year: g.first_air_date?.slice(0, 4) ?? null,
+          platform: g.played_platform ?? null,
+        })),
+      ),
     [myGames],
   );
 
@@ -447,8 +449,9 @@ function ReviewList({
   known: Map<string, GameStatus>;
   /** Con qué ficha del catálogo ha casado cada juego, por title_id. */
   matched: Map<string, MatchedTitle>;
-  /** Tus juegos, para reconocer el casado que se fue a otra edición. */
-  mine: MyGame[];
+  /** Tus juegos indexados por nombre, para reconocer el casado que se fue a
+   *  otra edición sin recorrer la biblioteca en cada fila (domain/steamMatch). */
+  mine: ReadonlyMap<string, MyGame>;
   onApply: (picks: ApplyPick[]) => void;
   pending: boolean;
 }) {
@@ -713,7 +716,7 @@ function GameRow({
   /** La ficha del catálogo con la que ha casado. Null mientras no tenga: lo que
    *  el catálogo no conocía se resuelve contra IGDB al confirmar. */
   match: MatchedTitle | null;
-  mine: MyGame[];
+  mine: ReadonlyMap<string, MyGame>;
   overwritten: boolean;
   onToggle: () => void;
   onState: (next: ImportState | null) => void;

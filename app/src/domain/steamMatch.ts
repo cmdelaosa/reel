@@ -48,6 +48,26 @@ export interface MyGame {
   platform: string | null;
 }
 
+/** Tu biblioteca indexada por nombre, que es como la pregunta de abajo se hace
+ *  una vez y no trescientas.
+ *
+ *  Lo pide el tamaño real del problema: una importación de Steam son cientos de
+ *  filas y una biblioteca importada, cientos de juegos. Preguntando fila a fila
+ *  contra la lista entera son cien mil normalizaciones de nombre POR RENDER, y
+ *  esta lista se vuelve a pintar cada vez que marcas una casilla.
+ *
+ *  Con dos ediciones tuyas del mismo nombre gana la primera, y da igual cuál:
+ *  lo que el aviso dice es "ya tienes esto", y con cualquiera de las dos es
+ *  verdad. */
+export function byName(mine: readonly MyGame[]): Map<string, MyGame> {
+  const index = new Map<string, MyGame>();
+  for (const game of mine) {
+    const key = nameKey(game.name);
+    if (key && !index.has(key)) index.set(key, game);
+  }
+  return index;
+}
+
 /** ¿Sigues ya este juego, pero con OTRA ficha?
  *
  *  Devuelve esa otra ficha tuya, o null si no la hay. Null es también lo que
@@ -55,10 +75,11 @@ export interface MyGame {
  *  el caso normal y no tiene nada que contar. */
 export function otherEdition(
   matched: { id: string; name: string } | null | undefined,
-  mine: readonly MyGame[],
+  mine: ReadonlyMap<string, MyGame>,
 ): MyGame | null {
   if (!matched) return null;
   const key = nameKey(matched.name);
   if (!key) return null;
-  return mine.find((g) => g.titleId !== matched.id && nameKey(g.name) === key) ?? null;
+  const found = mine.get(key);
+  return found && found.titleId !== matched.id ? found : null;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nameKey, otherEdition, type MyGame } from "./steamMatch";
+import { byName, nameKey, otherEdition, type MyGame } from "./steamMatch";
 
 /* La matriz de la señal que avisa de un mal casado. Lo que se prueba es que
    levanta la mano en el caso real que la motivó y que NO la levanta cuando la
@@ -36,21 +36,21 @@ describe("otherEdition", () => {
     // La avería del 27-ago-2026: la importación casó con la ficha de 2009 (de
     // Nintendo DS) teniendo tú la de 2016 en la biblioteca.
     const matched = { id: "7e6b66ca", name: "Agatha Christie: The ABC Murders" };
-    expect(otherEdition(matched, [abc2016])).toBe(abc2016);
+    expect(otherEdition(matched, byName([abc2016]))).toBe(abc2016);
   });
 
   it("calla cuando ha casado con la ficha que ya sigues", () => {
     const matched = { id: "a4461b93", name: "Agatha Christie: The ABC Murders" };
-    expect(otherEdition(matched, [abc2016])).toBeNull();
+    expect(otherEdition(matched, byName([abc2016]))).toBeNull();
   });
 
   it("calla con un juego que no tienes", () => {
     const matched = { id: "otro", name: "Hollow Knight" };
-    expect(otherEdition(matched, [abc2016])).toBeNull();
+    expect(otherEdition(matched, byName([abc2016]))).toBeNull();
   });
 
   it("calla cuando la importación no ha casado con nada", () => {
     // Lo que aún no tiene ficha se resuelve después, contra IGDB.
-    expect(otherEdition(null, [abc2016])).toBeNull();
+    expect(otherEdition(null, byName([abc2016]))).toBeNull();
   });
 });
