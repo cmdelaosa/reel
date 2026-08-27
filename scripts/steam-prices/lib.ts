@@ -11,6 +11,11 @@
 export function priceCents(text: string | number | null | undefined): number | null {
   if (typeof text === "number") return Number.isFinite(text) ? Math.round(text * 100) : null;
   if (!text) return null;
+  /* El recorte de la cola no es adorno. El rublo se escribe "1 234,56 руб." y
+     el punto de esa abreviatura sobrevive al primer filtro, rompe el match de
+     los decimales y manda la cifra por la rama de "no tiene decimales", que
+     multiplica por cien. Un precio cien veces mayor sin que nada falle: el peor
+     tipo de error que puede tener una pantalla de dinero. */
   const digits = String(text).replace(/[^\d.,]/g, "").replace(/[.,]+$/, "");
   if (!digits) return null;
   const m = digits.match(/[.,](\d{2})$/);

@@ -110,7 +110,22 @@ if (queue.length > MAX_ITEMS) {
   console.log(`Tope de ${MAX_ITEMS} por pasada: ${queue.length - MAX_ITEMS} se quedan para mañana.`);
 }
 
-const batch: Record<string, unknown>[] = [];
+let batch: Record<string, unknown>[] = [];
+
+/** Vuelca lo acumulado. Se llama cada tanda y no solo al final, y esa es la
+ *  diferencia entre perder el trabajo y no perderlo: la pasada larga son
+ *  dieciocho minutos de peticiones, y guardarlo todo para el último segundo
+ *  significa que un tiempo agotado, un `cancel` en Actions o un tropiezo de la
+ *  base tiran mil precios ya traídos. */
+async function flush(): Promise<void> {
+  if (!batch.length) return;
+  const { error } = await db
+    .from("steam_market_prices")
+    .upsert(batch, { onConflict: "appid,market_hash_name,currency" });
+  if (error) throw new Error(`escribiendo precios: ${error.message}`);
+  batch = [];
+}
+
 for (const item of queue.slice(0, MAX_ITEMS)) {
   const url =
     `https://steamcommunity.com/market/priceoverview/?appid=${item.appid}` +
@@ -127,38 +142,42 @@ for (const item of queue.slice(0, MAX_ITEMS)) {
       break;
     }
     if (!res.ok) {
+      /* Sin `continue`: la espera de abajo tiene que correr también aquí. Con un
+         `continue` en medio, una racha de respuestas malas —que es justo lo que
+         pasa cuando Steam empieza a enfadarse— se convertía en una ráfaga sin
+         hueco entre peticiones, o sea en la mejor forma de provocar el 429 que
+         este guión existe para evitar. */
       failed += 1;
-      continue;
+    } else {
+      const p = (await res.json()) as Record<string, unknown>;
+      batch.push({
+        appid: item.appid,
+        market_hash_name: item.name,
+        currency: CURRENCY,
+        /* Un objeto sin ventas recientes devuelve `{"success":true}` pelado, y
+           eso se guarda como null CON su `fetched_at`: es una respuesta, no un
+           fallo, y sin la marca de tiempo volvería a preguntarse cada noche
+           para siempre. */
+        lowest_cents: priceCents(p.lowest_price as string),
+        median_cents: priceCents(p.median_price as string),
+        volume: volumeOf(p.volume),
+        source: "server",
+        fetched_at: new Date().toISOString(),
+      });
+      refreshed += 1;
+      if (refreshed % 100 === 0) {
+        console.log(`  ${refreshed}/${Math.min(queue.length, MAX_ITEMS)}…`);
+      }
     }
-    const p = (await res.json()) as Record<string, unknown>;
-    batch.push({
-      appid: item.appid,
-      market_hash_name: item.name,
-      currency: CURRENCY,
-      /* Un objeto sin ventas recientes devuelve `{"success":true}` pelado, y eso
-         se guarda como null CON su `fetched_at`: es una respuesta, no un fallo,
-         y sin la marca de tiempo volvería a preguntarse cada noche para siempre. */
-      lowest_cents: priceCents(p.lowest_price as string),
-      median_cents: priceCents(p.median_price as string),
-      volume: volumeOf(p.volume),
-      source: "server",
-      fetched_at: new Date().toISOString(),
-    });
-    refreshed += 1;
-    if (refreshed % 100 === 0) console.log(`  ${refreshed}/${Math.min(queue.length, MAX_ITEMS)}…`);
   } catch (e) {
     failed += 1;
     console.log(`  sin precio: ${item.name} (${(e as Error).message})`);
   }
+  if (batch.length >= PAGE) await flush();
   await sleep(GAP_MS);
 }
 
-for (let i = 0; i < batch.length; i += PAGE) {
-  const { error } = await db
-    .from("steam_market_prices")
-    .upsert(batch.slice(i, i + PAGE), { onConflict: "appid,market_hash_name,currency" });
-  if (error) throw new Error(`escribiendo precios: ${error.message}`);
-}
+await flush();
 
 console.log(`Refrescados ${refreshed}, fallidos ${failed}${blocked ? ", cortado por Steam" : ""}.`);
 

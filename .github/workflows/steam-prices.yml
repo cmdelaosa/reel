@@ -44,7 +44,11 @@ on:
         description: "Tope de precios que pedir en esta pasada"
         default: "1500"
 
-permissions: {}
+# `checkout` necesita leer el repo, y con `permissions: {}` el token va sin un
+# solo permiso. En un repo público suele colar y ese "suele" es justo lo que no
+# se quiere en un cron que corre de madrugada sin nadie mirando.
+permissions:
+  contents: read
 
 jobs:
   refresh:
@@ -63,15 +67,15 @@ jobs:
           echo "priceoverview desde este runner -> $code"
           head -c 200 /tmp/po.json; echo
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
       - name: Instalar
         working-directory: scripts/steam-prices
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Refrescar precios
         working-directory: scripts/steam-prices

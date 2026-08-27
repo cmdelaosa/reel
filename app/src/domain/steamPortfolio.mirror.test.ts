@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import specSource from "@/domain/steamPortfolio.ts?raw";
 import marketSource from "../../../supabase/functions/steam-market/index.ts?raw";
+import cronSource from "../../../scripts/steam-prices/lib.ts?raw";
 
 /* `steamPortfolio.ts` es la especificación; `steam-market` la copia a mano
    porque corre en Deno y no puede importar de app/ — el mismo arreglo que
@@ -53,6 +54,23 @@ describe("el bloque de dinero y fechas está espejado byte a byte", () => {
 
   it(`${MIRROR} lo copia literal`, () => {
     expect(block(sources[MIRROR], MIRROR)).toBe(block(sources[SPEC], SPEC));
+  });
+
+  /* Y una tercera copia, que no puede llevar el bloque entero: el cron de los
+     precios (scripts/steam-prices) vive fuera de app/, con su propio tsconfig y
+     sin nada de las fechas. Lleva solo `priceCents`, así que lo que se compara
+     es esa función y no el bloque — pero se compara igual, porque es la que lee
+     DINERO y es donde estaba la trampa del rublo. Tres copias sin vigilar es
+     como se separan. */
+  it("el cron de precios copia priceCents literal", () => {
+    const fn = (src: string, file: string) => {
+      const from = src.indexOf("export function priceCents(");
+      if (from === -1) throw new Error(`priceCents no encontrada en ${file}`);
+      const to = src.indexOf("\n}\n", from);
+      if (to === -1) throw new Error(`priceCents sin cerrar en ${file}`);
+      return src.slice(from, to + 3);
+    };
+    expect(fn(cronSource, "scripts/steam-prices/lib.ts")).toBe(fn(sources[SPEC], SPEC));
   });
 
   it("ninguna copia trae un byte NUL", () => {

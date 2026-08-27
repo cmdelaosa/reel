@@ -25,6 +25,17 @@ export default defineConfig({
       allow: [
         fileURLToPath(new URL(".", import.meta.url)),
         fileURLToPath(new URL("../supabase/functions", import.meta.url)),
+        /* Y la carpeta del cron de los precios, que steamPortfolio.mirror.test.ts
+           lee como `?raw` para comprobar que su copia de `priceCents` no se ha
+           separado de la especificacion. Tiene que ser la CARPETA y no el
+           fichero: Vite decide sobre el id entero, y el id lleva el `?raw`
+           pegado, asi que una entrada de fichero no casa nunca.
+
+           Se abre esa y no `scripts/` entero por lo mismo que se dice arriba:
+           ahi viven importadores de un solo uso a los que un dia alguien les
+           deja un `.env` al lado. En esta no puede haber uno — sus credenciales
+           llegan por el entorno del workflow, nunca por un fichero. */
+        fileURLToPath(new URL("../scripts/steam-prices", import.meta.url)),
       ],
     },
   },
