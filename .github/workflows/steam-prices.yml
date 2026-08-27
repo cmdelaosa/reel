@@ -1,0 +1,110 @@
+name: steam-prices
+
+# Refresco diario de los precios del mercado de Steam y la foto del inventario
+# (migración 0088, guión scripts/steam-prices).
+#
+# ── Por qué el trabajo corre AQUÍ y no en una edge function ──────────────
+# Porque Steam elige por IP a quién le contesta, y a la de las edge functions de
+# Supabase no le contesta. La misma petición, el 27-08-2026, contra producción:
+#
+#   · desde la edge function:     429 a la primera, cero precios traídos;
+#   · desde un runner de GitHub:  5 de 5 con 200 y precios reales;
+#   · desde una IP doméstica:     12 seguidas sin un corte.
+#
+# La primera versión de esto era un bucle de `curl` contra una ruta `/prices` de
+# la función, y habría devuelto ceros todas las noches sin que nada fallara. El
+# primer paso de abajo vuelve a tomar esa medida en cada ejecución, para que el
+# día que Steam cambie de idea se vea en el registro y no haya que deducirlo.
+#
+# ── Por qué NO refresca el inventario, y esto está MEDIDO ────────────────
+# `/inventory/<steamid>/…` está estrangulado mucho más fuerte que los precios, y
+# la tentación de "pues que lo lea el cron y nos ahorramos el recolector" va a
+# reaparecer. No se puede. Sondeado desde este mismo runner el 27-08-2026:
+#
+#   · con un SteamID64 inventado:  404, 404, 404
+#   · con una cuenta real:         429, tanto en 730 como en 753
+#
+# El 404 engaña, y por poco me engaña a mí: Steam comprueba que la cuenta existe
+# ANTES de mirar el límite, así que sondear con un id falso hace creer que la IP
+# pasa. Con una cuenta de verdad, corta. Y encima `pricehistory` y `myhistory`
+# piden la cookie de sesión, que ninguna IP arregla.
+#
+# Lo que tienes lo sube el recolector desde tu propio navegador, de uvas a peras
+# (app/src/features/games/steamCollector.js). Lo que cambia a diario no es lo que
+# tienes: es lo que vale.
+#
+# A las 4:10 UTC: después de que el mercado europeo se calme, y a una hora en la
+# que un 429 no le estropea la pantalla a nadie. El minuto raro es para no caer
+# en el pico de trabajos programados en punto.
+#
+# SECRETS (repo → Settings → Secrets and variables → Actions):
+#   SUPABASE_URL                — https://<ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY   — la sb_secret_… (SUPABASE_DEFAULT_KEY en el
+#                                 CLI), no el JWT service_role legacy: ver
+#                                 docs/DEPLOY.md.
+# Sin ellos el guión se planta en la primera línea en vez de escribir nada en
+# silencio.
+
+on:
+  schedule:
+    - cron: "10 4 * * *"
+  workflow_dispatch:
+    inputs:
+      max_items:
+        description: "Tope de precios que pedir en esta pasada"
+        default: "1500"
+
+# `checkout` necesita leer el repo, y con `permissions: {}` el token va sin un
+# solo permiso. En un repo público suele colar y ese "suele" es justo lo que no
+# se quiere en un cron que corre de madrugada sin nadie mirando.
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # La medida que justifica que este trabajo exista, tomada cada vez. Nunca
+      # falla el job: si sale 429, el paso siguiente lo dirá con sus propias
+      # cifras y esto es la explicación que ahorra media hora de diagnóstico.
+      - name: ¿Steam contesta a este runner?
+        continue-on-error: true
+        run: |
+          code=$(curl -s -o /tmp/po.json -w '%{http_code}' \
+            --get --data-urlencode 'market_hash_name=AK-47 | Redline (Field-Tested)' \
+            'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3')
+          echo "priceoverview desde este runner -> $code"
+          head -c 200 /tmp/po.json; echo
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Instalar
+        working-directory: scripts/steam-prices
+        run: npm ci --no-audit --no-fund
+
+      - name: Refrescar precios
+        working-directory: scripts/steam-prices
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MAX_ITEMS: ${{ github.event.inputs.max_items || '1500' }}
+        run: npm start
+
+      # La foto del día se escribe SIEMPRE, aunque falten precios: el hueco se
+      # cuenta en `missing_prices` y la gráfica lo dice. Saltársela dejaría un
+      # agujero en la serie, que es peor — un día sin punto no se distingue de un
+      # día a cero. Esto sí va en la función: no sale a Steam, solo suma.
+      - name: Escribir la foto del día
+        env:
+          URL: ${{ secrets.SUPABASE_URL }}
+          KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          curl -sS --fail-with-body -X POST "$URL/functions/v1/steam-market/snapshot" \
+            -H "Authorization: Bearer $KEY" -H "apikey: $KEY"
+          echo

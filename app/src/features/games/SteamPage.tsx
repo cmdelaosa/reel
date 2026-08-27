@@ -15,6 +15,7 @@ import {
   type SteamItem,
 } from "@/lib/steam";
 import { byName, otherEdition, type MyGame } from "@/domain/steamMatch";
+import { SteamInventory } from "@/features/games/SteamInventory";
 import { formatPlaytime, type GameStatus } from "@/domain/gameStatus";
 import { useGameLibrary } from "@/lib/library";
 import { RatingStars } from "@/ui/RatingStars";
@@ -250,6 +251,14 @@ export default function SteamPage() {
           </>
         )}
       </div>
+
+      {/* ── El inventario del mercado (0088) ──────────────────────────────── */}
+      {/* Debajo de la importación de juegos y no en una pestaña propia: las dos
+          cuelgan de la misma cuenta enlazada, y una pestaña "Steam" que no
+          enseñara lo de Steam obligaría a recordar en cuál de las dos está cada
+          cosa. Son bloques distintos porque miran cosas distintas —aquello son
+          tus horas, esto es tu dinero—, no sitios distintos. */}
+      {link?.steamId && <SteamInventory />}
 
       {/* ── El perfil cerrado y los demás errores del escaneo ─────────────── */}
       {run?.state === "error" && (

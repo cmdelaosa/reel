@@ -44,6 +44,26 @@ So: **after a push that adds columns, check one of the new columns is really
 there** — and never push a migration from an unmerged branch, which is what took
 the number in the first place.
 
+**Cómo se repara**, si vuelve a pasar. Desde un checkout de `main`, nunca desde
+el worktree de la rama —ahí ese número es otro fichero—:
+
+```bash
+supabase migration repair --status reverted <NNNN>   # solo el registro
+supabase db push                                     # vuelve a pasar el fichero
+```
+
+⚠️ **Antes de reparar, mira que esa migración se pueda repetir.** `repair` es la
+única palanca que hace que una ya registrada se vuelva a ejecutar, y aquí colaba
+porque las de este caso usan `add column if not exists`. Una con un `insert` de
+semilla o un `add constraint` sin guarda duplicaría o reventaría.
+
+Y si verificas por la API en vez de con el SQL de arriba —que es lo que sale solo
+cuando no tienes la consola a mano—, pide **dos columnas de control**: una que
+exista seguro y otra inventada. Por la API un 400 no distingue «falta la columna»
+de «no se lee la tabla», así que sin las dos se concluye lo que uno ya sospecha.
+Con el `db query` de arriba no hace falta: `information_schema` no tiene esa
+ambigüedad.
+
 ⚠️ **Do not seed prod.** `supabase/seed/dev.sql` creates demo accounts
 (`password123`) and open invite codes — it's for local `supabase db reset` only.
 `supabase db push` does not run it; never run `supabase db reset` against the
@@ -53,7 +73,7 @@ linked hosted DB.
 
 ```bash
 supabase functions deploy tmdb-proxy igdb-proxy episode-refresh alerts importer export \
-  friend-request-email steam-sync
+  friend-request-email steam-sync steam-market
 ```
 
 `steam-sync` es la única función que se despliega **sin la reja de JWT de la
@@ -66,6 +86,20 @@ en todas sus otras rutas.
 ⚠️ **`steam-sync` e `igdb-proxy` van juntos.** La importación resuelve contra la
 ruta `/by-steam` de `igdb-proxy`, que llega en 0076: desplegar solo `steam-sync`
 deja las importaciones colgadas en `applying` con un 404 en `job_runs`.
+
+`steam-market` (0088) es el inventario del mercado, y **no necesita ningún
+secreto nuevo ni sale a internet**: recibe el volcado del navegador y escribe la
+foto del día, y nada más. Los precios los trae otro trabajo — ver
+[El cron de los precios de Steam](#el-cron-de-los-precios-de-steam), que **no va
+en pg_cron** como los otros cuatro, y tampoco en una edge function.
+
+Lo que esa función *no* hace, y conviene saber antes de que alguien lo dé por
+roto: no lee inventarios. No puede. Steam estrangula
+`/inventory/<steamid>/<appid>/<ctx>` por IP y contesta 429 hasta a la primera
+petición desde una IP limpia, así que desde la IP compartida de una edge function
+no hay nada que intentar; y `market/pricehistory` y `market/myhistory` piden la
+cookie de sesión de la persona. Todo eso lo trae el recolector desde el navegador
+(`app/src/features/games/steamCollector.js`) y se sube a mano por `/ingest`.
 
 Deploy migrations before the functions. `tmdb-proxy` uses the
 `is_current_user_invited()` function introduced in migration 0033 to combine
@@ -244,6 +278,34 @@ Then confirm:
 ```sql
 select jobname, schedule, active from cron.job;   -- expect all four, active
 ```
+
+### El cron de los precios de Steam
+
+El quinto trabajo periódico **no vive en pg_cron**: es
+`.github/workflows/steam-prices.yml`, y se enciende solo en cuanto el repo tenga
+sus dos secretos de Actions (`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` — la
+`sb_secret_…`, ver abajo).
+
+**Está en un runner porque Steam elige por IP a quién le contesta, y a Supabase
+no le contesta.** La misma petición a `market/priceoverview`, el 27-08-2026,
+contra producción:
+
+| desde dónde | respuesta |
+|---|---|
+| una edge function de Supabase | **429 a la primera**, cero precios |
+| un runner de GitHub | 5 de 5 con 200 y precios reales |
+| una IP doméstica | 12 seguidas sin un corte |
+
+La primera versión de esto era una ruta `/prices` de `steam-market` llamada en
+bucle, y habría devuelto ceros todas las noches sin que nada fallara. Por eso el
+workflow abre con un paso que vuelve a tomar esa medida en cada ejecución: el día
+que Steam cambie de idea, estará en el registro y no habrá que deducirlo.
+
+Comprobarlo después del primer despliegue: en la pestaña Actions, que
+`steam-prices` haya corrido y que su salida diga `Refrescados N`. Si dice
+`Refrescados 0, cortado por Steam`, mira el primer paso — si ahí sale 429, es la
+IP del runner y no el guión, y lo que quede se refresca al día siguiente por
+orden de rancio.
 
 ### Which service key
 

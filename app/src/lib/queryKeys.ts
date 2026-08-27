@@ -23,12 +23,17 @@ export const qk = {
      importación. */
   steamLink: ["steamLink"] as const,
   steamImport: ["steamImport"] as const,
+  /* El inventario del mercado (0088). Una sola clave para lo que tienes, los
+     precios, el libro y la serie: se leen juntos porque se pintan juntos, y
+     separarlos solo daría cuatro estados de carga en una pantalla que no puede
+     enseñar un total a medias. */
+  steamInventory: ["steamInventory"] as const,
   title: (tmdbId: number) => ["title", tmdbId] as const,
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,
   library: ["library"] as const,
   watched: (titleId: string) => ["watched", titleId] as const,
-  /* Cuándo viste UN episodio (0087). Clave propia y no una parte de `watched`:
+  /* Cuándo viste UN episodio (0088). Clave propia y no una parte de `watched`:
      esa se invalida entera al marcar cualquier episodio de la serie, y esto
      solo cambia para el episodio que se acaba de tocar. */
   watchedAt: (episodeId: string) => ["watched-at", episodeId] as const,
