@@ -79,6 +79,7 @@ supabase secrets set IGDB_CLIENT_ID=...       # Twitch app Client ID  (videojueg
 supabase secrets set IGDB_CLIENT_SECRET=...   # Twitch app Client Secret
 supabase secrets set STEAM_API_KEY=...        # Steam Web API key   (videojuegos)
 supabase secrets set APP_URL=https://...      # origen público de la app (vuelta de Steam)
+supabase secrets set STEAM_RETURN_BASE=https://<dominio>/api/steam   # proxy de la vuelta
 supabase secrets set RESEND_API_KEY=...       # Resend API key
 supabase secrets set RESEND_FROM="Reel <alerts@yourdomain.com>"   # verified domain
 ```
@@ -119,6 +120,21 @@ y confundirlas es el error que cuesta una tarde:
   con una cuenta de Steam que tenga algo comprado (Valve no la da a cuentas sin
   compras); el dominio que pide el formulario es informativo. Sin este secreto,
   `/scan` responde 502 y la pantalla dice que Steam no ha contestado.
+
+`STEAM_RETURN_BASE` es **dónde aterriza Steam**, y `APP_URL` es a dónde se
+manda a la persona después: dos cosas distintas que es fácil confundir. Steam le
+enseña a quien se identifica el `openid.realm`, y ese realm sale del origen del
+`return_to`. Sin este secreto la vuelta cae directamente en la edge function y
+la pantalla de Steam dice **"Sign in to `<ref>.supabase.co`"** — un dominio que
+nadie reconoce, justo en la pantalla donde lo único que se juzga es si el sitio
+es de fiar. Con él apuntando al proxy del Worker (`https://reel-app.com/api/steam`,
+sin barra final) la pantalla dice el dominio de Reel.
+
+Las dos mitades tienen que casar: este secreto y `RETURN_PATH` en
+`app/src/worker/index.ts` describen la misma URL, y si discrepan la función
+rechaza la vuelta por `return_to` y el enlace acaba en `steam=invalid`. En local
+se deja sin poner: sin Worker delante, la vuelta va a la función y todo sigue
+como estaba.
 
 `APP_URL` es el origen al que Steam devuelve a la persona cuando termina
 (`https://reel-app.com`, sin barra final; en local, `http://localhost:5173` en
@@ -339,6 +355,16 @@ select count(*) from episodes where season_number > 0 and tmdb_vote_average is n
   only if you enabled Google in step 4.
 - Do **not** set `VITE_DEV_AUTOLOGIN_*` — dev-only, and inert in a prod build
   anyway (`import.meta.env.DEV` is false).
+- Runtime secret — **Settings → Variables & Secrets**, this time the runtime one
+  and *not* the build variables: `SUPABASE_URL`, the same origin the edge
+  functions have. It is what the Steam-return proxy in `src/worker/index.ts`
+  forwards to; without it that route answers 500 and the Steam link never
+  completes (the rest of the app is unaffected — it talks to Supabase from the
+  browser with the build-time `VITE_` vars).
+
+  Add it as a **Secret**, not as a plain-text variable: plain-text variables that
+  aren't in `wrangler.jsonc` are wiped on every `wrangler deploy`, so the link
+  would break at the next deploy and nothing would say why.
 
 ⚠️ Missing build vars do **not** fail the build: it goes green and serves a
 blank app from a vendor-only bundle (~30 KB of JS). Verify by bundle size

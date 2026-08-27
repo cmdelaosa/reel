@@ -4,7 +4,7 @@
 // una URL que cualquiera puede escribir a mano en la barra del navegador. Todo
 // lo que hay entre "llegó un claimed_id" y "esta cuenta es tuya" está aquí.
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
-import { authUrl, checkReturn, isValid, steamIdFrom, verifyBody } from "./openid.ts";
+import { authUrl, checkReturn, isValid, returnBase, steamIdFrom, verifyBody } from "./openid.ts";
 
 const RETURN_TO = "https://ref.supabase.co/functions/v1/steam-sync/return?n=abc123";
 const ME = "https://steamcommunity.com/openid/id/76561198000000001";
@@ -28,6 +28,33 @@ Deno.test("la URL de login pide identifier_select y un realm que contiene al ret
   // deriva de él en vez de recibirse aparte: no pueden discrepar.
   assertEquals(u.searchParams.get("openid.realm"), "https://ref.supabase.co");
   assertStringIncludes(u.searchParams.get("openid.identity")!, "identifier_select");
+});
+
+Deno.test("sin STEAM_RETURN_BASE la vuelta sigue cayendo en la función", () => {
+  assertEquals(
+    returnBase(undefined, "https://ref.supabase.co"),
+    "https://ref.supabase.co/functions/v1/steam-sync",
+  );
+});
+
+Deno.test("con STEAM_RETURN_BASE el realm que ve la persona es el de la app", () => {
+  // Lo que se comprueba de verdad: el origen del return_to, que es lo que Steam
+  // enseña en su pantalla. Que ponga "reel-app.com" y no el ref de Supabase es
+  // el motivo entero de que este secreto exista.
+  const base = returnBase("https://reel-app.com/api/steam", "https://ref.supabase.co");
+  const u = new URL(authUrl(`${base}/return?n=abc123`));
+  assertEquals(u.searchParams.get("openid.realm"), "https://reel-app.com");
+  assertEquals(
+    u.searchParams.get("openid.return_to"),
+    "https://reel-app.com/api/steam/return?n=abc123",
+  );
+});
+
+Deno.test("una barra final de más no parte la URL de vuelta en dos", () => {
+  // El secreto lo escribe una persona en una consola web: la barra sobra un día
+  // de cada tres, y `…/api/steam//return` no casa con la ruta del Worker.
+  assertEquals(returnBase("https://reel-app.com/api/steam/", null), "https://reel-app.com/api/steam");
+  assertEquals(returnBase("  ", "https://ref.supabase.co/"), "https://ref.supabase.co/functions/v1/steam-sync");
 });
 
 Deno.test("el cuerpo de verificación devuelve todo lo de Steam y solo cambia el mode", () => {
