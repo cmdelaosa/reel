@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { fetchPaged } from "@/lib/paging";
 import { useFriendships } from "@/lib/friends";
 import { useMyRatings } from "@/lib/ratings";
 import { useMedium } from "@/lib/medium";
@@ -42,19 +43,32 @@ export interface FriendRatingRow {
   poster_path: string | null;
 }
 
-/** All show-level ratings of the given friends, one round trip. */
+/** Las notas de esos amigos, todas.
+ *
+ *  Paginada por lo mismo que `useMyRatings`, y aquí el tope se pasa antes: son
+ *  las notas de VARIOS a la vez, así que dos amigos con una biblioteca
+ *  importada ya lo rebasan. Sin paginar, la afinidad del último de la lista se
+ *  calculaba sobre las notas que cupieron — y una afinidad baja por
+ *  truncamiento no se distingue de una afinidad baja de verdad.
+ *
+ *  El orden es (user_id, title_id) porque es el único TOTAL que hay aquí: es la
+ *  clave única de la tabla, y esta consulta no promete ningún orden a quien la
+ *  llama (la página agrupa por amigo). */
 export function useFriendsRatings(friendIds: string[]) {
   return useQuery({
     queryKey: ["friendsRatings", [...friendIds].sort()],
     enabled: friendIds.length > 0,
     queryFn: async (): Promise<FriendRatingRow[]> => {
-      const { data, error } = await supabase
-        .from("ratings")
-        .select("user_id, score, titles(tmdb_id, kind, name, poster_path)")
-        .in("user_id", friendIds)
-        .not("title_id", "is", null);
-      if (error) throw error;
-      return z.array(friendRatingSchema).parse(data).map((r) => ({
+      const rows = await fetchPaged((from, to) =>
+        supabase
+          .from("ratings")
+          .select("user_id, score, titles(tmdb_id, kind, name, poster_path)")
+          .in("user_id", friendIds)
+          .not("title_id", "is", null)
+          .order("user_id")
+          .order("title_id")
+          .range(from, to));
+      return z.array(friendRatingSchema).parse(rows).map((r) => ({
         user_id: r.user_id,
         score: r.score,
         ...r.titles,

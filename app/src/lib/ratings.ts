@@ -164,7 +164,24 @@ const ratedRowSchema = z.object({
 });
 export type RatedRow = z.infer<typeof ratedRowSchema>;
 
-/** Every show-level rating of the caller, with its title, newest first. */
+/** Todas tus notas con su título, la más nueva primero.
+ *
+ *  Paginada, y esa es la única diferencia con la versión que estuvo aquí un
+ *  año: PostgREST corta en mil filas sin avisar (lib/paging) y esta cuenta ya
+ *  tiene 1.460 notas —1.005 de cine tras importar FilmAffinity—, así que la
+ *  lista llegaba con las 1.000 más nuevas y las otras 460 no existían para
+ *  nadie. De esta consulta cuelgan las notas de tu perfil, tus cifras, la
+ *  afinidad con cada amigo y la página de una persona: todas salían calculadas
+ *  sobre el trozo que cupo, con la pantalla llena y sin un error que lo dijera.
+ *  Es el mismo fallo que ya se tapó en la ficha de un amigo (lib/friendProfile)
+ *  y en la pantalla de confirmar de Steam (lib/steam) — esta era la que
+ *  quedaba, y la peor: son TUS notas.
+ *
+ *  El orden lleva DOS columnas y las dos hacen falta. `created_at` es lo que
+ *  esta función promete —la más nueva primero—, y `title_id` detrás es lo que
+ *  lo vuelve un orden TOTAL: las notas de una importación comparten fecha de a
+ *  cientos, Postgres no promete un orden estable entre consultas, y sin
+ *  desempate dos ventanas consecutivas repiten filas y se saltan otras. */
 export function useMyRatings() {
   const { session } = useAuth();
   const userId = session?.user.id;
@@ -174,14 +191,16 @@ export function useMyRatings() {
     queryFn: async (): Promise<RatedRow[]> => {
       // Scope to the caller — without user_id the "friends read" RLS policy
       // would fold friends' ratings into our own list.
-      const { data, error } = await supabase
-        .from("ratings")
-        .select("id, score, created_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres)")
-        .eq("user_id", userId!)
-        .not("title_id", "is", null)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return z.array(ratedRowSchema).parse(data);
+      const rows = await fetchPaged((from, to) =>
+        supabase
+          .from("ratings")
+          .select("id, score, created_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres)")
+          .eq("user_id", userId!)
+          .not("title_id", "is", null)
+          .order("created_at", { ascending: false })
+          .order("title_id")
+          .range(from, to));
+      return z.array(ratedRowSchema).parse(rows);
     },
   });
 }
