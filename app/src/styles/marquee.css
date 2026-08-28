@@ -2235,14 +2235,38 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 /* El reparto del ancho va al revés de lo que parece: manda la plataforma, no el
    botón. «PlayStation 5» o «Nintendo Switch 2» no caben en 148 y salían
    cortados con puntos suspensivos, mientras el botón se estiraba con su
-   etiqueta ya holgada. Ahora el botón se queda en lo que mide su texto y cede
-   el resto. */
+   etiqueta ya holgada. Así que el de terminar se queda en lo que mide su texto
+   y cede el resto.
+
+   Y ahora el de la plataforma también: aquí ya no crece nadie. Con el menú
+   ajustado a su opción más ancha (0100), el botón de encima era lo único que
+   seguía midiéndose por el hueco que sobraba —371 px en una ficha de
+   escritorio, dijera «Game Boy Advance» o dijera «PC»— con un suelo de 200 px
+   que lo dejaba gordo hasta cuando no decía nada. Medido el 28-08-2026 con la
+   ventana a 2752: 324,3 px con la Game Boy Advance puesta, 93,7 con «PC» y 97
+   sin poner, y sin recortar el nombre en ninguno de los tres — que era el
+   motivo entero de que se estirara.
+
+   Encoge por la IZQUIERDA, y de ahí el `flex-end`: el borde derecho se queda
+   donde estaba siempre. No es estética, es lo que evita que el menú se salga.
+   Cuelga anclado a la derecha del botón (.pick-menu) y crece hacia la
+   izquierda, así que con el botón hecho una pastilla de 93 px pegada al
+   principio de la fila, un menú de 322 se sale por la izquierda de la ficha —
+   y la ficha lleva `overflow-hidden`, o sea que no asoma: se CORTA. Con el
+   borde derecho quieto, la geometría del menú es exactamente la de antes.
+
+   `flex: 0 1 auto` y no `0 0 auto`: en una ficha estrecha tiene que poder
+   encoger. Y el suelo de 200 px no se BORRA, se pone a cero: un elemento de
+   caja flexible arranca con `min-width: auto`, que es su contenido, así que
+   quitar la línea le habría dado un suelo nuevo —el nombre entero— y la fila
+   se desbordaría en vez de recortar. */
 .game-done { display: flex; align-items: center; gap: 12px; }
 .game-done > .btn { flex: 0 1 auto; }
-.game-plat { display: flex; align-items: center; gap: 9px; flex: 1 1 auto; min-width: 0; }
+.game-plat { display: flex; align-items: center; gap: 9px; flex: 1 1 auto; min-width: 0;
+  justify-content: flex-end; }
 .game-plat .eyebrow { flex: 0 0 auto; }
-.game-plat .pick-wrap { flex: 1 1 auto; min-width: 0; }
-.game-plat .pick { min-width: 200px; }
+.game-plat .pick-wrap { flex: 0 1 auto; min-width: 0; }
+.game-plat .pick { min-width: 0; }
 /* «Lo tengo» vive en el héroe, encima de los logos: es lo primero que se mira
    de un juego. Con fondo propio, que un arte claro se lo comía. */
 .game-own { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px;
@@ -2401,8 +2425,13 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   .game-shots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .game-states { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .game-done { flex-direction: column; align-items: stretch; }
+  /* Aquí el desplegable SÍ se estira, al revés que en la ficha ancha: con la
+     fila apilada y el grupo centrado, un botón hecho pastilla dejaría el menú
+     colgando de un punto medio de la pantalla, y de 322 px que llega a medir se
+     saldría por la izquierda. Estirado, su borde derecho vuelve a ser el de la
+     fila y el menú cae dentro. De paso, en un móvil un blanco grande se agradece. */
   .game-plat { justify-content: center; }
-  .game-plat .pick { min-width: 0; }
+  .game-plat .pick-wrap { flex: 1 1 auto; }
   .game-facts { grid-template-columns: minmax(0, 1fr); }
   .ttb { flex-direction: column; gap: 12px; }
   .ttb-sep { width: auto; height: 1px; }
