@@ -148,9 +148,15 @@ test("la edición de Switch 2 hereda la nota del juego, que es de lo que se habl
 test("se corta la coletilla de edición, y solo esa", () => {
   assert.equal(sinEdicion("Ticket to Ride: Classic Edition"), "Ticket to Ride");
   assert.equal(sinEdicion("The Witcher 3: Wild Hunt - Complete Edition"), "The Witcher 3: Wild Hunt");
+  assert.equal(sinEdicion("Fallout: Game of the Year Edition"), "Fallout");
   // Un subtítulo NO es una edición: aquí se perdería el juego entero.
   assert.equal(sinEdicion("Zelda II: The Adventure of Link"), null);
   assert.equal(sinEdicion("Half-Life 2"), null);
+  /* Y una palabra de edición dentro de un subtítulo tampoco basta: sin la
+     palabra "edition" detrás, "The Complete Journey" es el título del juego y
+     cortarlo lo dejaría heredando la nota de otro. */
+  assert.equal(sinEdicion("Dragon Quest: The Complete Journey"), null);
+  assert.equal(sinEdicion("Sonic Origins: Classic Collection"), null);
 });
 
 test("un remaster no hereda: la crítica lo puntúa aparte", () => {

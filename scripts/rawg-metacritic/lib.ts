@@ -107,14 +107,20 @@ const anio = (fecha: string | null | undefined): number | null => {
  * buscar por el nombre a secas. Y solo con estas etiquetas, que significan "el
  * mismo juego, otra vez a la venta":
  *
- *   · edition / complete / deluxe / goty / anniversary / bundle / classic
+ *   · edition (Complete, Deluxe, Classic, Nintendo Switch 2…) / goty
+ *
+ * La lista es corta A PROPÓSITO. La primera versión aceptaba también `complete`,
+ * `deluxe`, `anniversary`, `bundle` y `classic` sueltos, y eso convierte
+ * cualquier subtítulo que lleve esa palabra en un corte: "Dragon Quest: The
+ * Complete Journey" se quedaría en "Dragon Quest" y heredaría la nota de un
+ * juego que no es. Con `edition` delante —que es como se escriben de verdad
+ * estas coletillas— el corte solo ocurre donde significa lo que creemos.
  *
  * NO entran `remastered`, `remake` ni `HD`, y no es un olvido: la crítica los
  * puntúa por separado —Valkyria Chronicles tiene un 86 y su remasterización un
  * 80— así que enseñar el número del original ahí sería enseñar la nota de otra
  * cosa. Esos se quedan sin nota, que es lo honesto. */
-const EDICIONES =
-  /\b(edition|complete|deluxe|goty|game of the year|anniversary|bundle|classic)\b/;
+const EDICIONES = /\b(edition|goty|game of the year)\b/;
 
 /** El nombre sin la coletilla de edición, o null si no la lleva.
  *
