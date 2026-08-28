@@ -8,7 +8,7 @@
 
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { emparejar, norm, platKey, queueFor, scoreOf, STALE_MS, type Candidato, type Game } from "./lib.ts";
+import { emparejar, emparejarEdicion, norm, platKey, queueFor, scoreOf, sinEdicion, STALE_MS, type Candidato, type Game } from "./lib.ts";
 
 const p = (...nombres: string[]) => nombres.map((name) => ({ platform: { name } }));
 
@@ -121,6 +121,63 @@ test("el Metascore fuera de 0-100, o que no es número, no se guarda", () => {
   assert.equal(scoreOf({ id: 1, name: "x", released: null, metacritic: null }), null);
   assert.equal(scoreOf(null), null);
   assert.equal(scoreOf({ id: 1, name: "x", released: null, metacritic: 0 }), 0);
+});
+
+/* ── Las ediciones ───────────────────────────────────────────────────────
+ *
+ * La biblioteca tiene "…- Nintendo Switch 2 Edition", que en RAWG no existe con
+ * ese nombre. El juego sí, y su Metascore es el del juego. */
+
+const TOTK: Candidato[] = [
+  { id: 327239, name: "The Legend of Zelda: Tears of the Kingdom", released: "2023-05-12", metacritic: 96, platforms: p("Nintendo Switch") },
+];
+
+test("la edición de Switch 2 hereda la nota del juego, que es de lo que se habla", () => {
+  const juego = {
+    name: "The Legend of Zelda: Tears of the Kingdom - Nintendo Switch 2 Edition",
+    first_air_date: "2025-06-05",
+    platforms: ["Nintendo Switch 2"],
+  };
+  // Por nombre entero no empareja con nada: ese es el punto de partida.
+  assert.equal(emparejar(juego, TOTK), null);
+  const base = sinEdicion(juego.name);
+  assert.equal(base, "The Legend of Zelda: Tears of the Kingdom");
+  assert.equal(scoreOf(emparejarEdicion(juego, base!, TOTK)), 96);
+});
+
+test("se corta la coletilla de edición, y solo esa", () => {
+  assert.equal(sinEdicion("Ticket to Ride: Classic Edition"), "Ticket to Ride");
+  assert.equal(sinEdicion("The Witcher 3: Wild Hunt - Complete Edition"), "The Witcher 3: Wild Hunt");
+  assert.equal(sinEdicion("Fallout: Game of the Year Edition"), "Fallout");
+  // Un subtítulo NO es una edición: aquí se perdería el juego entero.
+  assert.equal(sinEdicion("Zelda II: The Adventure of Link"), null);
+  assert.equal(sinEdicion("Half-Life 2"), null);
+  /* Y una palabra de edición dentro de un subtítulo tampoco basta: sin la
+     palabra "edition" detrás, "The Complete Journey" es el título del juego y
+     cortarlo lo dejaría heredando la nota de otro. */
+  assert.equal(sinEdicion("Dragon Quest: The Complete Journey"), null);
+  assert.equal(sinEdicion("Sonic Origins: Classic Collection"), null);
+});
+
+test("un remaster no hereda: la crítica lo puntúa aparte", () => {
+  /* Valkyria Chronicles tiene un 86 y su remasterización un 80. Enseñar el 86
+     en la remasterización sería enseñar la nota de otra cosa, así que estas dos
+     etiquetas se quedan fuera a propósito. */
+  assert.equal(sinEdicion("Valkyria Chronicles Remastered"), null);
+  assert.equal(sinEdicion("Broken Sword: The Smoking Mirror - Remastered"), null);
+  assert.equal(sinEdicion("Shadow of the Colossus - Remake"), null);
+});
+
+test("la edición no se empareja con un juego que se llame parecido", () => {
+  const juego = {
+    name: "The Legend of Zelda: Tears of the Kingdom - Nintendo Switch 2 Edition",
+    first_air_date: "2025-06-05",
+    platforms: ["Nintendo Switch 2"],
+  };
+  /* Un randomizer y un pack de contenido de OTRO Zelda: se llaman parecido y no
+     son el juego, así que la edición se queda sin nota antes que llevarse la de
+     un vecino. */
+  assert.equal(emparejarEdicion(juego, sinEdicion(juego.name)!, ZELDA.slice(1, 3)), null);
 });
 
 /* ── La cola ──────────────────────────────────────────────────────────── */

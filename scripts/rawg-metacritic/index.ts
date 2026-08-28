@@ -29,7 +29,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { emparejar, queueFor, scoreOf, type Candidato, type Game } from "./lib.ts";
+import { emparejar, emparejarEdicion, queueFor, scoreOf, sinEdicion, type Candidato, type Game } from "./lib.ts";
 
 const URL_ = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -156,6 +156,22 @@ for (const juego of cola.slice(0, MAX_ITEMS)) {
          juego sigue a la cabeza de la cola mañana. */
       if (candidatos === null) throw new Error("la búsqueda no contestó");
       elegido = emparejar(juego, candidatos);
+
+      /* Segunda pasada para las ediciones: "…Tears of the Kingdom - Nintendo
+         Switch 2 Edition" no está en RAWG con ese nombre, pero el juego sí, y
+         su Metascore es el del juego. Se busca otra vez —por el nombre a
+         secas— en vez de repescar entre los candidatos de la primera: el
+         buscador de RAWG ordena por lo que le pidas, y el juego base puede no
+         estar entre los diez que devolvió la consulta con la coletilla.
+         Solo cuando la primera no dio nada, así que no cuesta una petición más
+         a los juegos que ya emparejan. */
+      const base = elegido ? null : sinEdicion(juego.name);
+      if (base) {
+        await sleep(GAP_MS);
+        const otros = await buscar(base);
+        if (otros === null) throw new Error("la búsqueda del juego base no contestó");
+        elegido = emparejarEdicion(juego, base, otros);
+      }
     }
   } catch (e) {
     fallidos += 1;

@@ -369,7 +369,11 @@ Tres reglas que hay que conocer antes de tocar nada de esto:
    Metascore en la tienda le borraría cada semana lo que RAWG hubiera puesto —
    en silencio, y sin que ninguna pasada pareciera fallar.
 3. **El emparejamiento es por nombre + consola + año**, porque RAWG no comparte
-   id con IGDB. Unir solo por nombre daba notas de OTRO juego (el Tetris de
+   id con IGDB. Con una excepción medida: una EDICIÓN (`… - Nintendo Switch 2
+   Edition`, `… : Classic Edition`) se busca por el nombre del juego a secas y
+   hereda su Metascore, porque es el mismo juego reenvasado y las dos señales
+   que lo distinguirían —consola y año— son justo las que cambian. Un
+   `Remastered` o un `Remake` NO hereda: la crítica los puntúa aparte. Unir solo por nombre daba notas de OTRO juego (el Tetris de
    móvil de 2011 al Tetris de Game Boy). Los casos están en la matriz del guión,
    con las respuestas reales de la API. Un juego que no se pueda emparejar con
    seguridad se queda sin nota, a propósito.

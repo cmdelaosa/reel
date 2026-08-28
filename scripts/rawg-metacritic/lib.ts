@@ -97,6 +97,46 @@ const anio = (fecha: string | null | undefined): number | null => {
   return Number.isInteger(y) && y > 1900 ? y : null;
 };
 
+/* ── Las ediciones ────────────────────────────────────────────────────────
+ *
+ * "The Legend of Zelda: Tears of the Kingdom - Nintendo Switch 2 Edition" no
+ * está en RAWG con ese nombre, y por nombre exacto no empareja con nada. Pero
+ * el juego SÍ está, y su Metascore —96— es el del juego, no el del envoltorio.
+ *
+ * Así que cuando la búsqueda por el nombre entero no da nada, se vuelve a
+ * buscar por el nombre a secas. Y solo con estas etiquetas, que significan "el
+ * mismo juego, otra vez a la venta":
+ *
+ *   · edition (Complete, Deluxe, Classic, Nintendo Switch 2…) / goty
+ *
+ * La lista es corta A PROPÓSITO. La primera versión aceptaba también `complete`,
+ * `deluxe`, `anniversary`, `bundle` y `classic` sueltos, y eso convierte
+ * cualquier subtítulo que lleve esa palabra en un corte: "Dragon Quest: The
+ * Complete Journey" se quedaría en "Dragon Quest" y heredaría la nota de un
+ * juego que no es. Con `edition` delante —que es como se escriben de verdad
+ * estas coletillas— el corte solo ocurre donde significa lo que creemos.
+ *
+ * NO entran `remastered`, `remake` ni `HD`, y no es un olvido: la crítica los
+ * puntúa por separado —Valkyria Chronicles tiene un 86 y su remasterización un
+ * 80— así que enseñar el número del original ahí sería enseñar la nota de otra
+ * cosa. Esos se quedan sin nota, que es lo honesto. */
+const EDICIONES = /\b(edition|goty|game of the year)\b/;
+
+/** El nombre sin la coletilla de edición, o null si no la lleva.
+ *
+ *  Se corta por el último guion o dos puntos, y solo si lo que va detrás es una
+ *  de las etiquetas de arriba: "Tears of the Kingdom - Nintendo Switch 2
+ *  Edition" pierde la cola, y "Zelda II: The Adventure of Link" no la pierde,
+ *  porque su subtítulo no es una edición sino el título. */
+export function sinEdicion(nombre: string): string | null {
+  const corte = Math.max(nombre.lastIndexOf(" - "), nombre.lastIndexOf(" – "), nombre.lastIndexOf(": "));
+  if (corte <= 0) return null;
+  const cola = nombre.slice(corte);
+  if (!EDICIONES.test(cola.toLowerCase())) return null;
+  const base = nombre.slice(0, corte).trim();
+  return base.length >= 3 ? base : null;
+}
+
 /** El candidato que es el mismo juego, o null.
  *
  *  Tres reglas, en este orden:
@@ -118,11 +158,44 @@ export function emparejar(
   juego: Pick<Game, "name" | "first_air_date" | "platforms">,
   candidatos: readonly Candidato[],
 ): Candidato | null {
-  const nuestro = norm(juego.name);
+  const puntuados = mismoNombre(juego, juego.name, candidatos)
+    .filter((x) => x.solapa || x.dy <= 1);
+  return puntuados[0]?.c ?? null;
+}
+
+/** Lo mismo, pero para la EDICIÓN de un juego, buscando por su nombre a secas.
+ *
+ *  Aquí no se exige ni consola ni año, y tiene que ser así: la edición de
+ *  Switch 2 de Tears of the Kingdom sale en 2025 y solo para Switch 2, y el
+ *  juego que RAWG tiene es de 2023 y de Switch. Las dos señales que en el caso
+ *  general separan un juego de otro son justo las que aquí cambian, porque un
+ *  reenvasado es eso: el mismo juego, otro año y otra consola.
+ *
+ *  Lo que sostiene el emparejamiento es el nombre completo del juego base, que
+ *  ya es específico —quien busque "Tears of the Kingdom" no va a chocar con
+ *  otro juego llamado igual—, y que la coletilla que se ha quitado sea una de
+ *  las de `sinEdicion`. Entre varios candidatos sigue ganando el que comparte
+ *  consola, y luego el más cercano en el tiempo. */
+export function emparejarEdicion(
+  juego: Pick<Game, "name" | "first_air_date" | "platforms">,
+  base: string,
+  candidatos: readonly Candidato[],
+): Candidato | null {
+  return mismoNombre(juego, base, candidatos)[0]?.c ?? null;
+}
+
+/** Los candidatos que se llaman igual que `nombre`, ordenados por lo cerca que
+ *  están del juego: primero los que comparten consola, después por año. */
+function mismoNombre(
+  juego: Pick<Game, "first_air_date" | "platforms">,
+  nombre: string,
+  candidatos: readonly Candidato[],
+): { c: Candidato; solapa: boolean; dy: number }[] {
+  const nuestro = norm(nombre);
   const nuestroAnio = anio(juego.first_air_date);
   const nuestras = new Set((juego.platforms ?? []).map(platKey));
 
-  const puntuados = candidatos
+  return candidatos
     .filter((c) => norm(c.name ?? "") === nuestro)
     .map((c) => {
       const suyas = new Set((c.platforms ?? []).map((p) => platKey(p?.platform?.name ?? "")));
@@ -133,10 +206,7 @@ export function emparejar(
       const dy = nuestroAnio && suAnio ? Math.abs(suAnio - nuestroAnio) : Number.POSITIVE_INFINITY;
       return { c, solapa, dy };
     })
-    .filter((x) => x.solapa || x.dy <= 1)
     .sort((a, b) => Number(b.solapa) - Number(a.solapa) || a.dy - b.dy);
-
-  return puntuados[0]?.c ?? null;
 }
 
 /** El Metascore de un candidato, si lo tiene y es creíble.
