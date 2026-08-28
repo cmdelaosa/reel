@@ -1,0 +1,99 @@
+name: steam-notes
+
+# Refresco diario del porcentaje de reseñas de Steam y de la nota de Metacritic
+# de cada juego (migración 0089, guión scripts/steam-notes).
+#
+# ── Por qué el trabajo corre AQUÍ y no en igdb-proxy ─────────────────────
+# Porque ahí ya estaba, y ahí no funciona. Las dos notas las pedía la edge
+# function al abrir una ficha (0086), y Steam elige por IP a quién le contesta:
+# a Supabase no. La medida es del cron de precios, del 27-08-2026, y vale igual
+# para estas rutas — mismo dominio, misma tienda, mismo criterio:
+#
+#   · desde la edge function:     429 a la primera;
+#   · desde un runner de GitHub:  200 y datos reales;
+#   · desde una IP doméstica:     12 seguidas sin un corte.
+#
+# Y el fallo era MUDO: `notasDeSteam` omite la clave cuando algo no contesta, el
+# upsert no toca la columna y la ficha se abre igual, con los dos huecos. Nada
+# se ponía rojo; simplemente las notas no aparecían nunca. El primer paso de
+# abajo vuelve a tomar la medida en cada ejecución, para que el día que Steam
+# cambie de idea se vea en el registro y no haya que deducirlo.
+#
+# ── Por qué a diario si las notas casi no se mueven ──────────────────────
+# Porque lo que se drena no son las notas, es el ATASCO: cada pasada tiene un
+# tope (dos peticiones por juego, y la tienda corta a las doscientas cada cinco
+# minutos), así que los juegos que nunca han tenido nota se van llenando a
+# tandas. Cada juego concreto se vuelve a preguntar a los siete días
+# (`STALE_MS`), no cada noche.
+#
+# A las 4:40 UTC: veinte minutos después de que arranque el de precios, para no
+# pelearse con él por el mismo runner ni por la paciencia de la misma tienda.
+#
+# SECRETS (repo → Settings → Secrets and variables → Actions), los mismos dos
+# que ya usa steam-prices:
+#   SUPABASE_URL                — https://<ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY   — la sb_secret_… (SUPABASE_DEFAULT_KEY en el
+#                                 CLI), no el JWT service_role legacy: ver
+#                                 docs/DEPLOY.md.
+# Sin ellos el guión se planta en la primera línea en vez de escribir nada en
+# silencio.
+
+on:
+  schedule:
+    - cron: "40 4 * * *"
+  workflow_dispatch:
+    inputs:
+      max_items:
+        description: "Tope de juegos que preguntar en esta pasada"
+        default: "600"
+      gap_ms:
+        description: "Hueco entre juegos, en ms (dos peticiones por juego)"
+        default: "3000"
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # La medida que justifica que este trabajo exista, tomada cada vez. Nunca
+      # falla el job: si sale 429, el paso siguiente lo dirá con sus propias
+      # cifras y esto es la explicación que ahorra media hora de diagnóstico.
+      # 292030 es The Witcher 3, que tiene las dos notas desde hace diez años:
+      # si ESE sale vacío, no es el juego.
+      - name: ¿Steam contesta a este runner?
+        continue-on-error: true
+        run: |
+          code=$(curl -s -o /tmp/mc.json -w '%{http_code}' \
+            'https://store.steampowered.com/api/appdetails?appids=292030&filters=metacritic')
+          echo "appdetails desde este runner -> $code"
+          head -c 200 /tmp/mc.json; echo
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Instalar
+        working-directory: scripts/steam-notes
+        run: npm ci --no-audit --no-fund
+
+      # La matriz del guión, aquí y no en `check`: son las decisiones que se
+      # equivocan sin que nada falle —a quién se pregunta, y qué respuesta
+      # autoriza a escribir— y este es el único sitio por el que este código
+      # pasa. Cuesta tres segundos y corre antes de tocar la base.
+      - name: Probar
+        working-directory: scripts/steam-notes
+        run: npm test
+
+      - name: Refrescar notas
+        working-directory: scripts/steam-notes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MAX_ITEMS: ${{ github.event.inputs.max_items || '600' }}
+          GAP_MS: ${{ github.event.inputs.gap_ms || '3000' }}
+        run: npm start

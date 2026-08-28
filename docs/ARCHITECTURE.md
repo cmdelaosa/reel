@@ -144,6 +144,12 @@ titles (
   last_refreshed_at timestamptz,           -- the title row's DETAIL was refetched. Written by every
                                            -- full /tv/:id fetch, the discovery warm-up included.
                                            -- Gates /title's cache-first read, nothing else.
+  steam_notes_refreshed_at timestamptz,    -- GAMES (0089): Steam was ASKED for steam_reviews and
+                                           -- metacritic. A third freshness mark, and deliberately
+                                           -- not last_refreshed_at: only scripts/steam-notes (a
+                                           -- GitHub Action — Steam answers 429 to Supabase's IPs)
+                                           -- writes it, and gating the IGDB detail on it would
+                                           -- freeze every sheet.
   episodes_refreshed_at timestamptz        -- the title's EPISODES were refetched (0066). Written
                                            -- only by episode-refresh and tmdb-proxy's whole-show
                                            -- fill. Gates /season's read and the nightly cron's
@@ -320,7 +326,10 @@ stops happening.
 ```sql
 job_runs (                                  -- 0029: one row per scheduled run, per exit path
   id uuid pk, job text not null,            -- episode-refresh | alerts | discover-warm |
-                                            -- igdb-warm | steam-sync | imdb-dataset-import
+                                            -- igdb-warm | steam-sync | imdb-dataset-import |
+                                            -- steam-prices | steam-notes (the last two run in
+                                            -- GitHub Actions, not pg_cron: Steam blocks the
+                                            -- edge functions' IPs — see DEPLOY)
   started_at timestamptz, finished_at timestamptz,
   ok boolean not null default false,
   summary jsonb not null default '{}'       -- the run's own report: counts, errors, skips

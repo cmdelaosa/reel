@@ -307,6 +307,42 @@ Comprobarlo después del primer despliegue: en la pestaña Actions, que
 IP del runner y no el guión, y lo que quede se refresca al día siguiente por
 orden de rancio.
 
+### El cron de las notas de Steam y Metacritic
+
+El sexto trabajo tampoco vive en pg_cron y es hermano del anterior, por la misma
+razón y con los mismos dos secretos: `.github/workflows/steam-notes.yml`, guión
+en `scripts/steam-notes`, todos los días a las 4:40 UTC.
+
+Llena `titles.steam_reviews` y `titles.metacritic` de los juegos que tienen
+`steam_appid`. Antes las pedía igdb-proxy al abrir cada ficha (0086), o sea
+desde la IP a la que Steam no le contesta — y **el fallo era mudo**:
+`notasDeSteam` omite la clave cuando algo no responde, el upsert no toca la
+columna, la ficha se abre igual y las dos notas simplemente no aparecían nunca.
+A eso se sumaban los juegos que entraron en tanda (inventario de Steam, export
+de InfiniteBacklog), que ni lo intentaban.
+
+Dos peticiones por juego —`appreviews` y `appdetails?filters=metacritic`— con
+tres segundos de hueco, porque el techo de la tienda es del orden de doscientas
+cada cinco minutos. De ahí el tope de 600 juegos por pasada: el atasco de los
+que nunca han tenido nota se drena a tandas, y cada juego ya preguntado no
+vuelve a la cola hasta siete días después (`STALE_MS` en `lib.ts`).
+
+La contabilidad es una columna nueva, `titles.steam_notes_refreshed_at` (0089),
+y **no** `last_refreshed_at`: esa segunda significa «cuándo se trajo el detalle
+de IGDB» y es la que decide si igdb-proxy sirve la caché, así que escribirla
+desde aquí congelaría las fichas.
+
+Comprobarlo después del primer despliegue: en Actions, que la salida diga
+`Escritos N`. `Escritos 0, cortado por Steam` con un 429 en el primer paso es la
+IP del runner, no el guión, y lo que quede va al día siguiente. En la base:
+
+```sql
+select count(*) filter (where steam_notes_refreshed_at is null) as sin_preguntar,
+       count(*) filter (where metacritic is not null)           as con_metacritic,
+       count(*) filter (where steam_reviews is not null)        as con_resenas
+  from titles where kind = 'game' and steam_appid is not null;
+```
+
 ### Which service key
 
 Every one of these functions authenticates a caller as the cron by comparing the
