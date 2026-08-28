@@ -219,13 +219,27 @@ export function scoreOf(c: Candidato | null): number | null {
   return typeof n === "number" && n >= 0 && n <= 100 ? n : null;
 }
 
-/** Cuándo se vuelve a mirar un juego ya emparejado.
+/** Cuándo se vuelve a mirar un juego YA EMPAREJADO.
  *
  *  Treinta días. Un Metascore se congela a las pocas semanas del lanzamiento y
  *  no se mueve nunca más, así que lo único que este refresco persigue es el
  *  juego que salió ayer y todavía no tenía crítica. Preguntar más a menudo sería
  *  gastar la cuota mensual en volver a traer el mismo número. */
 export const STALE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Cuándo se vuelve a intentar uno que NO se pudo emparejar.
+ *
+ *  Siete días, y esta es la diferencia que importa: las dos filas se parecen
+ *  —las dos tienen la marca puesta— pero dicen cosas distintas. Una emparejada
+ *  es trabajo terminado; una sin emparejar es trabajo PENDIENTE, y lo que
+ *  cambia no es el dato de RAWG sino nuestro código para encontrarlo.
+ *
+ *  Medido el 28-08-2026: la regla de las ediciones se escribió con 24 juegos
+ *  sin emparejar, y al desplegarla no alcanzó a ninguno — todos llevaban la
+ *  marca de esa misma mañana y no volvían a la cola hasta un mes después. Hubo
+ *  que borrarla a mano con un `update` contra producción para que la mejora
+ *  sirviera de algo. Con siete días, la siguiente entra sola. */
+export const REINTENTO_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface Wanted {
   id: string;
@@ -243,7 +257,12 @@ export interface Wanted {
  *
  *  El orden:
  *    0. lo que nunca se ha buscado — el hueco que se ve en la ficha;
- *    1. lo buscado hace más de un mes, de más viejo a más nuevo.
+ *    1. lo rancio, de más viejo a más nuevo.
+ *
+ *  Y "rancio" no significa lo mismo en los dos casos: un juego emparejado
+ *  espera un mes (`STALE_MS`) y uno que no se pudo emparejar, una semana
+ *  (`REINTENTO_MS`). Lo primero es esperar a que la crítica se mueva; lo
+ *  segundo, a que nos movamos nosotros.
  *
  *  Lo fresco no entra, por lo mismo que en los otros dos crones: si entrara,
  *  el tope por pasada se lo comerían siempre los mismos y la cola no bajaría. */
@@ -265,7 +284,7 @@ export function queueFor(juegos: Game[], now: number): Wanted[] {
         nunca: !g.rawg_refreshed_at,
       };
     })
-    .filter((x) => x.nunca || now - x.at > STALE_MS)
+    .filter((x) => x.nunca || now - x.at > (x.rawg_id == null ? REINTENTO_MS : STALE_MS))
     .sort((a, b) => Number(b.nunca) - Number(a.nunca) || a.at - b.at)
     .map(({ id, name, first_air_date, platforms, rawg_id }) => ({
       id,
