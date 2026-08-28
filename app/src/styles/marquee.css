@@ -2205,9 +2205,13 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    abajo y justo debajo empieza el tráiler, que YouTube pinta en una capa
    compuesta aparte. Un z-index en el propio menú no bastaba —una capa compuesta
    se cuela por encima de sus hermanos sin capa—, así que quien sube es la
-   tarjeta entera, y con ella todo lo que se despliegue desde dentro. */
+   tarjeta entera, y con ella todo lo que se despliegue desde dentro.
+   Un 1, no más: el desplegable de amigos vive en la fila de notas de ARRIBA con
+   un 5 y cae sobre esta tarjeta, y un empate se rompe por orden en el
+   documento, o sea a favor de la tarjeta. Para ganarle al tráiler basta con
+   salir del `auto`. */
 .game-state { padding: 13px; display: flex; flex-direction: column; gap: 10px;
-  position: relative; z-index: 5; }
+  position: relative; z-index: 1; }
 .game-states { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .game-states .chip { width: 100%; justify-content: center; }
 .game-states .chip-active { font-weight: 750; }
