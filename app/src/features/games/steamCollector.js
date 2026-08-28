@@ -638,6 +638,26 @@
      mandan. Estos son para que la pantalla enseñe algo el primer día en vez de
      una tabla de guiones: Reel solo los acepta para objetos de los que todavía
      no sabe el precio, y los sustituye en cuanto el cron pasa. */
+  /** Cuántos fallos SEGUIDOS se aguantan antes de dejar la fase entera.
+   *
+   *  `priceoverview` se estrangula por su cuenta y a su ritmo: medido el
+   *  28-08-2026 en la misma pestaña y el mismo minuto, contestaba 429 a las
+   *  tres sondas mientras el inventario, `myhistory` y `pricehistory` iban a
+   *  200 — y el mismo extremo desde `curl`, misma máquina y misma IP, a 200
+   *  también. Cuando le da por ahí, recorrer los 608 objetos son casi tres
+   *  horas fallando uno a uno, cada uno con sus esperas de 2, 4 y 8 segundos, y
+   *  el botón de descarga no aparece hasta el final: el inventario y el libro
+   *  ya leídos, esperando a que termine de no traer nada.
+   *
+   *  Rendirse no cuesta nada, y por eso el número es bajo. Estos precios son el
+   *  adorno del primer día: los que mandan los trae el cron `steam-prices`
+   *  desde un runner —que sí recibe 200— y Reel solo acepta estos para lo que
+   *  todavía no conoce. Un fallo suelto no cuenta: la racha se pone a cero en
+   *  cuanto uno responde. */
+  const GIVE_UP_AFTER = 5;
+  let inARow = 0;
+  let pricesGaveUp = false;
+
   log(`Preguntando precios (${holdings.length}; esto es lo que más tarda)…`);
   const prices = [];
   for (let i = 0; i < holdings.length; i++) {
@@ -655,8 +675,16 @@
         median_cents: cents(p.median_price),
         volume: p.volume ? Number(String(p.volume).replace(/[^\d]/g, "")) : null,
       });
+      inARow = 0;
     } catch (e) {
       log(`  sin precio: ${h.market_hash_name} (${e.message})`);
+      inARow += 1;
+      if (inARow >= GIVE_UP_AFTER) {
+        pricesGaveUp = true;
+        log(`  ${GIVE_UP_AFTER} seguidos sin respuesta: dejo los precios y sigo.`);
+        log("  Los pondrá el cron esta madrugada; lo demás no se pierde.");
+        break;
+      }
     }
     if (i % 25 === 24) log(`  ${i + 1}/${holdings.length}…`);
     /* ~3s por petición. Parece lento y es lo que hace que termine: por debajo
@@ -675,7 +703,13 @@
       sum + (p.median_cents ?? 0) * (qty.get(`${p.appid}:${p.market_hash_name}`) ?? 0),
     0,
   );
-  log(`Valor ahora mismo: ${(totalCents / 100).toFixed(2)} €`);
+  /* Con la fase de precios abandonada este total es un trozo del real, y decirlo
+     importa: un "0,00 €" a secas después de leer un inventario entero parece
+     que lo roto es el inventario. */
+  log(
+    `Valor ahora mismo: ${(totalCents / 100).toFixed(2)} €` +
+      (pricesGaveUp ? ` (solo ${prices.length} de ${holdings.length} precios; falta lo demás)` : ""),
+  );
 
   offer("Guardar inventario", `reel-steam-${steamId}.json`, {
     ...base,
@@ -703,7 +737,20 @@
     .slice(0, HISTORY_TOP);
 
   log("");
-  log(`Trayendo el histórico de los ${top.length} más valiosos…`);
+  /* Sin un solo precio no hay "los más valiosos": el orden sale de las medianas
+     que acabamos de traer, y con la lista vacía todos valen cero y el `sort` se
+     queda con los sesenta primeros por casualidad. Tres minutos de peticiones
+     para traer la curva de sesenta objetos elegidos a dedo por el azar no le
+     sirven a nadie, así que se dice y se deja para la próxima. */
+  if (!prices.length) {
+    log("Sin precios no sé cuáles son los 60 más valiosos: dejo el histórico.");
+    log("Vuelve a pasar esto cuando Steam conteste y saldrá con los de verdad.");
+    return;
+  }
+  log(
+    `Trayendo el histórico de los ${top.length} más valiosos…` +
+      (pricesGaveUp ? ` (ordenados con los ${prices.length} precios que hay)` : ""),
+  );
   const cutoff = Date.now() - HISTORY_DAYS * 864e5;
   const history = [];
   for (let i = 0; i < top.length; i++) {
