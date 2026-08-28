@@ -536,7 +536,38 @@
    *  vale es la SEGUNDA. Y el signo lo da el rótulo de la izquierda, que dice
    *  "Vendido"/"Comprado" en tu idioma — así que no se lee el texto, se lee la
    *  clase `market_listing_gainorloss`, que es "+" o "-" en todos. */
-  function parseHistory(html) {
+  /** El appid de cada fila, sacado del bloque `hovers` de la respuesta.
+   *
+   *  La fila del HTML no lo lleva por ningún lado: ni enlace a la ficha, ni
+   *  atributo, ni el appid dentro de la URL de la imagen. Solo el NOMBRE del
+   *  juego, que es texto traducido y no sirve de llave. Y sin appid, una compra
+   *  no se puede casar con lo que tienes: `costBasis` compara por (appid,
+   *  nombre) a propósito, porque un cromo de 753 y una caja de 730 pueden
+   *  llamarse igual y valer cosas distintas.
+   *
+   *  La consecuencia, hasta hoy: 12.026 compras y ventas guardadas con `appid`
+   *  a null, un coste base vacío, y una pantalla afirmando que los 608 objetos
+   *  "salieron de cajas o intercambios y no costaron nada" con 9.319 compras
+   *  registradas debajo.
+   *
+   *  Steam sí lo dice, en el JavaScript que acompaña al HTML: una línea por
+   *  fila, con el id de la fila y el appid dentro.
+   *
+   *      CreateItemHoverFromContainer( g_rgAssets, 'history_row_A_B_name', 730, '2', '…', 0 );
+   *
+   *  Comprobado el 28-08-2026 contra una página de verdad: 20 filas, 20
+   *  casadas. */
+  function appidsFromHovers(hovers) {
+    const out = new Map();
+    const re =
+      /CreateItemHoverFromContainer\(\s*g_rgAssets,\s*'(history_row_[^']+?)_(?:name|image)',\s*(\d+)/g;
+    for (const m of String(hovers || "").matchAll(re)) {
+      if (!out.has(m[1])) out.set(m[1], Number(m[2]));
+    }
+    return out;
+  }
+
+  function parseHistory(html, appids = new Map()) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const rows = [];
     /* Las filas VISTAS, aparte de las entendidas. Una página entera de "puesto
@@ -557,6 +588,10 @@
       const appEl = el.querySelector(".market_listing_game_name");
       rows.push({
         external_id: id,
+        /* Sin appid la fila entra igual —el dinero cuenta en el realizado con
+           nombre o sin él— pero se queda fuera del coste base, y eso hay que
+           poder distinguirlo de "no la hemos guardado". */
+        appid: appids.get(id) ?? null,
         /* La fecha de Steam es "24 ago" sin año: la reconstruye el servidor
            con el orden de las filas, que llegan de más nueva a más vieja. Aquí
            se sube tal cual y también el índice, que es lo que no se puede
@@ -602,7 +637,10 @@
     }
     const total = Number(data.total_count);
     if (expected === null && Number.isFinite(total) && total > 0) expected = total;
-    const { rows, seen } = parseHistory(data.results_html || "");
+    const { rows, seen } = parseHistory(
+      data.results_html || "",
+      appidsFromHovers(data.hovers),
+    );
     ledger.push(...rows.map((r, i) => ({ ...r, order: start + i })));
     log(`  ${ledger.length} de ${expected ?? "?"}…`);
     /* Una página sin NINGUNA fila dentro es el final de la lista… o Steam que ha

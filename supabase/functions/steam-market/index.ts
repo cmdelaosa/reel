@@ -292,7 +292,17 @@ interface Dump {
   wallet_complete?: boolean;
 }
 
+/** El número que venga, o null si no viene ninguno.
+ *
+ *  El `null` y la cadena vacía se comprueban ANTES que nada, y no es una manía:
+ *  `Number(null)` es 0 y `Number("")` también, así que "aquí no hay dato" se
+ *  guardaba como el número cero. Es la diferencia entre un `appid` desconocido
+ *  y el appid 0 —que no existe pero sí casa con `!= null`, y se cuela en el
+ *  coste base con una llave inventada—, o entre una vela sin precio y una vela
+ *  que valió 0,00 €. `undefined` ya salía bien, por accidente: `Number` lo
+ *  convierte en NaN. */
 const int = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? Math.round(n) : null;
 };
