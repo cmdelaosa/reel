@@ -1,0 +1,43 @@
+-- 0089_notas_de_steam_por_cron.sql
+-- La tercera marca de frescura de `titles`: cuándo se le preguntó a Steam.
+--
+-- ── El agujero que esto tapa ───────────────────────────────────────────────
+-- 0086 añadió `steam_reviews` y `metacritic` y las llenaba desde igdb-proxy, al
+-- abrir una ficha. Un día después, 0088 midió lo que ya se sabía de los precios:
+-- **Steam elige por IP a quién le contesta, y a las edge functions de Supabase
+-- no le contesta** (429 a la primera; un runner de GitHub, 5 de 5 con 200). O
+-- sea que el único escritor de esas dos columnas estaba llamando desde el único
+-- sitio desde el que Steam no responde, y fallaba en silencio: `notasDeSteam`
+-- devuelve la clave ausente cuando algo no contesta, el upsert no toca la
+-- columna, y la ficha se abre igual — sin las dos notas, para siempre.
+--
+-- A eso se le sumaba la importación en tanda (`fetchGamesInto`), que ni lo
+-- intenta: los juegos que entraron por el inventario de Steam o por el export de
+-- InfiniteBacklog nacieron sin notas y nada volvía a por ellas.
+--
+-- Desde aquí las llena `scripts/steam-notes`, un GitHub Action diario, que es
+-- donde ya vive el cron de precios y por la misma razón. igdb-proxy sigue
+-- intentándolo al abrir la ficha: cuando cuela, mejor, y no estorba.
+--
+-- ── Por qué una marca NUEVA y no `last_refreshed_at` ──────────────────────
+-- Porque `last_refreshed_at` significa «cuándo se refrescó el detalle de IGDB»,
+-- y es lo que igdb-proxy mira para decidir si sirve la caché o vuelve a la red.
+-- Escribirla desde este cron le diría a la función que el detalle está fresco
+-- sin haberlo traído: las fichas se quedarían congeladas con lo que IGDB dijera
+-- el día del último refresco. Es la misma confusión que 0066 tuvo que separar
+-- entre el detalle y los episodios, y sale cara en las dos direcciones.
+--
+-- Null en todas las filas al aplicarse, que es exactamente lo que hace falta:
+-- «nunca se le ha preguntado» es la cabeza de la cola del guión.
+alter table public.titles
+  add column if not exists steam_notes_refreshed_at timestamptz;
+
+-- Sin índice a propósito. La cola se arma leyendo los juegos con `steam_appid`
+-- —unos cientos, ya cubiertos por `titles_steam_appid_idx` (0071)— y ordenando
+-- en memoria; un índice más aquí solo añadiría escrituras a cada upsert de
+-- ficha para ahorrar un sort de trescientas filas una vez al día.
+--
+-- Sin grants ni políticas: `titles` ya es legible por authenticated y escribible
+-- solo por service_role (0002), y esta columna lo hereda. No viaja al cliente
+-- por ningún esquema —no es dato de pantalla, es contabilidad del cron—, así que
+-- app/src/lib/schemas.ts no la conoce y no tiene por qué.

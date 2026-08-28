@@ -330,7 +330,19 @@ async function timeToBeat(igdbId: number): Promise<Any | null> {
  * cambiar un dato bueno de ayer por ninguno.
  *
  * Y con su propio tope de tiempo: `fetch` sin señal espera para siempre, y esto
- * corre dentro de la petición que abre una ficha. */
+ * corre dentro de la petición que abre una ficha.
+ *
+ * ── Esto YA NO es el que llena las columnas (0089) ────────────────────────
+ * Desde aquí casi nunca contesta nada: Steam elige por IP a quién le responde y
+ * a las edge functions de Supabase les da 429 —medido con los precios el
+ * 27-08-2026, ver steam-prices.yml—, así que este intento se saldaba con las
+ * dos claves ausentes y las fichas se quedaban sin notas sin que nada fallara.
+ * Quien las llena es `scripts/steam-notes`, un GitHub Action diario, desde una
+ * IP a la que la tienda sí le habla.
+ *
+ * Se deja aquí igualmente porque no estorba —va en paralelo con IGDB, con su
+ * tope de cuatro segundos— y porque el día que cuele es una ficha con notas sin
+ * esperar al cron. Lo que NO se puede es volver a contar con ello. */
 const STEAM_TIMEOUT_MS = 4_000;
 
 async function notasDeSteam(appid: number | null | undefined): Promise<SteamNotas | null> {
