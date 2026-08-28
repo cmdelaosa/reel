@@ -35,6 +35,10 @@ import { useWatchedAt } from "@/features/detail/data";
    emitir" no hay botón: la lista ya deshabilita el check de un episodio no
    emitido, y un botón muerto sería peor que ninguno.
 
+   El disco hace lo mismo que el botón cuando el episodio se ha emitido —es el
+   control de la lista, y ahí sí se pulsa—; sin emitir es el reloj, y entonces
+   ni se pulsa ni pinta el cursor de mano.
+
    ── El estado pobre es el que hay que mirar ────────────────────────────────
    De un episodio sin emitir, TMDB no tiene fotograma, ni notas, ni sinopsis,
    ni reparto. La ficha se sostiene con el título y la fecha, y los huecos se
@@ -188,9 +192,29 @@ export function EpisodeSheet({
             <X size={18} />
           </button>
           <div className="ep-state">
-            <span className={`check ${tira.on ? "on" : ""}`} style={{ width: 40, height: 40, flex: "0 0 auto" }} aria-hidden>
-              {tira.icon}
-            </span>
+            {/* El disco. Emitido, es el mismo control que el de la lista y
+                marca o desmarca; sin emitir es un reloj que solo informa, y
+                entonces vuelve a ser un adorno. Antes era siempre un `span`:
+                pintaba el cursor de mano y la mano no hacía nada.
+                Las 44 de caja son las de `button.check`, con el margen que le
+                devuelve a la tira las 40 que medía cuando no se podía pulsar. */}
+            {aired ? (
+              <button
+                type="button"
+                className={`check ${tira.on ? "on" : ""}`}
+                style={{ width: 44, height: 44, flex: "0 0 auto", marginBlock: -2 }}
+                disabled={busy}
+                aria-pressed={tira.on}
+                aria-label={tira.on ? tr("Watched — tap to clear") : tr("Mark watched")}
+                onClick={onToggleWatched}
+              >
+                {tira.icon}
+              </button>
+            ) : (
+              <span className={`check ${tira.on ? "on" : ""}`} style={{ width: 40, height: 40, flex: "0 0 auto", cursor: "default" }} aria-hidden>
+                {tira.icon}
+              </span>
+            )}
             <span className="min-w-0 flex-1">
               <span className="ep-state-title">{tira.titulo}</span>
               {tira.sub && <span className="ep-state-sub">{tira.sub}</span>}

@@ -555,6 +555,11 @@ const ES: Record<string, string> = {
   "Mark earlier episodes as seen?": "¿Marcar los episodios anteriores como vistos?",
   "Only this one": "Solo este",
   "Mark all": "Marcar los",
+  "Mark the whole show watched?": "¿Marcar toda la serie como vista?",
+  "This marks the one aired episode you haven't seen of {name}.": "Marca el único episodio emitido de {name} que no has visto.",
+  "This marks all {count} aired episodes you haven't seen of {name}.": "Marca los {count} episodios emitidos de {name} que no has visto.",
+  "Mark {count}": "Marcar los {count}",
+  "Cancel": "Cancelar",
   "TBA": "Por anunciar",
   "Loading episodes": "Cargando episodios",
   // Episode sub-sheet + season rating graph (IMDb).
