@@ -182,14 +182,18 @@ export function ratingOf(raw: string): number | null {
  *  su lista no tiene ninguna plataforma de PC que ofrecer. Se cuenta en el
  *  informe en vez de escribirse a la fuerza — un valor que el desplegable no
  *  ofrece no se puede ni ver ni cambiar desde la app. */
-const ALIAS: Record<string, string> = {
+/* Un Map y no un objeto literal: `ALIAS["constructor"]` en un objeto devuelve
+   una función heredada de Object.prototype, y `normPlat` de una función lanza
+   un TypeError que se lleva por delante la importación a media escritura. Una
+   plataforma llamada "constructor" no existe, pero el CSV es de fuera. */
+const ALIAS = new Map<string, string>(Object.entries({
   "windows pc": "PC (Microsoft Windows)",
   "windows": "PC (Microsoft Windows)",
   "pc": "PC (Microsoft Windows)",
   "macos": "Mac",
   "mac os": "Mac",
   "osx": "Mac",
-};
+}));
 
 const normPlat = (s: string) =>
   (s ?? "").trim().toLowerCase().replace(/[-_]/g, " ").replace(/\s+/g, " ");
@@ -197,7 +201,7 @@ const normPlat = (s: string) =>
 export function platformOf(raw: string, disponibles: readonly string[]): string | null {
   const n = normPlat(raw);
   if (!n) return null;
-  const objetivo = normPlat(ALIAS[n] ?? raw);
+  const objetivo = normPlat(ALIAS.get(n) ?? raw);
   return disponibles.find((p) => normPlat(p) === objetivo) ?? null;
 }
 
