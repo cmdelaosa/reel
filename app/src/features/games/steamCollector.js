@@ -536,9 +536,57 @@
    *  vale es la SEGUNDA. Y el signo lo da el rótulo de la izquierda, que dice
    *  "Vendido"/"Comprado" en tu idioma — así que no se lee el texto, se lee la
    *  clase `market_listing_gainorloss`, que es "+" o "-" en todos. */
-  function parseHistory(html) {
+  /** Qué objeto es cada fila, sacado del bloque `hovers` de la respuesta.
+   *
+   *  El HTML de la fila no basta para identificar lo que se compró. No trae el
+   *  appid por ninguna parte —ni enlace a la ficha, ni atributo, ni dentro de la
+   *  URL de la imagen— y el nombre que enseña es el NOMBRE PARA LEER, que en
+   *  753 no es el nombre de mercado:
+   *
+   *      lo que enseña la fila   "City Park"
+   *      lo que vale como llave  "639900-City Park"
+   *
+   *  Y la llave importa porque es la que usan tus objetos y la tabla de precios.
+   *  Con el nombre de leer, las 680 compras de cromos y fondos no casaban con
+   *  ninguno de los 532 que tienes: cero. Y `costBasis` compara por (appid,
+   *  nombre) a propósito, porque un cromo de 753 y una caja de 730 pueden
+   *  llamarse igual y valer cosas distintas.
+   *
+   *  Steam manda las dos cosas al lado del HTML. El bloque `hovers` empareja
+   *  cada fila con su objeto:
+   *
+   *      CreateItemHoverFromContainer( g_rgAssets, 'history_row_A_B_name', 730, '2', '27461336399', 0 );
+   *
+   *  y `assets[appid][contexto][assetid]` tiene la ficha, `market_hash_name`
+   *  incluido. Comprobado el 28-08-2026 contra páginas de verdad: 20 filas, 20
+   *  emparejadas, y los 753 saliendo con su prefijo. */
+  function assetRefsFromHovers(hovers) {
+    const out = new Map();
+    const re =
+      /CreateItemHoverFromContainer\(\s*g_rgAssets,\s*'(history_row_[^']+?)_(?:name|image)',\s*(\d+),\s*'(\d+)',\s*'(\d+)'/g;
+    for (const m of String(hovers || "").matchAll(re)) {
+      if (!out.has(m[1])) {
+        out.set(m[1], { appid: Number(m[2]), context: m[3], assetid: m[4] });
+      }
+    }
+    return out;
+  }
+
+  /** La ficha del objeto de una fila, si viene en el volcado de `assets`. */
+  function assetOf(assets, ref) {
+    if (!ref || !assets) return null;
+    return assets?.[String(ref.appid)]?.[ref.context]?.[ref.assetid] ?? null;
+  }
+
+  function parseHistory(html, refs = new Map(), assets = null) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const rows = [];
+    /* Filas que no han encontrado su ficha. Se cuentan porque el respaldo es
+       silencioso: si Valve cambia el nombre del ayudante de los hovers o deja
+       de mandar `assets`, todo sigue funcionando de cara afuera y las filas
+       vuelven a guardarse con el nombre de leer y sin appid — o sea, la avería
+       que este arreglo viene a quitar, otra vez y sin que nadie se entere. */
+    let sinFicha = 0;
     /* Las filas VISTAS, aparte de las entendidas. Una página entera de "puesto
        a la venta" no trae ni una fila con dinero y no por eso se ha acabado el
        historial: sin esta cuenta, esa página parecería el final. */
@@ -555,8 +603,15 @@
         .filter(Boolean);
       const name = (el.querySelector(".market_listing_item_name")?.textContent || "").trim();
       const appEl = el.querySelector(".market_listing_game_name");
+      const ref = refs.get(id);
+      const asset = assetOf(assets, ref);
+      if (!asset) sinFicha += 1;
       rows.push({
         external_id: id,
+        /* Sin appid la fila entra igual —el dinero cuenta en el realizado con
+           nombre o sin él— pero se queda fuera del coste base, y eso hay que
+           poder distinguirlo de "no la hemos guardado". */
+        appid: ref?.appid ?? null,
         /* La fecha de Steam es "24 ago" sin año: la reconstruye el servidor
            con el orden de las filas, que llegan de más nueva a más vieja. Aquí
            se sube tal cual y también el índice, que es lo que no se puede
@@ -565,11 +620,14 @@
         kind: sign === "+" ? "market_sell" : "market_buy",
         /* Signo desde tu cartera: una venta la llena, una compra la vacía. */
         amount_cents: sign === "+" ? amount : -amount,
-        market_hash_name: name || null,
+        /* El de la ficha manda; el raspado del HTML es el respaldo para cuando
+           `assets` no traiga ese objeto. Que sean distintos no es un detalle:
+           en 753 son namespaces diferentes y con el equivocado no casa nada. */
+        market_hash_name: asset?.market_hash_name || name || null,
         app_name: (appEl?.textContent || "").trim() || null,
       });
     }
-    return { rows, seen: found.length };
+    return { rows, seen: found.length, sinFicha };
   }
 
   log("Leyendo tus compras y ventas…");
@@ -584,6 +642,9 @@
    *  entero. Medido el 28-08-2026 sobre esta cuenta. */
   let expected = null;
   let ledgerComplete = true;
+  /** Filas que se han quedado sin la ficha de `assets`, sumando todas las
+   *  páginas. Cero es lo normal; otra cosa hay que decirla. */
+  let ledgerUnnamed = 0;
   /** Tope de páginas, que con `expected` a null es el ÚNICO tope que queda.
    *
    *  Sin él, un Steam que devolviera filas sin dar nunca un total creíble deja
@@ -602,7 +663,12 @@
     }
     const total = Number(data.total_count);
     if (expected === null && Number.isFinite(total) && total > 0) expected = total;
-    const { rows, seen } = parseHistory(data.results_html || "");
+    const { rows, seen, sinFicha } = parseHistory(
+      data.results_html || "",
+      assetRefsFromHovers(data.hovers),
+      data.assets,
+    );
+    ledgerUnnamed += sinFicha;
     ledger.push(...rows.map((r, i) => ({ ...r, order: start + i })));
     log(`  ${ledger.length} de ${expected ?? "?"}…`);
     /* Una página sin NINGUNA fila dentro es el final de la lista… o Steam que ha
@@ -630,6 +696,11 @@
   if (!ledgerComplete) {
     log("  Tus compras y ventas van INCOMPLETAS. Súbelo igual —no borra nada— y");
     log("  vuelve a pasar esto más tarde, cuando Steam deje de estrangular.");
+  }
+  if (ledgerUnnamed) {
+    log(`  ${ledgerUnnamed} filas sin ficha: van con el nombre que se lee y sin`);
+    log("  appid, así que no contarán en el coste base. Avisa si sale un número");
+    log("  grande: querrá decir que Steam ha movido el bloque de los hovers.");
   }
 
   /* ── 3. Precios de ahora ──────────────────────────────────────────────── */

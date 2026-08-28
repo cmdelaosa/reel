@@ -41,6 +41,13 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    /* Vitest sustituye por VACÍO todo lo que huela a CSS, y también cuando se
+       pide en crudo: `import css from "…/marquee.css?raw"` llegaba como cadena
+       de cero caracteres, así que ui/icons/platformMarks.test.ts —que comprueba
+       que el techo del desplegable de plataforma sigue cuadrando con el
+       logotipo más ancho— pasaba en verde sin haber leído la hoja. Con este
+       `include` esa y solo esa hoja se procesa de verdad. */
+    css: { include: [/marquee\.css/] },
     globals: false,
     include: ["src/**/*.{test,spec}.{ts,tsx}"], // e2e/ is Playwright, not vitest
     /* Placeholders, so importing lib/supabase.ts is never what decides whether a
