@@ -539,7 +539,11 @@
   function parseHistory(html) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const rows = [];
-    for (const el of doc.querySelectorAll(".market_listing_row")) {
+    /* Las filas VISTAS, aparte de las entendidas. Una página entera de "puesto
+       a la venta" no trae ni una fila con dinero y no por eso se ha acabado el
+       historial: sin esta cuenta, esa página parecería el final. */
+    const found = doc.querySelectorAll(".market_listing_row");
+    for (const el of found) {
       const id = el.id;
       if (!id) continue;
       const sign = (el.querySelector(".market_listing_gainorloss")?.textContent || "").trim();
@@ -565,24 +569,67 @@
         app_name: (appEl?.textContent || "").trim() || null,
       });
     }
-    return rows;
+    return { rows, seen: found.length };
   }
 
   log("Leyendo tus compras y ventas…");
   const ledger = [];
-  for (let start = 0; ; start += 100) {
+  /** Cuántas filas dice Steam que hay, según la PRIMERA respuesta que lo diga.
+   *
+   *  No se vuelve a mirar, y esa es toda la corrección: estrangulado,
+   *  `myhistory` contesta 200 con `total_count` a CERO, y tomar ese cero por el
+   *  total nuevo hacía cierto el `start + 100 >= total` de la salida. La lectura
+   *  se daba por terminada en la fila 1.800 de 12.026 dejando en el registro un
+   *  "1800 de 0…" que no parece un error, y el volcado subía como si estuviera
+   *  entero. Medido el 28-08-2026 sobre esta cuenta. */
+  let expected = null;
+  let ledgerComplete = true;
+  /** Tope de páginas, que con `expected` a null es el ÚNICO tope que queda.
+   *
+   *  Sin él, un Steam que devolviera filas sin dar nunca un total creíble deja
+   *  el bucle girando para siempre en la pestaña de alguien, a una petición
+   *  cada segundo y pico. 300 páginas son 30.000 filas: el triple de la cuenta
+   *  más gorda que hemos visto, y aun así un número. */
+  const MAX_PAGES = 300;
+  for (let start = 0; start < MAX_PAGES * 100; start += 100) {
     let data;
     try {
       data = await get(`/market/myhistory/render/?query=&start=${start}&count=100`);
     } catch (e) {
+      ledgerComplete = false;
       log(`  El historial se ha cortado en ${ledger.length} filas — ${e.message}`);
       break;
     }
-    const rows = parseHistory(data.results_html || "");
+    const total = Number(data.total_count);
+    if (expected === null && Number.isFinite(total) && total > 0) expected = total;
+    const { rows, seen } = parseHistory(data.results_html || "");
     ledger.push(...rows.map((r, i) => ({ ...r, order: start + i })));
-    log(`  ${ledger.length} de ${data.total_count ?? "?"}…`);
-    if (!rows.length || start + 100 >= (data.total_count ?? 0)) break;
+    log(`  ${ledger.length} de ${expected ?? "?"}…`);
+    /* Una página sin NINGUNA fila dentro es el final de la lista… o Steam que ha
+       dejado de contestar. Lo segundo se distingue por el total que dio al
+       principio, y se dice: un historial a medias que se presenta como entero
+       es un realizado a medias que nadie va a volver a mirar. */
+    if (!seen) {
+      if (expected !== null && start < expected) {
+        ledgerComplete = false;
+        log(`  Steam ha dejado de dar filas en la ${start} de ${expected}.`);
+      }
+      break;
+    }
+    if (expected !== null && start + 100 >= expected) break;
+    /* Se acabaron las páginas permitidas y Steam seguía dando filas: hay más
+       historial del que cabe en una pasada, y eso es una lectura incompleta
+       como cualquier otra. */
+    if (start + 100 >= MAX_PAGES * 100) {
+      ledgerComplete = false;
+      log(`  Tope de ${MAX_PAGES} páginas: me quedo en ${ledger.length} filas.`);
+      break;
+    }
     await sleep(1200);
+  }
+  if (!ledgerComplete) {
+    log("  Tus compras y ventas van INCOMPLETAS. Súbelo igual —no borra nada— y");
+    log("  vuelve a pasar esto más tarde, cuando Steam deje de estrangular.");
   }
 
   /* ── 3. Precios de ahora ──────────────────────────────────────────────── */
