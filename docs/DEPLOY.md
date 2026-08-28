@@ -378,6 +378,30 @@ Tres reglas que hay que conocer antes de tocar nada de esto:
    con las respuestas reales de la API. Un juego que no se pueda emparejar con
    seguridad se queda sin nota, a propósito.
 
+**Dos relojes, no uno**: un juego ya emparejado se vuelve a mirar al mes
+(`STALE_MS`) y uno que NO se pudo emparejar, a la semana (`REINTENTO_MS`). No es
+un ajuste fino: lo que puede cambiar en el segundo caso no es el dato de RAWG,
+es el código que lo busca. El 28-08-2026 la regla de las ediciones se desplegó
+con 24 juegos sin emparejar y no alcanzó a ninguno —todos con la marca de esa
+mañana— y hubo que borrarla a mano contra producción:
+
+```sql
+update titles set rawg_refreshed_at = null
+ where kind = 'game' and rawg_id is null and rawg_refreshed_at is not null;
+```
+
+Ese `update` sigue siendo la palanca para forzar un reintento inmediato, pero
+con la semana ya no hace falta esperarlo: la siguiente mejora entra sola.
+
+**Cuando el nombre no coincide y da igual lo que se afine**: `titles.rawg_id` se
+puede fijar a mano y el cron lo respeta para siempre (a partir de ahí pide la
+ficha por id y no busca). Es lo que se hizo con PUBG: Battlegrounds (RAWG lo
+tiene como PlayerUnknown's Battlegrounds, id 10142) y con Tales from the
+Borderlands (id 2100). Medido sobre los 21 que no emparejaban: solo esos dos y
+uno más tenían Metascore siquiera, así que fijar a mano salía más a cuenta que
+un tramo de emparejamiento por parecido — que es además por donde se cuelan las
+notas de otro juego.
+
 **Atribución**: el plan gratuito de RAWG exige el crédito visible donde se use
 su dato. Está al pie de la ficha del juego y solo aparece cuando la nota es
 suya. Si se quita el crédito, hay que quitar el cron.
