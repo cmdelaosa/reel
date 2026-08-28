@@ -144,6 +144,15 @@ titles (
   last_refreshed_at timestamptz,           -- the title row's DETAIL was refetched. Written by every
                                            -- full /tv/:id fetch, the discovery warm-up included.
                                            -- Gates /title's cache-first read, nothing else.
+  rawg_id int,                             -- GAMES (0090): the matched RAWG game, kept so the
+                                           -- name+platform+year search (the part that can be
+                                           -- WRONG) runs once and not every month. Null with
+                                           -- rawg_refreshed_at set = searched, no match.
+  rawg_refreshed_at timestamptz,           -- GAMES (0090): RAWG was asked. Only scripts/rawg-metacritic
+                                           -- writes it.
+  metacritic_source text,                  -- GAMES (0090): 'steam' | 'rawg'. Two crons write the one
+                                           -- metacritic column; this is what stops them wiping each
+                                           -- other, and what tells the sheet when to credit RAWG.
   steam_notes_refreshed_at timestamptz,    -- GAMES (0089): Steam was ASKED for steam_reviews and
                                            -- metacritic. A third freshness mark, and deliberately
                                            -- not last_refreshed_at: only scripts/steam-notes (a
@@ -327,7 +336,8 @@ stops happening.
 job_runs (                                  -- 0029: one row per scheduled run, per exit path
   id uuid pk, job text not null,            -- episode-refresh | alerts | discover-warm |
                                             -- igdb-warm | steam-sync | imdb-dataset-import |
-                                            -- steam-prices | steam-notes (the last two run in
+                                            -- steam-prices | steam-notes | rawg-metacritic (the
+                                            -- last three run in
                                             -- GitHub Actions, not pg_cron: Steam blocks the
                                             -- edge functions' IPs — see DEPLOY)
   started_at timestamptz, finished_at timestamptz,

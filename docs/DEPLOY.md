@@ -343,6 +343,48 @@ select count(*) filter (where steam_notes_refreshed_at is null) as sin_preguntar
   from titles where kind = 'game' and steam_appid is not null;
 ```
 
+### El cron del Metascore de consola (RAWG)
+
+El séptimo trabajo, también en Actions: `.github/workflows/rawg-metacritic.yml`,
+guión en `scripts/rawg-metacritic`, todos los días a las 5:10 UTC — después del
+de Steam, para que lo que aquel acabe de rellenar ya no entre en esta cola.
+
+Existe porque la nota que trae `steam-notes` viaja **dentro de la ficha de
+tienda de Steam**, y lo que Nintendo no vende ahí no tiene ficha: los 97 juegos
+de consola de la biblioteca se quedaban con la celda vacía aunque Metacritic sí
+los hubiera puntuado (Breath of the Wild tiene un 97). RAWG publica el Metascore
+de consola con una clave gratuita, y de ahí salen.
+
+**Un secreto más**: `RAWG_API_KEY`, de [rawg.io/apidocs](https://rawg.io/apidocs).
+Sin él el guión se planta en la primera línea. El plan gratuito son 20.000
+peticiones al mes y esto gasta una por juego, con tope de 300 por pasada.
+
+Tres reglas que hay que conocer antes de tocar nada de esto:
+
+1. **Steam manda donde llega.** Este cron solo mira juegos sin nota, o con nota
+   suya. La columna `titles.metacritic_source` ('steam' | 'rawg') es lo que lo
+   hace posible.
+2. **Y Steam no pisa lo que este escriba**: `steam-notes` solo escribe un null
+   encima si la nota que había era suya. Sin esa condición, un juego sin
+   Metascore en la tienda le borraría cada semana lo que RAWG hubiera puesto —
+   en silencio, y sin que ninguna pasada pareciera fallar.
+3. **El emparejamiento es por nombre + consola + año**, porque RAWG no comparte
+   id con IGDB. Unir solo por nombre daba notas de OTRO juego (el Tetris de
+   móvil de 2011 al Tetris de Game Boy). Los casos están en la matriz del guión,
+   con las respuestas reales de la API. Un juego que no se pueda emparejar con
+   seguridad se queda sin nota, a propósito.
+
+**Atribución**: el plan gratuito de RAWG exige el crédito visible donde se use
+su dato. Está al pie de la ficha del juego y solo aparece cuando la nota es
+suya. Si se quita el crédito, hay que quitar el cron.
+
+Después del primer despliegue, en la base:
+
+```sql
+select metacritic_source, count(*) from titles
+ where kind = 'game' and metacritic is not null group by 1;
+```
+
 ### Which service key
 
 Every one of these functions authenticates a caller as the cron by comparing the

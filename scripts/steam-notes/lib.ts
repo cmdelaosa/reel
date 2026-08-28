@@ -13,6 +13,9 @@ export interface Game {
   name: string | null;
   steam_appid: number;
   metacritic: number | null;
+  /* De qué fuente vino la nota que hay (0090): 'steam' o 'rawg'. Se mira antes
+     de escribir un null encima — ver el `update` de index.ts. */
+  metacritic_source: string | null;
   steam_reviews: unknown;
   steam_notes_refreshed_at: string | null;
 }
@@ -21,6 +24,10 @@ export interface Wanted {
   id: string;
   name: string;
   appid: number;
+  /* De dónde viene la nota que la fila ya tiene (0090). Viaja hasta aquí porque
+     el `update` la mira antes de escribir un null encima: la de RAWG no se
+     borra desde este cron. */
+  source: string | null;
 }
 
 /** Cuándo una nota se considera rancia.
@@ -58,13 +65,14 @@ export function queueFor(games: Game[], now: number): Wanted[] {
         id: g.id,
         name: g.name ?? String(g.steam_appid),
         appid: g.steam_appid,
+        source: g.metacritic_source,
         at: Number.isFinite(at) ? at : 0,
         nunca: !g.steam_notes_refreshed_at,
       };
     })
     .filter((x) => x.nunca || now - x.at > STALE_MS)
     .sort((a, b) => Number(b.nunca) - Number(a.nunca) || a.at - b.at)
-    .map(({ id, name, appid }) => ({ id, name, appid }));
+    .map(({ id, name, appid, source }) => ({ id, name, appid, source }));
 }
 
 /* ── Lo que la tienda contesta, y qué significa cada forma ─────────────────

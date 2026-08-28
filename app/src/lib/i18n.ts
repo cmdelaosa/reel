@@ -215,6 +215,8 @@ const ES: Record<string, string> = {
      pregunta se hace con esas tres palabras. */
   "Owned": "Lo tengo",
   "from Steam": "de Steam",
+  // El crédito que pide la licencia gratuita de RAWG (0090), en la ficha del juego.
+  "Critic score via": "Nota de la crítica vía",
   /* El inventario del mercado (0088). Dos decisiones de vocabulario que se
      repiten abajo y conviene dejar dichas:
 

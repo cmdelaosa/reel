@@ -116,7 +116,7 @@ let bloqueado = false;
 const juegos = await readAll<Game>(
   (from, to) =>
     db.from("titles")
-      .select("id, name, steam_appid, metacritic, steam_reviews, steam_notes_refreshed_at")
+      .select("id, name, steam_appid, metacritic, metacritic_source, steam_reviews, steam_notes_refreshed_at")
       .eq("kind", "game")
       .not("steam_appid", "is", null)
       /* Un `order` estable no es adorno: sin él PostgREST pagina sobre un orden
@@ -203,7 +203,18 @@ for (const juego of cola.slice(0, MAX_ITEMS)) {
     .from("titles")
     .update({
       ...(reseñas.touch ? { steam_reviews: reseñas.value } : {}),
-      ...(nota.touch ? { metacritic: nota.value } : {}),
+      /* La nota de la crítica la escriben DOS crones desde 0090 —este y
+         rawg-metacritic, que cubre lo que no se vende en Steam— y por eso aquí
+         hay una condición que antes no hacía falta.
+         Sin ella: la tienda dice "este juego no tiene Metascore" (null), RAWG
+         acaba de poner el 97 de Breath of the Wild desde metacritic.com, y esta
+         línea se lo borra. Cada semana, en silencio, y sin que ninguna de las
+         dos pasadas parezca haber fallado.
+         Así que el null solo se escribe cuando la nota que hay es de Steam:
+         eso es "la tienda ha dejado de puntuarlo", que sí es asunto suyo. */
+      ...(nota.touch && (nota.value != null || juego.source !== "rawg")
+        ? { metacritic: nota.value, metacritic_source: nota.value == null ? null : "steam" }
+        : {}),
       steam_notes_refreshed_at: new Date().toISOString(),
     })
     .eq("id", juego.id);

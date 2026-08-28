@@ -1,0 +1,81 @@
+name: rawg-metacritic
+
+# El Metascore de los juegos que no se venden en Steam (migración 0090, guión
+# scripts/rawg-metacritic).
+#
+# ── Por qué hace falta un segundo cron para la misma columna ─────────────
+# Porque `steam-notes` saca la nota de la ficha de tienda de Steam, y lo que
+# Nintendo no vende ahí no tiene ficha: los Zelda, Banjo-Kazooie, Bomberman. No
+# es que Metacritic no los puntuara —Breath of the Wild tiene un 97— es que esa
+# fuente no los alcanza. RAWG publica el Metascore de consola con una clave
+# gratuita, y de ahí salen.
+#
+# Steam manda donde llega: este trabajo solo mira los juegos SIN nota, y el de
+# Steam no pisa lo que este escriba (la condición está en steam-notes/index.ts,
+# con su porqué). Sin esa pareja de reglas las dos pasadas se borrarían la nota
+# la una a la otra, en silencio y una vez por semana.
+#
+# ── Cuota ───────────────────────────────────────────────────────────────
+# El plan gratuito de RAWG son 20.000 peticiones al mes, o sea unas 650 al día.
+# Una petición por juego y 300 por pasada: la primera vuelta drena la biblioteca
+# entera en dos días y a partir de ahí son cuatro juegos nuevos al día. Cabe de
+# sobra, pero por eso el guión NO pide el detalle además de la búsqueda: sería
+# gastar el doble para leer el mismo número.
+#
+# ── Atribución ──────────────────────────────────────────────────────────
+# El plan gratuito de RAWG exige el crédito visible donde se use el dato. Está
+# en la ficha del juego, bajo las notas, y solo cuando el número viene de ahí
+# (`metacritic_source = 'rawg'`). Si un día se quita el crédito, hay que quitar
+# también este trabajo.
+#
+# A las 5:10 UTC: después de steam-notes (4:40), para que lo que Steam acabe de
+# rellenar ya no entre en la cola de aquí.
+#
+# SECRETS (repo → Settings → Secrets and variables → Actions):
+#   SUPABASE_URL                — https://<ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY   — la sb_secret_…, ver docs/DEPLOY.md
+#   RAWG_API_KEY                — la clave de rawg.io/apidocs
+
+on:
+  schedule:
+    - cron: "10 5 * * *"
+  workflow_dispatch:
+    inputs:
+      max_items:
+        description: "Tope de juegos que preguntar en esta pasada"
+        default: "300"
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Instalar
+        working-directory: scripts/rawg-metacritic
+        run: npm ci --no-audit --no-fund
+
+      # La matriz del emparejamiento, que es lo único aquí capaz de escribir un
+      # dato FALSO en vez de dejar un hueco: sus casos son tres juegos reales a
+      # los que unir por nombre les asignaba la nota de otro. Corre antes de
+      # tocar la base y cuesta tres segundos.
+      - name: Probar
+        working-directory: scripts/rawg-metacritic
+        run: npm test
+
+      - name: Traer Metascores
+        working-directory: scripts/rawg-metacritic
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RAWG_API_KEY: ${{ secrets.RAWG_API_KEY }}
+          MAX_ITEMS: ${{ github.event.inputs.max_items || '300' }}
+        run: npm start

@@ -16,6 +16,7 @@ function juego(over: Partial<Game> & { id: string }): Game {
     name: `juego ${over.id}`,
     steam_appid: 1000 + Number(over.id),
     metacritic: null,
+    metacritic_source: null,
     steam_reviews: null,
     steam_notes_refreshed_at: null,
     ...over,
@@ -47,7 +48,7 @@ test("una marca ilegible es el principio de los tiempos, no NaN que se cae de la
 
 test("un juego sin nombre entra igual, identificado por su appid", () => {
   const cola = queueFor([juego({ id: "1", name: null, steam_appid: 730 })], AHORA);
-  assert.deepEqual(cola, [{ id: "1", name: "730", appid: 730 }]);
+  assert.deepEqual(cola, [{ id: "1", name: "730", appid: 730, source: null }]);
 });
 
 test("un appid imposible no se pregunta", () => {
