@@ -2333,8 +2333,19 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
      porque va anclado a la derecha del botón. En un móvil de 360 con la ficha
      de un juego de seis consolas viejas eso se salía por el lado de fuera de la
      pantalla. Con el techo puesto, lo que sobra lo recorta el nombre, que para
-     eso lleva `truncate` — y el logotipo, que es lo que se reconoce, no. */
-  max-width: min(calc(100vw - 32px), 340px);
+     eso lleva `truncate` — y el logotipo, que es lo que se reconoce, no.
+
+     Los 340 px de entonces eran un número redondo puesto a ojo, y sobraban:
+     el techo lo marca la opción MÁS ANCHA que puede existir, y esa es la Game
+     Boy Advance. Su logotipo ES el nombre escrito y mide 8,583 veces su alto,
+     así que a los 15 px de la lista son 128,7 px de dibujo; más «Game Boy
+     Advance» escrito al lado (127,5 px a 13,5/600), los dos huecos de 9, la
+     marca de 13, el relleno de la opción y el del menú: 321,2 px medidos en la
+     app. La siguiente ni se acerca —«3DO Interactive Multiplayer», 258— así
+     que 322 es el único sitio donde el techo ni recorta a la GBA ni ofrece
+     hueco que nadie va a pisar. Por debajo, la GBA sale con puntos suspensivos;
+     por encima, el techo no llega a tocar nunca. */
+  max-width: min(calc(100vw - 32px), 322px);
   /* Opaco DE VERDAD, con las dos partes sumando 100: la mezcla decía 90+5 y
      color-mix reparte en alfa lo que falta, así que el menú tenía un 5% de
      transparencia. Sobre un póster no se nota —el desenfoque de detrás lo
