@@ -97,33 +97,33 @@ describe("services on load", () => {
   });
 });
 
-/* `start` es la tercera cosa que sale de localStorage y entra en algo que no es
-   texto: una RUTA que la ruta "/" navega. Se sanea en la misma frontera que el
+/* `startMedium` es la tercera cosa que sale de localStorage y decide algo que
+   no es texto: la ruta que navega "/". Se sanea en la misma frontera que el
    país y las plataformas, y por eso se prueba aquí además de en
-   domain/startPage.test.ts, que prueba la lista blanca sola. */
-describe("start on load", () => {
+   domain/startPage.test.ts, que prueba la lista de tres sola. */
+describe("startMedium on load", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.resetModules();
   });
 
-  it("abre en la portada de series mientras no elijas", async () => {
+  it("abre en series mientras no elijas", async () => {
     const { getSettings } = await bootWith({ country: "ES" });
-    expect(getSettings().start).toBe("/tonight");
+    expect(getSettings().startMedium).toBe("tv");
   });
 
-  it("respeta la pantalla que elegiste", async () => {
-    const { getSettings } = await bootWith({ country: "ES", start: "/games/backlog" });
-    expect(getSettings().start).toBe("/games/backlog");
+  it("respeta el modo que elegiste", async () => {
+    const { getSettings } = await bootWith({ country: "ES", startMedium: "game" });
+    expect(getSettings().startMedium).toBe("game");
   });
 
   it("no navega a donde diga storage editado a mano", async () => {
-    const { getSettings } = await bootWith({ country: "ES", start: "https://otro-sitio.example/" });
-    expect(getSettings().start).toBe("/tonight");
+    const { getSettings } = await bootWith({ country: "ES", startMedium: "https://otro-sitio.example/" });
+    expect(getSettings().startMedium).toBe("tv");
   });
 
-  it("sobrevive a un start que ni siquiera es texto", async () => {
-    const { getSettings } = await bootWith({ country: "ES", start: { path: "/explore" } });
-    expect(getSettings().start).toBe("/tonight");
+  it("sobrevive a un startMedium que ni siquiera es texto", async () => {
+    const { getSettings } = await bootWith({ country: "ES", startMedium: { medium: "game" } });
+    expect(getSettings().startMedium).toBe("tv");
   });
 });

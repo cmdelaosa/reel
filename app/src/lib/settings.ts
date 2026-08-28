@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { deviceCountry, isCountryCode } from "@/lib/countries";
-import { DEFAULT_START, resolveStart } from "@/domain/startPage";
+import { DEFAULT_START_MEDIUM, resolveStartMedium } from "@/domain/startPage";
+import type { Medium } from "@/domain/mediumCopy";
 
 /* User-facing appearance settings, persisted to localStorage and applied to
    the <html> dataset. Ported from prototype/src/theme.tsx minus concept/look:
@@ -34,15 +35,14 @@ export interface Settings {
    *  suscrito es de las cosas que es mejor no guardar en un sitio donde no hace
    *  falta. Si algún día un aviso dice "ya está en TU Netflix", entonces sube. */
   services: number[];
-  /** Con qué pantalla abre la app: una de las doce de domain/startPage. La
-   *  ruta "/" redirige aquí, así que esto es lo primero que se ve al entrar
-   *  por el icono de la pantalla de inicio o por el marcador.
+  /** Con qué modo abre la app: series, cine o juegos. La ruta "/" redirige a
+   *  la portada de ese modo (domain/startPage), así que esto es lo primero que
+   *  se ve al entrar por el icono de la pantalla de inicio o por el marcador.
    *
-   *  Se guarda la RUTA y no un par (medio, sección) porque es lo que se
-   *  navega, y porque la lista blanca de startPage la valida a la entrada —
-   *  guardar dos claves obligaría a recomponer la ruta en el sitio que
-   *  navega, que es justo donde no hay que decidir nada. */
-  start: string;
+   *  Se guarda el MODO y no la ruta: la ruta la decide startPage a partir de
+   *  la tabla que ya existe, y así renombrar una portada no deja a nadie
+   *  guardado apuntando a una URL que ya no está. */
+  startMedium: Medium;
 }
 
 const BASE: Omit<Settings, "country"> = {
@@ -51,7 +51,7 @@ const BASE: Omit<Settings, "country"> = {
   density: "comfortable",
   language: "en",
   services: [],
-  start: DEFAULT_START,
+  startMedium: DEFAULT_START_MEDIUM,
 };
 
 const defaults = (): Settings => ({ ...BASE, country: deviceCountry() });
@@ -87,10 +87,11 @@ function load(): Settings {
       if (!Array.isArray(stored.services) || stored.services.some((s) => !Number.isInteger(s))) {
         stored.services = [];
       }
-      // Y lo mismo, con más motivo, para la pantalla de inicio: es una ruta que
-      // sale de storage y entra en un navigate(). La lista blanca vive en
-      // domain/startPage, con sus pruebas.
-      stored.start = resolveStart(stored.start);
+      // Y lo mismo para el modo con el que abre la app: sale de storage y
+      // decide un navigate(). La lista de tres vive en domain/startPage, con
+      // sus pruebas — y se come de paso lo que guardaba la primera versión de
+      // este ajuste, que era una ruta.
+      stored.startMedium = resolveStartMedium(stored.startMedium);
       return stored;
     }
   } catch {
