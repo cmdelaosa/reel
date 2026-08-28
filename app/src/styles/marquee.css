@@ -568,76 +568,151 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 .cast-edge.right { right: 2px; }
 @media (hover: none) { .cast-edge { display: none; } }
 
-/* ---- La ficha de un título, en dos columnas (0087) ----
-   De 760 a 1180. El ancho no es capricho: la lista de episodios tenía cuatro
-   columnas apretadas en 700px y ahora tiene cinco holgadas, y lo tuyo —seguir
-   por, progreso, amigos— deja de empujar hacia abajo lo de la serie.
+/* ---- Las fichas de detalle, a 760 y en una columna ----
+   Serie, película y juego comparten esqueleto: héroe con el arte y los botones
+   de gestión, una fila de notas justo debajo, la tarjeta de lo que se hace
+   aquí, y el resto del contenido en una sola columna.
 
-   El carril mide 296 y no 336: los 40 de diferencia se los queda la lista, que
-   es la que los aprovecha. Por debajo de 900 no hay dos columnas que valgan y
-   se apila, con el carril primero, que es donde está lo que se viene a hacer. */
-.detail-hero { height: 262px; flex: 0 0 auto; }
+   Vinieron de 1180 y dos columnas. Se vuelve a 760 porque la columna estrecha
+   llevaba lo tuyo —seguir por, progreso, amigos— lejos de donde miras, y a
+   1180 la lista de episodios y la sinopsis salían en renglones que no se leen.
+   Una columna y menos ancho: lo importante primero y nada al lado. */
+.detail-hero { height: 216px; flex: 0 0 auto; }
 .detail-hero-actions { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 8px; }
-.detail-body {
-  flex: 1 1 auto; min-height: 0; overflow-y: auto;
-  display: grid; grid-template-columns: 296px minmax(0, 1fr); gap: 26px;
-  padding: 20px 26px 26px; align-items: start;
-}
-.detail-rail { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
-/* Una sola columna cuando el carril no tiene nada que llevar. `display: contents`
-   y no `display: none`: lo que sobra es la COLUMNA, no su contenido — el bloque
-   de amigos sigue apareciendo si lo hay, ahora en el flujo de la única columna,
-   en vez de desaparecer con el carril.
+/* El pie del héroe. En clases y no en estilos en línea, que es como nació: un
+   estilo en línea gana a cualquier consulta de medios, y con las medidas metidas
+   en el atributo `style` el móvil seguía pintando un cartel de 152x228 dentro de
+   una hoja de 367 — el héroe desbordaba 442px de ancho, con los botones encima
+   de las estrellas. */
+.detail-hero-foot { position: absolute; left: 20px; right: 20px; bottom: 14px;
+  display: flex; align-items: flex-end; gap: 16px; }
+.detail-poster { width: 104px; height: 156px; flex: 0 0 auto; aspect-ratio: auto; }
+.detail-title { font-size: 27px; font-weight: 850; letter-spacing: -0.02em; line-height: 1.1;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .55); color: #fff; margin: 0; }
+.detail-meta { font-size: 13px; color: rgba(255, 255, 255, .85); margin-top: 3px; }
+.detail-orig { font-size: 11.5px; color: rgba(255, 255, 255, .62); margin-top: 2px; }
+/* Lo mismo, pero para lo que SÍ se queda en un teléfono: la clasificación por
+   edad son siete caracteres y siempre caben. La regla de abajo esconde
+   `.detail-orig` porque un título original no se puede cortar por una palabra;
+   esconder también la edad sería perder un dato por su culpa. */
+.detail-sub { font-size: 11.5px; color: rgba(255, 255, 255, .62); margin-top: 2px; }
 
-   El tope va en la PISTA y no en `.detail-main`: al disolver el carril, sus
-   bloques pasan a ser celdas de esta misma rejilla, y un tope puesto solo en la
-   columna principal los dejaba a ellos al ancho entero (1.126 px) sobre un
-   tráiler de 860 centrado, cada uno empezando en una equis distinta. Y 860 y no
-   el ancho entero porque a 1.126 el tráiler mide 633 px de alto —se come la
-   ficha— y la sinopsis sale en renglones que no se leen; 860 queda algo más
-   ancho que la columna de la ficha de dos (804), y el hueco repartido a los dos
-   lados se lee como margen, no como la columna vacía que veníamos a quitar. */
-.detail-body-sola { grid-template-columns: minmax(0, 860px); justify-content: center; }
-.detail-body-sola .detail-rail { display: contents; }
+.detail-body { flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 15px; padding: 16px 18px 18px; }
+/* En una columna de altura fija, un hijo sin esto se encoge hasta desaparecer. */
+.detail-body > * { flex: 0 0 auto; }
+/* Lo que no es ni las notas ni la tarjeta de lo que se hace aquí: sinopsis,
+   ficha, reparto y la lista. Va en su propia columna para tener su propio aire
+   —15px entre bloques del cuerpo, 16 entre los de dentro— y con la misma
+   defensa contra el encogido. */
 .detail-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.detail-main > * { flex: 0 0 auto; }
 
-/* Las notas del héroe. La tuya en caja de acento y las ajenas en una oscura:
-   sueltas sobre el arte, un fotograma claro se las comía. */
-.detail-scores { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 13px; }
-.detail-mine {
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: 7px 14px; border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--accent) 20%, rgba(10, 12, 18, .5));
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-}
-.detail-others {
-  display: inline-flex; align-items: center; gap: 16px;
-  padding: 8px 18px; border-radius: var(--r-sm); background: rgba(10, 12, 18, .5);
-}
-.detail-others-sep { width: 1px; height: 34px; background: rgba(255, 255, 255, .18); }
-.detail-out {
-  border-radius: var(--r-sm); white-space: nowrap;
-  background: rgba(10, 12, 18, .5); border-color: rgba(255, 255, 255, .28); color: #fff;
-}
-.detail-out:hover { background: rgba(10, 12, 18, .7); }
+/* ---- La fila de notas ----
+   Fuera del héroe y sin tarjeta, sobre el fondo de la hoja. Mi nota a la
+   izquierda con el número pegado a las estrellas y ANCHO FIJO —la misma pieza
+   mida lo que mida la nota, y en las tres fichas—; las de fuera juntas en una
+   caja pegada a la derecha, con la de amigos a su izquierda: así, cuando no hay
+   amigos, la caja encoge por dentro y nada se recoloca. */
+.detail-scores { display: flex; align-items: stretch; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; }
+.detail-mine { flex: 0 0 auto; display: flex; align-items: center; gap: 14px; padding: 9px 18px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--accent) 20%, rgba(10, 12, 18, .35));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+/* El número de la caja de acento es el de RatingStars, en grande: es el que
+   previsualiza al pasar por encima, y uno escrito aparte por la ficha salía
+   duplicado y sin esa gracia. Ancho fijo para "10/10", que es el más largo:
+   así la caja mide lo mismo con nota o sin ella, y en las tres fichas. */
+.detail-mine .rating-num { width: 62px; text-align: right; font-size: 22px;
+  font-weight: 850; letter-spacing: -0.02em; }
+.detail-others { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 14px;
+  padding: 8px 16px; border-radius: var(--r);
+  background: rgba(10, 12, 18, .42); border: 1px solid var(--border); }
+.detail-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.detail-cellval { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 850;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.detail-others-sep { width: 1px; align-self: stretch; margin: 2px 0; background: rgba(255, 255, 255, .16); }
+/* El enlace de fuera no es un botón aparte: es la propia celda de IMDb o de
+   Steam, con su flecha. Un botón más en la fila era otra cosa que leer. */
+.detail-out { color: inherit; }
+.detail-out svg:last-child { color: var(--text-mute); }
+button.detail-friends { border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0; }
+/* El acto que va DENTRO de la fila de notas —ver una película—: se estira a lo
+   alto de la fila para no quedar flotando entre dos cajas más altas que él. */
+.detail-act { flex: 0 0 auto; align-self: stretch; }
+/* Sin Mi nota que ocupe la izquierda —la ficha de un episodio— la caja se
+   estira y cada nota se centra en su parte, en vez de quedar arrinconada. */
+.detail-others-wide { width: 100%; }
+.detail-others-wide .detail-cell { flex: 1 1 0; }
 
-/* Por dónde ibas */
-.detail-next { padding: 15px; display: flex; flex-direction: column; gap: 12px; }
-.detail-next-still { width: 86px; height: 50px; flex: 0 0 auto; border-radius: var(--r-sm); border: 1px solid var(--border); }
-.detail-next-se { display: block; font-size: 11.5px; font-weight: 700; color: var(--accent); }
+/* ---- El episodio que toca ---- */
+.detail-next { display: flex; align-items: center; gap: 13px; padding: 11px 13px; }
+.detail-next-still { width: 104px; height: 59px; flex: 0 0 auto; border-radius: var(--r-sm);
+  border: 1px solid var(--border); object-fit: cover; }
+.detail-next-txt { flex: 1 1 auto; min-width: 0; }
+.detail-next-se { display: block; font-size: 11.5px; font-weight: 750; color: var(--accent); }
 .detail-next-name { display: block; font-size: 14.5px; font-weight: 700; }
 .detail-next-date { display: block; font-size: 12px; color: var(--text-mute); }
 
-@media (max-width: 900px) {
-  .detail-body { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 18px; }
-  .detail-hero { height: 214px; }
-  .detail-scores { gap: 10px; }
-}
+/* ---- El visor a tamaño completo (ui/Lightbox) ----
+   `line-height: 0` porque la imagen es en línea y su hueco de base añadía 40px
+   de caja por debajo, justo donde va la cuenta.
+
+   Y la X lleva clase propia en vez de la utilidad `absolute`: `.btn-icon` marca
+   `position: relative` y, como marquee.css se carga después de Tailwind, ganaba
+   —el botón se quedaba en el flujo, bajo la imagen y fuera del marco. Venía así
+   del visor del cartel de la ficha de una serie, que era de donde salió este. */
+.lightbox { line-height: 0; }
+.lightbox-close { position: absolute; top: 10px; right: 10px; color: #fff; }
+.lightbox-img { display: block; max-width: 92vw; max-height: 88vh; cursor: zoom-out;
+  border-radius: var(--r-lg); border: 1px solid var(--border); box-shadow: 0 24px 80px rgba(0, 0, 0, .6); }
+.lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); color: #fff; }
+/* `line-height` propio: el del padre está a cero para matar el hueco de base de
+   la imagen, y sin esto la píldora salía de seis píxeles de alto. */
+.lightbox-count { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  padding: 3px 10px; border-radius: 999px; background: rgba(10, 12, 18, .72); color: #fff;
+  font-size: 12px; line-height: 1.6; font-weight: 700; font-variant-numeric: tabular-nums; }
+.zoomable { cursor: zoom-in; }
+
 @media (max-width: 560px) {
-  /* Solo el aire. Los rótulos se quedan: el grupo son dos botones con texto más
-     la X —nunca tres, porque «Quitar/Parar» y «Añadir/Ignorar» son excluyentes—
-     y eso mide 170px, que caben de sobra en la hoja incluso a 320. */
-  .detail-hero-actions { gap: 5px; }
+  /* ---- El héroe en un teléfono ----
+     Se decía que los rótulos de los botones cabían «de sobra en la hoja incluso
+     a 320». No caben: medido a 390, el héroe de la ficha de un juego pedía
+     508px dentro de una caja de 365. Quedan solo los iconos. */
+  .detail-hero { height: 168px; }
+  .detail-hero-actions { top: 10px; right: 10px; gap: 5px; }
+  .detail-hero-actions .btn-label { display: none; }
+  /* Sin rótulo, el botón se queda en un óvalo aplastado entre dos redondos. */
+  .detail-hero-actions .btn-sm { width: var(--ctl-h-sm); padding: 0; justify-content: center; }
+  .detail-hero-foot { left: 14px; right: 14px; bottom: 12px; gap: 12px; }
+  .detail-poster { width: 78px; height: 117px; }
+  .detail-title { font-size: 20px; line-height: 1.15; }
+  /* Dos renglones y corta. Con la lista entera de géneros, la de un juego se
+     iba a tres, el pie del héroe crecía hacia arriba y el «Lo tengo» acababa
+     debajo de los botones de la esquina. */
+  .detail-meta { font-size: 11.5px; display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden; }
+  /* El título original se va: es la línea que menos dice y la que desborda
+     antes, porque no se puede cortar por una palabra. */
+  .detail-orig { display: none; }
+  .detail-body { padding: 13px 13px 14px; gap: 12px; }
+
+  /* La fila de notas se parte en dos renglones: a 366 pedía 362 dentro de una
+     caja de 338 y se salía por los dos lados. */
+  .detail-scores { flex-direction: column; align-items: stretch; }
+  .detail-mine { gap: 10px; padding: 8px 12px; justify-content: space-between; }
+  .detail-mine .rating-num { width: 54px; font-size: 19px; }
+  .detail-mine .rating-stars { --star: 23px; }
+  .detail-others { gap: 9px; padding: 8px 10px; }
+  /* Cada nota se queda con la misma parte y se centra en ella; pegadas a los
+     bordes, solo la de en medio parecía centrada. */
+  .detail-others .detail-cell { flex: 1 1 0; min-width: 0; }
+  /* El botón del episodio, a lo ancho bajo su miniatura: apretado en la fila,
+     el título salía en cuatro renglones de tres letras. */
+  .detail-next { flex-wrap: wrap; }
+  .detail-next > .btn { width: 100%; }
+  .detail-next-txt { flex: 1 1 120px; }
 }
 
 /* Episode row */
@@ -779,7 +854,13 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    la ficha de la serie que hay debajo, que mide 1180. */
 .ep-sheet { width: min(552px, 92vw); max-height: 88vh; border-radius: var(--r-lg); display: flex; flex-direction: column; overflow: hidden; }
 .ep-sheet-body { overflow-y: auto; padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 16px; }
-.ep-sheet-scores { display: flex; align-items: stretch; gap: 8px; }
+/* Las dos notas del episodio, en la misma caja oscura que las de fuera en las
+   otras tres fichas. Aquí no hay Mi nota que ocupe la izquierda —un episodio no
+   se puntúa suelto—, así que la caja se estira y cada una se centra en su
+   mitad, en vez de quedar arrinconada a un lado. */
+.ep-sheet-scores { display: flex; align-items: stretch; gap: 14px;
+  padding: 8px 16px; border-radius: var(--r);
+  background: rgba(10, 12, 18, .42); border: 1px solid var(--border); }
 .ep-sheet-overview { font-size: 14px; line-height: 1.6; color: var(--text-dim); margin: 0; }
 
 /* ---- El fotograma, y la marca de visto encima ----
@@ -2105,30 +2186,56 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .game-shot {
   display: block; aspect-ratio: 16 / 9; border-radius: var(--r-sm);
   overflow: hidden; border: 1px solid var(--border);
+  padding: 0; background: none; transition: border-color .16s ease;
 }
+.game-shot:hover { border-color: var(--accent); }
 .game-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
-/* Estado: los cuatro del mismo tamaño en rejilla 2×2 y centrados. En una sola
-   fila cada uno mediría 64px en el carril de 296 y «Abandonados» no cabría; en
-   2×2 los cuatro miden lo mismo diga lo que diga la palabra. */
-.game-state { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
-.game-states { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+/* Estado: los cuatro del mismo tamaño y en una sola fila. Estuvieron en 2×2
+   mientras vivían en un carril de 296; a lo ancho de la hoja de 760 caben los
+   cuatro seguidos, que es como se leen de un vistazo. Sin rótulo «Estado»
+   encima: las cuatro palabras ya dicen lo que son. */
+.game-state { padding: 13px; display: flex; flex-direction: column; gap: 10px; }
+.game-states { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .game-states .chip { width: 100%; justify-content: center; }
 .game-states .chip-active { font-weight: 750; }
+/* Terminarlo y decir dónde juegas, en la misma fila: son las dos cosas que se
+   tocan cuando ya lo tienes. */
+.game-done { display: flex; align-items: center; gap: 12px; }
+.game-done > .btn { flex: 1 1 auto; }
+.game-plat { display: inline-flex; align-items: center; gap: 9px; flex: 0 0 auto; }
+.game-plat .pick { min-width: 148px; }
+/* «Lo tengo» vive en el héroe, encima de los logos: es lo primero que se mira
+   de un juego. Con fondo propio, que un arte claro se lo comía. */
+.game-own { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px;
+  border-radius: 999px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.game-own.si { background: color-mix(in srgb, var(--accent) 30%, rgba(10, 12, 18, .55));
+  color: #fff; border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); }
+.game-own.no { background: rgba(10, 12, 18, .55); color: rgba(255, 255, 255, .82);
+  border: 1px dashed rgba(255, 255, 255, .4); }
+/* «Lo tengo» sobre los logos, que es como se lee: primero si es tuyo y luego
+   dónde sale. En un teléfono van en la misma línea — apilados, el pie del héroe
+   crecía hacia arriba y el chip se metía debajo de los botones de la esquina. */
+.game-badges { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
+@media (max-width: 560px) {
+  .game-badges { flex-direction: row; align-items: center; gap: 8px; margin-bottom: 4px; }
+}
 
-/* Time to beat: las estimaciones de IGDB y tus horas en la misma fila, que es
-   lo que deja compararlas de un vistazo. La tuya, teñida. */
-.ttb { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
-.ttb-cell {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 10px 6px; border-radius: var(--r-sm);
-  background: var(--surface-2); border: 1px solid var(--border); text-align: center;
-}
-.ttb-num { font-size: 19px; font-weight: 850; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.ttb-cell.mine {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-}
+/* Tus horas mandan y las de fuera se arriman: una tarjeta, lo tuyo grande a la
+   izquierda y las tres de How Long To Beat apiladas y pequeñas a la derecha.
+   Estuvieron las cuatro en fila con una barra de progreso debajo, y comparar
+   tus 62 con las 102 de una partida normal pedía mirar a dos sitios. */
+.ttb { display: flex; align-items: stretch; gap: 16px; padding: 13px 16px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+.ttb-mine { flex: 1 1 auto; display: flex; align-items: center; gap: 14px; }
+.ttb-num { font-size: 28px; font-weight: 850; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.ttb-sep { width: 1px; flex: 0 0 auto; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.ttb-list { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
+.ttb-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; font-size: 12.5px; }
+.ttb-row > :last-child { font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* La nota de Metacritic, en su cuadrado verde: es como la publican ellos y como
    la reconoce la gente. Sin gradiente de color por tramos — el número ya dice
@@ -2146,11 +2253,11 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   font-size: 13px; font-weight: 850; letter-spacing: -0.02em;
 }
 
-/* El pie: edad, quién lo hizo, quién lo vende, géneros y modos. */
-.game-foot { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
-.game-foot-sep { width: 1px; height: 32px; background: var(--border); flex: 0 0 auto; }
-.game-facts { width: 240px; flex: 0 0 auto; font-size: 12.5px; line-height: 1.85; }
-.game-facts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+/* El pie: quién lo hizo, quién lo vende, géneros y modos, en dos columnas. */
+.game-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 28px;
+  font-size: 13px; }
+.game-facts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 4px 0; border-bottom: 1px solid var(--border); }
 .game-facts > div > :last-child { font-weight: 650; text-align: right; }
 
 /* ---- El desplegable con logotipo (ui/PlatformPicker) ----
@@ -2189,10 +2296,15 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .pick-opt.on { background: var(--surface-3); color: var(--text); }
 .pick-hueco { width: 15px; flex: 0 0 auto; }
 
-@media (max-width: 900px) {
+@media (max-width: 560px) {
+  /* Tres por fila y las cinco visibles: son dos renglones, y la quinta captura
+     escondida era justo la que faltaba para hacerse una idea del juego. */
   .game-shots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .game-shots > :nth-child(n + 4) { display: none; }
-  .game-foot { gap: 14px; }
-  .game-foot-sep { display: none; }
-  .game-facts { width: 100%; }
+  .game-states { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .game-done { flex-direction: column; align-items: stretch; }
+  .game-plat { justify-content: center; }
+  .game-plat .pick { min-width: 0; }
+  .game-facts { grid-template-columns: minmax(0, 1fr); }
+  .ttb { flex-direction: column; gap: 12px; }
+  .ttb-sep { width: auto; height: 1px; }
 }

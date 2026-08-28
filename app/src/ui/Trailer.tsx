@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Play } from "lucide-react";
-import { igdbImg } from "@/lib/igdb";
 import { t as tr } from "@/lib/i18n";
 
 /* El tráiler de un juego (0086).
@@ -25,15 +24,16 @@ import { t as tr } from "@/lib/i18n";
 export function Trailer({
   videoId,
   name,
-  still,
+  portada,
 }: {
   videoId: string;
   name: string;
-  /** Hash de IGDB de la captura que hace de portada. */
-  still: string | null | undefined;
+  /** URL de la imagen que hace de portada, ya resuelta por quien llama: en un
+   *  juego sale de igdbImg y en una película de tmdbImg, y el componente no
+   *  tiene por qué saber de cuál de los dos. */
+  portada: string | null | undefined;
 }) {
   const [playing, setPlaying] = useState(false);
-  const portada = igdbImg(still, "screenshot_big");
 
   if (playing) {
     return (

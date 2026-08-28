@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router";
-import { Check, ExternalLink, Eye, EyeOff, Minus, Plus, Star, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Minus, Plus, Star, X } from "lucide-react";
 import { getMovie, getMovieCredits, getMovieSaga, tmdbImg } from "@/lib/tmdb";
 import { qk } from "@/lib/queryKeys";
 import { fmtPlainDate } from "@/lib/region";
@@ -20,6 +20,9 @@ import { RatingStars } from "@/ui/RatingStars";
 import { WatchOn } from "@/ui";
 import { posterBg } from "@/ui/posterBg";
 import { useFocusTrap } from "@/ui/useFocusTrap";
+import { Trailer } from "@/ui/Trailer";
+import { Lightbox } from "@/ui/Lightbox";
+import { useFriendsOnTitle } from "@/lib/friendsOnTitle";
 
 /* Ficha de película — la gemela de DetailSheet para el cine, abierta por el
    parámetro global ?movie=.
@@ -75,6 +78,14 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
   const rateTitle = useRateTitle(title?.id ?? "");
   const rating = myRating ?? 0;
 
+  /* El cartel a tamaño completo y la lista de amigos, los dos plegados: la
+     ficha enseña la media —«¿está bien?»— y solo si quieres saber quién, se
+     abre. La media se calcula de las MISMAS filas que pinta FriendsOnTitle,
+     no de la consulta de gustos, para que el número resuma exactamente la
+     lista que aparece debajo. */
+  const [posterOpen, setPosterOpen] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
+
   /* La nota ajena de esta película: IMDb, o TMDB de reserva. Null mientras la
      ficha carga y en la peli que nadie ha puntuado en ninguna de las dos. */
   const score = externalScore(title);
@@ -107,12 +118,28 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
   }, [onClose]);
 
   const poster = tmdbImg(title?.poster_path ?? null, "w342");
+  const posterFull = tmdbImg(title?.poster_path ?? null, "w780");
+  /* El primero de `videos` es el mejor tráiler: el proxy ya los deja ordenados
+     —oficial antes que no oficial, tráiler antes que teaser— igual que en la
+     ficha de un juego, y por eso la misma columna sirve para las dos. */
+  const trailer = title?.videos?.[0] ?? null;
   const backdrop = tmdbImg(title?.backdrop_path ?? null, "w780");
   const displayName = (isEs() && title?.name_es) || title?.name || "";
   const displayOverview = (isEs() && title?.overview_es) || title?.overview || "";
   const originalTitle =
     title?.original_name && title.original_name !== displayName ? title.original_name : null;
   const released = Boolean(title?.first_air_date && title.first_air_date <= new Date().toISOString().slice(0, 10));
+
+  /* La media de los amigos que la han puntuado, para la celda de la fila de
+     notas. Sale de las mismas filas que pinta FriendsOnTitle al desplegarla, y
+     no de la consulta de gustos: así el número resume exactamente esa lista.
+     Sin nadie que la haya puntuado no hay celda —una media de cero no es cero—
+     aunque la lista sí tenga a quien la tiene pendiente. */
+  const amigos = useFriendsOnTitle({ titleId: title?.id ?? null, episodeId, kind: "movie", tmdbId });
+  const puntuadas = amigos.map((f) => f.score).filter((s): s is number => s != null);
+  const friendsAvg = puntuadas.length
+    ? puntuadas.reduce((suma, s) => suma + s, 0) / puntuadas.length
+    : null;
 
   return (
     <>
@@ -126,7 +153,7 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
         className="detail-sheet sheet-center fixed z-[70] card overflow-hidden flex flex-col"
         style={{
           left: "50%", top: "50%", transform: "translate(-50%,-50%)",
-          width: "min(1180px, 94vw)", maxHeight: "90vh", borderRadius: "var(--r-xl)",
+          width: "min(760px, 94vw)", maxHeight: "90vh", borderRadius: "var(--r-xl)",
         }}
       >
         {isPending || !title ? (
@@ -150,13 +177,13 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                 {added && entry ? (
                   <button className="btn btn-sm badge-glass" style={{ color: "#fff", borderRadius: "var(--r-sm)" }}
                           onClick={() => unfollow.mutate(entry.title_id)}>
-                    <Minus size={14} />{tr("Remove")}
+                    <Minus size={14} /><span className="btn-label">{tr("Remove")}</span>
                   </button>
                 ) : (
                   <>
                     <button className="btn btn-sm badge-glass" style={{ color: "#fff", borderRadius: "var(--r-sm)" }}
                             onClick={() => follow.mutate(title)}>
-                      <Plus size={14} />{tr("Add")}
+                      <Plus size={14} /><span className="btn-label">{tr("Add")}</span>
                     </button>
                     <button
                       className="btn btn-sm badge-glass"
@@ -164,7 +191,7 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                       title={tr(isIgnored(title.tmdb_id, "movie") ? "Un-ignore — show in suggestions again" : "Ignore — hide from suggestions")}
                       onClick={() => (isIgnored(title.tmdb_id, "movie") ? unignore.mutate(title.id) : ignore.mutate(title.id))}
                     >
-                      {isIgnored(title.tmdb_id, "movie") ? <><Eye size={14} />{tr("Un-ignore")}</> : <><EyeOff size={14} />{tr("Ignore")}</>}
+                      {isIgnored(title.tmdb_id, "movie") ? <><Eye size={14} /><span className="btn-label">{tr("Un-ignore")}</span></> : <><EyeOff size={14} /><span className="btn-label">{tr("Ignore")}</span></>}
                     </button>
                   </>
                 )}
@@ -173,10 +200,15 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                 </button>
               </div>
 
-              <div className="absolute flex items-end gap-5" style={{ left: 26, right: 26, bottom: 16 }}>
+              <div className="detail-hero-foot">
                 <div
-                  className="poster"
-                  style={{ width: 152, height: 228, flex: "0 0 auto", aspectRatio: "auto", background: posterBg(title.name + "x") }}
+                  className={`poster detail-poster${poster ? " zoomable" : ""}`}
+                  role={poster ? "button" : undefined}
+                  tabIndex={poster ? 0 : undefined}
+                  aria-label={poster ? tr("View poster") : undefined}
+                  onClick={poster ? () => setPosterOpen(true) : undefined}
+                  onKeyDown={poster ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPosterOpen(true); } } : undefined}
+                  style={{ background: posterBg(title.name + "x") }}
                 >
                   {poster && <img className="poster-img" src={poster} alt="" />}
                   <div className="poster-sheen" />
@@ -184,20 +216,17 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                 <div className="pb-1 min-w-0 flex-1">
                   {/* Dónde verla vive AQUÍ y en ningún otro sitio: son los
                       mismos logotipos que en la ficha de un juego llevan las
-                      consolas, junto al título. El bloque «Dónde verla» que
-                      había en el cuerpo decía lo mismo dos veces. */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <WatchOn tmdbId={title.tmdb_id} kind="movie" size={14} />
+                      consolas, junto al título. */}
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <WatchOn tmdbId={title.tmdb_id} kind="movie" size={12} />
                     {!released && (
                       <span className="badge badge-accent">
                         {title.first_air_date ? `${tr("Premieres ")}${fmtPlainDate(title.first_air_date)}` : tr("Announced")}
                       </span>
                     )}
                   </div>
-                  <h2 style={{ fontSize: 32, fontWeight: 850, letterSpacing: "-0.02em", textShadow: "0 2px 12px rgba(0,0,0,.5)", color: "#fff", margin: 0 }}>
-                    {displayName}
-                  </h2>
-                  <div style={{ fontSize: 14, color: "rgba(255,255,255,.85)", marginTop: 2 }}>
+                  <h2 className="detail-title">{displayName}</h2>
+                  <div className="detail-meta">
                     {[
                       title.first_air_date?.slice(0, 4) ?? tr("TBA"),
                       title.genres.map(tGenre).join(" · "),
@@ -205,67 +234,35 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                     ].filter(Boolean).join(" · ")}
                   </div>
                   {originalTitle && (
-                    <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.65)", marginTop: 2 }}>
-                      {tr("Original title")}: {originalTitle}
-                    </div>
+                    <div className="detail-orig">{tr("Original title")}: {originalTitle}</div>
                   )}
-
-                  {/* Mi nota la primera y en caja de acento; la ajena al lado en
-                      una oscura. En cine la ajena es UNA —IMDb, con TMDB de
-                      reserva—: es la que se cita de una película, y dos números
-                      que casi nunca coinciden no informan, obligan a elegir. */}
-                  <div className="detail-scores">
-                    <div className="detail-mine">
-                      <div className="eyebrow" style={{ fontSize: 10, color: "#fff" }}>{tr("My rating")}</div>
-                      <RatingStars value={rating} size={30} onRate={(v) => rateTitle.mutate(v)} />
-                    </div>
-                    {score && (
-                      <div className="detail-others">
-                        <div className="ratings-cell">
-                          <div className="eyebrow" style={{ fontSize: 10, color: "rgba(255,255,255,.7)" }}>{scoreLabel(score.source)}</div>
-                          <div className="ratings-value" style={{ color: "#fff" }}>
-                            <Star size={16} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
-                            {score.value.toFixed(1)}
-                          </div>
-                          {score.source === "imdb" && title.imdb_votes != null && (
-                            <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.55)" }}>
-                              {tv("{votes} votes", { votes: title.imdb_votes.toLocaleString(dateLocale()) })}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {title.imdb_id && (
-                      <a
-                        className="btn btn-outline btn-sm detail-out"
-                        href={`https://www.imdb.com/title/${title.imdb_id}/`}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                      >
-                        <Star size={13} fill="currentColor" strokeWidth={0} style={{ color: "var(--imdb)" }} />
-                        {tr("View on IMDb")}
-                        <ExternalLink size={12} />
-                      </a>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Cuerpo — lo tuyo a la izquierda, la película a la derecha */}
+            {/* Cuerpo, en una sola columna */}
             <div className="detail-body">
-              <div className="detail-rail">
-                {/* Un solo acto, un solo botón. Y cuando ya está visto no dice
-                    «toca para desmarcar»: lo que lo dice es la caja —marco de
-                    acento y una trama diagonal muy suave—, porque es el único
-                    sitio de las tres fichas donde un botón representa un ESTADO
-                    cumplido y no una acción pendiente, y no puede parecerse ni
-                    al de acento (que invita a pulsar) ni al de contorno (que no
-                    dice nada). Sin episode_id no se dibuja, en vez de ofrecer
-                    algo que fallaría. */}
+              {/* Las notas y, entre las tuyas y las de fuera, el único acto que
+                  tiene una película: verla. Tenía tarjeta propia y no daba para
+                  ella — una fila con un botón y nada más.
+
+                  De fuera hay UNA nota, IMDb con TMDB de reserva: es la que se
+                  cita de una película, y dos números que casi nunca coinciden
+                  no informan, obligan a elegir. Sin el recuento de votos, que
+                  hacía la fila más alta que en las otras dos fichas. */}
+              <div className="detail-scores">
+                <div className="detail-mine">
+                  <span className="eyebrow" style={{ fontSize: 10.5 }}>{tr("My rating")}</span>
+                  <RatingStars value={rating} size={28} onRate={(v) => rateTitle.mutate(v)} />
+                </div>
+
+                {/* Cuando ya está vista no dice «toca para desmarcar»: lo dice
+                    la caja —marco de acento y una trama diagonal muy suave—,
+                    porque es el único botón de las tres fichas que representa un
+                    ESTADO cumplido y no una acción pendiente. */}
                 {episodeId && (
                   <button
-                    className={`btn w-full${seen ? " movie-seen" : " btn-accent"}`}
+                    className={`btn detail-act${seen ? " movie-seen" : " btn-accent"}`}
                     disabled={markWatched.isPending || unmarkWatched.isPending}
                     onClick={() => (watchEventId ? unmarkWatched.mutate(watchEventId) : markWatched.mutate(episodeId))}
                   >
@@ -274,8 +271,55 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                   </button>
                 )}
 
-                {/* Quién de los tuyos anda con esta película: su estado y su
-                    nota, uno por línea. La media, junto al rótulo. */}
+                <div className="detail-others">
+                  {amigos.length > 0 && (
+                    <>
+                      <button
+                        className="detail-cell detail-friends"
+                        aria-expanded={friendsOpen}
+                        onClick={() => setFriendsOpen((v) => !v)}
+                      >
+                        <span className="eyebrow" style={{ fontSize: 10 }}>{tr("Friends")}</span>
+                        <span className="detail-cellval">
+                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                          {friendsAvg != null ? friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 }) : "—"}
+                          {friendsOpen ? <ChevronUp size={14} style={{ color: "var(--text-mute)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-mute)" }} />}
+                        </span>
+                      </button>
+                      <span className="detail-others-sep" />
+                    </>
+                  )}
+                  {score && (
+                    title.imdb_id && score.source === "imdb" ? (
+                      <a
+                        className="detail-cell detail-out"
+                        href={`https://www.imdb.com/title/${title.imdb_id}/`}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        title={title.imdb_votes != null ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : tr("View on IMDb")}
+                      >
+                        <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
+                        <span className="detail-cellval">
+                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
+                          {score.value.toFixed(1)}
+                          <ExternalLink size={12} />
+                        </span>
+                      </a>
+                    ) : (
+                      <div className="detail-cell">
+                        <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
+                        <span className="detail-cellval">
+                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
+                          {score.value.toFixed(1)}
+                        </span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {/* Quién de los tuyos anda con ella, al desplegar su celda. */}
+              {friendsOpen && (
                 <FriendsOnTitle
                   kind="movie"
                   titleId={title.id}
@@ -284,20 +328,22 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                   released={released}
                   onOpen={(id) => { onClose(); navigate(`/friend/${id}`); }}
                 />
-              </div>
+              )}
 
               <div className="detail-main">
                 {displayOverview && (
                   <p className="dim" style={{ fontSize: 14, lineHeight: 1.55, margin: 0 }}>{displayOverview}</p>
                 )}
 
-                {/* Ficha técnica. La dirección enlaza; el guion no, porque un
-                    guionista repetido en la línea (lo habitual: dirige y firma)
-                    daría dos enlaces al mismo sitio en el mismo renglón. */}
+                {/* Dirección y guion, en la MISMA línea: son dos datos cortos
+                    y en dos renglones parecían dos secciones. La dirección
+                    enlaza; el guion no, porque un guionista repetido en la
+                    línea —lo habitual: dirige y firma— daría dos enlaces al
+                    mismo sitio en el mismo renglón. */}
                 {(directors.length > 0 || writers.length > 0) && (
-                  <div style={{ fontSize: 13.5, lineHeight: 1.7 }}>
+                  <div style={{ fontSize: 13.5, lineHeight: 1.7, marginTop: -6 }}>
                     {directors.length > 0 && (
-                      <div>
+                      <>
                         <span className="dim">{directors.length > 1 ? tr("Directors") : tr("Director")}</span>
                         {" · "}
                         {directors.map((d, i) => (
@@ -306,16 +352,24 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                             <button className="person-link" onClick={() => openPerson(d.id)}>{d.name}</button>
                           </span>
                         ))}
-                      </div>
+                      </>
                     )}
+                    {directors.length > 0 && writers.length > 0 && <span style={{ display: "inline-block", width: 16 }} />}
                     {writers.length > 0 && (
-                      <div>
+                      <>
                         <span className="dim">{tr("Writers")}</span>
                         {" · "}
                         {[...new Set(writers.map((w) => w.name))].join(", ")}
-                      </div>
+                      </>
                     )}
                   </div>
+                )}
+
+                {/* El tráiler, debajo de quién la hizo. Al pulsarlo se carga el
+                    reproductor; hasta entonces es una imagen, como en la ficha
+                    de un juego. */}
+                {trailer && (
+                  <Trailer videoId={trailer.video_id} name={trailer.name} portada={backdrop} />
                 )}
 
                 {cast.length > 0 && (
@@ -339,6 +393,16 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
           </>
         )}
       </div>
+
+      {/* El cartel a tamaño completo, al pulsarlo en el héroe. */}
+      {posterOpen && posterFull && (
+        <Lightbox
+          imagenes={[posterFull]}
+          indice={0}
+          onClose={() => setPosterOpen(false)}
+          etiqueta={displayName ? `${displayName} — ${tr("View poster")}` : tr("View poster")}
+        />
+      )}
     </>
   );
 }

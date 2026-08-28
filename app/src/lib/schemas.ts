@@ -63,6 +63,9 @@ export const titleRowSchema = z.object({
      no aquí. De `steam_reviews` NO viaja la etiqueta: la pone el cliente en el
      idioma de quien mira (ver domain/steamReviews). */
   screenshots: z.array(z.string()).nullable().optional(),
+  /* El tráiler. Nació para los juegos (IGDB) y desde ahora también lo llena
+     TMDB en las películas, con la misma forma: el reproductor de las dos fichas
+     es el mismo componente. */
   videos: z.array(z.object({ name: z.string(), video_id: z.string() })).nullable().optional(),
   age_ratings: z.array(z.object({ org: z.string(), rating: z.string() })).nullable().optional(),
   official_url: z.string().nullable().optional(),
