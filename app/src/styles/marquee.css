@@ -2201,16 +2201,29 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    mientras vivían en un carril de 296; a lo ancho de la hoja de 760 caben los
    cuatro seguidos, que es como se leen de un vistazo. Sin rótulo «Estado»
    encima: las cuatro palabras ya dicen lo que son. */
-.game-state { padding: 13px; display: flex; flex-direction: column; gap: 10px; }
+/* Sobre el cuerpo, no dentro de él: el desplegable de plataforma se abre hacia
+   abajo y justo debajo empieza el tráiler, que YouTube pinta en una capa
+   compuesta aparte. Un z-index en el propio menú no bastaba —una capa compuesta
+   se cuela por encima de sus hermanos sin capa—, así que quien sube es la
+   tarjeta entera, y con ella todo lo que se despliegue desde dentro. */
+.game-state { padding: 13px; display: flex; flex-direction: column; gap: 10px;
+  position: relative; z-index: 5; }
 .game-states { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .game-states .chip { width: 100%; justify-content: center; }
 .game-states .chip-active { font-weight: 750; }
 /* Terminarlo y decir dónde juegas, en la misma fila: son las dos cosas que se
    tocan cuando ya lo tienes. */
+/* El reparto del ancho va al revés de lo que parece: manda la plataforma, no el
+   botón. «PlayStation 5» o «Nintendo Switch 2» no caben en 148 y salían
+   cortados con puntos suspensivos, mientras el botón se estiraba con su
+   etiqueta ya holgada. Ahora el botón se queda en lo que mide su texto y cede
+   el resto. */
 .game-done { display: flex; align-items: center; gap: 12px; }
-.game-done > .btn { flex: 1 1 auto; }
-.game-plat { display: inline-flex; align-items: center; gap: 9px; flex: 0 0 auto; }
-.game-plat .pick { min-width: 148px; }
+.game-done > .btn { flex: 0 1 auto; }
+.game-plat { display: flex; align-items: center; gap: 9px; flex: 1 1 auto; min-width: 0; }
+.game-plat .eyebrow { flex: 0 0 auto; }
+.game-plat .pick-wrap { flex: 1 1 auto; min-width: 0; }
+.game-plat .pick { min-width: 200px; }
 /* «Lo tengo» vive en el héroe, encima de los logos: es lo primero que se mira
    de un juego. Con fondo propio, que un arte claro se lo comía. */
 .game-own { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px;
@@ -2283,9 +2296,12 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .pick-value { flex: 1 1 auto; min-width: 0; text-align: left; }
 .pick-menu {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; min-width: 100%;
-  /* Opaco, como .filter-menu y .friends-pop: bajo el look de cristal un menú
-     translúcido deja pasar el texto de debajo y se vuelve ilegible. */
-  background: color-mix(in srgb, var(--bg) 90%, #ffffff 5%);
+  /* Opaco DE VERDAD, con las dos partes sumando 100: la mezcla de .filter-menu
+     decía 90+5 y color-mix reparte lo que falta en transparencia, así que el
+     menú tenía un 5% de alfa. Sobre un póster no se nota —el desenfoque de
+     detrás lo tapa—, pero el desenfoque no sabe leer un iframe de YouTube: con
+     el tráiler puesto, el vídeo se veía nítido a través del menú. */
+  background: color-mix(in srgb, var(--bg) 95%, #ffffff 5%);
   -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
   border: 1px solid var(--border-strong); border-radius: var(--r);
   box-shadow: var(--shadow-lg); padding: 6px;

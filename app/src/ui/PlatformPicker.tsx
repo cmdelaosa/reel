@@ -25,12 +25,10 @@ export function PlatformPicker({
   platforms,
   value,
   onPick,
-  width,
 }: {
   platforms: string[];
   value: string | null;
   onPick: (name: string | null) => void;
-  width?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [activo, setActivo] = useState(0);
@@ -77,7 +75,7 @@ export function PlatformPicker({
   };
 
   return (
-    <div className="pick-wrap" ref={ref} style={width ? { width } : undefined}>
+    <div className="pick-wrap" ref={ref}>
       <button
         type="button"
         className={`pick${open ? " pick-open" : ""}`}
