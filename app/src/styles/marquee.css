@@ -107,8 +107,11 @@
   position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
   min-width: 210px; max-height: 320px; overflow-y: auto;
   /* opaque, theme-safe surface — var(--surface) is translucent under the glass
-     look, which let the posters bleed through and made the menu unreadable */
-  background: color-mix(in srgb, var(--bg) 90%, #ffffff 5%);
+     look, which let the posters bleed through and made the menu unreadable.
+     The two parts add up to 100 on purpose: color-mix turns whatever is missing
+     into alpha, so the 90+5 this used to say left the menu 5% see-through and
+     only the backdrop blur was hiding it. */
+  background: color-mix(in srgb, var(--bg) 95%, #ffffff 5%);
   -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
   border: 1px solid var(--border-strong);
   border-radius: var(--r); box-shadow: var(--shadow); padding: 6px;
@@ -161,12 +164,13 @@
 
 /* Filters panel: same markup, two shapes. ≥768px an anchored glass popover
    (roomier .filter-menu); <768px a fixed bottom sheet with backdrop. Opaque
-   glass mix, not var(--surface) — see .filter-menu. */
+   glass mix, not var(--surface) — see .filter-menu, including why the two parts
+   of the mix have to add up to 100. */
 .disc-filters { position: relative; }
 .disc-panel {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 70;
   width: 344px;
-  background: color-mix(in srgb, var(--bg) 90%, #ffffff 5%);
+  background: color-mix(in srgb, var(--bg) 95%, #ffffff 5%);
   -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
   border: 1px solid var(--border-strong);
   border-radius: var(--r); box-shadow: var(--shadow-lg);
@@ -589,13 +593,22 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
 .detail-poster { width: 104px; height: 156px; flex: 0 0 auto; aspect-ratio: auto; }
 .detail-title { font-size: 27px; font-weight: 850; letter-spacing: -0.02em; line-height: 1.1;
   text-shadow: 0 2px 12px rgba(0, 0, 0, .55); color: #fff; margin: 0; }
-.detail-meta { font-size: 13px; color: rgba(255, 255, 255, .85); margin-top: 3px; }
-.detail-orig { font-size: 11.5px; color: rgba(255, 255, 255, .62); margin-top: 2px; }
+/* Las tres líneas de debajo del título llevan su misma sombra, y no por
+   adorno: el velo del héroe se aclara hacia arriba y la carátula de un juego
+   suele ser su logotipo sobre un fondo claro, así que la fecha de salida —que
+   es la primera línea— caía sobre blanco a menudo. La sombra es más corta que
+   la del título porque el texto es más pequeño: a 12 px de desenfoque, una
+   línea de 11.5 se emborrona por dentro. */
+.detail-meta { font-size: 13px; color: rgba(255, 255, 255, .85); margin-top: 3px;
+  text-shadow: 0 1px 7px rgba(0, 0, 0, .7); }
+.detail-orig { font-size: 11.5px; color: rgba(255, 255, 255, .62); margin-top: 2px;
+  text-shadow: 0 1px 7px rgba(0, 0, 0, .7); }
 /* Lo mismo, pero para lo que SÍ se queda en un teléfono: la clasificación por
    edad son siete caracteres y siempre caben. La regla de abajo esconde
    `.detail-orig` porque un título original no se puede cortar por una palabra;
    esconder también la edad sería perder un dato por su culpa. */
-.detail-sub { font-size: 11.5px; color: rgba(255, 255, 255, .62); margin-top: 2px; }
+.detail-sub { font-size: 11.5px; color: rgba(255, 255, 255, .62); margin-top: 2px;
+  text-shadow: 0 1px 7px rgba(0, 0, 0, .7); }
 
 .detail-body { flex: 1 1 auto; min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; gap: 15px; padding: 16px 18px 18px; }
@@ -2201,16 +2214,33 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    mientras vivían en un carril de 296; a lo ancho de la hoja de 760 caben los
    cuatro seguidos, que es como se leen de un vistazo. Sin rótulo «Estado»
    encima: las cuatro palabras ya dicen lo que son. */
-.game-state { padding: 13px; display: flex; flex-direction: column; gap: 10px; }
+/* Sobre el cuerpo, no dentro de él: el desplegable de plataforma se abre hacia
+   abajo y justo debajo empieza el tráiler, que YouTube pinta en una capa
+   compuesta aparte. Un z-index en el propio menú no bastaba —una capa compuesta
+   se cuela por encima de sus hermanos sin capa—, así que quien sube es la
+   tarjeta entera, y con ella todo lo que se despliegue desde dentro.
+   Un 1, no más: el desplegable de amigos vive en la fila de notas de ARRIBA con
+   un 5 y cae sobre esta tarjeta, y un empate se rompe por orden en el
+   documento, o sea a favor de la tarjeta. Para ganarle al tráiler basta con
+   salir del `auto`. */
+.game-state { padding: 13px; display: flex; flex-direction: column; gap: 10px;
+  position: relative; z-index: 1; }
 .game-states { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .game-states .chip { width: 100%; justify-content: center; }
 .game-states .chip-active { font-weight: 750; }
 /* Terminarlo y decir dónde juegas, en la misma fila: son las dos cosas que se
    tocan cuando ya lo tienes. */
+/* El reparto del ancho va al revés de lo que parece: manda la plataforma, no el
+   botón. «PlayStation 5» o «Nintendo Switch 2» no caben en 148 y salían
+   cortados con puntos suspensivos, mientras el botón se estiraba con su
+   etiqueta ya holgada. Ahora el botón se queda en lo que mide su texto y cede
+   el resto. */
 .game-done { display: flex; align-items: center; gap: 12px; }
-.game-done > .btn { flex: 1 1 auto; }
-.game-plat { display: inline-flex; align-items: center; gap: 9px; flex: 0 0 auto; }
-.game-plat .pick { min-width: 148px; }
+.game-done > .btn { flex: 0 1 auto; }
+.game-plat { display: flex; align-items: center; gap: 9px; flex: 1 1 auto; min-width: 0; }
+.game-plat .eyebrow { flex: 0 0 auto; }
+.game-plat .pick-wrap { flex: 1 1 auto; min-width: 0; }
+.game-plat .pick { min-width: 200px; }
 /* «Lo tengo» vive en el héroe, encima de los logos: es lo primero que se mira
    de un juego. Con fondo propio, que un arte claro se lo comía. */
 .game-own { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px;
@@ -2224,6 +2254,19 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    dónde sale. En un teléfono van en la misma línea — apilados, el pie del héroe
    crecía hacia arriba y el chip se metía debajo de los botones de la esquina. */
 .game-badges { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
+/* Dentro del héroe, la baldosa de la plataforma no puede ser la de la ficha:
+   --surface-2 y --border son translúcidos bajo el look de cristal, así que
+   sobre un arte dorado el cuadrado desaparecía y el dibujo quedaba flotando.
+   El mismo cristal oscuro que «Lo tengo» y que los botones de la esquina —el
+   fondo lo pone la baldosa, no el velo del héroe—, y el color de marca del
+   dibujo se mantiene, que es lo que hace que se reconozca a 16 px. */
+.game-badges .plat-logo {
+  background: rgba(10, 12, 18, .55); border-color: rgba(255, 255, 255, .22);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+@media (hover: hover) {
+  .game-badges .plat-logo:hover { background: rgba(10, 12, 18, .78); border-color: rgba(255, 255, 255, .38); }
+}
 @media (max-width: 560px) {
   .game-badges { flex-direction: row; align-items: center; gap: 8px; margin-bottom: 4px; }
 }
@@ -2283,9 +2326,14 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .pick-value { flex: 1 1 auto; min-width: 0; text-align: left; }
 .pick-menu {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; min-width: 100%;
-  /* Opaco, como .filter-menu y .friends-pop: bajo el look de cristal un menú
-     translúcido deja pasar el texto de debajo y se vuelve ilegible. */
-  background: color-mix(in srgb, var(--bg) 90%, #ffffff 5%);
+  /* Opaco DE VERDAD, con las dos partes sumando 100: la mezcla decía 90+5 y
+     color-mix reparte en alfa lo que falta, así que el menú tenía un 5% de
+     transparencia. Sobre un póster no se nota —el desenfoque de detrás lo
+     tapa—, pero el desenfoque no sabe leer un iframe de YouTube: con el tráiler
+     puesto, el vídeo se veía nítido a través del menú. Los otros dos paneles de
+     cristal, .filter-menu y .disc-panel, decían lo mismo y están corregidos
+     igual. */
+  background: color-mix(in srgb, var(--bg) 95%, #ffffff 5%);
   -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
   border: 1px solid var(--border-strong); border-radius: var(--r);
   box-shadow: var(--shadow-lg); padding: 6px;

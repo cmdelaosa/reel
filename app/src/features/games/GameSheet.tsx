@@ -508,7 +508,6 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                         platforms={platforms}
                         value={playedPlatform}
                         onPick={(name) => setProgress.mutate({ titleId: entry.title_id, playedPlatform: name })}
-                        width={148}
                       />
                     </span>
                   </div>
