@@ -224,6 +224,31 @@ test("primero lo que nunca se buscó, después lo rancio de más viejo a más nu
   assert.deepEqual(cola.map((x) => x.id), ["3", "2", "1"]);
 });
 
+test("lo que no se pudo emparejar vuelve a la semana, no al mes", () => {
+  /* Los dos llevan la marca de hace diez días. El emparejado espera su mes; el
+     que no lo está vuelve ya, porque lo que puede haber cambiado ahí no es el
+     dato de RAWG sino nuestro código para encontrarlo. Sin esta diferencia, la
+     regla de las ediciones (28-08-2026) no alcanzó a ninguno de los 24 juegos
+     que la motivaron y hubo que borrarles la marca a mano en producción. */
+  const diezDias = hace(10 * 24 * 60 * 60 * 1000);
+  const cola = queueFor(
+    [
+      juego({ id: "emparejado", rawg_id: 22511, rawg_refreshed_at: diezDias }),
+      juego({ id: "sin-emparejar", rawg_id: null, rawg_refreshed_at: diezDias }),
+    ],
+    AHORA,
+  );
+  assert.deepEqual(cola.map((x) => x.id), ["sin-emparejar"]);
+});
+
+test("pero uno sin emparejar de anteayer tampoco entra: la semana es una semana", () => {
+  const cola = queueFor(
+    [juego({ id: "1", rawg_id: null, rawg_refreshed_at: hace(2 * 24 * 60 * 60 * 1000) })],
+    AHORA,
+  );
+  assert.equal(cola.length, 0);
+});
+
 test("el emparejamiento guardado viaja con la cola: la próxima vez no se busca por nombre", () => {
   const cola = queueFor([juego({ id: "1", rawg_id: 22511 })], AHORA);
   assert.equal(cola[0]?.rawg_id, 22511);
