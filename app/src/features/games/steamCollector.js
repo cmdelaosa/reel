@@ -581,6 +581,12 @@
   function parseHistory(html, refs = new Map(), assets = null) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const rows = [];
+    /* Filas que no han encontrado su ficha. Se cuentan porque el respaldo es
+       silencioso: si Valve cambia el nombre del ayudante de los hovers o deja
+       de mandar `assets`, todo sigue funcionando de cara afuera y las filas
+       vuelven a guardarse con el nombre de leer y sin appid — o sea, la avería
+       que este arreglo viene a quitar, otra vez y sin que nadie se entere. */
+    let sinFicha = 0;
     /* Las filas VISTAS, aparte de las entendidas. Una página entera de "puesto
        a la venta" no trae ni una fila con dinero y no por eso se ha acabado el
        historial: sin esta cuenta, esa página parecería el final. */
@@ -599,6 +605,7 @@
       const appEl = el.querySelector(".market_listing_game_name");
       const ref = refs.get(id);
       const asset = assetOf(assets, ref);
+      if (!asset) sinFicha += 1;
       rows.push({
         external_id: id,
         /* Sin appid la fila entra igual —el dinero cuenta en el realizado con
@@ -620,7 +627,7 @@
         app_name: (appEl?.textContent || "").trim() || null,
       });
     }
-    return { rows, seen: found.length };
+    return { rows, seen: found.length, sinFicha };
   }
 
   log("Leyendo tus compras y ventas…");
@@ -635,6 +642,9 @@
    *  entero. Medido el 28-08-2026 sobre esta cuenta. */
   let expected = null;
   let ledgerComplete = true;
+  /** Filas que se han quedado sin la ficha de `assets`, sumando todas las
+   *  páginas. Cero es lo normal; otra cosa hay que decirla. */
+  let ledgerUnnamed = 0;
   /** Tope de páginas, que con `expected` a null es el ÚNICO tope que queda.
    *
    *  Sin él, un Steam que devolviera filas sin dar nunca un total creíble deja
@@ -653,11 +663,12 @@
     }
     const total = Number(data.total_count);
     if (expected === null && Number.isFinite(total) && total > 0) expected = total;
-    const { rows, seen } = parseHistory(
+    const { rows, seen, sinFicha } = parseHistory(
       data.results_html || "",
       assetRefsFromHovers(data.hovers),
       data.assets,
     );
+    ledgerUnnamed += sinFicha;
     ledger.push(...rows.map((r, i) => ({ ...r, order: start + i })));
     log(`  ${ledger.length} de ${expected ?? "?"}…`);
     /* Una página sin NINGUNA fila dentro es el final de la lista… o Steam que ha
@@ -685,6 +696,11 @@
   if (!ledgerComplete) {
     log("  Tus compras y ventas van INCOMPLETAS. Súbelo igual —no borra nada— y");
     log("  vuelve a pasar esto más tarde, cuando Steam deje de estrangular.");
+  }
+  if (ledgerUnnamed) {
+    log(`  ${ledgerUnnamed} filas sin ficha: van con el nombre que se lee y sin`);
+    log("  appid, así que no contarán en el coste base. Avisa si sale un número");
+    log("  grande: querrá decir que Steam ha movido el bloque de los hovers.");
   }
 
   /* ── 3. Precios de ahora ──────────────────────────────────────────────── */
