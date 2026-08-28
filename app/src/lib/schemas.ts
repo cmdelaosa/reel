@@ -71,6 +71,11 @@ export const titleRowSchema = z.object({
   official_url: z.string().nullable().optional(),
   steam_reviews: z.object({ percent: z.number(), count: z.number().int() }).nullable().optional(),
   metacritic: z.number().int().nullable().optional(),
+  /* De dónde vino ese número (0090): 'steam' cuando lo trae la ficha de tienda
+     y 'rawg' cuando lo trae RAWG, que es la fuente de todo lo que no se vende
+     en Steam —los juegos de consola—. La ficha lo lee para poner el crédito a
+     RAWG que su licencia gratuita exige, y solo donde de verdad se usa su dato. */
+  metacritic_source: z.enum(["steam", "rawg"]).nullable().optional(),
   /* `network` guarda el desarrollador (studio() lo resuelve así desde 0071);
      esta es la otra mitad de involved_companies. Se guardan las dos aunque
      coincidan: que un juego se autodistribuya es un dato, no un duplicado. */

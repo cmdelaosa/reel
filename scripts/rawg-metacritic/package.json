@@ -1,0 +1,20 @@
+{
+  "name": "rawg-metacritic",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Cron: Metascore de RAWG para los juegos que no están en Steam (consola). Rellena titles.metacritic donde steam-notes no llega.",
+  "scripts": {
+    "start": "tsx index.ts",
+    "test": "node --test --experimental-strip-types lib.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^6.0.3"
+  }
+}

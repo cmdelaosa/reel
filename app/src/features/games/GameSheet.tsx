@@ -611,6 +611,20 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                   <div><span className="mute">{tr("Publisher")}</span><span>{title.publisher ?? "—"}</span></div>
                   <div><span className="mute">{tr("Modes")}</span><span>{(title.game_modes ?? []).map((m) => tr(m)).join(" · ") || "—"}</span></div>
                 </div>
+
+                {/* El crédito a RAWG (0090). No es cortesía: su plan gratuito lo
+                    exige donde se use el dato, y de ahí sale la nota de todo lo
+                    que no se vende en Steam —los juegos de consola—. Por eso
+                    aparece solo cuando el número que se está enseñando es suyo,
+                    y no en las fichas cuya nota vino de la tienda. */}
+                {title.metacritic_source === "rawg" && (
+                  <div className="mute" style={{ fontSize: 11, marginTop: 10 }}>
+                    {tr("Critic score via")}{" "}
+                    <a href="https://rawg.io" target="_blank" rel="noreferrer noopener" className="underline">
+                      RAWG
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           </>
