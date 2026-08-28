@@ -724,7 +724,10 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
       {/* Marcar la serie entera — la misma caja que la de "hasta aquí", porque
           es la misma pregunta a mayor escala. Con la cuenta delante: "marcar 61
           episodios" se piensa distinto que "marcar todo". */}
-      {confirmSeries && (
+      {/* `unwatchedAired > 0` además del estado: si la cuenta llega a cero con
+          el aviso abierto —otra pestaña marcó la serie y el refetch al volver
+          al foco lo trae—, la caja ofrecería "marcar 0". */}
+      {confirmSeries && unwatchedAired > 0 && (
         <>
           <div className="backdrop" style={{ zIndex: 80 }} onClick={() => setConfirmSeries(false)} />
           <div
