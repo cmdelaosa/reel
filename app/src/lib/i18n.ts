@@ -580,6 +580,7 @@ const ES: Record<string, string> = {
   "Writer": "Guion",
   "My rating": "Mi nota",
   "Continue with": "Continuar por",
+  "Episode details": "Ver la ficha del episodio",
   "Whole show": "Toda la serie",
   "Season {n}": "Temporada {n}",
   "Mark the whole show watched": "Marcar toda la serie vista",
