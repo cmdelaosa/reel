@@ -716,6 +716,36 @@ const ES: Record<string, string> = {
   "Best rated": "Mejor nota",
   "Worst rated": "Peor nota",
   "No ratings yet — open a show and tap the stars.": "Aún no hay notas — abre una serie y toca las estrellas.",
+  /* Las notas de un medio: su pantalla (features/you/RatingsPage) y la tarjeta
+     del perfil que lleva a ella. Tres frases por cosa y no una con el nombre del
+     medio interpolado — en español el género arrastra: son "puntuadas" las
+     series y las películas, y "puntuados" los juegos. La tabla que las reparte
+     está en domain/ratingsList.
+
+     "Your show ratings" no está en esta lista: ya la tiene la sección de
+     Exportar, con esta misma traducción, y el diccionario es plano — repetirla
+     aquí no compila, y son dos entradas que un día dirían cosas distintas. */
+  "Your movie ratings": "Tus notas de cine",
+  "Your game ratings": "Tus notas de juegos",
+  /* El nombre del medio no se repite en castellano: al lado ya está, en el
+     rótulo de la tarjeta ("Cine") y en el título de la pantalla ("Tus notas de
+     cine"). Con él dentro —"44 películas puntuadas · media 6,9"— el renglón se
+     parte en tres líneas dentro de una tarjeta de 220 px y la fila queda más
+     alta que la de las bibliotecas, que dice "1 en tu biblioteca". Lo que sí
+     hace falta son las cuatro formas: el género lo pone el medio (puntuadas las
+     series y las películas, puntuados los juegos) y el número, el singular. */
+  "{n} show rated · avg {avg}": "{n} puntuada · media {avg}",
+  "{n} shows rated · avg {avg}": "{n} puntuadas · media {avg}",
+  "{n} movie rated · avg {avg}": "{n} puntuada · media {avg}",
+  "{n} movies rated · avg {avg}": "{n} puntuadas · media {avg}",
+  "{n} game rated · avg {avg}": "{n} puntuado · media {avg}",
+  "{n} games rated · avg {avg}": "{n} puntuados · media {avg}",
+  "No show ratings yet — open a show and tap the stars.":
+    "Aún no has puntuado ninguna serie — abre una y toca las estrellas.",
+  "No movie ratings yet — open a movie and tap the stars.":
+    "Aún no has puntuado ninguna película — abre una y toca las estrellas.",
+  "No game ratings yet — open a game and tap the stars.":
+    "Aún no has puntuado ningún juego — abre uno y toca las estrellas.",
   "Share profile": "Compartir perfil",
   "rated": "puntuada",
   "today": "hoy",

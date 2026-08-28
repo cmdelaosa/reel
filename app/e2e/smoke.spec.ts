@@ -132,5 +132,13 @@ test("core loop: search → add → mark watched → tonight → calendar → ra
   // attribute), so it depends on the seeded user. Bind to the class.
   await page.locator(".mq-avatar").click();
   await expect(page.getByRole("heading", { name: "Your ratings" })).toBeVisible();
+
+  // La lista ya no vive en el perfil: ahí hay una tarjeta por medio y la nota
+  // está en la pantalla que abre (features/you/RatingsPage). Se pulsa la
+  // tarjeta en vez de ir a la URL a pelo, porque lo que hay que comprobar es
+  // justamente que la puerta lleva a donde dice.
+  await page.getByRole("button", { name: /rated · avg/ }).first().click();
+  await expect(page).toHaveURL(/\/you\/ratings\/shows/);
+  await expect(page.getByRole("heading", { name: "Your show ratings" })).toBeVisible();
   await expect(page.locator(".mq-row", { hasText: "Severance" }).first()).toBeVisible();
 });

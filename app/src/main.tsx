@@ -37,6 +37,7 @@ import PersonPage from "@/features/social/PersonPage";
 import TastePage from "@/features/social/TastePage";
 import TonightPage from "@/features/tonight/TonightPage";
 import YouPage from "@/features/you/YouPage";
+import RatingsPage from "@/features/you/RatingsPage";
 import { Shell } from "@/ui/shell/Shell";
 import { StartRedirect } from "@/ui/shell/StartRedirect";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
@@ -155,6 +156,24 @@ const router = createBrowserRouter([
       { path: "calendar", element: <CalendarPage /> },
       { path: "history", element: <HistoryPage /> },
       { path: "you", element: <YouPage /> },
+      /* Tus notas, una pantalla por medio, colgando del perfil: son tuyas y no
+         del modo en el que estés, así que abrirlas no cambia el acento ni las
+         pestañas de la barra (lib/medium, `mediumOfPath`) — igual que /history
+         o /friends.
+
+         ⚠️ Las tres rutas están escritas también en domain/ratingsList, que es
+         de donde las leen las tarjetas del perfil y el conmutador de la propia
+         pantalla. Se tocan juntas: no hay ruta comodín, así que renombrar una
+         aquí y no allí deja la pantalla en blanco bajo la barra.
+
+         El medio va en el elemento y no en un `:medium`, para que una URL
+         inventada no llegue a la pantalla con un medio que no existe. */
+      { path: "you/ratings/shows", element: <RatingsPage medium="tv" /> },
+      { path: "you/ratings/movies", element: <RatingsPage medium="movie" /> },
+      { path: "you/ratings/games", element: <RatingsPage medium="game" /> },
+      // Sin medio no hay lista que enseñar: al perfil, que es donde están las
+      // tres puertas.
+      { path: "you/ratings", element: <Navigate to="/you" replace /> },
       { path: "friends", element: <FriendsPage /> },
       { path: "friends/taste", element: <TastePage /> },
       { path: "friends/stats", element: <StatsPage /> },
