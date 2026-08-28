@@ -87,10 +87,26 @@ describe("platformModel — el aparato exacto", () => {
 
   it("lo que no reconoce sale con su nombre y el mando genérico", () => {
     expect(platformModel("Commodore 64")).toEqual({
-      id: "other", label: "Commodore 64", mark: null, family: "other",
+      id: "other:commodore 64", label: "Commodore 64", mark: null, family: "other",
     });
     expect(platformModel("Atari 2600").mark).toBeNull();
     expect(platformModel("").mark).toBeNull();
+  });
+
+  /* ── El id lleva el nombre dentro cuando la regla es una coladera ────────
+     El desplegable deduplica por id, así que dos aparatos que se llaman
+     distinto tienen que tener ids distintos. Con las reglas de un dibujo para
+     toda la familia —Xbox, Sega, la coladera de PlayStation— eso no sale solo:
+     con un id fijo, un juego en Xbox One y en Series X|S ofrecía UNA opción y
+     se comía la otra en silencio. */
+  it("dos aparatos con el mismo dibujo no comparten id", () => {
+    const distintos = (ns: string[]) => new Set(ns.map((n) => platformModel(n).id)).size;
+    expect(distintos(["Xbox", "Xbox 360", "Xbox One", "Xbox Series X|S"])).toBe(4);
+    expect(distintos(["Sega Mega Drive/Genesis", "Sega Saturn", "Sega Game Gear"])).toBe(3);
+    expect(distintos(["PlayStation", "PlayStation VR"])).toBe(2);
+    expect(distintos(["Commodore 64", "Atari 2600"])).toBe(2);
+    // Y los que SÍ son el mismo aparato lo siguen compartiendo.
+    expect(distintos(["Nintendo DS", "Nintendo DSi"])).toBe(1);
   });
 
   /* La razón de ser del mapa por patrón: la consola que salga mañana cae en su
@@ -128,6 +144,21 @@ describe("playPlatform — lo que se elige en «en cuál lo juegas»", () => {
 
   it("el arcade se queda", () => {
     expect(playPlatform("Arcade").label).toBe("Arcade");
+  });
+
+  /* Lo mismo que arriba pero en el sitio donde se nota: ui/PlatformPicker
+     deduplica las opciones por id, así que esto es la lista que vería el
+     usuario en un juego que saliera en todo. */
+  it("las opciones de un juego no se comen unas a otras", () => {
+    const deUnJuego = (ns: string[]) => {
+      const vistos = new Set<string>();
+      return ns.map(playPlatform).filter((o) => !vistos.has(o.id) && vistos.add(o.id));
+    };
+    expect(deUnJuego(["PC (Microsoft Windows)", "Mac", "Linux"]).map((o) => o.label)).toEqual(["PC"]);
+    expect(deUnJuego(["Xbox One", "Xbox Series X|S"]).map((o) => o.label))
+      .toEqual(["Xbox One", "Xbox Series X|S"]);
+    expect(deUnJuego(["Sega Mega Drive/Genesis", "Sega Saturn", "Dreamcast"]).map((o) => o.label))
+      .toEqual(["Sega Mega Drive/Genesis", "Sega Saturn", "Dreamcast"]);
   });
 });
 

@@ -45,7 +45,10 @@ function Trazo({ model, size }: { model: PlatformModel; size: number }) {
      cambia de tema exactamente igual que un trazado. Puesta de <img> se veía
      negra sobre negro. */
   if ("mask" in m) {
-    const mask = { maskImage: `url(${m.mask})`, maskSize: "contain", maskRepeat: "no-repeat", maskPosition: "center" };
+    /* La URL entre comillas: la pone el empaquetador, y si algún día el fichero
+       se sirve en línea como `data:` —basta con subir `assetsInlineLimit`— sin
+       comillas el `url()` se rompe con el primer carácter raro. */
+    const mask = { maskImage: `url("${m.mask}")`, maskSize: "contain", maskRepeat: "no-repeat", maskPosition: "center" };
     return (
       <span
         aria-hidden

@@ -70,13 +70,18 @@ type Regla = {
   label?: string;
   mark: MarkKey | null;
   family: PlatformFamily;
+  /** Cae en «PC» al elegir dónde lo juegas. */
+  pc?: true;
 };
 
 /* El ordenador entero, como UNA opción de «en cuál lo juegas». El símbolo es el
    de Steam y no la ventana de Windows a propósito: la ventana deja fuera a Mac
-   y a Linux, y quien juega en ordenador reconoce antes la válvula. */
+   y a Linux, y quien juega en ordenador reconoce antes la válvula.
+
+   Quién cae aquí lo marca cada regla con `pc`, y no una lista de ids: los ids de
+   las reglas sin `label` llevan el nombre dentro (ver `deRegla`), así que una
+   lista se habría quedado sin reconocer a SteamOS en cuanto se tocara eso. */
 const PC: PlatformModel = { id: "pc", label: "PC", mark: "steam", family: "steam" };
-const ES_PC = new Set(["windows", "mac", "linux", "steam", "steamdeck"]);
 
 const RULES: Regla[] = [
   // ── PlayStation ──────────────────────────────────────────────────────────
@@ -132,34 +137,55 @@ const RULES: Regla[] = [
   // ── Ordenador ────────────────────────────────────────────────────────────
   // Antes que Windows y que Linux, y no por gusto: una Steam Deck es las dos
   // cosas —SteamOS es Linux— y lo que uno reconoce en ella es Steam.
-  { re: /steam deck/i, id: "steamdeck", label: "Steam Deck", mark: "steamdeck", family: "steam" },
-  { re: /steamos|steam machine/i, id: "steam", mark: "steam", family: "steam" },
-  { re: /windows|^pc\b|\bdos\b/i, id: "windows", label: "Windows", mark: "windows", family: "windows" },
+  { re: /steam deck/i, id: "steamdeck", label: "Steam Deck", mark: "steamdeck", family: "steam", pc: true },
+  { re: /steamos|steam machine/i, id: "steam", mark: "steam", family: "steam", pc: true },
+  { re: /windows|^pc\b|\bdos\b/i, id: "windows", label: "Windows", mark: "windows", family: "windows", pc: true },
   { re: /\bios\b|ipados|ipad|iphone|tvos/i, id: "ios", label: "iOS", mark: "ios", family: "apple" },
-  { re: /\bmac\b|macos|os x/i, id: "mac", label: "Mac", mark: "mac", family: "apple" },
+  { re: /\bmac\b|macos|os x/i, id: "mac", label: "Mac", mark: "mac", family: "apple", pc: true },
   // La coladera de Apple: el Pippin, el Apple II. La manzana es suya y el
-  // nombre que traiga IGDB es el que se lee.
+  // nombre que traiga IGDB es el que se lee. Sin `pc`: un Pippin no es un
+  // ordenador de jugar, y un Apple II tampoco es «donde lo juegas» hoy.
   { re: /apple/i, id: "apple", mark: "mac", family: "apple" },
   { re: /android/i, id: "android", label: "Android", mark: "android", family: "android" },
-  { re: /linux/i, id: "linux", label: "Linux", mark: "linux", family: "linux" },
+  { re: /linux/i, id: "linux", label: "Linux", mark: "linux", family: "linux", pc: true },
 
   // ── Sin marca que copiar ─────────────────────────────────────────────────
   { re: /browser|\bweb\b/i, id: "web", label: "Web", mark: null, family: "web" },
   { re: /arcade|neo geo mvs/i, id: "arcade", label: "Arcade", mark: null, family: "arcade" },
 ];
 
+/* El id es la identidad de la RESPUESTA, y la respuesta es la etiqueta: el
+   desplegable deduplica por id, así que dos aparatos que se llaman distinto
+   tienen que tener ids distintos.
+
+   Con las reglas coladeras eso no sale solo. `/xbox/` es UNA regla para las
+   cuatro generaciones —hay un solo dibujo— y con un id fijo «xbox» un juego en
+   Xbox One y Series X|S ofrecía UNA opción y se comía la otra sin decir nada.
+   Pasaba igual con las cinco de Sega y con la coladera de PlayStation. Por eso
+   las reglas sin `label` se llevan el nombre dentro del id. */
+function deRegla(r: Regla, name: string): PlatformModel {
+  const label = r.label ?? name.trim();
+  return {
+    id: r.label ? r.id : `${r.id}:${label.toLowerCase()}`,
+    label,
+    mark: r.mark,
+    family: r.family,
+  };
+}
+
 /** El aparato exacto: lo que enseña la fila de plataformas de la ficha. */
 export function platformModel(name: string): PlatformModel {
   const r = RULES.find((x) => x.re.test(name));
-  if (!r) return { id: "other", label: name, mark: null, family: "other" };
-  return { id: r.id, label: r.label ?? name, mark: r.mark, family: r.family };
+  if (!r) return { id: `other:${name.trim().toLowerCase()}`, label: name.trim(), mark: null, family: "other" };
+  return deRegla(r, name);
 }
 
 /** Lo que se elige en «en cuál lo juegas». Igual que el modelo, salvo que todo
  *  el ordenador —Windows, Mac, Linux, SteamOS, Steam Deck— es una sola «PC». */
 export function playPlatform(name: string): PlayPlatform {
-  const m = platformModel(name);
-  return ES_PC.has(m.id) ? PC : m;
+  const r = RULES.find((x) => x.re.test(name));
+  if (!r) return platformModel(name);
+  return r.pc ? PC : deRegla(r, name);
 }
 
 /** La familia, que es lo único que decide el COLOR de la marca. */
