@@ -274,8 +274,25 @@
     let unknown = 0;
     const seen = new Map();
 
+    /** El trozo de HTML de "cargar más", convertido en algo recorrible.
+     *
+     *  El `<table>` de alrededor NO es adorno: la respuesta son `<tr>` sueltos,
+     *  y `DOMParser` TIRA una fila que no tiene tabla donde vivir. El documento
+     *  resultante conserva el texto —por eso no parecía roto— pero ni una sola
+     *  fila, así que la paginación traía megas de HTML y sacaba cero filas de
+     *  ellos, una página tras otra, sin un error por ninguna parte. Medido el
+     *  28-08-2026 sobre la misma respuesta: 0 filas suelta, 995 dentro de una
+     *  tabla. Es la razón de que el volcado de la cartera se quedara siempre en
+     *  lo que ya estaba pintado en la página. */
+    const parseRows = (html) =>
+      new DOMParser().parseFromString(`<table>${html}</table>`, "text/html");
+
+    /** Lee las filas de un documento y devuelve CUÁNTAS ha visto — vistas, no
+     *  entendidas: es lo que distingue "esta página no traía nada" de "esta
+     *  página traía cosas que no nos interesan". */
     const readTable = (doc) => {
-      for (const el of doc.querySelectorAll(".wallet_table_row")) {
+      const found = doc.querySelectorAll(".wallet_table_row");
+      for (const el of found) {
         const type = (el.querySelector(".wht_type")?.textContent || "").trim();
         let kind = kindOf(type);
         if (kind === null) continue;
@@ -323,6 +340,7 @@
           order: rows.length,
         });
       }
+      return found.length;
     };
 
     readTable(document);
@@ -344,16 +362,35 @@
       log("  No veo el botón de «cargar más»: esto va pegado en");
       log("  https://store.steampowered.com/account/history/");
     } else {
+      /** De dónde sale el cursor de la siguiente página.
+       *
+       *  Hoy la tienda lo tiene en la global `g_historyCursor` y el botón no
+       *  lleva ningún `data-cursor` —lo comprobado el 28-08-2026: el botón
+       *  existe, su atributo es null y su `onclick` llama a
+       *  `WalletHistory_LoadMore()`, que lee la global—. El atributo se sigue
+       *  mirando primero porque no cuesta nada y porque Valve mueve estas cosas
+       *  sin avisar; lo que no puede volver a pasar es que no encontrarlo se
+       *  quede en 54 filas de la primera página y nadie se entere.
+       *
+       *  Y el que se lee es el que hay AL PRINCIPIO: `WalletHistory_LoadMore`
+       *  actualiza la global a medida que carga, así que leerla dentro del
+       *  bucle sería seguir el rastro de dos paginaciones a la vez. */
       let cursor = null;
       try {
         cursor = JSON.parse(cursorEl.getAttribute("data-cursor") || "null");
       } catch {
         cursor = null;
       }
-      /* Hay botón de "cargar más" pero su cursor no se deja leer: hay páginas
-         que no vamos a poder pedir, así que esto NO es una lectura completa por
-         mucho que el bucle no llegue a dar una vuelta. */
-      if (!cursor) complete = false;
+      if (!cursor && window.g_historyCursor && typeof window.g_historyCursor === "object") {
+        cursor = { ...window.g_historyCursor };
+      }
+      /* Ni atributo ni global: hay páginas que no vamos a poder pedir, así que
+         esto NO es una lectura completa por mucho que el bucle no llegue a dar
+         una vuelta. */
+      if (!cursor) {
+        complete = false;
+        log("  No encuentro el cursor de la siguiente página; me quedo con esta.");
+      }
       let page = 0;
       for (; cursor && page < 60; page++) {
         const body = new URLSearchParams({ sessionid });
@@ -378,7 +415,16 @@
           if (data.cursor) complete = false;
           break;
         }
-        readTable(new DOMParser().parseFromString(data.html, "text/html"));
+        const vistas = readTable(parseRows(data.html));
+        /* Página con HTML pero sin una sola fila dentro: o Steam ha cambiado el
+           molde o lo estamos leyendo mal. Lo que no se puede hacer es seguir
+           como si nada y acabar diciendo que la lectura fue completa, que es
+           justo lo que autoriza a barrer el libro. */
+        if (!vistas) {
+          complete = false;
+          log(`  Esa página no traía ninguna fila; me quedo en ${rows.length}.`);
+          break;
+        }
         log(`  ${rows.length} filas…`);
         cursor = data.cursor ?? null;
         await sleep(800);
