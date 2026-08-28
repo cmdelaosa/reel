@@ -350,6 +350,10 @@
       } catch {
         cursor = null;
       }
+      /* Hay botón de "cargar más" pero su cursor no se deja leer: hay páginas
+         que no vamos a poder pedir, así que esto NO es una lectura completa por
+         mucho que el bucle no llegue a dar una vuelta. */
+      if (!cursor) complete = false;
       let page = 0;
       for (; cursor && page < 60; page++) {
         const body = new URLSearchParams({ sessionid });
@@ -366,7 +370,14 @@
           break;
         }
         const data = await res.json();
-        if (!data.html) break;
+        if (!data.html) {
+          /* Sin filas y sin cursor es el final de la lista. Sin filas PERO con
+             cursor es un tropiezo de Steam a media lectura, y tratarlo como
+             final autorizaría a barrer el libro entero con un tercio de las
+             filas en la mano. */
+          if (data.cursor) complete = false;
+          break;
+        }
         readTable(new DOMParser().parseFromString(data.html, "text/html"));
         log(`  ${rows.length} filas…`);
         cursor = data.cursor ?? null;

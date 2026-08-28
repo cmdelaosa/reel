@@ -330,7 +330,12 @@ export function useUploadSteamDump() {
       if (parsed.data.holdings?.length || parsed.data.ledger?.length || parsed.data.prices?.length) {
         payloads.push(rest);
       }
-      for (const part of splitHistory(history)) payloads.push({ ...rest, history: part });
+      /* Los trozos de histórico llevan la cabecera —versión, moneda, steam_id— y
+         NADA más. Con `rest` entero dentro, cada trozo re-escribía el inventario
+         y el libro otra vez: seis llamadas, seis barridos y un recibo diciendo
+         que has subido seis veces tus objetos. */
+      const header = { version: raw.version, steam_id: raw.steam_id, currency: raw.currency, collected_at: raw.collected_at };
+      for (const part of splitHistory(history)) payloads.push({ ...header, history: part });
 
       /* En serie y no en paralelo: son escrituras a la misma tabla, y media
          docena de llamadas a la vez es la forma de que la función se quede sin
