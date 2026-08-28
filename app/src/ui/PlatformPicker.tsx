@@ -69,8 +69,13 @@ export function PlatformPicker({
     return [...hw, null];
   }, [platforms]);
 
-  const puestaId = value ? playPlatform(value).id : null;
-  const puesta = opciones.find((o) => o?.id === puestaId) ?? null;
+  /* La puesta se resuelve del valor guardado y NO buscándola en las opciones:
+     IGDB reescribe `titles.platforms` en cada refresco, y el día que quite una
+     plataforma de un juego —pasa, sobre todo con las viejas— la que tú tenías
+     puesta deja de estar en la lista. Buscándola ahí, el botón se quedaba con
+     el nombre pelado y sin logotipo justo en ese caso. */
+  const puesta = value ? playPlatform(value) : null;
+  const puestaId = puesta?.id ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -120,7 +125,7 @@ export function PlatformPicker({
         onKeyDown={teclas}
       >
         {puesta && <PlatformMarkIcon model={puesta} size={16} />}
-        <span className="pick-value truncate">{puesta?.label ?? value ?? tr("Not set")}</span>
+        <span className="pick-value truncate">{puesta?.label ?? tr("Not set")}</span>
         <ChevronDown size={15} className="mute" aria-hidden />
       </button>
       {open && (

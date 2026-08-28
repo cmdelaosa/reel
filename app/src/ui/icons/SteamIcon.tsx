@@ -17,7 +17,14 @@ import { PLATFORM_MARKS } from "@/ui/icons/platformMarks";
 
    `fill="currentColor"` y no `stroke`: es un logotipo macizo, no un pictograma
    de trazo, así que hereda el color del texto por relleno. */
-export function SteamIcon({ size = 24, ...rest }: { size?: number } & React.SVGProps<SVGSVGElement>) {
+export function SteamIcon({
+  size = 24,
+  ...rest
+}: { size?: number } /* Sin `children` ni `dangerouslySetInnerHTML`: el dibujo lo
+     pone el trazado compartido, y React revienta —«Can only set one of children
+     or dangerouslySetInnerHTML»— si además llega un hijo. Antes cabía, porque
+     el trazado era un hijo escrito aquí. */
+  & Omit<React.SVGProps<SVGSVGElement>, "children" | "dangerouslySetInnerHTML">) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

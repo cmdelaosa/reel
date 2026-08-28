@@ -80,8 +80,8 @@ export function PlatformMarkIcon({ model, size }: { model: PlatformModel; size: 
  *  la esfera de Xbox no dice si es una 360 o una Series X.
  *
  *  Nunca es pulsable: es una lista informativa. Donde hay que ELEGIR una
- *  plataforma —«en cuál lo juegas»— el control es ui/PlatformPicker, que lleva
- *  este dibujo con `bare` y el nombre exacto escrito al lado. */
+ *  plataforma —«en cuál lo juegas»— el control es ui/PlatformPicker, que pinta
+ *  el dibujo suelto con `PlatformMarkIcon` y el nombre exacto escrito al lado. */
 export function PlatformLogo({
   name,
   hint,
