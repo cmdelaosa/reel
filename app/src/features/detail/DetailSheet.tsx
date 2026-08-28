@@ -536,19 +536,30 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                   lo que se viene a hacer, así que va lo primero del cuerpo. */}
               {nextPending && !entry?.stopped && (
                 <div className="card detail-next">
-                  <img
-                    className="detail-next-still"
-                    src={nextStill ?? undefined}
-                    alt=""
-                    style={nextStill ? undefined : { background: posterBg(title.name) }}
-                  />
-                  <span className="detail-next-txt">
-                    <span className="detail-next-se">
-                      S{nextPending.season_number} · E{nextPending.episode_number} · {tr("Continue with")}
+                  {/* El fotograma y el texto abren la ficha del episodio —la
+                      misma que la fila de la lista—, que es donde está la
+                      sinopsis. El botón de marcar se queda aparte: son dos
+                      intenciones distintas y compartir clic las confundía. */}
+                  <button
+                    type="button"
+                    className="btn-reset detail-next-open"
+                    onClick={() => setEpisodeOpen(nextPending)}
+                    title={tr("Episode details")}
+                  >
+                    <img
+                      className="detail-next-still"
+                      src={nextStill ?? undefined}
+                      alt=""
+                      style={nextStill ? undefined : { background: posterBg(title.name) }}
+                    />
+                    <span className="detail-next-txt">
+                      <span className="detail-next-se">
+                        S{nextPending.season_number} · E{nextPending.episode_number} · {tr("Continue with")}
+                      </span>
+                      <span className="detail-next-name truncate">{nextPendingName}</span>
+                      <span className="detail-next-date">{fmtDate(nextPending.air_datetime)}</span>
                     </span>
-                    <span className="detail-next-name truncate">{nextPendingName}</span>
-                    <span className="detail-next-date">{fmtDate(nextPending.air_datetime)}</span>
-                  </span>
+                  </button>
                   <button
                     className="btn btn-accent btn-sm"
                     disabled={markWatched.isPending}
