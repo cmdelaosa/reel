@@ -160,6 +160,10 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const [episodeOpen, setEpisodeOpen] = useState<EpisodeRow | null>(null);
   const [toast, setToast] = useState<{ ids: string[]; count: number } | null>(null);
   const [posterOpen, setPosterOpen] = useState(false);
+  /* Marcar la serie entera escribe decenas de filas y no hay un solo botón que
+     lo deshaga: se pregunta antes. Vive aquí, y no en el propio botón, porque
+     el diálogo se pinta al final de la hoja, fuera de la cabecera. */
+  const [confirmSeries, setConfirmSeries] = useState(false);
   /* La lista de amigos vive plegada tras su nota: la media responde
      «¿está bien?» y solo si quieres saber quién, se abre. */
   const [friendsOpen, setFriendsOpen] = useState(false);
@@ -233,6 +237,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   };
 
   const markWholeSeries = async () => {
+    setConfirmSeries(false);
     const ids = await markSeries.mutateAsync();
     setToast({ ids, count: ids.length });
   };
@@ -298,11 +303,12 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
       if (e.key !== "Escape") return;
       if (posterOpen) setPosterOpen(false);
       else if (episodeOpen) setEpisodeOpen(null);
+      else if (confirmSeries) setConfirmSeries(false);
       else onClose();
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onClose, posterOpen, episodeOpen]);
+  }, [onClose, posterOpen, episodeOpen, confirmSeries]);
 
   const toggleFollow = () => {
     if (!title) return;
@@ -383,7 +389,7 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                     className="btn btn-sm badge-glass"
                     style={{ color: "#fff", borderRadius: "var(--r-sm)" }}
                     disabled={markSeries.isPending}
-                    onClick={markWholeSeries}
+                    onClick={() => setConfirmSeries(true)}
                     title={unwatchedAired === 1
                       ? tr("Mark the last aired episode as seen — for shows you've already watched")
                       : tv("Mark all {count} aired episodes as seen — for shows you've already watched", { count: unwatchedAired })}
@@ -709,6 +715,40 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                 onClick={() => { markWatched.mutate(pending.id); setPending(null); }}
               >
                 {tr("Only this one")}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Marcar la serie entera — la misma caja que la de "hasta aquí", porque
+          es la misma pregunta a mayor escala. Con la cuenta delante: "marcar 61
+          episodios" se piensa distinto que "marcar todo". */}
+      {confirmSeries && (
+        <>
+          <div className="backdrop" style={{ zIndex: 80 }} onClick={() => setConfirmSeries(false)} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={tr("Mark the whole show watched?")}
+            className="sheet-center fixed card flex flex-col"
+            style={{ zIndex: 81, left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(400px, 92vw)", padding: 22, gap: 6, borderRadius: "var(--r-lg)" }}
+          >
+            <div style={{ fontWeight: 800, fontSize: 16 }}>{tr("Mark the whole show watched?")}</div>
+            <p className="dim" style={{ fontSize: 14, lineHeight: 1.55, margin: "2px 0 14px" }}>
+              {tv(
+                unwatchedAired === 1
+                  ? "This marks the one aired episode you haven't seen of {name}."
+                  : "This marks all {count} aired episodes you haven't seen of {name}.",
+                { count: unwatchedAired, name: displayName },
+              )}
+            </p>
+            <div className="flex items-center gap-2.5">
+              <button className="btn btn-accent flex-1" disabled={markSeries.isPending} onClick={markWholeSeries}>
+                <CheckCheck size={16} />{markSeries.isPending ? tr("Marking…") : tv("Mark {count}", { count: unwatchedAired })}
+              </button>
+              <button className="btn btn-outline flex-1" onClick={() => setConfirmSeries(false)}>
+                {tr("Cancel")}
               </button>
             </div>
           </div>
