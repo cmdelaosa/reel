@@ -34,12 +34,17 @@ export type Section = "tonight" | "calendar" | "library" | "explore";
    solo aquí —o solo allí— no da error, deja la pantalla en blanco bajo la
    barra. Ya pasó una vez con la biblioteca de juegos (/games/library →
    /games/backlog, cuya redirección sigue viva en main.tsx). */
-const ROUTES: Record<Section, Record<Medium, string>> = {
+export const ROUTES: Record<Section, Record<Medium, string>> = {
   tonight: { tv: "/tonight", movie: "/movies/tonight", game: "/games/tonight" },
   calendar: { tv: "/calendar", movie: "/movies/releases", game: "/games/releases" },
   library: { tv: "/shows?filter=watchlist", movie: "/movies/watchlist", game: "/games/backlog" },
   explore: { tv: "/explore", movie: "/movies/explore", game: "/games/explore" },
 };
+
+/* Exportada —y no privada como nació— porque los Ajustes dejan elegir con cuál
+   de estas doce abre la app (domain/startPage). Leerla desde allí es lo que
+   evita una CUARTA copia de las mismas rutas: ya hay dos —esta y las pestañas
+   del Shell— y el aviso de arriba dice lo que cuesta cada una. */
 
 /** La portada de cada modo, adonde te lleva el conmutador cuando la sección en
  *  la que estás no existe al otro lado. Los tres son ya su "esta noche": es la

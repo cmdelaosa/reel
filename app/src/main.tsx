@@ -38,6 +38,7 @@ import TastePage from "@/features/social/TastePage";
 import TonightPage from "@/features/tonight/TonightPage";
 import YouPage from "@/features/you/YouPage";
 import { Shell } from "@/ui/shell/Shell";
+import { StartRedirect } from "@/ui/shell/StartRedirect";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
 import { flashQueryError } from "@/ui/shell/queryErrorStore";
 import { restoreMetadataCache, watchMetadataCache } from "@/lib/queryPersistence";
@@ -104,7 +105,9 @@ const router = createBrowserRouter([
       </LandingGate>
     ),
     children: [
-      { index: true, element: <Navigate to="/tonight" replace /> },
+      // La pantalla de inicio la elige el usuario en Ajustes; StartRedirect la
+      // lee y redirige (antes esto era un Navigate fijo a /tonight).
+      { index: true, element: <StartRedirect /> },
       { path: "tonight", element: <TonightPage /> },
       { path: "shows", element: <ShowsPage /> },
       // El cine cuelga de /movies — el prefijo que lib/medium reconoce para que

@@ -47,6 +47,10 @@ const ES: Record<string, string> = {
   "Search": "Buscar",
   "Notifications": "Notificaciones",
   "Settings": "Ajustes",
+  /* Ajustes: con qué pantalla abre la app. "Se abre en" y no "Pantalla de
+     inicio", que en un móvil es el escritorio del sistema. */
+  "Opens on": "Se abre en",
+  "The screen Reel shows when you open it.": "La pantalla que ves al abrir Reel.",
   "Your profile": "Tu perfil",
 
   // ---- Common ----

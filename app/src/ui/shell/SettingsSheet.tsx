@@ -12,6 +12,7 @@ import {
   NOTIFICATION_TYPES, prefFor, useNotificationPrefs, useSetPref,
 } from "@/lib/notificationPrefs";
 import { COUNTRIES, countryName } from "@/lib/region";
+import { START_GROUPS } from "@/domain/startPage";
 import { useProviderOptions } from "@/lib/movies";
 import { tmdbImg } from "@/lib/tmdb";
 import { t } from "@/lib/i18n";
@@ -279,6 +280,28 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
                 { v: "light", label: t("Light") },
               ]}
             />
+          </Row>
+
+          <Row label={t("Opens on")}>
+            {/* Un select agrupado y no un segmentado: son doce, y el segmentado
+                de arriba ya se envuelve con cuatro. Los grupos son los tres
+                modos, que es lo que distingue tres "Explorar" idénticos. */}
+            <select
+              className="field-select"
+              value={settings.start}
+              onChange={(e) => setSetting("start", e.target.value)}
+            >
+              {START_GROUPS.map((g) => (
+                <optgroup key={g.medium} label={t(g.label)}>
+                  {g.options.map((o) => (
+                    <option key={o.route} value={o.route}>{t(o.label)}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <div className="mute" style={{ fontSize: 12 }}>
+              {t("The screen Reel shows when you open it.")}
+            </div>
           </Row>
 
           <Row label={t("Language")}>
