@@ -16,6 +16,7 @@ import {
   isoOf,
   minutesOf,
   parseCsv,
+  platformOf,
   progressOf,
   ratingOf,
   type CurrentEntry,
@@ -150,12 +151,12 @@ const plan = (over: Partial<PlannedGame> = {}): PlannedGame => ({
   igdbId: 1, name: "Hades", from: "collection", owned: true, minutes: 600,
   playState: null, finished: false, finishedAt: null, rating: 8,
   ratedAt: "2024-12-21T14:12:07.000Z", addedAt: "2024-12-21T14:12:07.000Z",
-  playedAt: "2024-12-21T14:12:07.000Z", ...over,
+  playedAt: "2024-12-21T14:12:07.000Z", platform: "Windows PC", ...over,
 });
 
 const entry = (over: Partial<CurrentEntry> = {}): CurrentEntry => ({
   followed: true, play_state: null, minutes_played: 0, minutes_source: null,
-  owned: false, added_at: "2026-08-24T10:00:00.000Z", ...over,
+  owned: false, added_at: "2026-08-24T10:00:00.000Z", played_platform: null, ...over,
 });
 
 test("decideEntry: fila nueva se escribe entera", () => {
@@ -249,4 +250,72 @@ test("decideEntry: una fila que ya está y no cambia nada no genera parche", () 
 test("parseCsv: un campo de varias líneas en un fichero CRLF no arrastra \\r", () => {
   const rows = parseCsv('a,b\r\n1,"dos\r\nlíneas"\r\n');
   assert.equal(rows[0].b, "dos\nlíneas");
+});
+
+/* ─────────────────────── La plataforma en la que juegas ────────────────── */
+
+const IGDB_PC = ["PC (Microsoft Windows)", "Nintendo Switch", "PlayStation 4"];
+
+test("platformOf: 'Windows PC' del export es 'PC (Microsoft Windows)' en IGDB", () => {
+  assert.equal(platformOf("Windows PC", IGDB_PC), "PC (Microsoft Windows)");
+});
+
+test("platformOf: devuelve la cadena de IGDB, no la del CSV", () => {
+  // Es lo que hace que el desplegable de la ficha marque la opción: compara
+  // por cadena contra titles.platforms.
+  assert.equal(platformOf("nintendo switch", IGDB_PC), "Nintendo Switch");
+  assert.equal(platformOf("PLAYSTATION 4", IGDB_PC), "PlayStation 4");
+});
+
+test("platformOf: mayúsculas, espacios y guiones no cuentan", () => {
+  assert.equal(platformOf(" SG 1000 ", ["SG-1000"]), "SG-1000");
+});
+
+test("platformOf: lo que IGDB no lista en ESE juego no se inventa", () => {
+  // Maui Mallard: se juega en PC y para IGDB es un juego de Super Nintendo.
+  assert.equal(platformOf("Windows PC", ["Super Nintendo Entertainment System"]), null);
+  assert.equal(platformOf("", IGDB_PC), null);
+});
+
+test("decideEntry: la plataforma entra en una fila nueva", () => {
+  const { patch } = decideEntry(plan(), null, "PC (Microsoft Windows)");
+  assert.equal(patch.played_platform, "PC (Microsoft Windows)");
+});
+
+test("decideEntry: sin casar no se escribe nada de plataforma", () => {
+  assert.equal(decideEntry(plan(), null, null).patch.played_platform, undefined);
+  assert.equal(decideEntry(plan(), entry(), null).patch.played_platform, undefined);
+});
+
+test("decideEntry: rellena el hueco de la plataforma", () => {
+  const { patch, conflicts } = decideEntry(plan(), entry(), "Nintendo Switch");
+  assert.equal(patch.played_platform, "Nintendo Switch");
+  assert.deepEqual(conflicts, []);
+});
+
+test("decideEntry: una plataforma ya dicha no la pisa el CSV, se cuenta", () => {
+  const { patch, conflicts } = decideEntry(
+    plan(),
+    entry({ played_platform: "Nintendo Switch" }),
+    "PC (Microsoft Windows)",
+  );
+  assert.equal(patch.played_platform, undefined);
+  assert.equal(conflicts.length, 1);
+  assert.match(conflicts[0], /plataforma ya dicha 'Nintendo Switch'/);
+});
+
+test("decideEntry: la misma plataforma otra vez no es conflicto ni parche", () => {
+  const { patch, conflicts } = decideEntry(
+    plan(),
+    entry({ played_platform: "Nintendo Switch" }),
+    "Nintendo Switch",
+  );
+  assert.equal(patch.played_platform, undefined);
+  assert.deepEqual(conflicts, []);
+});
+
+test("buildPlan: la plataforma sale de la colección y las listas no la traen", () => {
+  const { games } = buildPlan(COL, LISTAS, "");
+  assert.equal(games.find((g) => g.igdbId === 20)!.platform, "Windows PC");
+  assert.equal(games.find((g) => g.from === "list")!.platform, null);
 });

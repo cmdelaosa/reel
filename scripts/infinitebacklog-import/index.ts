@@ -20,7 +20,9 @@
  *      HowLongToBeat, y no como una fila a medias.
  *   3. Lee lo que la cuenta ya tiene y decide fila a fila qué se escribe
  *      (decideEntry). Nada se pisa.
- *   4. Escribe: biblioteca, `played_at`, terminados y notas.
+ *   4. Escribe: biblioteca —incluida la plataforma en la que juegas, casada con
+ *      la lista del propio juego (lib/platformOf)—, `played_at`, terminados y
+ *      notas.
  *   5. Deja un informe JSON al lado del export.
  *
  * ── Por qué la clave de servicio y no una sesión ─────────────────────────
@@ -40,7 +42,7 @@
 
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildPlan, decideEntry, type CurrentEntry } from "./lib.ts";
+import { buildPlan, decideEntry, platformOf, type CurrentEntry } from "./lib.ts";
 
 /** `watch_events.source` de lo que entre por aquí. La columna es texto libre
  *  (0003) y nadie la pinta, pero es lo único que separa esta importación de lo
@@ -149,6 +151,11 @@ async function getByIds(env: Env, path: string, campo: string, ids: string[]): P
 interface Resolved {
   titleId: string;
   episodeId: string | null;
+  /** `titles.platforms`, que es contra lo que se casa la columna `Platform` del
+   *  export (lib/platformOf). Viaja con el título resuelto porque es el único
+   *  momento en que se tiene: pedirla luego sería una lectura más del catálogo
+   *  para una columna que ya estaba en la respuesta. */
+  platforms: string[];
 }
 
 /** Lo que ya está en el catálogo, sin gastar una petición a IGDB.
@@ -162,13 +169,13 @@ async function cachedTitles(env: Env, igdbIds: number[]): Promise<Map<number, Re
   for (const trozo of chunk(igdbIds, ID_PAGE)) {
     const rows = await get(
       env,
-      `titles?kind=eq.game&select=id,tmdb_id,last_refreshed_at,episodes(id,season_number,episode_number)` +
+      `titles?kind=eq.game&select=id,tmdb_id,last_refreshed_at,platforms,episodes(id,season_number,episode_number)` +
         `&tmdb_id=in.(${trozo.join(",")})`,
     );
     for (const r of rows) {
       if (!r.last_refreshed_at) continue;
       const ep = (r.episodes ?? []).find((e: Any) => e.season_number === 1 && e.episode_number === 1);
-      found.set(r.tmdb_id, { titleId: r.id, episodeId: ep?.id ?? null });
+      found.set(r.tmdb_id, { titleId: r.id, episodeId: ep?.id ?? null, platforms: r.platforms ?? [] });
     }
   }
   return found;
@@ -194,7 +201,11 @@ async function resolveOne(env: Env, igdbId: number): Promise<Resolved | null> {
   if (res.status === 404) return null;
   const body = await res.json() as Any;
   if (!body?.title?.id) return null;
-  return { titleId: body.title.id, episodeId: body.episode_id ?? null };
+  return {
+    titleId: body.title.id,
+    episodeId: body.episode_id ?? null,
+    platforms: body.title.platforms ?? [],
+  };
 }
 
 /* ─────────────────────────────── main ──────────────────────────────────── */
@@ -267,7 +278,8 @@ async function main() {
   const entradas = new Map<string, CurrentEntry>();
   for (const r of await getByIds(
     env,
-    `library_entries?user_id=eq.${env.userId}&select=title_id,followed,play_state,minutes_played,minutes_source,owned,added_at`,
+    `library_entries?user_id=eq.${env.userId}&select=title_id,followed,play_state,minutes_played,` +
+      `minutes_source,owned,added_at,played_platform`,
     "title_id",
     titleIds,
   )) entradas.set(r.title_id, r);
@@ -295,12 +307,23 @@ async function main() {
   const notas: Any[] = [];
   let notasQueYaEstaban = 0;
   let sinEpisodio = 0;
+  /* La plataforma del export que IGDB no lista en ESE juego. No es un error de
+     la importación y por eso se enseña por su nombre: IGDB clasifica los
+     clásicos reeditados por su lanzamiento original —Maui Mallard es un juego
+     de Super Nintendo— así que "Windows PC" no tiene dónde encajar. */
+  const plataformasSinCasar: string[] = [];
+  let conPlataforma = 0;
 
   for (const g of listos) {
-    const { titleId, episodeId } = resolved.get(g.igdbId)!;
+    const { titleId, episodeId, platforms } = resolved.get(g.igdbId)!;
     const actual = entradas.get(titleId) ?? null;
-    const { patch, conflicts } = decideEntry(g, actual);
+    const plataforma = platformOf(g.platform ?? "", platforms);
+    if (g.platform && !plataforma) {
+      plataformasSinCasar.push(`${g.name}: '${g.platform}' no está en las de IGDB (${platforms.join(", ") || "ninguna"})`);
+    }
+    const { patch, conflicts } = decideEntry(g, actual, plataforma);
     conflictos.push(...conflicts);
+    if (patch.played_platform) conPlataforma++;
 
     if (!actual) {
       nuevas.push({
@@ -317,6 +340,9 @@ async function main() {
         // filas no tengan todas las mismas claves ("All object keys must
         // match"), así que omitirla en 115 de las 349 tira el lote entero.
         added_at: patch.added_at ?? ahora,
+        // Explícita también aquí, y por lo mismo que `added_at`: PostgREST
+        // rechaza un POST cuyas filas no tengan todas las mismas claves.
+        played_platform: patch.played_platform ?? null,
       });
     } else if (Object.keys(patch).length > 0) {
       parches.push({ titleId, patch });
@@ -379,12 +405,17 @@ async function main() {
       `  biblioteca      : ${nuevas.length} altas, ${parches.length} filas que se completan\n` +
       `  terminados      : ${terminados.length} (${yaTerminados.size} ya lo estaban)\n` +
       `  notas           : ${notas.length} (${notasQueYaEstaban} ya tenían nota)\n` +
+      `  plataformas     : ${conPlataforma} (${plataformasSinCasar.length} sin casar con IGDB)\n` +
       `  sin resolver    : ${noEncontrados.length}\n` +
       `  errores         : ${errores.length}\n` +
       `  conflictos      : ${conflictos.length} (se dejan como están)`,
   );
   for (const c of conflictos.slice(0, 20)) console.log(`    · ${c}`);
   if (conflictos.length > 20) console.log(`    … y ${conflictos.length - 20} más, en el informe`);
+  for (const p of plataformasSinCasar.slice(0, 10)) console.log(`    ~ ${p}`);
+  if (plataformasSinCasar.length > 10) {
+    console.log(`    … y ${plataformasSinCasar.length - 10} plataformas más sin casar, en el informe`);
+  }
   for (const n of noEncontrados) console.log(`    ? ${n}`);
   for (const e of errores.slice(0, 10)) console.log(`    x ${e}`);
   if (sinEpisodio) console.log(`  ! ${sinEpisodio} terminados sin episodio sintético — no se marcan`);
@@ -400,6 +431,8 @@ async function main() {
     terminados: terminados.length,
     notas: notas.length,
     notasQueYaEstaban,
+    plataformas: conPlataforma,
+    plataformasSinCasar,
     sinEpisodio,
     noEncontrados,
     errores,

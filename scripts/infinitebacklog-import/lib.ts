@@ -15,6 +15,11 @@
  * es un estado sino el watch_event del episodio sintético (0073, gameStatus.ts).
  * La traducción entera está en `progressOf`, con su tabla.
  *
+ * La columna `Platform` del export es `library_entries.played_platform` (0083),
+ * que llegó DESPUÉS de la primera importación del 25-08-2026: por eso la
+ * biblioteca de juegos de esa cuenta se quedó sin ninguna plataforma puesta y
+ * pareció un borrado. Se traduce al nombre de IGDB en `platformOf`.
+ *
  * ── Las fechas del CSV mandan, y no es un detalle ────────────────────────
  * Todo lo que se escribe va fechado con lo que dice el export —`Date added`
  * para la biblioteca, `Last updated` para lo terminado y para las notas— y no
@@ -157,6 +162,45 @@ export function ratingOf(raw: string): number | null {
   return Number.isInteger(n) && n >= 1 && n <= 10 ? n : null;
 }
 
+/** En qué plataforma juegas TÚ el juego (`library_entries.played_platform`,
+ *  0083), traducida al nombre EXACTO con el que IGDB la escribe en
+ *  `titles.platforms`.
+ *
+ *  La traducción no es un capricho: el desplegable de la ficha
+ *  (`ui/PlatformPicker`) construye sus opciones con `titles.platforms` y marca
+ *  la que coincide POR CADENA. Escribir "Windows PC" —como lo dice el export—
+ *  en un juego cuya lista trae "PC (Microsoft Windows)" deja el dato en la base
+ *  y la ficha enseñando "Ninguna": lo peor de los dos mundos.
+ *
+ *  Por eso se casa contra la lista del PROPIO juego y se devuelve la cadena de
+ *  esa lista, no la del CSV ni la del alias. `ALIAS` solo existe para los
+ *  nombres que de verdad se llaman distinto en los dos sitios; el resto casa
+ *  solo con normalizar mayúsculas, espacios y guiones (`SG-1000` / `SG 1000`).
+ *
+ *  Null cuando no casa, y eso incluye un caso que NO es un fallo: IGDB clasifica
+ *  Maui Mallard como juego de Super Nintendo aunque tú lo juegues en PC, así que
+ *  su lista no tiene ninguna plataforma de PC que ofrecer. Se cuenta en el
+ *  informe en vez de escribirse a la fuerza — un valor que el desplegable no
+ *  ofrece no se puede ni ver ni cambiar desde la app. */
+const ALIAS: Record<string, string> = {
+  "windows pc": "PC (Microsoft Windows)",
+  "windows": "PC (Microsoft Windows)",
+  "pc": "PC (Microsoft Windows)",
+  "macos": "Mac",
+  "mac os": "Mac",
+  "osx": "Mac",
+};
+
+const normPlat = (s: string) =>
+  (s ?? "").trim().toLowerCase().replace(/[-_]/g, " ").replace(/\s+/g, " ");
+
+export function platformOf(raw: string, disponibles: readonly string[]): string | null {
+  const n = normPlat(raw);
+  if (!n) return null;
+  const objetivo = normPlat(ALIAS[n] ?? raw);
+  return disponibles.find((p) => normPlat(p) === objetivo) ?? null;
+}
+
 /** Una fecha del export como ISO, o null.
  *
  *  Vienen ya en ISO con Z (`2024-12-21T14:12:07.000Z`), pero se normaliza igual:
@@ -191,6 +235,13 @@ export interface PlannedGame {
   addedAt: string | null;
   /** `library_entries.played_at`: la última vez que consta que lo tocaste. */
   playedAt: string | null;
+  /** La columna `Platform` del export, TAL CUAL. Se traduce al nombre de IGDB
+   *  en index.ts y no aquí, porque para casarla hace falta la lista de
+   *  plataformas del juego, que solo se conoce después de resolverlo.
+   *
+   *  Solo la colección la trae: el CSV de listas no tiene la columna, y en los
+   *  deseados sería "dónde lo jugarás", que no es lo que la columna dice. */
+  platform: string | null;
 }
 
 export interface Plan {
@@ -237,6 +288,7 @@ export function buildPlan(collectionCsv: string, listsCsv: string, wishlistCsv: 
       ratedAt: updated,
       addedAt: isoOf(r["Date added"] ?? ""),
       playedAt: updated,
+      platform: (r["Platform"] ?? "").trim() || null,
     });
   }
 
@@ -260,6 +312,7 @@ export function buildPlan(collectionCsv: string, listsCsv: string, wishlistCsv: 
       ratedAt: null,
       addedAt: isoOf(r["Date added"] ?? ""),
       playedAt: null,
+      platform: null,
     });
   };
 
@@ -284,6 +337,7 @@ export interface CurrentEntry {
   minutes_source: string | null;
   owned: boolean | null;
   added_at: string | null;
+  played_platform: string | null;
 }
 
 export interface EntryDecision {
@@ -308,6 +362,10 @@ export interface EntryDecision {
  *    · `added_at` se queda con la MÁS ANTIGUA. Es la fecha que ordena la
  *      biblioteca y la que publica el muro; adelantarla al día de hoy sería
  *      republicar como nuevo algo que llevas un año teniendo.
+ *    · la plataforma en la que juegas se rellena si no habías dicho ninguna, y
+ *      si la que hay es otra se cuenta y se deja: «dónde lo juego» tiene UNA
+ *      respuesta (0083) y la de la app es de esta semana, la del CSV de hace
+ *      ocho meses.
  *    · lo que QUITASTE de la biblioteca sigue quitado. `followed` solo se
  *      escribe al dar de alta; una fila con `followed = false` es una decisión
  *      tuya (library.ts marca, no borra), y volver a seguirla porque un CSV la
@@ -321,6 +379,10 @@ export interface EntryDecision {
 export function decideEntry(
   planned: PlannedGame,
   current: CurrentEntry | null,
+  /** La plataforma del CSV ya casada con la lista del juego (`platformOf`), o
+   *  null si no casó. Llega hecha desde fuera porque casarla necesita
+   *  `titles.platforms`, que aquí no se conoce. */
+  platform: string | null = null,
 ): EntryDecision {
   const conflicts: string[] = [];
   const patch: Record<string, unknown> = {};
@@ -332,6 +394,7 @@ export function decideEntry(
     patch.minutes_played = planned.minutes;
     if (planned.minutes > 0) patch.minutes_source = "manual";
     if (planned.addedAt) patch.added_at = planned.addedAt;
+    if (platform) patch.played_platform = platform;
     return { patch, conflicts };
   }
 
@@ -357,6 +420,15 @@ export function decideEntry(
       conflicts.push(
         `${planned.name}: ${mine} min en la cuenta (${current.minutes_source ?? "sin fuente"}), ` +
           `${planned.minutes} min en el CSV`,
+      );
+    }
+  }
+
+  if (platform) {
+    if (!current.played_platform) patch.played_platform = platform;
+    else if (current.played_platform !== platform) {
+      conflicts.push(
+        `${planned.name}: plataforma ya dicha '${current.played_platform}', el CSV dice '${platform}'`,
       );
     }
   }
