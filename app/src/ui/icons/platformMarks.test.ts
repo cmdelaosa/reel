@@ -1,22 +1,30 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import css from "@/styles/marquee.css?raw";
+import picker from "@/ui/PlatformPicker.tsx?raw";
 import { PLATFORM_MARKS } from "@/ui/icons/platformMarks";
 
-/* El techo de `.pick-menu` es un número medido —322 px, lo que pide la opción
-   más ancha del desplegable de «en cuál lo juegas»— y la mitad de esa cuenta no
-   vive en la hoja de estilos: vive AQUÍ, en la proporción del wordmark de la
-   Game Boy Advance, que es el más ancho del catálogo. Nada obligaba a las dos
-   mitades a seguir de acuerdo: añadir un logotipo más apaisado que el de la GBA
-   —un «SEGA MASTER SYSTEM», por ejemplo— dejaba el techo corto, y lo único que
-   se veía era una opción con puntos suspensivos que nadie relaciona con el
-   fichero que tocó. Ni los tipos, ni el lint, ni ninguna otra prueba lo miran.
+/* El techo de `.pick-menu` —322 px, lo que pide la opción más ancha del
+   desplegable de «en cuál lo juegas»— es un número MEDIDO, y la mitad de la
+   cuenta que lo sostiene no vive en la hoja de estilos: vive aquí, en la
+   proporción del wordmark de la Game Boy Advance, que es el más apaisado del
+   catálogo. Nada obligaba a las dos mitades a seguir de acuerdo: añadir un
+   logotipo más ancho que el suyo —un «SEGA MASTER SYSTEM», por ejemplo— dejaba
+   el techo corto, y lo único que se veía era una opción con puntos suspensivos
+   que nadie relaciona con el fichero que tocó. Ni los tipos, ni el lint, ni
+   ninguna otra prueba miran eso.
 
-   Lo que se mide en el navegador y no se puede medir aquí es el ANCHO DEL
-   NOMBRE: jsdom no tiene tipografías, así que «Game Boy Advance» mediría cero.
-   Va de constante, con su fecha, como las pestañas de domain/tabFit.test.ts.
-   Todo lo demás —la caja de la opción y la del menú— es aritmética de la hoja
-   de estilos, y está escrita con los mismos números que ella. */
+   Lo único que no se puede medir aquí es el ANCHO DEL NOMBRE: jsdom no tiene
+   tipografías, así que «Game Boy Advance» mediría cero. Ese va de constante,
+   con su fecha, como los anchos de pestaña de domain/tabFit.test.ts. Todo lo
+   demás es aritmética de la caja, y sus números son COPIAS de la hoja de
+   estilos y del componente — así que la prueba de en medio comprueba que
+   siguen siendo copias, porque una cuenta correcta sobre un relleno que ya
+   cambió es un verde que no vale nada.
+
+   La hoja llega por `?raw` como en los `*.mirror.test.ts` de domain, y eso pide
+   una línea en vite.config: vitest sustituye por vacío TODO lo que huela a CSS
+   —también en crudo—, así que sin el `css: { include }` esta prueba pasaría en
+   verde sin haber leído nada. */
 
 /** La altura a la que ui/PlatformPicker pide el dibujo en la lista. */
 const ALTO = 15;
@@ -32,19 +40,17 @@ function pideLaGba(): number {
   return ALTO * PLATFORM_MARKS.gba.r + NOMBRE_GBA + CAJA_OPCION + CAJA_MENU;
 }
 
-/** El segundo argumento del `min()` del techo, en px.
- *
- *  La hoja se lee del disco y no con `import ... ?raw`, que es como leen sus
- *  fuentes los `*.mirror.test.ts` de domain: vitest corre con `css: false` y
- *  ahí un módulo CSS llega VACÍO —cadena de cero— aunque se pida en crudo, así
- *  que la prueba pasaba en verde sin haber mirado nada. Y la ruta sale del
- *  directorio raíz de vitest, que es este `app/`, y no de `import.meta.url`:
- *  bajo vitest esa URL es la del servidor de Vite, `http://…`, y `fileURLToPath`
- *  la rechaza. */
+/** El cuerpo de una regla de la hoja, para no buscar a ciegas en 131 kB. */
+function regla(selector: string): string {
+  const i = css.indexOf(`${selector} {`);
+  if (i < 0) throw new Error(`no encuentro la regla ${selector} en marquee.css`);
+  const fin = css.indexOf("}", i);
+  return css.slice(i, fin);
+}
+
+/** El segundo argumento del `min()` del techo, en px. */
 function techoDelMenu(): number {
-  const css = readFileSync(resolve(process.cwd(), "src/styles/marquee.css"), "utf8");
-  const bloque = css.slice(css.indexOf(".pick-menu {"));
-  const m = /max-width:\s*min\(calc\(100vw - 32px\),\s*([\d.]+)px\)/.exec(bloque);
+  const m = /max-width:\s*min\(calc\(100vw - 32px\),\s*([\d.]+)px\)/.exec(regla(".pick-menu"));
   if (!m) throw new Error("no encuentro el max-width de .pick-menu en marquee.css");
   return Number(m[1]);
 }
@@ -61,6 +67,15 @@ describe("el techo del desplegable y el logotipo más ancho", () => {
     /* Si esto falla, el techo de marquee.css se ha quedado sin dueño: hay que
        medir en el navegador la opción de la marca nueva y poner ese número. */
     expect(masApaisada().clave).toBe("gba");
+  });
+
+  it("la caja de la que sale la cuenta sigue siendo la que dicen la hoja y el componente", () => {
+    expect(regla(".pick-opt")).toContain("padding: 7px 10px");
+    expect(regla(".pick-opt")).toContain("gap: 9px");
+    expect(regla(".pick-menu")).toContain("padding: 6px");
+    // La altura del dibujo y el tamaño de la marca de selección, en la lista.
+    expect(picker).toContain("<PlatformMarkIcon model={p} size={15} />");
+    expect(picker).toContain("<Check size={13}");
   });
 
   it("el techo deja pasar entera la opción de la Game Boy Advance", () => {

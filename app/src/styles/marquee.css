@@ -2337,7 +2337,12 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 
      `max-content` y no dejarlo en automático: un absoluto sin ancho se estira
      hasta el hueco que le deja su contenedor, así que en una ficha estrecha el
-     menú seguiría midiendo lo que el botón en vez de lo que su contenido. */
+     menú seguiría midiendo lo que el botón en vez de lo que su contenido.
+
+     Y sí, ahora puede quedar MÁS ESTRECHO que el botón: un juego que solo salga
+     en PC enseña un menú de ~127 px colgado del lado derecho de un botón de
+     382. Es lo que se buscaba — la pastilla mide lo que dice, no lo que le
+     cabe. */
   width: max-content;
   /* Y un techo, desde 0091: el menú crece con el logotipo más ancho que haya
      dentro —«NINTENDO 64» son 110 px él solo— y crece hacia la IZQUIERDA,
@@ -2353,6 +2358,11 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
      «Game Boy Advance» escrito al lado (13,5/600), los dos huecos de 9, la
      marca de 13, el relleno de la opción y el del menú: 321,2 px medidos en el
      navegador. La segunda ni se acerca —«3DO Interactive Multiplayer», 258.
+
+     El techo recorta en un solo sitio, y es el otro brazo del `min()`: por
+     debajo de unos 354 px de ventana manda `100vw - 32px` y la GBA sale con
+     puntos suspensivos. Ahí es justo lo que se quiere — el logotipo entero, que
+     es lo que se reconoce, y el nombre cortado.
 
      Lo que NO se promete es que no pueda aparecer una más ancha: las reglas
      coladeras de domain/platformModel se quedan con el nombre crudo de IGDB, y
