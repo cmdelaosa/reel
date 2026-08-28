@@ -92,12 +92,17 @@ async function buscar(nombre: string): Promise<Candidato[] | null> {
 
 /** La ficha de un juego ya emparejado, por su id. Sin volver a buscar por
  *  nombre: el emparejamiento es la parte cara y la que se puede equivocar, y
- *  repetirla cada mes es repetir el riesgo por un número que no se mueve. */
-async function porId(id: number): Promise<Candidato | null> {
+ *  repetirla cada mes es repetir el riesgo por un número que no se mueve.
+ *
+ *  Lanza si no contesta bien, y no devuelve null: aquí null significaría "este
+ *  juego no está en RAWG" y el `update` de abajo borraría el emparejamiento
+ *  guardado por un 500 de una tarde. La próxima pasada tendría que volver a
+ *  buscar por nombre — o sea volver a arriesgarse a emparejar mal. */
+async function porId(id: number): Promise<Candidato> {
   const res = await fetch(`https://api.rawg.io/api/games/${id}?key=${RAWG}`, {
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  if (!res.ok) return null;
+  if (!res.ok) throw new Error(`la ficha ${id} contestó ${res.status}`);
   return (await res.json()) as Candidato;
 }
 
@@ -118,7 +123,7 @@ const juegos = await readAll<Game>(
   (from, to) =>
     db.from("titles")
       .select(
-        "id, name, first_air_date, platforms, metacritic, metacritic_source, rawg_id, rawg_refreshed_at, library_entries!inner(id)",
+        "id, name, first_air_date, platforms, metacritic, metacritic_source, rawg_id, rawg_refreshed_at, library_entries!inner(title_id)",
       )
       .eq("kind", "game")
       .order("id", { ascending: true })
