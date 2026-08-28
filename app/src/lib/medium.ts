@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from "react";
+import { getSettings } from "@/lib/settings";
+import { resolveStartMedium } from "@/domain/startPage";
 
 /* El medio en el que estás: series, cine o videojuegos.
  *
@@ -46,6 +48,13 @@ function load(): Medium {
     if (typeof location !== "undefined") {
       const fromPath = mediumOfPath(location.pathname);
       if (fromPath) return fromPath;
+      /* "/" no es de ningún medio, pero desde que la pantalla de inicio se
+         elige tampoco es de series: redirige a la portada del modo elegido en
+         Ajustes. Sin esta línea, quien abre en Cine o en Juegos y cerró la
+         sesión anterior en Series veía el primer fotograma teñido de coral
+         antes de que el Shell reafirmara el modo — el mismo fotograma que el
+         comentario de arriba explica que este módulo existe para evitar. */
+      if (location.pathname === "/") return resolveStartMedium(getSettings().startMedium);
     }
     const stored = localStorage.getItem(KEY);
     return isMedium(stored) ? stored : "tv";

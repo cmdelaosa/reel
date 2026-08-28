@@ -8,10 +8,12 @@ import {
   useSettings, setSetting, resetSettings,
   type LanguageName, type ThemeName,
 } from "@/lib/settings";
+import type { Medium } from "@/domain/mediumCopy";
 import {
   NOTIFICATION_TYPES, prefFor, useNotificationPrefs, useSetPref,
 } from "@/lib/notificationPrefs";
 import { COUNTRIES, countryName } from "@/lib/region";
+import { START_OPTIONS } from "@/domain/startPage";
 import { useProviderOptions } from "@/lib/movies";
 import { tmdbImg } from "@/lib/tmdb";
 import { t } from "@/lib/i18n";
@@ -279,6 +281,21 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
                 { v: "light", label: t("Light") },
               ]}
             />
+          </Row>
+
+          <Row label={t("Opens on")}>
+            {/* Un segmentado, como el tema y el idioma: son tres, y la palabra
+                de cada uno es la misma con la que el modo se enciende en la
+                barra. Lo que se elige es el MODO, no la pantalla — dentro de
+                él siempre se abre por su portada. */}
+            <Seg<Medium>
+              value={settings.startMedium}
+              onPick={(v) => setSetting("startMedium", v)}
+              options={START_OPTIONS.map((o) => ({ v: o.medium, label: t(o.label) }))}
+            />
+            <div className="mute" style={{ fontSize: 12 }}>
+              {t("Reel opens on this mode's front page.")}
+            </div>
           </Row>
 
           <Row label={t("Language")}>
