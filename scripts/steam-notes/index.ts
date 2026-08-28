@@ -45,14 +45,28 @@ if (!URL_ || !KEY) {
   process.exit(1);
 }
 
-/** Tope por pasada. 600 juegos a 3 s son 30 minutos, holgado dentro de los 45
- *  del workflow. Lo que no entre se refresca mañana, por orden de cola: primero
- *  lo que nunca ha tenido nota. */
-const MAX_ITEMS = Number(process.env.MAX_ITEMS ?? 600);
+/** Tope por pasada. 400 juegos a unos cuatro segundos —el hueco más lo que la
+ *  tienda tarda en contestar dos veces— son unos 27 minutos, con margen dentro
+ *  de los 45 del workflow. El margen no es cortesía: si el trabajo se pasa del
+ *  tope, Actions lo mata y el rojo es diario, que es el rojo que nadie mira.
+ *  Lo que no entre se refresca mañana, por orden de cola: primero lo que nunca
+ *  ha tenido nota. */
+const MAX_ITEMS = Number(process.env.MAX_ITEMS ?? 400);
 
-/** El hueco entre juegos. Ver arriba: dos peticiones por juego, y el techo de la
- *  tienda es del orden de 200 cada 5 minutos. */
+/** Lo que se tarda por juego, hueco incluido: la mitad entre sus dos peticiones
+ *  y la mitad antes del siguiente. Ver arriba: el techo de la tienda es del
+ *  orden de 200 peticiones cada 5 minutos, y esto deja el ritmo en 40. */
 const GAP_MS = Number(process.env.GAP_MS ?? 3000);
+
+/** Cuántos juegos seguidos pueden fallar antes de dar la pasada por perdida.
+ *
+ *  El 429 se detecta solo y corta, pero no es la única forma que tiene la tienda
+ *  de cerrar la puerta: un 403, un 503 o un DNS que no resuelve se cuentan como
+ *  "este juego ha fallado" y, si es la IP la que está vetada, eso son cuarenta
+ *  minutos preguntando a una pared. Veinte seguidos es mucho más de lo que da
+ *  una racha normal —los fallos sueltos van repartidos— y mucho menos que la
+ *  pasada entera. */
+const MAX_SEGUIDOS = 20;
 
 /** Tope por petición. Sin señal, `fetch` espera para siempre, y un solo juego
  *  colgado se llevaría por delante los 45 minutos del trabajo. */
@@ -96,6 +110,7 @@ const startedAt = new Date().toISOString();
 let escritos = 0;
 let sinNota = 0;
 let fallidos = 0;
+let seguidos = 0;
 let bloqueado = false;
 
 const juegos = await readAll<Game>(
@@ -150,8 +165,14 @@ for (const juego of cola.slice(0, MAX_ITEMS)) {
       break;
     }
     fallidos += 1;
+    seguidos += 1;
     console.log(`  sin notas: ${juego.name} (${(e as Error).message})`);
-    await sleep(GAP_MS);
+    if (seguidos >= MAX_SEGUIDOS) {
+      bloqueado = true;
+      console.log(`${MAX_SEGUIDOS} juegos seguidos sin respuesta: no es el juego, es la puerta. Paro.`);
+      break;
+    }
+    await sleep(GAP_MS / 2);
     continue;
   }
 
@@ -160,9 +181,16 @@ for (const juego of cola.slice(0, MAX_ITEMS)) {
      a la cabeza de la cola hasta dentro de una semana. */
   if (!reseñas.touch && !nota.touch) {
     fallidos += 1;
-    await sleep(GAP_MS);
+    seguidos += 1;
+    if (seguidos >= MAX_SEGUIDOS) {
+      bloqueado = true;
+      console.log(`${MAX_SEGUIDOS} juegos seguidos sin respuesta: no es el juego, es la puerta. Paro.`);
+      break;
+    }
+    await sleep(GAP_MS / 2);
     continue;
   }
+  seguidos = 0;
 
   /* `update` y no `upsert`: cada juego escribe un juego DISTINTO de columnas
      —las que hayan contestado—, y el upsert de PostgREST manda un INSERT con la
@@ -184,7 +212,7 @@ for (const juego of cola.slice(0, MAX_ITEMS)) {
   escritos += 1;
   if (reseñas.value == null && nota.value == null) sinNota += 1;
   if (escritos % 50 === 0) console.log(`  ${escritos}/${Math.min(cola.length, MAX_ITEMS)}…`);
-  await sleep(GAP_MS);
+  await sleep(GAP_MS / 2);
 }
 
 console.log(

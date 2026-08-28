@@ -45,7 +45,7 @@ on:
     inputs:
       max_items:
         description: "Tope de juegos que preguntar en esta pasada"
-        default: "600"
+        default: "400"
       gap_ms:
         description: "Hueco entre juegos, en ms (dos peticiones por juego)"
         default: "3000"
@@ -94,6 +94,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          MAX_ITEMS: ${{ github.event.inputs.max_items || '600' }}
+          MAX_ITEMS: ${{ github.event.inputs.max_items || '400' }}
           GAP_MS: ${{ github.event.inputs.gap_ms || '3000' }}
         run: npm start

@@ -323,7 +323,7 @@ de InfiniteBacklog), que ni lo intentaban.
 
 Dos peticiones por juego —`appreviews` y `appdetails?filters=metacritic`— con
 tres segundos de hueco, porque el techo de la tienda es del orden de doscientas
-cada cinco minutos. De ahí el tope de 600 juegos por pasada: el atasco de los
+cada cinco minutos. De ahí el tope de 400 juegos por pasada: el atasco de los
 que nunca han tenido nota se drena a tandas, y cada juego ya preguntado no
 vuelve a la cola hasta siete días después (`STALE_MS` en `lib.ts`).
 
