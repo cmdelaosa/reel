@@ -1,27 +1,29 @@
-import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
-import { CalendarClock, ChevronLeft, ChevronRight, Clapperboard, Clock, Eye, Film, Gamepad2, History, LayoutGrid, Share2, Star, Timer, Trophy, Tv, Users } from "lucide-react";
+import { useMemo, type ComponentType } from "react";
+import { useNavigate } from "react-router";
+import { CalendarClock, ChevronRight, Clapperboard, Clock, Eye, Film, Gamepad2, History, LayoutGrid, Share2, Star, Timer, Trophy, Tv, Users } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useLibraryRows } from "@/lib/library";
-import { useMyRatings, type RatedRow } from "@/lib/ratings";
+import { useMyRatings } from "@/lib/ratings";
 import { useWatchHistory } from "@/lib/history";
 import { buildWall } from "@/domain/activityWall";
 import { tasteBlocks } from "@/domain/tasteProfile";
 import { mediumPlural } from "@/domain/mediumCopy";
-import { MEDIA, sheetParam, type Medium } from "@/domain/tasteScope";
+import { ratingsRoute, ratingsSummary, ratingsSummaryLine } from "@/domain/ratingsList";
+import { MEDIA } from "@/domain/tasteScope";
 import { useUserStats, timeSpentLabel } from "@/lib/stats";
-import { thumbArt } from "@/lib/artwork";
-import { dateLocale, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
-import { Stars } from "@/ui";
-import { MediumGlyph } from "@/ui/MediumGlyph";
+import { t as tr, tv } from "@/lib/i18n";
 import { StatsSkeleton } from "@/ui/Skeleton";
-import { hueOf, posterBg } from "@/ui/posterBg";
+import { hueOf } from "@/ui/posterBg";
 import { ActivityWall } from "@/features/social/ActivityWall";
 import { TasteBlocks } from "@/features/social/TasteBlocks";
 import { WatchHeatmap } from "@/features/you/WatchHeatmap";
 
-/* You — profile header + your ratings (sort + 15/page). Port of prototype
-   marquee.tsx → You; the stats grid lands in P2-C9.
+/* You — profile header, your libraries, your ratings and your activity. Port of
+   prototype marquee.tsx → You; the stats grid lands in P2-C9.
+
+   La lista de notas ya no está aquí: era la última sección, la más larga de la
+   página (1.460 filas paginadas) y la única puerta a tus notas. Ahora hay tres
+   tarjetas —una por medio— que abren su pantalla (features/you/RatingsPage).
 
    Esta página NO mira el conmutador de medio: es el único sitio donde te ves
    entero, con las series, el cine y los juegos a la vez. Por eso los gustos son
@@ -29,54 +31,37 @@ import { WatchHeatmap } from "@/features/you/WatchHeatmap";
    activityWall) y la rejilla de actividad tiñe cada día del medio que más pesó
    en él. */
 
-const RATE_PAGE = 15;
-type RateSort = "new" | "old" | "best" | "worst";
-/** El filtro de medio de tus notas. "all" es un cuarto valor y no la ausencia
- *  del filtro: es lo que la barra tiene seleccionado al abrir. */
-type RateMedium = Medium | "all";
-
 /* Cuántas filas del historial alimentan el muro. Es la primera página de
    `useWatchHistory`, que ya está pedida en cuanto abres Historial, así que aquí
    no cuesta un viaje nuevo: 60 episodios dan de sobra para las doce filas que
    el muro enseña de entrada, incluso plegando poco. */
 const WALL_FROM_HISTORY = 60;
 
-function ratedAtLabel(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (days <= 0) return tr("today");
-  if (days === 1) return tr("yesterday");
-  if (days < 30) return tv("{days} days ago", { days });
-  return new Date(iso).toLocaleDateString(dateLocale(), { month: "short", year: "numeric" });
-}
-
-function RatingRow({ r, onOpen }: { r: RatedRow; onOpen: () => void }) {
-  const t = r.titles;
-  /* La carátula sale de una fuente distinta según el medio: un juego guarda un
-     hash de IGDB donde series y cine guardan una ruta de TMDB (0071). thumbArt
-     lo resuelve; tmdbImg a secas devolvía una URL bien formada que responde 404
-     sin quejarse — o sea, todas tus notas de juegos sin carátula y ni un error
-     en consola que lo explicara. */
-  const art = thumbArt(t.kind, t.poster_path);
-  const esNames = useEsNames();
-  const name = locName(esNames, t.tmdb_id, t.name, t.kind);
+/* Una tarjeta de acceso del perfil: icono, rótulo, un renglón pequeño con la
+   cifra y la flecha. La usan las dos filas de arriba —tus bibliotecas y tus
+   notas—, que tienen que verse iguales porque son lo mismo: puertas a otra
+   pantalla con un número que dice qué hay al otro lado. */
+function AccessCard(
+  { icon: Icon, label, sub, onClick }:
+  { icon: ComponentType<{ size?: number }>; label: string; sub: string; onClick: () => void },
+) {
   return (
-    <div className="card mq-row" onClick={onOpen}>
-      <div className="mq-row-art" style={art ? undefined : { background: posterBg(name) }}>
-        {art && <img src={art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
-        <div className="poster-sheen" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="mq-row-title truncate" style={{ marginTop: 0 }}>{name}</div>
-        <div className="dim truncate" style={{ fontSize: 12.5 }}>
-          {[t.first_air_date?.slice(0, 4), tGenre(t.genres[0] ?? ""), `${tr("rated")} ${ratedAtLabel(r.created_at)}`].filter(Boolean).join(" · ")}
-        </div>
-        <div style={{ marginTop: 4 }}><Stars score={r.score} size={13} /></div>
-      </div>
-      {/* De qué medio es la nota. Tus notas son de los tres y sin esto la única
-          pista era la carátula, que en un juego y en una película se parecen. */}
-      <MediumGlyph kind={t.kind} />
-      <div className="mq-score">{r.score}<span>/10</span></div>
-    </div>
+    <button className="card p-4 flex items-center gap-3 text-left" style={{ cursor: "pointer" }} onClick={onClick}>
+      <span
+        className="grid place-items-center"
+        style={{
+          width: 38, height: 38, borderRadius: "var(--r-sm)", flex: "0 0 auto",
+          background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)",
+        }}
+      >
+        <Icon size={18} />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span style={{ display: "block", fontWeight: 750, fontSize: 15 }}>{label}</span>
+        <span className="mute" style={{ display: "block", fontSize: 12.5 }}>{sub}</span>
+      </span>
+      <ChevronRight size={17} className="mute" />
+    </button>
   );
 }
 
@@ -86,51 +71,17 @@ export default function YouPage() {
   const { data: stats } = useUserStats();
   const { data: library = [] } = useLibraryRows();
   const { data: history } = useWatchHistory();
-  const [sort, setSort] = useState<RateSort>("new");
-  const [rateMedium, setRateMedium] = useState<RateMedium>("all");
-  const [page, setPage] = useState(0);
-  const [, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const byNew = (a: RatedRow, b: RatedRow) => b.created_at.localeCompare(a.created_at);
-  const rated = [...ratings]
-    .filter((r) => rateMedium === "all" || r.titles.kind === rateMedium)
-    .sort((a, b) => {
-      if (sort === "new") return byNew(a, b);
-      if (sort === "old") return -byNew(a, b);
-      if (sort === "best") return b.score - a.score || byNew(a, b);
-      return a.score - b.score || byNew(a, b);
-    });
-
-  const pageCount = Math.max(1, Math.ceil(rated.length / RATE_PAGE));
-  const clamped = Math.min(page, pageCount - 1);
-  const start = clamped * RATE_PAGE;
-  const shown = rated.slice(start, start + RATE_PAGE);
-
-  /* Tus notas son de los tres medios, así que cada fila se abre con el
-     parámetro del suyo: `?title=` sobre una película llevaba a la ficha de la
-     serie con ese número —o a ninguna—, porque el id solo es único dentro de su
-     medio (domain/tasteScope, `sheetParam`). */
-  const open = (tmdbId: number, kind: Medium) =>
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set(sheetParam(kind), String(tmdbId));
-      return next;
-    });
-
-  const sorts: { v: RateSort; label: string }[] = [
-    { v: "new", label: tr("Newest") },
-    { v: "old", label: tr("Oldest") },
-    { v: "best", label: tr("Best rated") },
-    { v: "worst", label: tr("Worst rated") },
-  ];
-
-  /* El filtro de medio solo se ofrece si hay más de uno que filtrar: con notas
-     de un medio solo, cuatro pestañas de las que tres devuelven vacío. */
-  const ratedMedia = useMemo(() => {
-    const present = new Set(ratings.map((r) => r.titles.kind));
-    return MEDIA.filter((m) => present.has(m));
-  }, [ratings]);
+  /* Cuántas notas tienes de cada medio y con qué media, que es lo que prometen
+     las tres tarjetas de abajo. La lista en sí ya no vive aquí: cada medio tiene
+     su pantalla (features/you/RatingsPage), y la cuenta que enseña la tarjeta y
+     las filas que enseña esa pantalla salen del mismo módulo para que no puedan
+     decir cosas distintas (domain/ratingsList). */
+  const rateSummary = useMemo(
+    () => ratingsSummary(ratings.map((r) => ({ score: r.score, kind: r.titles.kind }))),
+    [ratings],
+  );
 
   /* Tu perfil de gustos, uno por medio. Leía `useLibrary()`, que filtra a
      series desde 0067: "tus gustos" eran los de un tercio de lo que usas. */
@@ -225,29 +176,56 @@ export default function YouPage() {
       {/* My Shows + History moved off the top tabs — they live here now */}
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
         {links.map((l) => (
-          <button
-            key={l.path}
-            className="card p-4 flex items-center gap-3 text-left"
-            style={{ cursor: "pointer" }}
-            onClick={() => navigate(l.path)}
-          >
-            <span
-              className="grid place-items-center"
-              style={{
-                width: 38, height: 38, borderRadius: "var(--r-sm)", flex: "0 0 auto",
-                background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)",
-              }}
-            >
-              <l.icon size={18} />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span style={{ display: "block", fontWeight: 750, fontSize: 15 }}>{l.label}</span>
-              <span className="mute" style={{ display: "block", fontSize: 12.5 }}>{l.sub}</span>
-            </span>
-            <ChevronRight size={17} className="mute" />
-          </button>
+          <AccessCard key={l.path} icon={l.icon} label={l.label} sub={l.sub} onClick={() => navigate(l.path)} />
         ))}
       </div>
+
+      {/* Tus notas: una puerta por medio, con su cuenta y su media.
+
+          Aquí había la lista entera —1.460 filas paginadas de quince en quince,
+          con su propio filtro de medio— y era la última sección de la página,
+          debajo del muro y del mapa de calor. Es lo más grande que tiene el
+          perfil y estaba donde menos se ve; ahora cada medio tiene su pantalla
+          (RatingsPage) y esto es lo que lleva a ella.
+
+          Los medios sin ni una nota no se pintan, la misma regla que los accesos
+          de arriba y las estadísticas de abajo: a quien solo ve series, dos
+          tarjetas a cero le dicen menos que nada. Y si no has puntuado nada de
+          nada, en vez de tres huecos va la frase que dice cómo se empieza. */}
+      <section className="flex flex-col gap-4">
+        <div className="mq-sechead">
+          <div>
+            <h2 className="section-title">{tr("Your ratings")}</h2>
+          </div>
+        </div>
+
+        {ratings.length === 0 ? (
+          <div className="card" style={{ padding: "28px 24px" }}>
+            <p className="dim" style={{ margin: 0, fontSize: 14 }}>
+              {tr("No ratings yet — open a show and tap the stars.")}
+            </p>
+          </div>
+        ) : (
+          /* auto-FILL y no auto-fit, que es lo que usa la fila de arriba: aquí
+             puede haber una sola tarjeta —quien solo puntúa series—, y con
+             auto-fit esa única se estira de lado a lado y parece un cartel. Con
+             auto-fill se queda del ancho de una tarjeta, en su sitio. */
+          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+            {MEDIA.filter((m) => rateSummary[m].count > 0).map((m) => (
+              <AccessCard
+                key={m}
+                icon={Star}
+                label={tr(mediumPlural(m))}
+                sub={tv(ratingsSummaryLine(m, rateSummary[m].count), {
+                  n: rateSummary[m].count.toLocaleString(),
+                  avg: rateSummary[m].avg!.toFixed(1),
+                })}
+                onClick={() => navigate(ratingsRoute(m))}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
       {!stats && <StatsSkeleton />}
       {stats && (
@@ -307,78 +285,6 @@ export default function YouPage() {
       <TasteBlocks blocks={taste} />
 
       <ActivityWall items={wall} isMe />
-
-      <section className="flex flex-col gap-4">
-        <div className="mq-sechead">
-          <div>
-            <h2 className="section-title">{tr("Your ratings")}</h2>
-          </div>
-        </div>
-
-        <div className="mq-rate-toolbar">
-          <div className="segmented scroll no-scrollbar">
-            {sorts.map((s) => (
-              <div key={s.v} className={`seg ${sort === s.v ? "seg-active" : ""}`} onClick={() => { setSort(s.v); setPage(0); }}>
-                {s.label}
-              </div>
-            ))}
-          </div>
-          {ratedMedia.length > 1 && (
-            <div className="segmented scroll no-scrollbar">
-              {([["all", tr("All")] as const, ...ratedMedia.map((m) => [m, tr(mediumPlural(m))] as const)]).map(([v, label]) => (
-                <div
-                  key={v}
-                  className={`seg ${rateMedium === v ? "seg-active" : ""}`}
-                  onClick={() => { setRateMedium(v); setPage(0); }}
-                >
-                  {label}
-                </div>
-              ))}
-            </div>
-          )}
-          {rated.length > 0 && (
-            <span className="mute" style={{ fontSize: 12.5 }}>
-              {start + 1}–{Math.min(start + RATE_PAGE, rated.length)} {tr("of")} {rated.length}
-            </span>
-          )}
-        </div>
-
-        {rated.length === 0 && (
-          <div className="card" style={{ padding: "28px 24px" }}>
-            <p className="dim" style={{ margin: 0, fontSize: 14 }}>
-              {tr("No ratings yet — open a show and tap the stars.")}
-            </p>
-          </div>
-        )}
-
-        <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))" }}>
-          {shown.map((r) => (
-            <RatingRow key={r.id} r={r} onOpen={() => open(r.titles.tmdb_id, r.titles.kind)} />
-          ))}
-        </div>
-
-        {pageCount > 1 && (
-          <div className="mq-pager">
-            <button
-              className="btn btn-ghost btn-sm"
-              disabled={clamped === 0}
-              style={{ opacity: clamped === 0 ? 0.4 : 1, pointerEvents: clamped === 0 ? "none" : "auto" }}
-              onClick={() => setPage(clamped - 1)}
-            >
-              <ChevronLeft size={15} />{tr("Prev")}
-            </button>
-            <span>{tr("Page")} {clamped + 1} {tr("of")} {pageCount}</span>
-            <button
-              className="btn btn-ghost btn-sm"
-              disabled={clamped === pageCount - 1}
-              style={{ opacity: clamped === pageCount - 1 ? 0.4 : 1, pointerEvents: clamped === pageCount - 1 ? "none" : "auto" }}
-              onClick={() => setPage(clamped + 1)}
-            >
-              {tr("Next")}<ChevronRight size={15} />
-            </button>
-          </div>
-        )}
-      </section>
     </div>
   );
 }
