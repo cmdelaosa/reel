@@ -536,38 +536,49 @@
    *  vale es la SEGUNDA. Y el signo lo da el rótulo de la izquierda, que dice
    *  "Vendido"/"Comprado" en tu idioma — así que no se lee el texto, se lee la
    *  clase `market_listing_gainorloss`, que es "+" o "-" en todos. */
-  /** El appid de cada fila, sacado del bloque `hovers` de la respuesta.
+  /** Qué objeto es cada fila, sacado del bloque `hovers` de la respuesta.
    *
-   *  La fila del HTML no lo lleva por ningún lado: ni enlace a la ficha, ni
-   *  atributo, ni el appid dentro de la URL de la imagen. Solo el NOMBRE del
-   *  juego, que es texto traducido y no sirve de llave. Y sin appid, una compra
-   *  no se puede casar con lo que tienes: `costBasis` compara por (appid,
+   *  El HTML de la fila no basta para identificar lo que se compró. No trae el
+   *  appid por ninguna parte —ni enlace a la ficha, ni atributo, ni dentro de la
+   *  URL de la imagen— y el nombre que enseña es el NOMBRE PARA LEER, que en
+   *  753 no es el nombre de mercado:
+   *
+   *      lo que enseña la fila   "City Park"
+   *      lo que vale como llave  "639900-City Park"
+   *
+   *  Y la llave importa porque es la que usan tus objetos y la tabla de precios.
+   *  Con el nombre de leer, las 680 compras de cromos y fondos no casaban con
+   *  ninguno de los 532 que tienes: cero. Y `costBasis` compara por (appid,
    *  nombre) a propósito, porque un cromo de 753 y una caja de 730 pueden
    *  llamarse igual y valer cosas distintas.
    *
-   *  La consecuencia, hasta hoy: 12.026 compras y ventas guardadas con `appid`
-   *  a null, un coste base vacío, y una pantalla afirmando que los 608 objetos
-   *  "salieron de cajas o intercambios y no costaron nada" con 9.319 compras
-   *  registradas debajo.
+   *  Steam manda las dos cosas al lado del HTML. El bloque `hovers` empareja
+   *  cada fila con su objeto:
    *
-   *  Steam sí lo dice, en el JavaScript que acompaña al HTML: una línea por
-   *  fila, con el id de la fila y el appid dentro.
+   *      CreateItemHoverFromContainer( g_rgAssets, 'history_row_A_B_name', 730, '2', '27461336399', 0 );
    *
-   *      CreateItemHoverFromContainer( g_rgAssets, 'history_row_A_B_name', 730, '2', '…', 0 );
-   *
-   *  Comprobado el 28-08-2026 contra una página de verdad: 20 filas, 20
-   *  casadas. */
-  function appidsFromHovers(hovers) {
+   *  y `assets[appid][contexto][assetid]` tiene la ficha, `market_hash_name`
+   *  incluido. Comprobado el 28-08-2026 contra páginas de verdad: 20 filas, 20
+   *  emparejadas, y los 753 saliendo con su prefijo. */
+  function assetRefsFromHovers(hovers) {
     const out = new Map();
     const re =
-      /CreateItemHoverFromContainer\(\s*g_rgAssets,\s*'(history_row_[^']+?)_(?:name|image)',\s*(\d+)/g;
+      /CreateItemHoverFromContainer\(\s*g_rgAssets,\s*'(history_row_[^']+?)_(?:name|image)',\s*(\d+),\s*'(\d+)',\s*'(\d+)'/g;
     for (const m of String(hovers || "").matchAll(re)) {
-      if (!out.has(m[1])) out.set(m[1], Number(m[2]));
+      if (!out.has(m[1])) {
+        out.set(m[1], { appid: Number(m[2]), context: m[3], assetid: m[4] });
+      }
     }
     return out;
   }
 
-  function parseHistory(html, appids = new Map()) {
+  /** La ficha del objeto de una fila, si viene en el volcado de `assets`. */
+  function assetOf(assets, ref) {
+    if (!ref || !assets) return null;
+    return assets?.[String(ref.appid)]?.[ref.context]?.[ref.assetid] ?? null;
+  }
+
+  function parseHistory(html, refs = new Map(), assets = null) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const rows = [];
     /* Las filas VISTAS, aparte de las entendidas. Una página entera de "puesto
@@ -586,12 +597,14 @@
         .filter(Boolean);
       const name = (el.querySelector(".market_listing_item_name")?.textContent || "").trim();
       const appEl = el.querySelector(".market_listing_game_name");
+      const ref = refs.get(id);
+      const asset = assetOf(assets, ref);
       rows.push({
         external_id: id,
         /* Sin appid la fila entra igual —el dinero cuenta en el realizado con
            nombre o sin él— pero se queda fuera del coste base, y eso hay que
            poder distinguirlo de "no la hemos guardado". */
-        appid: appids.get(id) ?? null,
+        appid: ref?.appid ?? null,
         /* La fecha de Steam es "24 ago" sin año: la reconstruye el servidor
            con el orden de las filas, que llegan de más nueva a más vieja. Aquí
            se sube tal cual y también el índice, que es lo que no se puede
@@ -600,7 +613,10 @@
         kind: sign === "+" ? "market_sell" : "market_buy",
         /* Signo desde tu cartera: una venta la llena, una compra la vacía. */
         amount_cents: sign === "+" ? amount : -amount,
-        market_hash_name: name || null,
+        /* El de la ficha manda; el raspado del HTML es el respaldo para cuando
+           `assets` no traiga ese objeto. Que sean distintos no es un detalle:
+           en 753 son namespaces diferentes y con el equivocado no casa nada. */
+        market_hash_name: asset?.market_hash_name || name || null,
         app_name: (appEl?.textContent || "").trim() || null,
       });
     }
@@ -639,7 +655,8 @@
     if (expected === null && Number.isFinite(total) && total > 0) expected = total;
     const { rows, seen } = parseHistory(
       data.results_html || "",
-      appidsFromHovers(data.hovers),
+      assetRefsFromHovers(data.hovers),
+      data.assets,
     );
     ledger.push(...rows.map((r, i) => ({ ...r, order: start + i })));
     log(`  ${ledger.length} de ${expected ?? "?"}…`);
