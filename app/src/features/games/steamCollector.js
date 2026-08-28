@@ -69,14 +69,40 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /** El SteamID64 de quien está mirando. `g_steamID` lo pone Steam tanto en la
-   *  comunidad como en la tienda cuando hay sesión; si vale false, no la hay. */
-  const steamId = String(window.g_steamID || "");
+  /** El SteamID64 de quien está mirando, que cada pestaña guarda en otro sitio.
+   *
+   *  `g_steamID` lo pone la comunidad. La TIENDA no lo pone —ahí hay
+   *  `g_AccountID`, que son los 32 bits bajos del mismo número, y el bloque
+   *  `#application_config` con la ficha entera—, así que mirar solo el primero
+   *  mandaba media pasada al "no veo tu sesión" con la sesión abierta y el
+   *  nombre en la esquina. Y el aviso de abajo remataba el enredo mandándote a
+   *  la comunidad, que es justo la pestaña que NO tiene lo que ibas a leer. */
+  function whoAmI() {
+    const direct = String(window.g_steamID || "");
+    if (/^\d{17}$/.test(direct)) return direct;
+    try {
+      const cfg = document.getElementById("application_config");
+      const id = String(JSON.parse(cfg?.dataset?.userinfo || "{}").steamid || "");
+      if (/^\d{17}$/.test(id)) return id;
+    } catch {
+      /* Ese bloque cambia de forma cada temporada. Si hoy no se deja leer,
+         queda el accountid, que es aritmética y no depende de ningún HTML. */
+    }
+    const account = Number(window.g_AccountID || 0);
+    if (Number.isInteger(account) && account > 0) {
+      return String(BigInt(account) + 76561197960265728n);
+    }
+    return "";
+  }
+
+  const steamId = whoAmI();
   if (!/^\d{17}$/.test(steamId)) {
     alert(
       "No veo tu sesión de Steam.\n\n" +
-        "Abre https://steamcommunity.com/market/ , confirma que arriba a la " +
-        "derecha sale tu nombre, y vuelve a pegar esto en ESA pestaña.",
+        "Comprueba que arriba a la derecha sale tu nombre, en la pestaña donde " +
+        "vayas a pegar esto:\n\n" +
+        "  · https://steamcommunity.com/market/  — tu inventario\n" +
+        "  · https://store.steampowered.com/account/history/  — tu cartera",
     );
     return;
   }
@@ -227,6 +253,14 @@
   if (IS_STORE) {
     log("Leyendo el movimiento de tu cartera…");
 
+    /** El tipo de fila según el rótulo, que es una PISTA y no el veredicto.
+     *
+     *  La columna de tipo dice "Compra" también cuando recargas la cartera —lo
+     *  de "fondos" vive en otra celda, y con el historial en inglés ni eso—, así
+     *  que esta lista sola clasificaba las recargas de doce años como gasto en
+     *  la tienda: cero euros en "de tu bolsillo" y esos mismos euros contados
+     *  otra vez en la cesta de al lado. Quien decide es el signo del saldo, ahí
+     *  abajo; esto solo distingue lo que el signo no puede. */
     const kindOf = (label) => {
       const s = label.toLowerCase();
       if (/mercado|market/.test(s)) return null; // ya viene por myhistory
@@ -243,7 +277,7 @@
     const readTable = (doc) => {
       for (const el of doc.querySelectorAll(".wallet_table_row")) {
         const type = (el.querySelector(".wht_type")?.textContent || "").trim();
-        const kind = kindOf(type);
+        let kind = kindOf(type);
         if (kind === null) continue;
         const rawDate = (el.querySelector(".wht_date")?.textContent || "").trim();
         /* El cambio de saldo es la cifra que importa; `wht_total` es lo que
@@ -261,13 +295,24 @@
           : /^\+/.test(changeText)
             ? false
             : kind !== "wallet_topup" && kind !== "refund";
+        /* Y aquí el saldo corrige al rótulo. Un ingreso es un ingreso lo llame
+           Steam como lo llame y esté la página en el idioma que esté: si la
+           cartera SUBE y no es una devolución, ese dinero entró de tu bolsillo.
+           Al revés no hace falta hacerlo —lo que baja ya cae en su cesta por el
+           rótulo—, y forzarlo convertiría un reembolso en una compra. */
+        if (!negative && kind !== "refund") kind = "wallet_topup";
         /* Un id que sobreviva a que la lista crezca por arriba: la posición no
            vale —mañana esta fila estará una más abajo y se importaría dos
            veces—, así que se compone con lo que no cambia. El saldo resultante
            desempata dos filas idénticas de años distintos, y el contador
-           desempata dos idénticas del mismo día. */
+           desempata dos idénticas del mismo día.
+           `kind` NO entra aquí, y esa ausencia es el arreglo: con él dentro,
+           corregir una clasificación —lo que acaba de pasar con las recargas—
+           le cambiaba el id a la fila, y la corregida entraba al lado de la
+           equivocada en vez de encima. Un id identifica la fila de Steam, no lo
+           que nosotros creamos hoy que significa. */
         const balance = (el.querySelector(".wht_total")?.textContent || "").trim();
-        const stem = `wallet_${rawDate}_${changeText}_${balance}_${kind}`;
+        const stem = `wallet_${rawDate}_${changeText}_${balance}`;
         const n = seen.get(stem) ?? 0;
         seen.set(stem, n + 1);
         rows.push({
@@ -286,9 +331,16 @@
     /* El resto llega por el botón de "cargar más", que es una petición con el
        cursor de la última fila. Sin sessionid no hay nada que pedir, y eso pasa
        si esto se pega en una página de la tienda que no es el historial. */
+    /* ¿Se ha leído el historial ENTERO? Reel barre las filas viejas de la
+       cartera cuando el volcado está completo —es la única forma de que
+       corregir una clasificación no deje la fila vieja al lado de la nueva—, y
+       barrer con una lectura a medias sería borrar años de movimientos porque
+       la tienda cortó en la página doce. Así que se dice la verdad. */
+    let complete = true;
     const sessionid = document.cookie.match(/sessionid=([^;]+)/)?.[1];
     const cursorEl = document.querySelector("#load_more_button, [data-cursor]");
     if (!sessionid || !cursorEl) {
+      complete = false;
       log("  No veo el botón de «cargar más»: esto va pegado en");
       log("  https://store.steampowered.com/account/history/");
     } else {
@@ -298,7 +350,12 @@
       } catch {
         cursor = null;
       }
-      for (let page = 0; cursor && page < 60; page++) {
+      /* Hay botón de "cargar más" pero su cursor no se deja leer: hay páginas
+         que no vamos a poder pedir, así que esto NO es una lectura completa por
+         mucho que el bucle no llegue a dar una vuelta. */
+      if (!cursor) complete = false;
+      let page = 0;
+      for (; cursor && page < 60; page++) {
         const body = new URLSearchParams({ sessionid });
         for (const [k, v] of Object.entries(cursor)) body.set(`cursor[${k}]`, String(v));
         const res = await fetch("/account/AjaxLoadMoreHistory/", {
@@ -308,25 +365,43 @@
           body,
         });
         if (!res.ok) {
+          complete = false;
           log(`  La tienda ha cortado en ${rows.length} filas (${res.status}).`);
           break;
         }
         const data = await res.json();
-        if (!data.html) break;
+        if (!data.html) {
+          /* Sin filas y sin cursor es el final de la lista. Sin filas PERO con
+             cursor es un tropiezo de Steam a media lectura, y tratarlo como
+             final autorizaría a barrer el libro entero con un tercio de las
+             filas en la mano. */
+          if (data.cursor) complete = false;
+          break;
+        }
         readTable(new DOMParser().parseFromString(data.html, "text/html"));
         log(`  ${rows.length} filas…`);
         cursor = data.cursor ?? null;
         await sleep(800);
       }
+      /* Se acabaron las páginas permitidas y Steam seguía dando cursor: hay más
+         historial del que cabe en una pasada. */
+      if (cursor && page >= 60) complete = false;
     }
 
-    log(`Cartera: ${rows.length} filas leídas${unknown ? `, ${unknown} sin entender` : ""}.`);
+    log(
+      `Cartera: ${rows.length} filas leídas${unknown ? `, ${unknown} sin entender` : ""}` +
+        `${complete ? "" : " (lectura incompleta)"}.`,
+    );
     if (!rows.length) {
       log("Ni una fila. Si estás en el historial y con sesión, avisa: el HTML");
       log("de la tienda habrá cambiado y hay que ajustar el recolector.");
       return;
     }
-    offer("Guardar cartera", `reel-steam-cartera-${steamId}.json`, { ...base, ledger: rows });
+    offer("Guardar cartera", `reel-steam-cartera-${steamId}.json`, {
+      ...base,
+      ledger: rows,
+      wallet_complete: complete,
+    });
     log("Pulsa el botón y súbelo en Reel → Juegos → Steam.");
     return;
   }

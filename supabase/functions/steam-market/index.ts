@@ -287,6 +287,9 @@ interface Dump {
   prices?: Any[];
   ledger?: Any[];
   history?: Any[];
+  /** Solo en el volcado de la cartera: el recolector pudo pasar TODAS las
+   *  páginas del historial. Es lo que autoriza a barrer lo viejo. */
+  wallet_complete?: boolean;
 }
 
 const int = (v: unknown): number | null => {
@@ -357,7 +360,11 @@ async function writeLedger(
   userId: string,
   rows: Any[],
   currency: number,
-): Promise<{ written: number; undated: number }> {
+  /** El volcado dice si pudo leer el historial de la cartera ENTERO. Solo
+   *  entonces se barre lo viejo: con una lectura a medias, barrer sería borrar
+   *  años de movimientos porque la tienda cortó en la página doce. */
+  walletComplete = false,
+): Promise<{ written: number; undated: number; swept: number }> {
   const dated = datesWithYear(
     rows.map((r, i) => ({
       externalId: String(r.external_id ?? ""),
@@ -395,13 +402,39 @@ async function writeLedger(
     })
     .filter(Boolean) as Any[];
 
+  const stamp = new Date().toISOString();
   for (const part of chunk(clean, PAGE)) {
     const { error } = await admin
       .from("steam_ledger")
-      .upsert(part, { onConflict: "user_id,external_id" });
+      .upsert(part.map((r: Any) => ({ ...r, collected_at: stamp })), {
+        onConflict: "user_id,external_id",
+      });
     if (error) throw new Error(`ledger: ${error.message}`);
   }
-  return { written: clean.length, undated };
+
+  /* Lo que el volcado de hoy ya no trae. Escribe primero y borra después, igual
+     que el inventario y por lo mismo: en este orden lo peor que puede pasar es
+     quedarse con filas de más, que el siguiente volcado limpia; al revés, un
+     fallo a la mitad te deja el libro vacío.
+
+     Solo las de la cartera —`wallet_…`—, nunca las del mercado, que llegan del
+     otro volcado y no están en esta lista. Y el `is null` es lo que arregla lo
+     ya escrito: las filas de antes de esta columna son las del volcado que
+     clasificaba mal las recargas, y se van en el primer barrido bueno. */
+  let swept = 0;
+  const wallet = clean.filter((r: Any) => String(r.external_id).startsWith("wallet_"));
+  if (walletComplete && wallet.length) {
+    const { data, error } = await admin
+      .from("steam_ledger")
+      .delete()
+      .eq("user_id", userId)
+      .like("external_id", "wallet\\_%")
+      .or(`collected_at.is.null,collected_at.lt.${stamp}`)
+      .select("id");
+    if (error) throw new Error(`barriendo la cartera: ${error.message}`);
+    swept = (data ?? []).length;
+  }
+  return { written: clean.length, undated, swept };
 }
 
 const KINDS = new Set([
@@ -637,9 +670,16 @@ Deno.serve(async (req) => {
         summary.prices = await writeClientPrices(admin, dump.prices, currency);
       }
       if (Array.isArray(dump.ledger) && dump.ledger.length) {
-        const r = await writeLedger(admin, userId, dump.ledger, currency);
+        const r = await writeLedger(
+          admin,
+          userId,
+          dump.ledger,
+          currency,
+          dump.wallet_complete === true,
+        );
         summary.ledger = r.written;
         summary.undated = r.undated;
+        if (r.swept) summary.swept = r.swept;
       }
       if (Array.isArray(dump.history) && dump.history.length) {
         summary.history = await writeHistory(admin, dump.history, currency);

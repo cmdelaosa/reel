@@ -243,6 +243,42 @@ export interface IngestSummary {
   ledger?: number;
   undated?: number;
   history?: number;
+  swept?: number;
+}
+
+/** Cuántas velas caben en una llamada a `/ingest`.
+ *
+ *  El histórico de sesenta objetos son cuarenta mil velas, y la función las
+ *  escribe en tandas de 500 una detrás de otra: ochenta y cinco viajes a la
+ *  base dentro de una sola invocación, que se pasa del tiempo que le dan y
+ *  devuelve un 5xx con todo el fichero ya subido. Troceado aquí, cada llamada
+ *  son quince tandas largas. El corte es por VELAS y no por objetos porque lo
+ *  que tarda son las filas: un objeto trae dos años de curva y otro dos
+ *  semanas. Y repetir es inofensivo — el upsert del histórico ignora las velas
+ *  que ya están—, así que un corte a la mitad se arregla volviendo a subir. */
+const CANDLES_PER_CALL = 8000;
+
+/** Parte el histórico en volcados que quepan de uno en uno. */
+function splitHistory(history: unknown[]): unknown[][] {
+  const parts: unknown[][] = [];
+  let current: unknown[] = [];
+  let candles = 0;
+  for (const item of history) {
+    const n = Array.isArray((item as { days?: unknown[] }).days)
+      ? (item as { days: unknown[] }).days.length
+      : 0;
+    /* Un objeto no se parte por dentro: 730 velas es un objeto entero y cabe de
+       sobra. Lo que se corta es dónde empieza el siguiente volcado. */
+    if (current.length && candles + n > CANDLES_PER_CALL) {
+      parts.push(current);
+      current = [];
+      candles = 0;
+    }
+    current.push(item);
+    candles += n;
+  }
+  if (current.length) parts.push(current);
+  return parts;
 }
 
 /** Sube un fichero del recolector.
@@ -282,10 +318,40 @@ export function useUploadSteamDump() {
            saber que no ha subido lo que creía. */
         throw new Error("El volcado viene vacío. Vuelve a pasar el recolector.");
       }
-      return (await call("/ingest", {
-        method: "POST",
-        body: JSON.stringify(dump),
-      })) as IngestSummary;
+      /* Lo que no es histórico va en una llamada, y el histórico en las suyas.
+         Se manda `dump` sin tocar salvo por el troceo: la función mira qué trae
+         cada volcado y escribe solo eso, así que un volcado sin `history` no
+         borra ningún histórico ni uno de solo `history` toca el inventario. */
+      const raw = dump as Record<string, unknown>;
+      const history = Array.isArray(raw.history) ? (raw.history as unknown[]) : [];
+      const rest = { ...raw };
+      delete rest.history;
+      const payloads: Record<string, unknown>[] = [];
+      if (parsed.data.holdings?.length || parsed.data.ledger?.length || parsed.data.prices?.length) {
+        payloads.push(rest);
+      }
+      /* Los trozos de histórico llevan la cabecera —versión, moneda, steam_id— y
+         NADA más. Con `rest` entero dentro, cada trozo re-escribía el inventario
+         y el libro otra vez: seis llamadas, seis barridos y un recibo diciendo
+         que has subido seis veces tus objetos. */
+      const header = { version: raw.version, steam_id: raw.steam_id, currency: raw.currency, collected_at: raw.collected_at };
+      for (const part of splitHistory(history)) payloads.push({ ...header, history: part });
+
+      /* En serie y no en paralelo: son escrituras a la misma tabla, y media
+         docena de llamadas a la vez es la forma de que la función se quede sin
+         conexiones justo cuando el fichero es grande, que es el caso que esto
+         viene a arreglar. */
+      const total: IngestSummary = {};
+      for (const payload of payloads) {
+        const part = (await call("/ingest", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        })) as IngestSummary;
+        for (const k of ["holdings", "prices", "ledger", "undated", "history", "swept"] as const) {
+          if (typeof part[k] === "number") total[k] = (total[k] ?? 0) + part[k];
+        }
+      }
+      return total;
     },
     onSettled: () => qc.invalidateQueries({ queryKey: qk.steamInventory }),
   });
