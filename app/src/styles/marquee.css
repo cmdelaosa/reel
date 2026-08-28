@@ -1939,15 +1939,19 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 }
 
 /* ---- Plataformas de un juego, como logotipos (ui/PlatformLogo) ----
-   La baldosa es neutra y el dibujo va en color de marca: al revés —el color de
+   La pastilla es neutra y el dibujo va en color de marca: al revés —el color de
    fondo de cada marca, como en las cadenas de televisión— una fila de ocho
    plataformas sería una fila de ocho rectángulos de colores gritando, y aquí
    son ocho a la vez, no uno.
 
-   El tamaño lo pone el componente (el icono + 14), así que esto solo dice
-   forma, fondo y qué pasa al pasar por encima. */
+   Pastilla y ya no baldosa: desde que los logotipos son los oficiales, uno por
+   modelo, la mitad son PALABRAS —«NINTENDO 64» mide casi siete veces más de
+   ancho que de alto— y en un cuadrado se quedan en una raya. El componente pone
+   el alto y el mínimo cuadrado (el dibujo + 14); el ancho lo pide cada marca y
+   estos 7 px de aire por lado son lo que la separa del borde cuando crece. */
 .plat-logo {
   display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  padding: 0 7px;
   border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border);
   transition: border-color .16s ease, background .16s ease, transform .16s ease;
 }
@@ -1956,13 +1960,11 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
      realce es lo que dice que hay algo que leer. */
   .plat-logo:hover { border-color: var(--border-strong); background: var(--surface-3); }
 }
-/* La misma baldosa cuando además es un botón: elegir en cuál lo juegas. */
-.plat-pick { cursor: pointer; padding: 0; }
-@media (hover: hover) { .plat-pick:hover { transform: translateY(-1px); } }
-.plat-pick-on {
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-}
+/* Aquí vivían `.plat-pick` y `.plat-pick-on`, la baldosa cuando además era el
+   botón de «en cuál lo juegas». Ese control es un desplegable desde 0086 y
+   ninguna de las dos clases la ponía ya nadie; se van ahora porque la de arriba
+   decía `padding: 0`, que es justo lo que la pastilla necesita para no
+   estrangular un wordmark. */
 
 /* ---- Perfil de gustos: un bloque por medio ----
    Tres columnas donde quepan, una donde no. `auto-fit` y no `auto-fill` a
@@ -2326,6 +2328,13 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .pick-value { flex: 1 1 auto; min-width: 0; text-align: left; }
 .pick-menu {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; min-width: 100%;
+  /* Y un techo, desde 0091: el menú crece con el logotipo más ancho que haya
+     dentro —«NINTENDO 64» son 110 px él solo— y crece hacia la IZQUIERDA,
+     porque va anclado a la derecha del botón. En un móvil de 360 con la ficha
+     de un juego de seis consolas viejas eso se salía por el lado de fuera de la
+     pantalla. Con el techo puesto, lo que sobra lo recorta el nombre, que para
+     eso lleva `truncate` — y el logotipo, que es lo que se reconoce, no. */
+  max-width: min(calc(100vw - 32px), 340px);
   /* Opaco DE VERDAD, con las dos partes sumando 100: la mezcla decía 90+5 y
      color-mix reparte en alfa lo que falta, así que el menú tenía un 5% de
      transparencia. Sobre un póster no se nota —el desenfoque de detrás lo

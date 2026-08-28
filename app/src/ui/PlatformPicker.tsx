@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { t as tr } from "@/lib/i18n";
-import { PlatformLogo } from "@/ui/PlatformLogo";
+import { playPlatform, type PlayPlatform } from "@/domain/platformModel";
+import { PlatformMarkIcon } from "@/ui/PlatformLogo";
 
 /* «En cuál lo juegas», como desplegable CON logotipo.
  *
@@ -16,6 +17,20 @@ import { PlatformLogo } from "@/ui/PlatformLogo";
  * (flechas, Home/End, Enter). Sin eso, quien navega con teclado se queda sin
  * poder cambiar de plataforma.
  *
+ * ── Lo que se ofrece es HARDWARE, no el nombre de IGDB ────────────────────
+ * IGDB da «PC (Microsoft Windows)», «Mac», «Linux» y «SteamOS» como cuatro
+ * plataformas distintas, y como respuesta a «dónde lo tengo» son la misma: PC.
+ * Así que las opciones salen de `playPlatform`, que agrupa el ordenador entero
+ * —y solo el ordenador: una PS4 no es una PS5, y el móvil se parte en iOS y
+ * Android porque son dos aparatos y dos compras. Agrupar obliga a DEDUPLICAR:
+ * un juego que salga en Windows, Mac y Linux tiene que ofrecer «PC» una vez, no
+ * tres iguales seguidas.
+ *
+ * Lo que se guarda es la ETIQUETA («PC», «PlayStation 5»), no el nombre de
+ * IGDB. Las entradas que ya tuvieran guardado el nombre viejo siguen valiendo
+ * porque las etiquetas se reconocen a sí mismas — hay un test que recorre el
+ * catálogo entero comprobándolo, y ese test es lo que ahorra la migración.
+ *
  * ── Volver a pulsar la puesta la quita ────────────────────────────────────
  * Es la regla de 0083, y se mantiene: «dónde lo juego» tiene UNA respuesta, y
  * cuando te lo llevas a la consola nueva esa respuesta cambia, no se acumula.
@@ -26,9 +41,11 @@ export function PlatformPicker({
   value,
   onPick,
 }: {
+  /** Los nombres de IGDB del juego, tal cual. */
   platforms: string[];
+  /** La etiqueta guardada — o un nombre de IGDB de antes de 0091. */
   value: string | null;
-  onPick: (name: string | null) => void;
+  onPick: (label: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [activo, setActivo] = useState(0);
@@ -37,9 +54,23 @@ export function PlatformPicker({
   const idBase = useId();
   const ref = useRef<HTMLDivElement | null>(null);
 
-  // Las opciones son las plataformas más «Ninguna» al final, que es lo que
-  // deja quitar la elección sin salir del control.
-  const opciones: (string | null)[] = [...platforms, null];
+  // Las opciones son el hardware del juego —deduplicado, en el orden en que
+  // IGDB los da— más «Ninguna» al final, que es lo que deja quitar la elección
+  // sin salir del control.
+  const opciones = useMemo<(PlayPlatform | null)[]>(() => {
+    const vistos = new Set<string>();
+    const hw: PlayPlatform[] = [];
+    for (const p of platforms) {
+      const opt = playPlatform(p);
+      if (vistos.has(opt.id)) continue;
+      vistos.add(opt.id);
+      hw.push(opt);
+    }
+    return [...hw, null];
+  }, [platforms]);
+
+  const puestaId = value ? playPlatform(value).id : null;
+  const puesta = opciones.find((o) => o?.id === puestaId) ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -50,16 +81,16 @@ export function PlatformPicker({
     return () => document.removeEventListener("pointerdown", fuera);
   }, [open]);
 
-  const elegir = (v: string | null) => {
+  const elegir = (v: PlayPlatform | null) => {
     setOpen(false);
-    onPick(v);
+    onPick(v?.label ?? null);
   };
 
   const teclas = (e: React.KeyboardEvent) => {
     if (!open) {
       if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
         e.preventDefault();
-        setActivo(Math.max(0, opciones.indexOf(value)));
+        setActivo(Math.max(0, opciones.findIndex((o) => o?.id === puestaId)));
         setOpen(true);
       }
       return;
@@ -88,25 +119,25 @@ export function PlatformPicker({
         onClick={() => setOpen((o) => !o)}
         onKeyDown={teclas}
       >
-        {value && <PlatformLogo name={value} size={16} bare />}
-        <span className="pick-value truncate">{value ?? tr("Not set")}</span>
+        {puesta && <PlatformMarkIcon model={puesta} size={16} />}
+        <span className="pick-value truncate">{puesta?.label ?? value ?? tr("Not set")}</span>
         <ChevronDown size={15} className="mute" aria-hidden />
       </button>
       {open && (
         <div className="pick-menu" role="listbox" aria-label={tr("Platform")}>
           {opciones.map((p, i) => (
             <div
-              key={p ?? "__ninguna"}
+              key={p?.id ?? "__ninguna"}
               id={`${idBase}-${i}`}
               role="option"
-              aria-selected={p === value}
-              className={`pick-opt${p === value ? " on" : ""}${i === activo ? " activa" : ""}`}
+              aria-selected={p?.id === puestaId}
+              className={`pick-opt${p?.id === puestaId ? " on" : ""}${i === activo ? " activa" : ""}`}
               onPointerEnter={() => setActivo(i)}
               onClick={() => elegir(p)}
             >
-              {p ? <PlatformLogo name={p} size={15} bare /> : <span className="pick-hueco" />}
-              <span className="flex-1 min-w-0 truncate">{p ?? tr("Not set")}</span>
-              {p === value && <Check size={13} strokeWidth={3} />}
+              {p ? <PlatformMarkIcon model={p} size={15} /> : <span className="pick-hueco" />}
+              <span className="flex-1 min-w-0 truncate">{p?.label ?? tr("Not set")}</span>
+              {p?.id === puestaId && <Check size={13} strokeWidth={3} />}
             </div>
           ))}
         </div>
