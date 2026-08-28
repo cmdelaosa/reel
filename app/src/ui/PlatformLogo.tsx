@@ -39,6 +39,26 @@ function Trazo({ model, size }: { model: PlatformModel; size: number }) {
     return <Gamepad2 {...props} />;
   }
   const m = PLATFORM_MARKS[model.mark];
+  /* La Game Boy, la única de mapa de bits: se pinta como MÁSCARA y no como
+     <img>. Su PNG es un color casi negro sobre transparente, así que el canal
+     alfa ya es la silueta; el color lo pone el fondo y con eso se recolorea y
+     cambia de tema exactamente igual que un trazado. Puesta de <img> se veía
+     negra sobre negro. */
+  if ("mask" in m) {
+    const mask = { maskImage: `url(${m.mask})`, maskSize: "contain", maskRepeat: "no-repeat", maskPosition: "center" };
+    return (
+      <span
+        aria-hidden
+        style={{
+          display: "inline-block", flex: "0 0 auto",
+          width: size * m.r, height: size, backgroundColor: "currentColor",
+          ...mask,
+          WebkitMaskImage: mask.maskImage, WebkitMaskSize: mask.maskSize,
+          WebkitMaskRepeat: mask.maskRepeat, WebkitMaskPosition: mask.maskPosition,
+        }}
+      />
+    );
+  }
   return (
     <svg
       viewBox={m.vb}

@@ -45,6 +45,7 @@ export type PlatformFamily =
   | "android"
   | "linux"
   | "steam"
+  | "sega"
   | "web"
   | "arcade"
   | "other";
@@ -105,12 +106,28 @@ const RULES: Regla[] = [
   { re: /virtual boy/i, id: "virtualboy", label: "Virtual Boy", mark: "virtualboy", family: "nintendo" },
   { re: /game boy advance|^gba\b/i, id: "gba", label: "Game Boy Advance", mark: "gba", family: "nintendo" },
   { re: /game boy color|^gbc\b/i, id: "gbc", label: "Game Boy Color", mark: "gbc", family: "nintendo" },
-  // La Game Boy a secas no tiene SVG libre: cae en el wordmark de Nintendo, que
-  // al menos es suyo. El nombre escrito al lado es el que dice cuál es.
-  { re: /game boy/i, id: "gameboy", label: "Game Boy", mark: "nintendo", family: "nintendo" },
+  // La única marca que no existe en SVG en ningún sitio libre. Entra igual, de
+  // mapa de bits usado como máscara — ui/icons/platformMarks lo cuenta.
+  { re: /game boy/i, id: "gameboy", label: "Game Boy", mark: "gameboy", family: "nintendo" },
   { re: /nintendo 3ds|^3ds\b/i, id: "n3ds", label: "Nintendo 3DS", mark: "n3ds", family: "nintendo" },
   { re: /nintendo ds|^ds\b/i, id: "ds", label: "Nintendo DS", mark: "ds", family: "nintendo" },
   { re: /nintendo/i, id: "nintendo", mark: "nintendo", family: "nintendo" },
+
+  // ── Sega ─────────────────────────────────────────────────────────────────
+  // Familia propia desde 0092. Antes caían todas en `other`, o sea en el mando
+  // genérico: la Mega Drive, la Dreamcast y la Saturn salían con el mismo
+  // dibujo que un aparato que nadie ha sabido reconocer.
+  //
+  // Atari NO entra aquí, y no es un descuido: son dos empresas distintas y sin
+  // relación —Atari es de California y de 1972, Sega de Tokio— así que se queda
+  // en `other` hasta que alguien decida darle familia propia.
+  { re: /dreamcast/i, id: "dreamcast", label: "Dreamcast", mark: "dreamcast", family: "sega" },
+  // Sin `label`: Sega solo tiene UN dibujo, como Xbox, así que la consola la
+  // dice el nombre que traiga IGDB — «Sega Mega Drive/Genesis» tal cual.
+  {
+    re: /\bsega\b|mega drive|genesis|master system|game gear|\bsaturn\b|sg-?1000|\b32x\b|mega-?cd/i,
+    id: "sega", mark: "sega", family: "sega",
+  },
 
   // ── Ordenador ────────────────────────────────────────────────────────────
   // Antes que Windows y que Linux, y no por gusto: una Steam Deck es las dos

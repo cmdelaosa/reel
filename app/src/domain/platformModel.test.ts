@@ -49,9 +49,27 @@ describe("platformModel — el aparato exacto", () => {
     expect(platformModel("Steam Deck (Linux)").mark).toBe("steamdeck");
   });
 
-  it("la Game Boy a secas no tiene SVG libre y cae en el de Nintendo", () => {
-    expect(platformModel("Game Boy").mark).toBe("nintendo");
+  it("la Game Boy tiene la suya, aunque sea un mapa de bits", () => {
+    expect(platformModel("Game Boy").mark).toBe("gameboy");
     expect(platformModel("Game Boy").label).toBe("Game Boy");
+    // Y no la roba ninguna de las otras dos Game Boy, que van antes.
+    expect(platformModel("Game Boy Color").mark).toBe("gbc");
+    expect(platformModel("Game Boy Advance").mark).toBe("gba");
+  });
+
+  it("Sega tiene familia, y Atari no es Sega", () => {
+    for (const n of ["Sega Mega Drive/Genesis", "Sega Master System/Mark III", "Sega Saturn",
+      "Sega Game Gear", "Sega 32X", "SG-1000", "Sega CD"]) {
+      expect(platformModel(n), n).toMatchObject({ mark: "sega", family: "sega" });
+    }
+    // Sin etiqueta propia: hay un solo dibujo de Sega, como con Xbox, así que
+    // la consola la dice el nombre que trae IGDB.
+    expect(platformModel("Sega Mega Drive/Genesis").label).toBe("Sega Mega Drive/Genesis");
+    // La Dreamcast sí tiene marca propia, y es la única de la casa que la tiene.
+    expect(platformModel("Dreamcast")).toMatchObject({ mark: "dreamcast", label: "Dreamcast", family: "sega" });
+    // Atari es otra empresa: se queda fuera, con el mando genérico.
+    expect(platformModel("Atari 2600")).toMatchObject({ mark: null, family: "other" });
+    expect(platformModel("Atari Jaguar").family).toBe("other");
   });
 
   it("el ordenador, separado en la ficha", () => {
@@ -68,8 +86,8 @@ describe("platformModel — el aparato exacto", () => {
   });
 
   it("lo que no reconoce sale con su nombre y el mando genérico", () => {
-    expect(platformModel("Sega Mega Drive/Genesis")).toEqual({
-      id: "other", label: "Sega Mega Drive/Genesis", mark: null, family: "other",
+    expect(platformModel("Commodore 64")).toEqual({
+      id: "other", label: "Commodore 64", mark: null, family: "other",
     });
     expect(platformModel("Atari 2600").mark).toBeNull();
     expect(platformModel("").mark).toBeNull();
@@ -125,7 +143,8 @@ const CATALOGO = [
   "Nintendo Switch", "Nintendo Switch 2", "Game Boy", "Game Boy Color", "Game Boy Advance",
   "Virtual Boy", "Nintendo DS", "Nintendo DSi", "Nintendo 3DS", "New Nintendo 3DS",
   "iOS", "iPad", "Android", "Web browser", "Arcade", "Neo Geo MVS",
-  "Sega Mega Drive/Genesis", "Atari 2600",
+  "Sega Mega Drive/Genesis", "Sega Master System/Mark III", "Sega Saturn", "Dreamcast",
+  "Sega Game Gear", "Sega 32X", "SG-1000", "Atari 2600", "Atari Jaguar",
 ];
 
 /* ── El test que evita una migración ───────────────────────────────────────
@@ -166,7 +185,8 @@ describe("platformFamily — solo decide el color", () => {
     expect(platformFamily("Android")).toBe("android");
     expect(platformFamily("Web browser")).toBe("web");
     expect(platformFamily("Arcade")).toBe("arcade");
-    expect(platformFamily("Sega Mega Drive/Genesis")).toBe("other");
+    expect(platformFamily("Sega Mega Drive/Genesis")).toBe("sega");
+    expect(platformFamily("Atari 2600")).toBe("other");
     expect(platformFamily("")).toBe("other");
   });
 });
