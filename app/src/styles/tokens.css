@@ -57,6 +57,32 @@
      Used on the star glyph and the episode-graph line; numbers stay in --text so
      they keep contrast on the light theme. */
   --imdb: #f5c518;
+
+  /* ---- El color de marca de las plataformas de juegos (ui/PlatformLogo) ----
+     Uno por familia, no por modelo: la marca de la PS4 y la de la PS5 son el
+     mismo azul, y en una fila de ocho plataformas lo que ordena la vista es que
+     todo lo de Sony vaya junto de color.
+
+     Están aquí y no en el componente porque NO son el hexadecimal oficial: son
+     el oficial corregido para el fondo. El azul de PlayStation (#0070D1), el
+     verde de Xbox (#107C10) y el negro de Apple desaparecen sobre el #0b0d12
+     del tema oscuro, así que ahí van aclarados; en el tema claro se usa el
+     oficial tal cual y son Steam y Apple los que se oscurecen. Un token por
+     tema es lo único que resuelve las dos cosas a la vez.
+
+     Estos son los del oscuro y el OLED, que comparten fondo. */
+  --plat-playstation: #4c9ef0;
+  --plat-xbox: #3fb93f;
+  --plat-nintendo: #ff4b52;
+  --plat-windows: #3aa0ea;
+  --plat-apple: #e6eaf0;
+  --plat-android: #3ddc84;
+  --plat-linux: #fcc624;
+  --plat-steam: #66c0f4;
+  --plat-sega: #4fb3f0;
+  --plat-web: #8ab4f8;
+  --plat-arcade: #e2a3ff;
+  --plat-other: #a8b1c2;
 }
 
 /* ---- Corner radius presets ---- */
@@ -129,6 +155,22 @@
   --shadow: 0 10px 30px -16px rgba(31, 41, 68, 0.28);
   --shadow-lg: 0 30px 60px -22px rgba(31, 41, 68, 0.32);
   --scrim: rgba(20, 26, 40, 0.5);
+
+  /* Sobre blanco manda el hexadecimal oficial; los que se corrigen son los
+     otros dos: el celeste de Steam (#66c0f4) sobre una baldosa clara no se ve,
+     y la manzana vuelve a su negro. */
+  --plat-playstation: #0070d1;
+  --plat-xbox: #107c10;
+  --plat-nintendo: #e60012;
+  --plat-windows: #0078d4;
+  --plat-apple: #000000;
+  --plat-android: #2bb673;
+  --plat-linux: #c99700;
+  --plat-steam: #171a21;
+  --plat-sega: #0089cf;
+  --plat-web: #3b6fd4;
+  --plat-arcade: #9b4fd6;
+  --plat-other: #6b7688;
   color-scheme: light;
 }
 

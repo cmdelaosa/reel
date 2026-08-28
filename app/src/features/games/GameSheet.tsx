@@ -339,7 +339,11 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                     >
                       {owned ? <><Library size={12} />{tr("Owned")}</> : <><Plus size={12} />{tr("Not owned")}</>}
                     </button>
-                    <span className="flex items-center gap-1.5">
+                    {/* `flex-wrap` desde 0091: los logotipos son los oficiales
+                        por modelo y la mitad son palabras, así que una fila de
+                        seis plataformas viejas ya no mide seis cuadrados sino
+                        lo que midan; sin envolver, se salían del héroe. */}
+                    <span className="flex flex-wrap items-center gap-1.5">
                       {platforms.map((p) => (
                         <PlatformLogo
                           key={p}
