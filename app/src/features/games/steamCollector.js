@@ -584,7 +584,14 @@
    *  entero. Medido el 28-08-2026 sobre esta cuenta. */
   let expected = null;
   let ledgerComplete = true;
-  for (let start = 0; ; start += 100) {
+  /** Tope de páginas, que con `expected` a null es el ÚNICO tope que queda.
+   *
+   *  Sin él, un Steam que devolviera filas sin dar nunca un total creíble deja
+   *  el bucle girando para siempre en la pestaña de alguien, a una petición
+   *  cada segundo y pico. 300 páginas son 30.000 filas: el triple de la cuenta
+   *  más gorda que hemos visto, y aun así un número. */
+  const MAX_PAGES = 300;
+  for (let start = 0; start < MAX_PAGES * 100; start += 100) {
     let data;
     try {
       data = await get(`/market/myhistory/render/?query=&start=${start}&count=100`);
@@ -610,6 +617,14 @@
       break;
     }
     if (expected !== null && start + 100 >= expected) break;
+    /* Se acabaron las páginas permitidas y Steam seguía dando filas: hay más
+       historial del que cabe en una pasada, y eso es una lectura incompleta
+       como cualquier otra. */
+    if (start + 100 >= MAX_PAGES * 100) {
+      ledgerComplete = false;
+      log(`  Tope de ${MAX_PAGES} páginas: me quedo en ${ledger.length} filas.`);
+      break;
+    }
     await sleep(1200);
   }
   if (!ledgerComplete) {
