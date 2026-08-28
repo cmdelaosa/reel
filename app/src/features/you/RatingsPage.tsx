@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMyRatings, type RatedRow } from "@/lib/ratings";
 import { thumbArt } from "@/lib/artwork";
@@ -8,6 +8,7 @@ import { MEDIA, sheetParam, type Medium } from "@/domain/tasteScope";
 import { mediumPlural } from "@/domain/mediumCopy";
 import {
   RATE_SORTS,
+  averageScore,
   ratingsEmpty,
   ratingsRoute,
   ratingsSummaryLine,
@@ -112,7 +113,11 @@ export default function RatingsPage({ medium }: { medium: Medium }) {
      nota no está en la fila sino en el título que trae colgado. */
   const mine = useMemo(() => ratings.filter((r) => r.titles.kind === medium), [ratings, medium]);
   const rows = useMemo(() => sortRatings(mine, sort), [mine, sort]);
-  const avg = mine.length > 0 ? mine.reduce((n, r) => n + r.score, 0) / mine.length : null;
+  /* La media, de domain/ratingsList y no de un `reduce` de aquí: es la misma
+     cifra que promete la tarjeta del perfil, y con una cuenta en cada sitio se
+     separan solas. Memoizada porque son hasta 1.005 filas y esto se renderiza
+     con cada cambio de orden, de página y de ficha abierta. */
+  const avg = useMemo(() => averageScore(mine), [mine]);
 
   const pageCount = Math.max(1, Math.ceil(rows.length / RATE_PAGE));
   const clamped = Math.min(page, pageCount - 1);
@@ -142,18 +147,30 @@ export default function RatingsPage({ medium }: { medium: Medium }) {
 
   return (
     <div className="screen mq-page">
+      {/* La vuelta al perfil, que es la única puerta que trae hasta aquí: /you
+          no está en la barra ni en el dock, así que sin esto la pantalla es un
+          callejón del que solo se sale con el Atrás del navegador. El mismo
+          enlace, y con la misma pinta, que el de CollectionPage a Explorar. */}
+      <Link to="/you" className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start" }}>
+        <ChevronLeft size={15} />{tr("Your profile")}
+      </Link>
+
+      {/* Cabecera de PÁGINA (mq-header + mq-h1), no de sección: esto es una
+          pantalla, como la de una colección, y no un bloque dentro del perfil.
+          Va envuelta en mq-sechead para que el conmutador de medio se siente a
+          su derecha y baje solo cuando no quepa. */}
       <div className="mq-sechead">
-        <div>
-          <h1 className="section-title">{tr(ratingsTitle(medium))}</h1>
-          {mine.length > 0 && (
-            <div className="mute" style={{ fontSize: 12.5 }}>
+        <header className="mq-header">
+          <h1 className="mq-h1">{tr(ratingsTitle(medium))}</h1>
+          {avg != null && (
+            <p className="mq-sub mute">
               {tv(ratingsSummaryLine(medium, mine.length), {
                 n: mine.length.toLocaleString(),
-                avg: avg!.toFixed(1),
+                avg: avg.toFixed(1),
               })}
-            </div>
+            </p>
           )}
-        </div>
+        </header>
         {otros.length > 1 && (
           <div className="segmented scroll no-scrollbar">
             {otros.map((m) => (

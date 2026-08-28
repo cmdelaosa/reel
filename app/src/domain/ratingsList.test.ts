@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MEDIA, type Medium } from "@/domain/tasteScope";
 import {
+  averageScore,
   ratingsEmpty,
   ratingsRoute,
   ratingsSummary,
@@ -64,6 +65,29 @@ describe("sortRatings", () => {
 
   it("sin notas no revienta", () => {
     expect(sortRatings([], "new")).toEqual([]);
+  });
+});
+
+describe("averageScore", () => {
+  it("promedia lo que le den", () => {
+    expect(averageScore([{ score: 8 }, { score: 6 }, { score: 7 }])).toBe(7);
+  });
+
+  /* Null y no 0, que es lo que decide si la línea de la cabecera se pinta:
+     "media 0,0" diría que puntúas fatal lo que no has puntuado. */
+  it("sin notas: null", () => {
+    expect(averageScore([])).toBeNull();
+  });
+
+  /* Es la MISMA cuenta que la de la tarjeta del perfil — ese es el motivo de
+     que exista suelta— así que las dos tienen que dar lo mismo sobre las mismas
+     filas. */
+  it("da lo mismo que la media por medio de ratingsSummary", () => {
+    const cine = [
+      { score: 9, kind: "movie" as Medium },
+      { score: 4, kind: "movie" as Medium },
+    ];
+    expect(ratingsSummary([...cine, { score: 1, kind: "tv" as Medium }]).movie.avg).toBe(averageScore(cine));
   });
 });
 

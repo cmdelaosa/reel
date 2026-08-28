@@ -68,23 +68,32 @@ export interface MediumRatings {
   readonly avg: number | null;
 }
 
+/** La media de un montón de notas, o null si no hay ninguna.
+ *
+ *  Suelta y no escondida dentro de `ratingsSummary` porque la piden los dos
+ *  sitios: la tarjeta del perfil, que las quiere de los tres medios a la vez, y
+ *  la pantalla de un medio, que ya tiene sus filas filtradas y solo necesita
+ *  esta cuenta. Con un `reduce` en cada uno son dos cuentas de lo mismo que un
+ *  día dirán números distintos. */
+export const averageScore = (rows: readonly { readonly score: number }[]): number | null =>
+  rows.length > 0 ? rows.reduce((n, r) => n + r.score, 0) / rows.length : null;
+
 /** Cuántas notas tienes de cada medio y con qué media. Los tres siempre, aunque
  *  alguno esté a cero: quien pinta decide si esconde los vacíos, y así esta
  *  función no tiene que adivinarlo. */
 export function ratingsSummary(
   rows: readonly { readonly score: number; readonly kind: Medium }[],
 ): Record<Medium, MediumRatings> {
-  const total = new Map<Medium, { n: number; sum: number }>(MEDIA.map((m) => [m, { n: 0, sum: 0 }]));
+  const porMedio = new Map<Medium, { score: number }[]>(MEDIA.map((m) => [m, []]));
   for (const row of rows) {
-    const acc = total.get(row.kind);
-    if (!acc) continue; // un `kind` desconocido no infla la media de nadie
-    acc.n += 1;
-    acc.sum += row.score;
+    // Un `kind` que este cliente no conoce —un medio nuevo servido a un
+    // frontend viejo— no infla la media de nadie.
+    porMedio.get(row.kind)?.push(row);
   }
   return Object.fromEntries(
     MEDIA.map((m) => {
-      const { n, sum } = total.get(m)!;
-      return [m, { count: n, avg: n > 0 ? sum / n : null }];
+      const suyas = porMedio.get(m)!;
+      return [m, { count: suyas.length, avg: averageScore(suyas) }];
     }),
   ) as Record<Medium, MediumRatings>;
 }

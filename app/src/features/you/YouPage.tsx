@@ -67,7 +67,7 @@ function AccessCard(
 
 export default function YouPage() {
   const { profile } = useAuth();
-  const { data: ratings = [] } = useMyRatings();
+  const { data: ratings = [], isPending: ratingsPending } = useMyRatings();
   const { data: stats } = useUserStats();
   const { data: library = [] } = useLibraryRows();
   const { data: history } = useWatchHistory();
@@ -199,7 +199,12 @@ export default function YouPage() {
           </div>
         </div>
 
-        {ratings.length === 0 ? (
+        {/* Mientras la consulta viaja no se dice que no hay notas: `ratings`
+            vale `[]` hasta que responde —son 1.460 filas que llegan de cien en
+            cien (lib/paging)— y esta sección ya no está al final de la página
+            sino arriba, así que ese cartel sería lo primero que se lee, y es
+            mentira. */}
+        {ratingsPending ? null : ratings.length === 0 ? (
           <div className="card" style={{ padding: "28px 24px" }}>
             <p className="dim" style={{ margin: 0, fontSize: 14 }}>
               {tr("No ratings yet — open a show and tap the stars.")}
