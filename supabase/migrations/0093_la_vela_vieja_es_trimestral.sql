@@ -1,0 +1,32 @@
+-- 0093_la_vela_vieja_es_trimestral.sql
+--
+-- Solo un comentario: la fila de `steam_price_history` ya no es siempre un día.
+--
+-- 0088 escribió que esta tabla es «una vela por día y objeto», y era verdad
+-- mientras el recolector cortaba el histórico en 730 días. Desde este cambio no
+-- corta: trae lo que Steam guarda —desde 2013— y lo que hace con lo viejo es
+-- BAJAR LA RESOLUCIÓN. Los dos últimos años siguen día a día; más atrás va un
+-- punto por trimestre, fechado en su primer día con ventas.
+--
+-- Lo que hay que saber para leer esta tabla sin equivocarse:
+--   · una fila NO es un día: puede ser un trimestre entero resumido, y lo único
+--     que distingue una cosa de la otra es lo lejos que esté `day` de hoy;
+--   · `volume` de un punto trimestral es la suma del trimestre, no la de un día.
+--     Nadie lo lee todavía —la ficha dibuja `median_cents` y la reconstrucción
+--     de 0092 tampoco lo mira—, y por eso no se parte la columna en dos: se
+--     dice aquí y ya.
+--
+-- Lo que NO cambia, y es la razón de que esto sea un comentario y no una
+-- migración de datos: quien lee esta tabla ARRASTRA el precio de cada vela
+-- hasta la siguiente, porque Steam nunca escribió vela los días sin ventas y los
+-- huecos ya existían. Un punto que dura tres meses es un hueco más largo, no una
+-- forma nueva. Lo hacen las dos: `rpc_steam_value_series` en el `lead`/`priced`
+-- de 0092, y la gráfica de la ficha, que reparte el eje por fecha.
+--
+-- Ojo con el tope de la reconstrucción: `rpc_steam_value_series` mira como mucho
+-- `p_days` días (1095 por defecto), así que los puntos anteriores a tres años
+-- se guardan y se ven en la ficha de un objeto, pero no estiran la curva de la
+-- cartera. Ese tope es deliberado — 0092 lo explica.
+
+comment on table public.steam_price_history is
+  'Vela de precio por objeto, de market/pricehistory. Global. Diaria en los dos ultimos anos y TRIMESTRAL mas atras (el punto se fecha en su primer dia con ventas y volume es el del trimestre entero). Las velas del ultimo mes llegan por hora desde Steam y el recolector las agrega a dia.';
