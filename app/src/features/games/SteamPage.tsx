@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { AlertTriangle, CheckCircle2, Clock, Link2, Link2Off, Loader2, RefreshCw } from "lucide-react";
+import { SteamIcon } from "@/ui/icons/SteamIcon";
 import {
   startSteamLogin,
   useApplySteamImport,
@@ -193,17 +194,13 @@ export default function SteamPage() {
   const summary = (run?.summary ?? {}) as Record<string, unknown>;
   const num = (k: string) => Number(summary[k] ?? 0);
 
-  /* La revisión de la importación es lo único que necesita el ancho entero, y
-     ahora vive dentro de una sección: estando en Inventario, ensanchar la
-     página por una lista que no se ve deja el inventario nadando en una columna
-     que no le corresponde. */
-  const ancha = section === "import" && run?.state === "ready" && items.length > 0;
-
   return (
-    /* La columna de 760px se queda para conectar la cuenta y para el recibo —
-       son dos párrafos y cuatro botones—, y la revisión sale de ella. */
-    <div className="screen mq-page" style={{ maxWidth: ancha ? "none" : 760, marginInline: "auto" }}>
-      <h1 className="sr-only">{tr("Steam")}</h1>
+    /* Ancho entero, como el resto de la app. La columna de 760 tenía sentido
+       cuando esta pantalla eran dos párrafos y cuatro botones; con el
+       inventario dentro —608 objetos y su rejilla— lo que hacía era meter en
+       cinco columnas lo que en cualquier otra pantalla entra en nueve, y dejar
+       medio monitor en blanco a cada lado. */
+    <div className="screen mq-page">
 
       {message && (
         <p
@@ -220,28 +217,47 @@ export default function SteamPage() {
       )}
 
       {/* ── Paso 1: la cuenta ────────────────────────────────────────────── */}
-      <div className="card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div className="eyebrow">{tr("Steam account")}</div>
-        {linkPending ? (
-          <div className="skeleton" style={{ height: 44, borderRadius: "var(--r-md)" }} />
-        ) : link?.steamId ? (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2.5">
-              <CheckCircle2 size={20} style={{ color: "var(--accent)" }} />
-              <div>
-                <div style={{ fontWeight: 750 }}>{tr("Connected")}</div>
-                <div className="mute" style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}>
-                  {link.steamId}
-                </div>
-              </div>
+      {/* Conectada, la cuenta es CABECERA y no tarjeta. Una tarjeta de veinte
+          píxeles de relleno para decir «conectada» y dos botones era el bloque
+          más alto de la pantalla diciendo lo que menos cambia, y encima no se
+          parecía a ninguna otra página: el resto de la casa abre con h1, frase
+          y acciones a la derecha (mq-sechead + mq-h1 + mq-sub). Esto es eso.
+
+          Sin conectar sí hay tarjeta, debajo: ahí hay algo que explicar —qué se
+          lee, qué no se publica y lo del perfil público— y eso son párrafos,
+          no una fila de botones. */}
+      <div className="mq-sechead">
+        <div>
+          <h1 className="mq-h1">{tr("Steam")}</h1>
+          <p className="mq-sub dim">{tr("Your market inventory, and the games you bring into Reel.")}</p>
+        </div>
+        {link?.steamId && (
+          /* Con wrap, y no solo en la fila de fuera: los dos botones juntos
+             piden más que un teléfono, y en móvil eso no saca barra de
+             desplazamiento —encoge la página entera y se lleva el dock fuera
+             del área táctil—. Ver e2e/steam-header-fit.spec.ts. */
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* El id entero son diecisiete dígitos que no dicen nada a nadie y
+                se comían la fila. Los cuatro de cada punta bastan para
+                reconocer la cuenta, y el resto está en el title para quien lo
+                necesite de verdad. */}
+            <div
+              className="chip"
+              title={link.steamId}
+              style={{
+                height: "var(--ctl-h)", borderRadius: "var(--r)",
+                background: "var(--surface)", color: "var(--text)", cursor: "default",
+              }}
+            >
+              <SteamIcon size={15} style={{ color: "var(--plat-steam)" }} />
+              <span style={{ fontWeight: 700 }}>{tr("Connected")}</span>
+              <span className="mute" style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                {`${link.steamId.slice(0, 4)}…${link.steamId.slice(-4)}`}
+              </span>
             </div>
-            {/* Con wrap, y no solo en la fila de fuera: los dos botones juntos
-                piden más que un teléfono, y en móvil eso no saca barra de
-                desplazamiento —encoge la página entera y se lleva el dock fuera
-                del área táctil—. Ver e2e/steam-header-fit.spec.ts. */}
             <div className="flex items-center gap-2 flex-wrap">
               <button
-                className="btn"
+                className="btn btn-outline"
                 disabled={busy}
                 /* Y salta a Importar, que es donde se ve. El botón vive en la
                    tarjeta de la cuenta —fuera de las dos secciones— pero todo
@@ -265,26 +281,37 @@ export default function SteamPage() {
               </button>
             </div>
           </div>
-        ) : (
-          <>
-            <p className="dim" style={{ margin: 0, fontSize: 14 }}>
-              {tr("Connect your Steam account to bring in the hours you've already played. Reel only reads your games list — it never posts anything.")}
-            </p>
-            <div>
-              <button className="btn btn-primary" onClick={() => void startSteamLogin()}>
-                <Link2 size={16} />
-                {tr("Connect Steam")}
-              </button>
-            </div>
-            {/* El perfil privado devuelve una lista vacía SIN error, así que
-                más vale decirlo antes que después de que parezca que la cuenta
-                no tiene juegos. */}
-            <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
-              {tr("Your Steam profile's game details have to be public, or Steam sends back an empty list.")}
-            </p>
-          </>
         )}
       </div>
+
+      {linkPending && (
+        <div className="skeleton" style={{ height: 44, borderRadius: "var(--r)" }} />
+      )}
+
+      {!linkPending && !link?.steamId && (
+        <div className="card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12, maxWidth: 720 }}>
+          <div className="eyebrow">{tr("Steam account")}</div>
+          <p className="dim" style={{ margin: 0, fontSize: 14 }}>
+            {tr("Connect your Steam account to bring in the hours you've already played. Reel only reads your games list — it never posts anything.")}
+          </p>
+          <div>
+            {/* `btn-accent`, que es la variante que existe. Llevaba desde el
+                primer día pidiendo `btn-primary`, que no está en ninguna hoja:
+                el botón que arranca todo esto se pintaba sin fondo y sin borde,
+                indistinguible de una línea de texto. */}
+            <button className="btn btn-accent" onClick={() => void startSteamLogin()}>
+              <Link2 size={16} />
+              {tr("Connect Steam")}
+            </button>
+          </div>
+          {/* El perfil privado devuelve una lista vacía SIN error, así que
+              más vale decirlo antes que después de que parezca que la cuenta
+              no tiene juegos. */}
+          <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
+            {tr("Your Steam profile's game details have to be public, or Steam sends back an empty list.")}
+          </p>
+        </div>
+      )}
 
       {/* ── Las dos secciones ─────────────────────────────────────────────── */}
       {/* Antes esto era una pantalla larga: la importación arriba y el

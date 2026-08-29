@@ -261,6 +261,19 @@ const ES: Record<string, string> = {
   "Spent on games": "Gastado en juegos",
   "Made trading": "Sacado con el mercado",
   "Unrealised, on what you still hold": "Sin realizar, en lo que aún tienes",
+  /* La misma cifra, en la baldosa estrecha del 2×2: ahí «Sin realizar, en lo
+     que aún tienes» se parte en tres líneas y estira la tarjeta, que es
+     justamente lo que la fila del total y la gráfica no puede permitirse. El
+     matiz de «en lo que aún tienes» lo dice la frase de debajo. */
+  "Unrealised": "Sin realizar",
+  /* Bruto es lo que paga el comprador; neto, lo que te queda después de las dos
+     comisiones de Steam. Dos palabras y no dos frases porque van en dos
+     pastillas de 26px, y en español son las que usa cualquiera que haya
+     vendido algo. */
+  "Gross": "Bruto",
+  "Net": "Neto",
+  "Net takes off Steam's 15% cut — what actually lands in your wallet.":
+    "El neto descuenta la comisión del 15 % de Steam: lo que te llega de verdad a la cartera.",
   "{items} items · {distinct} different · about {quick} if you sold it all today":
     "{items} objetos · {distinct} distintos · unos {quick} si lo vendieras todo hoy",
   "{n} items have no price yet, and are not in that total.":
@@ -314,6 +327,8 @@ const ES: Record<string, string> = {
   "{n} rows had a date Steam wrote in a way we couldn't read, and were left out rather than dated wrong.":
     "{n} filas traían una fecha que Steam escribió de una forma que no supimos leer, y se han quedado fuera en vez de fecharse mal.",
   "Steam account": "Cuenta de Steam",
+  "Your market inventory, and the games you bring into Reel.":
+    "Tu inventario del mercado, y los juegos que traes a Reel.",
   "Connect Steam": "Conectar Steam",
   "Connected": "Conectada",
   "Disconnect": "Desconectar",
