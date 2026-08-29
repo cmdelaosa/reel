@@ -167,11 +167,29 @@
    *  El 429 de Steam no es un error que reintentar deprisa: es "para". Se espera
    *  cada vez más (2s, 4s, 8s…) porque insistir cada segundo alarga el bloqueo
    *  en vez de acortarlo. Y `credentials: "include"` porque media pasada
-   *  depende de tu cookie. */
+   *  depende de tu cookie.
+   *
+   *  ── Y la dirección se pide ENTERA, no "/market/…" ────────────────────────
+   *  Porque el `fetch` de la página puede no ser el del navegador. Medido el
+   *  29-08-2026 pegando esto en `steamcommunity.com/id/<tu-id>/inventory`: el
+   *  bundle de esa pantalla envuelve `window.fetch` —queda un
+   *  `function(t){return n.apply(this,arguments)}` en vez del nativo— y esa
+   *  envoltura construye un `new URL(...)` sin base, así que una ruta relativa
+   *  revienta antes de salir a la red con «Failed to construct 'URL': Invalid
+   *  URL».
+   *
+   *  Lo caro no fue el fallo sino su disfraz: como se lanza igual que un fallo
+   *  de red, la fase de precios se comió sus cinco strikes en quince segundos y
+   *  el panel concluyó «Steam no ha dado ni un precio», que era mentira —no
+   *  llegó a preguntar—, y de paso se saltó el histórico entero.
+   *
+   *  `new URL(url, location.origin)` cuesta nada y quita la dependencia: con la
+   *  dirección entera, la envoltura de turno no tiene que resolver nada. */
   async function get(url, { tries = 5 } = {}) {
+    const entera = new URL(url, location.origin).toString();
     let wait = 2000;
     for (let i = 0; i < tries; i++) {
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(entera, { credentials: "include" });
       if (res.ok) return res.json();
       if (res.status === 429 || res.status >= 500) {
         log(`  Steam dice "espera" (${res.status}); reintento en ${wait / 1000}s…`);
@@ -424,7 +442,9 @@
       for (; cursor && page < 60; page++) {
         const body = new URLSearchParams({ sessionid });
         for (const [k, v] of Object.entries(cursor)) body.set(`cursor[${k}]`, String(v));
-        const res = await fetch("/account/AjaxLoadMoreHistory/", {
+        /* Entera y no relativa, por lo mismo que en `get`: el `fetch` de la
+           página puede estar envuelto y no saber resolver una ruta. */
+        const res = await fetch(new URL("/account/AjaxLoadMoreHistory/", location.origin), {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/x-www-form-urlencoded" },
