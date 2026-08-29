@@ -658,7 +658,7 @@ function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
         gap: 8,
         /* `auto-fill` y no `auto-fit`: con cuatro objetos sueltos —un filtro que
            casi no deja nada— `auto-fit` estira cada tarjeta hasta un cuarto de
-           pantalla y un cromo de 96 px acaba pixelado dentro de una caja
+           pantalla y un cromo de 128 px acaba pixelado dentro de una caja
            gigante. Con `auto-fill` las tarjetas conservan su tamaño y la fila se
            queda a medias, que es lo que uno espera de una rejilla.
            Y 108 y no 148, que es donde empezó esto: con 148 entran cinco
@@ -750,7 +750,12 @@ function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
           </div>
           {/* El texto encima del dibujo, sobre un degradado que se funde con
               él: si fuera una banda opaca haría falta reservarle su franja y la
-              baldosa volvería a crecer de alto. */}
+              baldosa volvería a crecer de alto.
+
+              Degradado y NO `backdrop-filter`: el desenfoque quedaba igual —el
+              degradado ya llega al 92% donde va el texto— y son 608 baldosas.
+              Cada capa desenfocada es una composición aparte, y la chapa de la
+              cantidad ya pone una por baldosa. */}
           <div
             style={{
               position: "absolute",
@@ -763,7 +768,6 @@ function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
               gap: 1,
               background:
                 "linear-gradient(to top, color-mix(in srgb, var(--bg) 92%, transparent) 55%, transparent)",
-              backdropFilter: "blur(8px)",
             }}
           >
             {/* UNA línea, no dos. Los nombres de Steam llegan a los sesenta
