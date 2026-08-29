@@ -27,6 +27,11 @@ import {
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/steam-market`;
 
+/** El id de moneda de Valve del mercado que mira esta pantalla. 3 es el euro, y
+ *  no es un formato: Steam no convierte, así que la moneda ES qué mercado se
+ *  está leyendo. El cron (scripts/steam-prices) usa el mismo por defecto. */
+const MARKET_CURRENCY = 3;
+
 async function call(path: string, init?: RequestInit): Promise<unknown> {
   const {
     data: { session },
@@ -77,17 +82,30 @@ const ledgerRow = z.object({
   quantity: z.number().int(),
 });
 
-const snapshotRow = z.object({
+export type SteamLedgerEntry = z.infer<typeof ledgerRow>;
+
+/* Un punto de la curva del valor. Lo devuelve `rpc_steam_value_series` (0092) y
+   NO se lee ya de `steam_portfolio_snapshots`: la función mezcla las dos cosas
+   —la foto real donde la hay, la reconstrucción donde no— y `source` dice cuál
+   es cuál. Leer la tabla además de la función sería pedir dos veces lo mismo. */
+const seriesRow = z.object({
   day: z.string(),
   value_cents: z.number().int(),
   item_count: z.number().int(),
   distinct_items: z.number().int(),
   missing_prices: z.number().int(),
+  source: z.enum(["snapshot", "reconstructed"]),
+});
+
+const candleRow = z.object({
+  day: z.string(),
+  median_cents: z.number().int(),
+  volume: z.number().int(),
 });
 
 export type SteamHolding = z.infer<typeof holdingRow>;
 export type SteamPrice = z.infer<typeof priceRow>;
-export type SteamSnapshot = z.infer<typeof snapshotRow>;
+export type SteamSeriesPoint = z.infer<typeof seriesRow>;
 
 /** Una fila de la tabla: el objeto con su precio y su cuenta ya hechas. */
 export interface InventoryRow {
@@ -115,7 +133,10 @@ export interface Inventory {
   totals: PortfolioValue;
   cash: CashFlow;
   gain: { gainCents: number; coveredItems: number; uncoveredItems: number };
-  snapshots: SteamSnapshot[];
+  /** El libro entero, tal cual. Lo usa la ficha de un objeto para clavar sus
+   *  compras en la curva; ya está leído aquí, así que abrir una ficha no cuesta
+   *  ni una petición más. */
+  ledger: SteamLedgerEntry[];
   /** Cuándo se subió el último volcado. Null si no hay ninguno, que es el
    *  estado de estreno de la pantalla. */
   collectedAt: string | null;
@@ -166,16 +187,6 @@ export function useSteamInventory() {
           .range(from, to),
       );
       const ledger = ledgerRows.map((r) => ledgerRow.parse(r));
-
-      const snapRows = await fetchPaged((from, to) =>
-        supabase
-          .from("steam_portfolio_snapshots")
-          .select("*")
-          .eq("user_id", session!.user.id)
-          .order("day", { ascending: true })
-          .range(from, to),
-      );
-      const snapshots = snapRows.map((r) => snapshotRow.parse(r));
 
       const asHoldings: Holding[] = holdings.map((h) => ({
         appid: h.appid,
@@ -228,9 +239,65 @@ export function useSteamInventory() {
           ledger.map((l) => ({ kind: l.kind, amountCents: l.amount_cents })),
         ),
         gain: unrealized(asHoldings, asPrices, basis),
-        snapshots,
+        ledger,
         collectedAt: holdings[0]?.collected_at ?? null,
       };
+    },
+  });
+}
+
+/** La curva del valor de tu cartera, hacia atrás.
+ *
+ *  Una llamada a `rpc_steam_value_series` (0092) y no una lectura de tablas: la
+ *  suma son cuarenta mil velas y se hace donde están. Lo que vuelve son los mil
+ *  puntos de la línea, cada uno diciendo si es foto real o reconstrucción.
+ *
+ *  Va en su propia consulta, aparte del inventario, porque tarda más y porque
+ *  la pantalla puede —y debe— enseñar el total mientras la curva llega. */
+export function useSteamValueSeries() {
+  const { session } = useAuth();
+  return useQuery({
+    queryKey: qk.steamValueSeries,
+    enabled: Boolean(session),
+    queryFn: async (): Promise<SteamSeriesPoint[]> => {
+      const { data, error } = await supabase.rpc("rpc_steam_value_series", {});
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((r: unknown) => seriesRow.parse(r));
+    },
+  });
+}
+
+/** El histórico de UN objeto: una vela por día, tal y como la dio Steam.
+ *
+ *  `steam_price_history` es global y la lee cualquiera que haya iniciado sesión
+ *  —no es de nadie, es lo que valía un objeto—, así que aquí no hay filtro por
+ *  usuario. Lo que sí hay es paginado: dos años de un objeto que se mueve todos
+ *  los días son 730 filas, y los mil de PostgREST se alcanzan antes de lo que
+ *  parece.
+ *
+ *  Solo se pide cuando hay una ficha abierta. Cargar los históricos de
+ *  seiscientos objetos por si acaso es exactamente lo que esta pantalla no
+ *  hace. */
+export function useSteamItemHistory(item: { appid: number; marketHashName: string } | null) {
+  const { session } = useAuth();
+  return useQuery({
+    queryKey: qk.steamItemHistory(item?.appid ?? 0, item?.marketHashName ?? ""),
+    enabled: Boolean(session && item),
+    queryFn: async () => {
+      const rows = await fetchPaged((from, to) =>
+        supabase
+          .from("steam_price_history")
+          .select("day, median_cents, volume")
+          .eq("appid", item!.appid)
+          .eq("market_hash_name", item!.marketHashName)
+          /* Sin esto se mezclarían las velas de dos mercados distintos —Steam no
+             convierte, cada moneda es su propio mercado— y la curva daría saltos
+             de escalón que nadie pagó. `euros()` de abajo dice el mismo 3. */
+          .eq("currency", MARKET_CURRENCY)
+          .order("day", { ascending: true })
+          .range(from, to),
+      );
+      return rows.map((r) => candleRow.parse(r));
     },
   });
 }
@@ -376,8 +443,13 @@ export function iconUrl(hash: string | null, size = 96): string | null {
     : null;
 }
 
-/** La ficha del objeto en el mercado de Steam, para poder abrirla desde la
- *  rejilla.
+/** La ficha del objeto en el mercado de Steam, para poder abrirla desde su
+ *  ficha de aquí.
+ *
+ *  Colgaba de la baldosa entera de la rejilla hasta 0092, y se mudó dentro de la
+ *  ficha cuando la baldosa pasó a abrirla: el gráfico que se iba a buscar a
+ *  Steam ya está en casa, y a Steam se va ahora para lo que solo hay allí —las
+ *  ofertas de verdad y el botón de vender.
  *
  *  El nombre va dentro de la ruta y hay que codificarlo entero: casi todos
  *  llevan barra vertical y espacios —"AK-47 | Redline (Field-Tested)"— y sin

@@ -23,6 +23,14 @@
  * persona (app/src/features/games/steamCollector.js). Lo que cambia a diario no
  * es lo que tienes: es lo que vale.
  *
+ * ── Lo que sí hace desde 0092: la vela de hoy ────────────────────────────
+ * Cada precio que refresca se escribe DOS veces: en `steam_market_prices`, que
+ * es la foto de ahora y se pisa a sí misma, y en `steam_price_history` como la
+ * vela del día. Así la curva reconstruida del inventario se mantiene sola de hoy
+ * en adelante, y el recolector queda para lo único que solo él puede hacer: el
+ * relleno hacia atrás. Antes de esto el histórico envejecía en cuanto uno dejaba
+ * de acordarse de pasar el recolector.
+ *
  * Variables (las pone el workflow desde los secretos del repo):
  *   SUPABASE_URL                — https://<ref>.supabase.co
  *   SUPABASE_SERVICE_ROLE_KEY   — la sb_secret_…, ver docs/DEPLOY.md
@@ -80,6 +88,9 @@ const startedAt = new Date().toISOString();
 let refreshed = 0;
 let failed = 0;
 let blocked = false;
+/** Velas del histórico escritas esta pasada. Se cuenta aparte de `refreshed`
+ *  porque no son lo mismo: un precio sin mediana se refresca y no deja vela. */
+let historyWritten = 0;
 
 const held = await readAll<Held>(
   (from, to) =>
@@ -123,6 +134,49 @@ async function flush(): Promise<void> {
     .from("steam_market_prices")
     .upsert(batch, { onConflict: "appid,market_hash_name,currency" });
   if (error) throw new Error(`escribiendo precios: ${error.message}`);
+
+  /* La misma tanda, otra vez, como vela de HOY en el histórico.
+   *
+   * `steam_market_prices` es una foto que se pisa a sí misma: guarda el precio
+   * de ahora y el de ayer se pierde. El histórico son las velas, y hasta 0092
+   * solo las traía el recolector desde el navegador — o sea que la curva
+   * envejecía en cuanto uno dejaba de pasarlo, y había que acordarse.
+   *
+   * Con esto el recolector queda para lo que de verdad solo él puede hacer: el
+   * relleno hacia atrás, los años que ya pasaron. De hoy en adelante la curva se
+   * mantiene sola, todas las noches.
+   *
+   * Se pisa la vela del día (sin `ignoreDuplicates`) y solo la del día: la
+   * ingesta del volcado sí respeta lo que ya está escrito, pero aquí la fila que
+   * se toca es la de hoy y este precio viene del cron, que es la fuente buena.
+   * Si alguien subió antes hoy un precio desde su navegador, este lo sustituye.
+   *
+   * Un objeto sin ventas recientes viene con `median_cents` null y NO deja vela:
+   * la tabla no admite nulos ahí, y una vela inventada a cero sería un desplome
+   * en la curva que no ocurrió. */
+  const day = new Date().toISOString().slice(0, 10);
+  const candles = batch
+    .filter((p) => typeof p.median_cents === "number")
+    .map((p) => ({
+      appid: p.appid,
+      market_hash_name: p.market_hash_name,
+      currency: p.currency,
+      day,
+      median_cents: p.median_cents,
+      volume: p.volume ?? 0,
+    }));
+  if (candles.length) {
+    const { error: e2 } = await db
+      .from("steam_price_history")
+      .upsert(candles, { onConflict: "appid,market_hash_name,currency,day" });
+    /* No se relanza: la vela de hoy es un extra sobre el trabajo de este guión,
+       que es refrescar precios. Tirar la pasada entera —y con ella los precios
+       ya traídos— porque el histórico no admitió una fila sería cambiar lo
+       importante por lo accesorio. Se dice en el registro y sigue. */
+    if (e2) console.log(`  sin vela de histórico esta tanda: ${e2.message}`);
+    else historyWritten += candles.length;
+  }
+
   batch = [];
 }
 
@@ -179,7 +233,10 @@ for (const item of queue.slice(0, MAX_ITEMS)) {
 
 await flush();
 
-console.log(`Refrescados ${refreshed}, fallidos ${failed}${blocked ? ", cortado por Steam" : ""}.`);
+console.log(
+  `Refrescados ${refreshed}, fallidos ${failed}, ${historyWritten} velas de histórico` +
+    `${blocked ? ", cortado por Steam" : ""}.`,
+);
 
 /* La fila del cron, como los demás trabajos periódicos. `ok` en falso solo si no
    se trajo NADA habiendo cola: un corte a la mitad es el funcionamiento normal
@@ -189,7 +246,14 @@ await db.from("job_runs").insert({
   started_at: startedAt,
   finished_at: new Date().toISOString(),
   ok: refreshed > 0 || queue.length === 0,
-  summary: { asked: Math.min(queue.length, MAX_ITEMS), refreshed, failed, blocked, queue: queue.length },
+  summary: {
+    asked: Math.min(queue.length, MAX_ITEMS),
+    refreshed,
+    failed,
+    blocked,
+    queue: queue.length,
+    history: historyWritten,
+  },
 }).then(
   () => {},
   () => {},

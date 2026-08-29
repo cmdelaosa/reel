@@ -4,13 +4,14 @@ import collectorSource from "@/features/games/steamCollector.js?raw";
 import {
   euros,
   iconUrl,
-  marketUrl,
   useSteamInventory,
+  useSteamValueSeries,
   useUploadSteamDump,
   type IngestSummary,
   type InventoryRow,
-  type SteamSnapshot,
+  type SteamSeriesPoint,
 } from "@/lib/steamMarket";
+import { SteamItemSheet } from "@/features/games/SteamItemSheet";
 import {
   netLineCents,
   netOrNull,
@@ -43,6 +44,9 @@ const plural = (n: number, one: string, many: string) =>
 
 export function SteamInventory() {
   const { data, isLoading } = useSteamInventory();
+  /* Aparte del inventario y sin bloquearlo: la serie suma cuarenta mil velas en
+     la base y tarda lo suyo, y el total no tiene por qué esperarla. */
+  const { data: series } = useSteamValueSeries();
   const upload = useUploadSteamDump();
   const fileInput = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
@@ -51,6 +55,9 @@ export function SteamInventory() {
    *  arriba justamente por eso — media pantalla en bruto y media en neto no
    *  sería una opción, sería un error de lectura esperando a ocurrir. */
   const [net, setNet] = useState(false);
+  /** El objeto cuya ficha está abierta, o null. Vive aquí y no dentro de la
+   *  lista porque la ficha necesita el libro, que lo tiene esta consulta. */
+  const [open, setOpen] = useState<InventoryRow | null>(null);
 
   if (isLoading) {
     return (
@@ -88,10 +95,10 @@ export function SteamInventory() {
               antes de que se viera un solo objeto. */}
           <div className="steam-band">
             <Totals data={data} net={net} onNet={setNet} />
-            <ValueChart snapshots={data.snapshots} net={net} />
+            <ValueChart series={series ?? []} net={net} />
           </div>
           <CashNotes data={data} />
-          <Items rows={data.rows} net={net} />
+          <Items rows={data.rows} net={net} onOpen={setOpen} />
           <Footer
             collectedAt={data.collectedAt}
             onPick={() => fileInput.current?.click()}
@@ -112,6 +119,15 @@ export function SteamInventory() {
       )}
       {upload.data && (
         <UploadReceipt summary={upload.data} />
+      )}
+
+      {open && (
+        <SteamItemSheet
+          row={open}
+          ledger={data?.ledger ?? []}
+          net={net}
+          onClose={() => setOpen(null)}
+        />
       )}
 
       <input
@@ -261,13 +277,22 @@ const W = 900;
 const H = 150;
 const PAD = { top: 12, right: 12, bottom: 22, left: 56 };
 
-/** El valor de tu cartera, un punto por día.
+/** El valor de tu cartera, un punto por día, HACIA ATRÁS.
  *
- *  Empieza el día que subiste el primer volcado, y no antes: nadie guardó esa
- *  foto. Reconstruirla con la serie de cada objeto multiplicaría los precios de
- *  entonces por las cantidades de HOY, que es otra cosa — se puede dibujar, pero
- *  no es lo que valía tu inventario, y esta gráfica no lo va a fingir. */
-/** La curva se queda SIEMPRE en bruto, y lo dice.
+ *  Empezaba el día del primer volcado, porque antes nadie guardó esa foto. Desde
+ *  0092 se reconstruye lo de antes con el histórico de cada objeto y el libro:
+ *  las cantidades se caminan hacia atrás —«en marzo tenía tres, el cuarto lo
+ *  compré en mayo»— y se multiplican por el precio de aquel día.
+ *
+ *  Es UNA sola línea y con un rótulo de aproximada, aunque el tramo reciente sea
+ *  foto real y exacto. La razón es de lectura, no de datos: dos tramos con dos
+ *  precisiones distintas obligan a mirar dónde empieza cuál antes de entender
+ *  nada, y lo que se quiere de esta tarjeta es la forma de la curva. Lo que la
+ *  reconstrucción no puede saber está en la migración y en el propio rótulo:
+ *  lo que salió de una caja o de un drop no está en el libro, así que sale como
+ *  si lo hubieras tenido desde siempre, y el error crece cuanto más atrás.
+ *
+ *  La curva se queda SIEMPRE en bruto, y lo dice.
  *
  *  Es la única cifra de la pantalla que el conmutador no puede seguir. La foto
  *  diaria (`steam_portfolio_snapshots`) guarda un total y nada más: qué objetos
@@ -279,34 +304,37 @@ const PAD = { top: 12, right: 12, bottom: 22, left: 56 };
  *  Así que en vez de dibujar una curva aproximada sin decirlo, se dibuja la de
  *  siempre con su etiqueta. Es la misma regla que el resto de la pantalla: un
  *  total con un asterisco es útil, uno equivocado no. */
-function ValueChart({ snapshots, net }: { snapshots: SteamSnapshot[]; net: boolean }) {
+function ValueChart({ series, net }: { series: SteamSeriesPoint[]; net: boolean }) {
   const geo = useMemo(() => {
-    if (snapshots.length < 2) return null;
-    const values = snapshots.map((s) => s.value_cents);
+    if (series.length < 2) return null;
+    const values = series.map((s) => s.value_cents);
     const min = Math.min(...values);
     const max = Math.max(...values);
     /* Un rango plano (todo igual) partiría por cero al escalar. */
     const span = max - min || Math.max(max, 1);
     const x = (i: number) =>
-      PAD.left + (i / (snapshots.length - 1)) * (W - PAD.left - PAD.right);
+      PAD.left + (i / (series.length - 1)) * (W - PAD.left - PAD.right);
     const y = (v: number) =>
       H - PAD.bottom - ((v - min) / span) * (H - PAD.top - PAD.bottom);
     return {
       min,
       max,
-      points: snapshots.map((s, i) => ({ ...s, x: x(i), y: y(values[i]) })),
+      points: series.map((s, i) => ({ ...s, x: x(i), y: y(values[i]) })),
     };
-  }, [snapshots]);
+  }, [series]);
 
   /* Con un solo día todavía no hay curva, pero sí hay hueco: la tarjeta se
      pinta igual para que la banda siga siendo dos tarjetas y el total no se
-     quede solo a media página. */
+     quede solo a media página.
+     El texto ya no habla del primer volcado —la curva no empieza ahí desde
+     0092— sino de lo que falta de verdad para poder dibujarla: el histórico,
+     que es el segundo botón del recolector y el que se olvida. */
   if (!geo) {
     return (
       <div className="card" style={{ padding: "16px 18px", display: "grid", alignItems: "center" }}>
         <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
           {tr(
-            "The value graph starts the day you first upload: nobody recorded what your inventory was worth before that.",
+            "No graph yet: the price history is what draws it, and it comes from the collector's second button.",
           )}
         </p>
       </div>
@@ -321,15 +349,24 @@ function ValueChart({ snapshots, net }: { snapshots: SteamSnapshot[]; net: boole
      línea no se distingue de una tanda de precios que no llegó — y son cosas
      muy distintas para quien la mira. */
   const gaps = geo.points.filter((p) => p.missing_prices > 0);
+  /* Cuántos de estos puntos son foto real. No cambia el dibujo —la línea es una
+     y el rótulo es uno— pero sí lo que dice el aviso de debajo: «aproximada» a
+     secas, teniendo diez meses de registro exacto, se pasa de humilde. */
+  const recorded = geo.points.filter((p) => p.source === "snapshot").length;
 
   return (
     <div className="card" style={{ padding: "16px 18px" }}>
       <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-        {/* Con el neto puesto, la etiqueta dice que esta cifra no lo sigue. Sin
-            ella, la última punta de la curva y el total de al lado se
-            contradicen y no hay nada en pantalla que lo explique. */}
-        <div className="eyebrow" title={net ? tr("The daily photo only stores a total, so there's no way to take the per-item cut off the past.") : undefined}>
-          {net ? tr("Value over time · gross") : tr("Value over time")}
+        {/* Dos avisos en una etiqueta, y los dos hacen falta:
+            · «aproximada», porque el tramo anterior a la primera foto se
+              reconstruye con el libro, y lo que salió de una caja o de un drop
+              no está en el libro;
+            · «bruta», porque el conmutador de neto no puede seguir a esta cifra
+              (la foto diaria guarda un total y la comisión tiene un mínimo POR
+              objeto). Sin decirlo, la última punta de la curva y el total de al
+              lado se contradicen y nada en pantalla lo explica. */}
+        <div className="eyebrow" title={tr("Before the first daily photo the line is rebuilt from your ledger: what came out of a case, a drop or a trade isn't in it, so it counts as if you'd always had it. The further back, the rougher.")}>
+          {net ? tr("Value over time · approximate · gross") : tr("Value over time · approximate")}
         </div>
         <div style={{ fontSize: 13, fontWeight: 700, color: change >= 0 ? "var(--ok, #3a7)" : "var(--bad, #e26)" }}>
           {change >= 0 ? "+" : "−"}
@@ -388,6 +425,18 @@ function ValueChart({ snapshots, net }: { snapshots: SteamSnapshot[]; net: boole
           {new Date(last.day).toLocaleDateString(dateLocale())}
         </text>
       </svg>
+      {/* La letra pequeña de la curva, con los dos números que la califican. Va
+          debajo y no en un `title` porque es la diferencia entre leer la línea
+          como un registro y leerla como una estimación, y eso no puede vivir
+          escondido detrás de un puntero que en el móvil no existe. */}
+      <p className="mute" style={{ margin: "6px 0 0", fontSize: 12 }}>
+        {recorded > 0
+          ? tv("{recorded} days recorded day by day; the {rebuilt} before them are rebuilt from your ledger and the price history.", {
+              recorded,
+              rebuilt: geo.points.length - recorded,
+            })
+          : tr("Rebuilt from your ledger and the price history: no day here was recorded as it happened.")}
+      </p>
     </div>
   );
 }
@@ -446,7 +495,15 @@ const APP_NAMES: Record<number, string> = {
 };
 const appName = (appid: number) => APP_NAMES[appid] ?? `App ${appid}`;
 
-function Items({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
+function Items({
+  rows,
+  net,
+  onOpen,
+}: {
+  rows: InventoryRow[];
+  net: boolean;
+  onOpen: (row: InventoryRow) => void;
+}) {
   const [sort, setSort] = useState<Sort>("value");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("grid");
@@ -627,7 +684,9 @@ function Items({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
         </div>
       </div>
 
-      {view === "grid" ? <ItemsGrid rows={shown} net={net} /> : <ItemsTable rows={shown} net={net} />}
+      {view === "grid"
+        ? <ItemsGrid rows={shown} net={net} onOpen={onOpen} />
+        : <ItemsTable rows={shown} net={net} onOpen={onOpen} />}
       {!shown.length && (
         <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>{tr("Nothing matches that.")}</p>
       )}
@@ -650,7 +709,15 @@ function Items({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
  *  suman. Las otras tres —unitario, mínimo, coste— son para comparar, y para
  *  comparar está la lista; apretarlas en la tarjeta la volvería ilegible sin
  *  hacerla más útil. */
-function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
+function ItemsGrid({
+  rows,
+  net,
+  onOpen,
+}: {
+  rows: InventoryRow[];
+  net: boolean;
+  onOpen: (row: InventoryRow) => void;
+}) {
   return (
     <div
       className="grid"
@@ -674,18 +741,24 @@ function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
       }}
     >
       {rows.map((r) => (
-        /* La baldosa entera es un enlace a la ficha del mercado de Steam, que
-           es a donde va uno en cuanto ve un número que no esperaba: a mirar el
-           gráfico y las ofertas de verdad. En pestaña nueva y con `noreferrer`
-           —es un dominio de terceros— y sin subrayado ni azul, porque un
-           enlace que se ve como un enlace en 608 baldosas es ruido. */
-        <a
+        /* La baldosa entera abre la ficha del objeto, y el enlace al mercado
+           de Steam se ha ido DENTRO de ella.
+           La baldosa era ese enlace hasta 0092, y el porqué era bueno: a la
+           ficha de Steam va uno en cuanto ve un número que no esperaba, a
+           mirar el gráfico. Lo que ha cambiado es que el gráfico ya está aquí
+           —el precio desde que lo compraste, con tu compra clavada—, así que el
+           primer clic lo contesta sin salir y el segundo, dentro de la ficha,
+           sigue llevando a Steam.
+           Y un `button` de verdad, no un `div` con `onClick`: son seiscientas
+           baldosas y la única forma de recorrerlas con el teclado es que cada
+           una sea un control. Los reseteos —fondo, borde, tipografía— son lo
+           que cuesta que un botón se parezca a la baldosa que era. */
+        <button
+          type="button"
           key={`${r.appid}:${r.marketHashName}`}
-          href={marketUrl(r.appid, r.marketHashName)}
-          target="_blank"
-          rel="noreferrer noopener"
           title={r.marketHashName}
           className="surface-2"
+          onClick={() => onOpen(r)}
           style={{
             position: "relative",
             display: "block",
@@ -694,6 +767,14 @@ function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
             minWidth: 0,
             color: "inherit",
             textDecoration: "none",
+            /* Lo que cuesta que un `button` se parezca a la baldosa: sin caja
+               propia, sin tipografía propia, y con la mano del ratón. `padding`
+               a cero porque el relleno lo pone ya la caja del icono. */
+            border: 0,
+            padding: 0,
+            font: "inherit",
+            textAlign: "left",
+            cursor: "pointer",
           }}
         >
           {/* El icono a sangre, en un cuadrado. Antes vivía en una caja de 42
@@ -808,7 +889,7 @@ function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
               )}
             </div>
           </div>
-        </a>
+        </button>
       ))}
     </div>
   );
@@ -821,7 +902,15 @@ function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
  *  lo que se compara: precio unitario, coste y total, uno debajo de otro. Meter
  *  esas cinco cifras en cada tarjeta la convertiría en una fila de tabla con
  *  bordes redondeados. */
-function ItemsTable({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
+function ItemsTable({
+  rows,
+  net,
+  onOpen,
+}: {
+  rows: InventoryRow[];
+  net: boolean;
+  onOpen: (row: InventoryRow) => void;
+}) {
   return (
     <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -837,7 +926,15 @@ function ItemsTable({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={`${r.appid}:${r.marketHashName}`} style={{ borderTop: "1px solid var(--border)" }}>
+              /* La fila entera abre la ficha, y el nombre además es un botón:
+                 con el ratón se pincha donde caiga, y con el teclado hay UN
+                 punto de parada por fila en vez de seis. Un `onClick` en el
+                 `tr` a secas no lo alcanza ninguna tecla. */
+              <tr
+                key={`${r.appid}:${r.marketHashName}`}
+                style={{ borderTop: "1px solid var(--border)", cursor: "pointer" }}
+                onClick={() => onOpen(r)}
+              >
                 <td style={{ padding: "6px 8px" }}>
                   <div className="flex items-center gap-2">
                     {iconUrl(r.iconUrl, 48) && (
@@ -851,7 +948,28 @@ function ItemsTable({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
                       />
                     )}
                     <span>
-                      {r.marketHashName}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          /* Sin esto el clic sube al `tr` y la ficha se abre dos
+                             veces — inofensivo hoy, y la clase de detalle que
+                             deja de serlo en cuanto abrir cueste una petición. */
+                          e.stopPropagation();
+                          onOpen(r);
+                        }}
+                        title={tr("See its price since you bought it")}
+                        style={{
+                          background: "none",
+                          border: 0,
+                          padding: 0,
+                          font: "inherit",
+                          color: "inherit",
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {r.marketHashName}
+                      </button>
                       {/* Un objeto que no se puede vender hoy vale igual pero no
                           se puede realizar, y eso cambia qué significa su cifra. */}
                       {!r.marketable && (

@@ -44,8 +44,17 @@
 //
 // Lo peor que puede hacer entonces un cliente hostil es inventarse el precio de
 // un objeto que nadie más tiene, durante menos de un día. `steam_price_history`
-// se acepta entera porque no hay forma de que el servidor la traiga — y por eso
-// no toca ningún total: solo dibuja la curva de un objeto en su ficha.
+// se acepta entera porque no hay forma de que el servidor la traiga: es la única
+// vía para los años pasados.
+//
+// ── Lo que 0092 cambió de esto ──────────────────────────────────────────
+// Antes esa tabla no tocaba ningún total: solo dibujaba la curva de un objeto en
+// su ficha. Desde 0092 también alimenta el tramo RECONSTRUIDO de la curva del
+// valor, así que una vela inventada puede deformar el dibujo de otra persona con
+// el mismo objeto. Sigue sin mover una sola cifra guardada —la foto diaria y el
+// total grande salen de precios con `source = 'server'`—, la ingesta sigue sin
+// pisar una vela ya escrita, y desde 0092 el cron escribe la vela de hoy con la
+// clave de servicio. El razonamiento entero está en la migración.
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
