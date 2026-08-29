@@ -866,6 +866,27 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .season-chart .chart-tip text { fill: var(--text); font-size: 11px; font-weight: 700; }
 .season-chart .x-label { fill: var(--text-mute); font-size: 10px; text-anchor: middle; }
 
+/* ---- El inventario de Steam (0088) ----
+   La banda de arriba: el total a la izquierda y la curva del valor a la
+   derecha, con la MISMA altura. `stretch` y no una altura escrita: la más alta
+   de las dos manda, así que la banda sigue cuadrada aunque cambie el contenido
+   —un total sin dinero registrado, una gráfica que aún no existe— sin que nadie
+   tenga que volver a medir nada.
+
+   Los 340 son lo que pide la rejilla de 2×2 de las cifras del dinero sin partir
+   «Sacado con el mercado» en tres líneas. Por debajo de 900 se apila: a esa
+   anchura la curva ya es una raya. */
+.steam-band { display: grid; gap: 16px; grid-template-columns: 340px minmax(0, 1fr); align-items: stretch; }
+@media (max-width: 900px) { .steam-band { grid-template-columns: 1fr; } }
+
+/* La curva del valor del inventario. Las dos clases de dentro existían ya, pero
+   colgando de `.season-chart` —otra gráfica, otra pantalla—, así que aquí no
+   pintaban nada: las rayas de la escala salían sin trazo y sus cifras en negro
+   sobre el tema oscuro, o sea invisibles. Es el mismo fallo que `--line` y que
+   `chip-on`, y la tercera vez que aparece en esta pantalla. */
+.steam-chart .grid-line { stroke: var(--border); stroke-width: 1; }
+.steam-chart .grid-label { fill: var(--text-mute); font-size: 10px; }
+
 /* Episode sub-sheet — a small card over the detail sheet: synopsis + per-episode
    scores from both sources, and mark-watched. Reuses the sheet/backdrop system. */
 /* 552 y no 460: desde 0087 la ficha lleva dos filas de caras de 96px, y a 460

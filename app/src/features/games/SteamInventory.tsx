@@ -10,6 +10,12 @@ import {
   type InventoryRow,
   type SteamSnapshot,
 } from "@/lib/steamMarket";
+import {
+  netLineCents,
+  netOrNull,
+  netTotalCents,
+  netUnrealizedCents,
+} from "@/domain/steamFee";
 import { t as tr, tv } from "@/lib/i18n";
 import { dateLocale } from "@/lib/locale";
 
@@ -39,6 +45,11 @@ export function SteamInventory() {
   const upload = useUploadSteamDump();
   const fileInput = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
+  /** Bruto o neto, para TODOS los euros de mercado de la pantalla a la vez: el
+   *  total, el de la pestaña que estés mirando y el de cada objeto. Vive aquí
+   *  arriba justamente por eso — media pantalla en bruto y media en neto no
+   *  sería una opción, sería un error de lectura esperando a ocurrir. */
+  const [net, setNet] = useState(false);
 
   if (isLoading) {
     return (
@@ -52,7 +63,10 @@ export function SteamInventory() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div className="eyebrow">{tr("Market inventory")}</div>
+      {/* El rótulo solo en el estreno. Con la pantalla llena lo dicen ya la
+          pestaña de arriba (Inventario) y el propio total, y un rótulo que
+          repite lo que hay debajo se come una línea de las buenas. */}
+      {empty && <div className="eyebrow">{tr("Market inventory")}</div>}
 
       {empty ? (
         <Onboarding
@@ -67,10 +81,16 @@ export function SteamInventory() {
         />
       ) : (
         <>
-          <Totals data={data} />
-          <ValueChart snapshots={data.snapshots} />
-          <Cash data={data} />
-          <Items rows={data.rows} />
+          {/* El total y la curva son UNA banda: dos tarjetas de la misma altura
+              a lo ancho de la página. Iban una debajo de otra, y entre las dos
+              y las cuatro baldosas del dinero se comían la pantalla entera
+              antes de que se viera un solo objeto. */}
+          <div className="steam-band">
+            <Totals data={data} net={net} onNet={setNet} />
+            <ValueChart snapshots={data.snapshots} net={net} />
+          </div>
+          <CashNotes data={data} />
+          <Items rows={data.rows} net={net} />
           <Footer
             collectedAt={data.collectedAt}
             onPick={() => fileInput.current?.click()}
@@ -113,47 +133,132 @@ export function SteamInventory() {
 
 /* ── El número grande ─────────────────────────────────────────────────────── */
 
-function Totals({ data }: { data: NonNullable<ReturnType<typeof useSteamInventory>["data"]> }) {
-  const { totals } = data;
+/** El total, el conmutador que decide qué significa, y el dinero.
+ *
+ *  Debajo del número no va nada más: el recuento y el aviso de los objetos sin
+ *  precio se han ido a la cabecera de la lista, que es donde ahora se lee el
+ *  total de lo que estás mirando. Un número grande con tres renglones colgando
+ *  hacía esta tarjeta más alta que la gráfica de al lado, y las dos comparten
+ *  fila.
+ *
+ *  Y el conmutador está aquí, pegado al número, y no en la barra de la lista:
+ *  manda sobre todos los euros de mercado de la pantalla, así que se pone donde
+ *  se ve el más grande de ellos cambiar. */
+function Totals({
+  data,
+  net,
+  onNet,
+}: {
+  data: NonNullable<ReturnType<typeof useSteamInventory>["data"]>;
+  net: boolean;
+  onNet: (v: boolean) => void;
+}) {
+  const { totals, cash, gain, rows } = data;
+  /* Las tres primeras son dinero que YA pasó por tu cartera —lo metiste, lo
+     gastaste, te llegó de una venta con su comisión ya descontada—, así que el
+     conmutador no las toca: no hay comisión que quitarle a lo que ya cobraste.
+     La cuarta sí, porque no es dinero sino una valoración de lo que tienes: en
+     neto se recalcula sobre lo que de verdad cobrarías (domain/steamFee). */
+  const unrealisedCents = net ? netUnrealizedCents(rows) : gain.gainCents;
+  /* El orden cuenta una historia y por eso no es alfabético: de tu bolsillo
+     hacia dentro, lo que el mercado ha dado, y lo que queda en pie.
+
+     En 2×2 y no en columna: apiladas, estas cuatro cifras hacían la tarjeta
+     noventa píxeles más alta y se llevaban la gráfica con ellas. */
+  const money = [
+    { label: tr("Out of your own pocket"), value: euros(cash.toppedUpCents) },
+    { label: tr("Spent on games"), value: euros(cash.spentInStoreCents) },
+    {
+      label: tr("Made trading"),
+      value: euros(cash.realizedCents),
+      tone: cash.realizedCents >= 0 ? "ok" : "bad",
+    },
+    {
+      label: tr("Unrealised"),
+      value: euros(unrealisedCents),
+      tone: unrealisedCents >= 0 ? "ok" : "bad",
+    },
+  ];
   return (
-    <div className="card" style={{ padding: 20 }}>
-      <div style={{ fontSize: 34, fontWeight: 850, letterSpacing: "-0.02em" }}>
-        {euros(totals.valueCents)}
-      </div>
-      <div className="mute" style={{ fontSize: 13 }}>
-        {tv("{items} items · {distinct} different · about {quick} if you sold it all today", {
-          items: totals.itemCount,
-          distinct: totals.distinctItems,
-          quick: euros(totals.quickSellCents),
-        })}
-      </div>
-      {/* La advertencia va PEGADA al número, no al pie de la pantalla: un total
-          al que le faltan objetos solo es honesto si las dos cosas se leen a la
-          vez. */}
-      {totals.missingPrices > 0 && (
+    <div className="card" style={{ padding: "16px 18px", display: "flex", flexDirection: "column" }}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="eyebrow">{tr("Total")}</div>
+        {/* `.segmented` y no un chip: siempre hay uno de los dos encendido, que
+            es la regla de la hoja de estilos para elegir entre las dos formas. */}
         <div
-          className="flex items-center gap-2"
-          style={{ marginTop: 10, fontSize: 12.5, color: "var(--warn, #d90)" }}
+          className="segmented"
+          role="tablist"
+          title={tr("Net takes off Steam's 15% cut — what actually lands in your wallet.")}
         >
-          <AlertTriangle size={14} />
-          {/* Es la línea que califica el número grande, y «1 items» ahí le
-              quita autoridad justo donde hace falta que la tenga. */}
-          {plural(
-            totals.missingPrices,
-            "One item has no price yet, and is not in that total.",
-            "{n} items have no price yet, and are not in that total.",
-          )}
+          {[
+            { key: false, label: tr("Gross") },
+            { key: true, label: tr("Net") },
+          ].map((x) => (
+            <button
+              key={String(x.key)}
+              role="tab"
+              aria-selected={net === x.key}
+              className={net === x.key ? "seg seg-active" : "seg"}
+              style={{ height: 26, padding: "0 11px", fontSize: 12 }}
+              onClick={() => onNet(x.key)}
+            >
+              {x.label}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
+      <div
+        style={{
+          fontSize: 38,
+          fontWeight: 850,
+          letterSpacing: "-0.025em",
+          lineHeight: 1.15,
+          marginTop: 4,
+        }}
+      >
+        {/* `netTotalCents` sobre las filas, y no la comisión aplicada al total
+            ya hecho: cada unidad es su propia venta y paga su propio mínimo.
+            Con 532 cromos de tres céntimos, netear la suma diría casi el triple
+            de lo que cobrarías — y contradiría a la vista lo que pone en cada
+            ficha de la rejilla. */}
+        {euros(net ? netTotalCents(rows) : totals.valueCents)}
+      </div>
+      <div style={{ height: 1, background: "var(--border)", margin: "14px 0 12px" }} />
+      <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
+        {money.map((m) => (
+          <div key={m.label}>
+            <div
+              style={{
+                fontSize: 16,
+                fontWeight: 800,
+                lineHeight: 1.2,
+                color:
+                  m.tone === "ok"
+                    ? "var(--ok, #3a7)"
+                    : m.tone === "bad"
+                      ? "var(--bad, #e26)"
+                      : undefined,
+              }}
+            >
+              {m.value}
+            </div>
+            <div className="mute" style={{ fontSize: 11 }}>{m.label}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 /* ── La curva ─────────────────────────────────────────────────────────────── */
 
-const W = 680;
-const H = 140;
-const PAD = { top: 12, right: 12, bottom: 22, left: 52 };
+/* Más ancha y más plana que antes (era 680×140), y no por gusto: la gráfica
+   comparte fila con el total, y el alto de una tarjeta cuyo SVG escala con el
+   ancho lo decide esta proporción. A 6:1 las dos miden casi lo mismo en la
+   página de 1.280, que es lo que hace que la banda se lea como una sola cosa. */
+const W = 900;
+const H = 150;
+const PAD = { top: 12, right: 12, bottom: 22, left: 56 };
 
 /** El valor de tu cartera, un punto por día.
  *
@@ -161,7 +266,19 @@ const PAD = { top: 12, right: 12, bottom: 22, left: 52 };
  *  foto. Reconstruirla con la serie de cada objeto multiplicaría los precios de
  *  entonces por las cantidades de HOY, que es otra cosa — se puede dibujar, pero
  *  no es lo que valía tu inventario, y esta gráfica no lo va a fingir. */
-function ValueChart({ snapshots }: { snapshots: SteamSnapshot[] }) {
+/** La curva se queda SIEMPRE en bruto, y lo dice.
+ *
+ *  Es la única cifra de la pantalla que el conmutador no puede seguir. La foto
+ *  diaria (`steam_portfolio_snapshots`) guarda un total y nada más: qué objetos
+ *  lo componían ese día no está en ninguna parte, y sin eso no hay forma de
+ *  aplicar una comisión que tiene un mínimo POR objeto. Pasarle el 15 % al
+ *  total daría una línea que no coincide ni con su propio último punto — el
+ *  total de arriba, que sí se calcula objeto a objeto.
+ *
+ *  Así que en vez de dibujar una curva aproximada sin decirlo, se dibuja la de
+ *  siempre con su etiqueta. Es la misma regla que el resto de la pantalla: un
+ *  total con un asterisco es útil, uno equivocado no. */
+function ValueChart({ snapshots, net }: { snapshots: SteamSnapshot[]; net: boolean }) {
   const geo = useMemo(() => {
     if (snapshots.length < 2) return null;
     const values = snapshots.map((s) => s.value_cents);
@@ -176,17 +293,22 @@ function ValueChart({ snapshots }: { snapshots: SteamSnapshot[] }) {
     return {
       min,
       max,
-      points: snapshots.map((s, i) => ({ ...s, x: x(i), y: y(s.value_cents) })),
+      points: snapshots.map((s, i) => ({ ...s, x: x(i), y: y(values[i]) })),
     };
   }, [snapshots]);
 
+  /* Con un solo día todavía no hay curva, pero sí hay hueco: la tarjeta se
+     pinta igual para que la banda siga siendo dos tarjetas y el total no se
+     quede solo a media página. */
   if (!geo) {
     return (
-      <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
-        {tr(
-          "The value graph starts the day you first upload: nobody recorded what your inventory was worth before that.",
-        )}
-      </p>
+      <div className="card" style={{ padding: "16px 18px", display: "grid", alignItems: "center" }}>
+        <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
+          {tr(
+            "The value graph starts the day you first upload: nobody recorded what your inventory was worth before that.",
+          )}
+        </p>
+      </div>
     );
   }
 
@@ -200,15 +322,21 @@ function ValueChart({ snapshots }: { snapshots: SteamSnapshot[] }) {
   const gaps = geo.points.filter((p) => p.missing_prices > 0);
 
   return (
-    <div className="card" style={{ padding: 16 }}>
-      <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
-        <div className="eyebrow">{tr("Value over time")}</div>
+    <div className="card" style={{ padding: "16px 18px" }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
+        {/* Con el neto puesto, la etiqueta dice que esta cifra no lo sigue. Sin
+            ella, la última punta de la curva y el total de al lado se
+            contradicen y no hay nada en pantalla que lo explique. */}
+        <div className="eyebrow" title={net ? tr("The daily photo only stores a total, so there's no way to take the per-item cut off the past.") : undefined}>
+          {net ? tr("Value over time · gross") : tr("Value over time")}
+        </div>
         <div style={{ fontSize: 13, fontWeight: 700, color: change >= 0 ? "var(--ok, #3a7)" : "var(--bad, #e26)" }}>
           {change >= 0 ? "+" : "−"}
           {euros(Math.abs(change))}
         </div>
       </div>
       <svg
+        className="steam-chart"
         viewBox={`0 0 ${W} ${H}`}
         role="img"
         aria-label={tv("Inventory value from {from} to {to}", {
@@ -263,52 +391,19 @@ function ValueChart({ snapshots }: { snapshots: SteamSnapshot[] }) {
   );
 }
 
-/* ── El dinero ────────────────────────────────────────────────────────────── */
+/* ── Las dos frases del dinero ────────────────────────────────────────────── */
 
-function Cash({ data }: { data: NonNullable<ReturnType<typeof useSteamInventory>["data"]> }) {
+/** Lo que las cuatro cifras del dinero no dicen solas.
+ *
+ *  Las cifras se han ido a la tarjeta del total (2×2, arriba); aquí se quedan
+ *  las dos frases, que son prosa y no caben en una baldosa. Van debajo de la
+ *  banda porque califican lo de arriba, y las dos aparecen solo cuando hay algo
+ *  que calificar. */
+function CashNotes({ data }: { data: NonNullable<ReturnType<typeof useSteamInventory>["data"]> }) {
   const { cash, gain } = data;
-  const tiles = [
-    /* El orden cuenta una historia y por eso no es alfabético: de tu bolsillo
-       hacia dentro, lo que el mercado ha dado, y lo que queda en pie. */
-    { label: tr("Out of your own pocket"), value: euros(cash.toppedUpCents) },
-    { label: tr("Spent on games"), value: euros(cash.spentInStoreCents) },
-    {
-      label: tr("Made trading"),
-      value: euros(cash.realizedCents),
-      tone: cash.realizedCents >= 0 ? "ok" : "bad",
-    },
-    {
-      label: tr("Unrealised, on what you still hold"),
-      value: euros(gain.gainCents),
-      tone: gain.gainCents >= 0 ? "ok" : "bad",
-    },
-  ];
+  if (!cash.storeFundedByMarketCents && !gain.uncoveredItems) return null;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div
-        className="grid gap-3"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}
-      >
-        {tiles.map((t) => (
-          <div key={t.label} className="surface-2" style={{ borderRadius: "var(--r)", padding: 14 }}>
-            <div
-              style={{
-                fontSize: 19,
-                fontWeight: 800,
-                color:
-                  t.tone === "ok"
-                    ? "var(--ok, #3a7)"
-                    : t.tone === "bad"
-                      ? "var(--bad, #e26)"
-                      : undefined,
-              }}
-            >
-              {t.value}
-            </div>
-            <div className="mute" style={{ fontSize: 12 }}>{t.label}</div>
-          </div>
-        ))}
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       {/* La frase que ninguna de esas cuatro cifras dice sola, y que es la que
           se quiere saber. */}
       {cash.storeFundedByMarketCents > 0 && (
@@ -350,7 +445,7 @@ const APP_NAMES: Record<number, string> = {
 };
 const appName = (appid: number) => APP_NAMES[appid] ?? `App ${appid}`;
 
-function Items({ rows }: { rows: InventoryRow[] }) {
+function Items({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
   const [sort, setSort] = useState<Sort>("value");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("grid");
@@ -404,6 +499,16 @@ function Items({ rows }: { rows: InventoryRow[] }) {
     return sorted;
   }, [rows, sort, query, activeApp]);
 
+  /* El total de lo que estás mirando, que cambia con la pestaña y con el filtro
+     por nombre — «¿cuánto de esto es CS2?» es la otra mitad de la pregunta que
+     hace clic ahí arriba. Y el recuento de los que no tienen precio sale de lo
+     MISMO que se está sumando: un aviso global al lado de un total filtrado
+     estaría hablando de otros objetos. */
+  const shownTotalCents = net
+    ? netTotalCents(shown)
+    : shown.reduce((a, r) => a + (r.medianCents === null ? 0 : r.valueCents), 0);
+  const shownMissing = shown.filter((r) => r.medianCents === null).length;
+
   const SORTS: { key: Sort; label: string }[] = [
     { key: "value", label: tr("Total value") },
     { key: "unit", label: tr("Unit price") },
@@ -423,29 +528,57 @@ function Items({ rows }: { rows: InventoryRow[] }) {
           hayan elegido. En una fila con lo otro parecerían un filtro más.
           `.segmented` y no chips por la regla de la hoja de estilos: un chip es
           algo que enciendes y puedes apagar; aquí siempre hay una encendida. */}
-      {showTabs && (
-        <div className="segmented scroll" role="tablist">
-          <button
-            role="tab"
-            aria-selected={activeApp === null}
-            className={activeApp === null ? "seg seg-active" : "seg"}
-            onClick={() => setApp(null)}
-          >
-            {tr("Everything")}
-            <span className="mute" style={{ fontWeight: 600 }}>{rows.length}</span>
-          </button>
-          {tabs.map((t) => (
+      <div className="flex items-center gap-3" style={{ flexWrap: "wrap" }}>
+        {showTabs && (
+          <div className="segmented scroll" role="tablist" style={{ flex: "0 1 auto", minWidth: 0 }}>
             <button
-              key={t.appid}
               role="tab"
-              aria-selected={activeApp === t.appid}
-              className={activeApp === t.appid ? "seg seg-active" : "seg"}
-              onClick={() => setApp(t.appid)}
+              aria-selected={activeApp === null}
+              className={activeApp === null ? "seg seg-active" : "seg"}
+              onClick={() => setApp(null)}
             >
-              {appName(t.appid)}
-              <span className="mute" style={{ fontWeight: 600 }}>{t.count}</span>
+              {tr("Everything")}
+              <span className="mute" style={{ fontWeight: 600 }}>{rows.length}</span>
             </button>
-          ))}
+            {tabs.map((t) => (
+              <button
+                key={t.appid}
+                role="tab"
+                aria-selected={activeApp === t.appid}
+                className={activeApp === t.appid ? "seg seg-active" : "seg"}
+                onClick={() => setApp(t.appid)}
+              >
+                {appName(t.appid)}
+                <span className="mute" style={{ fontWeight: 600 }}>{t.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {/* Se pinta con pestañas y sin ellas: con un solo juego sigue habiendo
+            un filtro por nombre, y esa suma es justo lo que no se sabía. */}
+        <div className="flex items-baseline gap-2" style={{ marginLeft: "auto" }}>
+          <span className="eyebrow">{tr("Total")}</span>
+          <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.01em" }}>
+            {euros(shownTotalCents)}
+          </span>
+        </div>
+      </div>
+      {/* La advertencia que antes colgaba del número grande. Aquí califica el
+          total que tiene al lado, que es el que ahora se puede filtrar — y un
+          total al que le faltan objetos solo es honesto si las dos cosas se leen
+          a la vez. */}
+      {shownMissing > 0 && (
+        <div
+          className="flex items-center gap-2"
+          style={{ fontSize: 12.5, color: "var(--warn, #d90)", marginTop: -4 }}
+        >
+          <AlertTriangle size={14} />
+          {/* «1 items» le quita autoridad a la línea justo donde hace falta. */}
+          {plural(
+            shownMissing,
+            "One item has no price yet, and is not in that total.",
+            "{n} items have no price yet, and are not in that total.",
+          )}
         </div>
       )}
       <div className="flex items-center gap-2" style={{ flexWrap: "wrap" }}>
@@ -493,7 +626,7 @@ function Items({ rows }: { rows: InventoryRow[] }) {
         </div>
       </div>
 
-      {view === "grid" ? <ItemsGrid rows={shown} /> : <ItemsTable rows={shown} />}
+      {view === "grid" ? <ItemsGrid rows={shown} net={net} /> : <ItemsTable rows={shown} net={net} />}
       {!shown.length && (
         <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>{tr("Nothing matches that.")}</p>
       )}
@@ -514,7 +647,7 @@ function Items({ rows }: { rows: InventoryRow[] }) {
  *  suman. Las otras tres —unitario, mínimo, coste— son para comparar, y para
  *  comparar está la lista; apretarlas en la tarjeta la volvería ilegible sin
  *  hacerla más útil. */
-function ItemsGrid({ rows }: { rows: InventoryRow[] }) {
+function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
   return (
     <div
       className="grid"
@@ -600,7 +733,9 @@ function ItemsGrid({ rows }: { rows: InventoryRow[] }) {
           >
             <span className="mute">×{r.quantity}</span>
             <span style={{ fontWeight: 700 }}>
-              {r.medianCents === null ? "—" : euros(r.valueCents)}
+              {r.medianCents === null
+                ? "—"
+                : euros(net ? netLineCents(r.medianCents, r.quantity) : r.valueCents)}
             </span>
           </div>
           {/* Las mismas dos advertencias que la tabla. Un objeto bloqueado vale
@@ -636,7 +771,7 @@ function ItemsGrid({ rows }: { rows: InventoryRow[] }) {
  *  lo que se compara: precio unitario, coste y total, uno debajo de otro. Meter
  *  esas cinco cifras en cada tarjeta la convertiría en una fila de tabla con
  *  bordes redondeados. */
-function ItemsTable({ rows }: { rows: InventoryRow[] }) {
+function ItemsTable({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
   return (
     <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -679,15 +814,21 @@ function ItemsTable({ rows }: { rows: InventoryRow[] }) {
                   </div>
                 </td>
                 <td style={{ padding: "6px 8px", textAlign: "right" }}>{r.quantity}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right" }}>{euros(r.medianCents)}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right" }} className="mute">
-                  {euros(r.lowestCents)}
+                <td style={{ padding: "6px 8px", textAlign: "right" }}>
+                  {euros(net ? netOrNull(r.medianCents) : r.medianCents)}
                 </td>
+                <td style={{ padding: "6px 8px", textAlign: "right" }} className="mute">
+                  {euros(net ? netOrNull(r.lowestCents) : r.lowestCents)}
+                </td>
+                {/* Lo que pagaste no lleva comisión: es dinero que ya salió, y
+                    descontarle un 15 % sería inventarse una compra más barata. */}
                 <td style={{ padding: "6px 8px", textAlign: "right" }} className="mute">
                   {euros(r.costCents)}
                 </td>
                 <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700 }}>
-                  {r.medianCents === null ? "—" : euros(r.valueCents)}
+                  {r.medianCents === null
+                    ? "—"
+                    : euros(net ? netLineCents(r.medianCents, r.quantity) : r.valueCents)}
                 </td>
               </tr>
             ))}
@@ -744,7 +885,10 @@ function Onboarding({
         {tr("Steam blocks servers from reading inventories — that's why the sites that do this work so badly — and your purchase history needs your own session. So the reading happens in your browser, and Reel keeps the result. Nothing of your Steam session ever leaves your machine.")}
       </p>
       <CollectorSteps onCopy={onCopy} copied={copied} />
-      <button className="btn btn-primary" onClick={onPick} disabled={uploading}>
+      {/* `btn-accent`: `btn-primary` no existe en la hoja de estilos, así que
+          el botón que cierra el estreno de esta pantalla se pintaba sin fondo
+          ni borde, como si no fuera un botón. */}
+      <button className="btn btn-accent" onClick={onPick} disabled={uploading}>
         {uploading ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
         {tr("Upload the file")}
       </button>
@@ -767,22 +911,29 @@ function Footer({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-      <div className="mute" style={{ fontSize: 12.5 }}>
-        {collectedAt
-          ? tv("Your items as of {when}. Prices refresh on their own every day.", {
-              when: new Date(collectedAt).toLocaleString(dateLocale()),
-            })
-          : tr("Prices refresh on their own every day.")}
-      </div>
-      <div className="flex items-center gap-2" style={{ flexWrap: "wrap" }}>
-        <button className="btn" onClick={onPick} disabled={uploading}>
-          {uploading ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
-          {tr("Upload a new dump")}
-        </button>
-        <button className="btn" onClick={() => setOpen((v) => !v)}>
-          {open ? tr("Hide the collector") : tr("Show the collector")}
-        </button>
+    /* A lo ancho: la fecha a la izquierda y los dos botones a la derecha, que a
+       1.280 es una línea en vez de tres. Y con variantes de verdad — los dos
+       eran `.btn` a secas, o sea sin fondo ni borde, y el que abre el fichero
+       es la acción principal de este pie. */
+    <div className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="mute" style={{ fontSize: 12.5 }}>
+          {collectedAt
+            ? tv("Your items as of {when}. Prices refresh on their own every day.", {
+                when: new Date(collectedAt).toLocaleString(dateLocale()),
+              })
+            : tr("Prices refresh on their own every day.")}
+        </div>
+        <div className="flex items-center gap-2" style={{ flexWrap: "wrap" }}>
+          <button className="btn btn-accent" onClick={onPick} disabled={uploading}>
+            {uploading ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
+            {tr("Upload a new dump")}
+          </button>
+          <button className="btn btn-outline" onClick={() => setOpen((v) => !v)}>
+            <Clipboard size={15} />
+            {open ? tr("Hide the collector") : tr("Show the collector")}
+          </button>
+        </div>
       </div>
       {open && <CollectorSteps onCopy={onCopy} copied={copied} />}
     </div>

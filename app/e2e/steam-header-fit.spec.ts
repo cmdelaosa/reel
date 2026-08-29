@@ -14,6 +14,10 @@ import { test, expect, type Page } from "@playwright/test";
    juntos pedían 405px sobre 375 de pantalla (440 en español, con un steam_id de
    los largos).
 
+   Sigue en pie con la cuenta ya convertida en cabecera de página: lo que se
+   mide no es una tarjeta concreta sino que NADA se salga, y la fila de arriba
+   —h1, pastilla de la cuenta y dos botones— es justo donde más cabe que pase.
+
    Hermética: no toca datos. El estado "conectada" se finge interceptando la
    única lectura que lo decide (profiles.steam_id), porque el usuario sembrado
    del CI no tiene cuenta de Steam enlazada y la fila que aquí se mide solo
@@ -72,8 +76,13 @@ for (const ancho of [375, 320] as const) {
     await fingirCuentaEnlazada(page);
     await page.goto("/games/steam");
 
-    // Con la fila de la cuenta pintada: medir antes es medir la pantalla vacía.
-    await expect(page.getByText(STEAM_ID)).toBeVisible();
+    /* Con la fila de la cuenta pintada: medir antes es medir la pantalla vacía.
+
+       Por el `title` y no por el texto: desde que la cuenta es cabecera de
+       página, el id se pinta acortado —los cuatro dígitos de cada punta— y
+       entero solo está aquí. Es además lo que hay que esperar, porque el
+       acortado sí se ve pero no identifica la fila. */
+    await expect(page.getByTitle(STEAM_ID)).toBeVisible();
 
     const medida = await page.evaluate(() => {
       const pantalla = document.documentElement.clientWidth;
