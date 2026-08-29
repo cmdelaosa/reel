@@ -362,14 +362,37 @@ function ValueChart({
   const first = geo.points[0];
   const last = geo.points[geo.points.length - 1];
   const change = last.value_cents - first.value_cents;
-  /* Los días a los que les faltaban precios se marcan. Sin esto, un bache de la
-     línea no se distingue de una tanda de precios que no llegó — y son cosas
-     muy distintas para quien la mira. */
-  const gaps = geo.points.filter((p) => p.missing_prices > 0);
   /* Cuántos de estos puntos son foto real. No cambia el dibujo —la línea es una
      y el rótulo es uno— pero sí lo que dice el aviso de debajo: «aproximada» a
      secas, teniendo diez meses de registro exacto, se pasa de humilde. */
   const recorded = geo.points.filter((p) => p.source === "snapshot").length;
+
+  /* Los días a los que les faltaban precios se marcan, pero SOLO en el tramo de
+     foto real. En el reconstruido no.
+     La misma columna cuenta dos cosas distintas según de dónde venga el punto, y
+     eso no se vio hasta tener datos de verdad delante. En una foto diaria, «sin
+     precio» es un accidente: el cron no trajo esa tanda, y son ocho de 608. En
+     el tramo reconstruido es la REGLA, porque el recolector solo trae el
+     histórico de los sesenta objetos más valiosos —los otros 548 son cromos de
+     tres céntimos y su curva no la va a abrir nadie—, así que ahí faltan 548
+     todos los días.
+     Marcándolos igual, la curva salía con un punto naranja en los 731 días:
+     un aviso que está siempre no avisa de nada, y de paso tapaba el único día
+     en que decía algo. El recuento estructural se cuenta abajo con palabras, que
+     es donde se puede explicar. */
+  const gaps = geo.points.filter((p) => p.source === "snapshot" && p.missing_prices > 0);
+
+  /* Cuántos objetos sigue de verdad el tramo reconstruido, medidos en el último
+     día que lo sea. Es la cifra que lo califica —«esto son 60 de tus 610»— y no
+     cabía en ningún sitio hasta que dejó de haber puntos naranjas.
+     Se dice «el tramo reconstruido» y no «la curva» a propósito: el día que las
+     fotos diarias lleven años escribiéndose, ese último día reconstruido será
+     viejo y sus cifras también, y una frase que hablara de la curva entera
+     estaría contando el inventario de entonces como si fuera el de hoy. */
+  /* `.at(-1)` no: el `lib` de este proyecto es anterior a es2022 y no lo tiene. */
+  const rebuiltPoints = geo.points.filter((p) => p.source === "reconstructed");
+  const lastRebuilt = rebuiltPoints.length ? rebuiltPoints[rebuiltPoints.length - 1] : null;
+  const tracked = lastRebuilt ? lastRebuilt.distinct_items - lastRebuilt.missing_prices : 0;
 
   return (
     <div className="card" style={{ padding: "16px 18px" }}>
@@ -447,12 +470,29 @@ function ValueChart({
           como un registro y leerla como una estimación, y eso no puede vivir
           escondido detrás de un puntero que en el móvil no existe. */}
       <p className="mute" style={{ margin: "6px 0 0", fontSize: 12 }}>
+        {/* «1 days recorded» salía tal cual en producción el primer día, que es
+            justo el día en que esta frase estrena su número. Para eso está
+            `plural`, que ya usa media pantalla. */}
         {recorded > 0
-          ? tv("{recorded} days recorded day by day; the {rebuilt} before them are rebuilt from your ledger and the price history.", {
+          ? plural(
               recorded,
-              rebuilt: geo.points.length - recorded,
-            })
+              "One day recorded as it happened; everything before it is rebuilt from your ledger and the price history.",
+              "{n} days recorded as they happened; everything before them is rebuilt from your ledger and the price history.",
+            )
           : tr("Rebuilt from your ledger and the price history: no day here was recorded as it happened.")}
+        {/* Y lo que la reconstrucción NO cubre, con su porqué. El recolector
+            trae el histórico de los sesenta objetos más valiosos y de ahí no
+            pasa, así que esta frase es permanente y no un aviso de avería: sin
+            ella, el hueco entre la curva y el total de al lado no se explica. */}
+        {lastRebuilt && lastRebuilt.missing_prices > 0 && tracked > 0 && (
+          <>
+            {" "}
+            {tv("The rebuilt part follows the {tracked} of your {held} items that have a price history — the rest have no candles to ask for.", {
+              tracked,
+              held: lastRebuilt.distinct_items,
+            })}
+          </>
+        )}
       </p>
     </div>
   );
