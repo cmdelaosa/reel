@@ -200,12 +200,18 @@ export default function SteamPage() {
        inventario dentro —608 objetos y su rejilla— lo que hacía era meter en
        cinco columnas lo que en cualquier otra pantalla entra en nueve, y dejar
        medio monitor en blanco a cada lado. */
-    /* Y arranca 16px más arriba que el resto de páginas. Sin el h1, la fila de
-       la cuenta es lo primero que se lee, y una fila de 40px de alto no pide el
+    /* Y arranca más arriba que el resto de páginas. Sin el h1, la fila de la
+       cuenta es lo primero que se lee, y una fila de 40px de alto no pide el
        mismo aire por encima que un título de 34px: con el hueco entero se leía
        como un bloque suelto en medio del blanco. El margen es de esta pantalla
-       y no del `--pad` de .mq-main, que lo comparten las nueve. */
-    <div className="screen mq-page" style={{ marginTop: -16 }}>
+       y no del padding de .mq-main, que lo comparten las nueve.
+
+       Y con el MISMO clamp que ese padding, no con un 16 fijo: arriba son
+       `clamp(20px, 3.5vw, 36px)`, o sea 36 en un monitor y 20 ya en cualquier
+       teléfono. Restar 16 en los dos sitios deja 20 de aire en el monitor —lo
+       que se busca— y 4 en el teléfono, que es la fila pegada a la barra. Con
+       el clamp se descuenta lo que sobra donde sobra: 16 arriba, 4 abajo. */
+    <div className="screen mq-page" style={{ marginTop: "calc(-1 * clamp(4px, 1.2vw, 16px))" }}>
 
       {message && (
         <p
