@@ -36,6 +36,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY   — la sb_secret_…, ver docs/DEPLOY.md
  *   STEAM_CURRENCY              — id de moneda de Valve; 3 = EUR (opcional)
  *   MAX_ITEMS                   — tope de peticiones por pasada (opcional)
+ *   STEAM_GAP_MS                — hueco entre peticiones en ms (opcional)
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -118,6 +119,19 @@ const MAX_ITEMS = Number(process.env.MAX_ITEMS ?? 500);
 /** Filas por escritura y por página de lectura. PostgREST corta las lecturas en
  *  1.000 SIN AVISAR, así que aquí no hay ningún `select` sin `range`. */
 const PAGE = 500;
+
+/** Cada cuántos precios se vuelca lo acumulado.
+ *
+ *  Iba con `PAGE`, y con `MAX_ITEMS` en 1.500 eso eran tres vuelcos por pasada.
+ *  Al bajar el tope a 500 los dos números se igualaron y el vuelco intermedio
+ *  dejó de existir: los 500 precios de la noche se quedaban en memoria hasta el
+ *  `flush` final, que es exactamente lo que la cabecera de `flush` dice que no
+ *  puede pasar — y ahora peor, porque la pasada dura 35 minutos en vez de 18 y
+ *  un `cancel` en Actions o un tropiezo de la base los tira todos.
+ *
+ *  Aparte de `PAGE` y no en su lugar: uno dice cuántas filas caben en una
+ *  sentencia y el otro cada cuánto se guarda, y atarlos fue el error. */
+const FLUSH_EVERY = 100;
 
 const db = createClient(URL_, KEY, { auth: { persistSession: false } });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -308,7 +322,7 @@ for (const item of queue.slice(0, MAX_ITEMS)) {
     failed += 1;
     console.log(`  sin precio: ${item.name} (${(e as Error).message})`);
   }
-  if (batch.length >= PAGE) await flush();
+  if (batch.length >= FLUSH_EVERY) await flush();
   await sleep(GAP_MS);
 }
 
