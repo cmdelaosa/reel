@@ -214,7 +214,11 @@ export default function SteamPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            {/* Con wrap, y no solo en la fila de fuera: los dos botones juntos
+                piden más que un teléfono, y en móvil eso no saca barra de
+                desplazamiento —encoge la página entera y se lleva el dock fuera
+                del área táctil—. Ver e2e/steam-header-fit.spec.ts. */}
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 className="btn"
                 disabled={busy}
