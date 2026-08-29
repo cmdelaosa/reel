@@ -444,12 +444,15 @@
         for (const [k, v] of Object.entries(cursor)) body.set(`cursor[${k}]`, String(v));
         /* Entera y no relativa, por lo mismo que en `get`: el `fetch` de la
            página puede estar envuelto y no saber resolver una ruta. */
-        const res = await fetch(new URL("/account/AjaxLoadMoreHistory/", location.origin), {
-          method: "POST",
-          credentials: "include",
-          headers: { "content-type": "application/x-www-form-urlencoded" },
-          body,
-        });
+        const res = await fetch(
+          new URL("/account/AjaxLoadMoreHistory/", location.origin).toString(),
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body,
+          },
+        );
         if (!res.ok) {
           complete = false;
           log(`  La tienda ha cortado en ${rows.length} filas (${res.status}).`);
