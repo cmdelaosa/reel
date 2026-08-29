@@ -52,15 +52,63 @@ if (!URL_ || !KEY) {
    esto no es un formato, es qué mercado se está mirando. */
 const CURRENCY = Number(process.env.STEAM_CURRENCY ?? 3);
 
-/** El hueco entre peticiones. 700 ms sale de la medida: el margen exacto no se
- *  conoce y el castigo del 429 dura minutos, así que ir despacio aquí no cuesta
- *  nada — esto corre de madrugada y no hay nadie esperando. */
-const GAP_MS = 700;
+/** Quiénes somos, y sin esto Steam no contesta.
+ *
+ *  El `fetch` de Node manda `User-Agent: node` y a ese Steam le devuelve 429
+ *  SIEMPRE desde un runner de GitHub: 10 de 10, medido el 29-08-2026. Con este
+ *  agente, 200 de 200 en el mismo segundo y desde la misma IP.
+ *
+ *  Y no es que Steam tenga una lista de agentes buenos: `curl/8.5.0` pasó diez
+ *  seguidas en una pasada y salió 429 seis veces en la siguiente, dos minutos
+ *  después. Lo que encaja con las dos medidas es que el cupo va por IP Y AGENTE,
+ *  y la IP de un runner la comparte medio mundo — así que los agentes comunes
+ *  llegan con el cubo ya gastado por otro y uno propio llega con el suyo limpio.
+ *  Por eso este dice quiénes somos de verdad en vez de imitar a un navegador:
+ *  no hace falta mentir para que funcione, y una URL en el agente es lo que
+ *  permite que quien mire los registros de Valve sepa a quién escribir.
+ *
+ *  Cambiarlo por algo genérico vuelve a romper el cron, y el síntoma será otra
+ *  vez «Refrescados 0» sin ningún error. */
+const UA = "Reel/1.0 (+https://reel-app.com)";
 
-/** Tope por pasada. 1.500 a 700 ms son unos 18 minutos, holgado dentro de los 45
- *  del workflow. Existe para que un inventario absurdo no deje el trabajo
- *  girando una hora; lo que no entre se refresca mañana, por orden de rancio. */
-const MAX_ITEMS = Number(process.env.MAX_ITEMS ?? 1500);
+/** El hueco entre peticiones.
+ *
+ *  Eran 700 ms, y el comentario decía que salía de una medida. No salía de
+ *  ninguna: hasta que se arregló el agente, la PRIMERA petición ya devolvía 429
+ *  y no había forma de medir el ritmo. Medido de verdad el 29-08-2026, con el
+ *  agente bueno y desde el runner:
+ *
+ *    · a 700 ms:  20 de 40, y el corte llega en la petición 21 — o sea que el
+ *                 cubo son unas veinte y a ese ritmo se vacía en quince
+ *                 segundos;
+ *    · a 3.000 ms: 30 de 40, con cortes sueltos por el medio.
+ *
+ *  O sea que lo que Steam sostiene es del orden de una cada cuatro segundos.
+ *  4.000 ms van por debajo de eso a propósito: esto corre de madrugada, no hay
+ *  nadie esperando, y lo que cuesta caro es el 429 — que no solo pierde esa
+ *  petición, sino que cierra el cubo para las siguientes. */
+const GAP_MS = Number(process.env.STEAM_GAP_MS ?? 4000);
+
+/** Cuánto se espera cuando Steam dice 429, y cuántos seguidos hacen rendirse.
+ *
+ *  Antes un solo 429 cortaba la pasada entera. Con el ritmo bien puesto los
+ *  cortes siguen existiendo —30 de 40 en la medida, no 40 de 40—, así que
+ *  rendirse al primero es tirar la noche por un tropiezo. Se espera el doble
+ *  cada vez, que es lo que el cubo necesita para volver a llenarse, y solo se
+ *  abandona cuando Steam dice que no cinco veces seguidas: eso ya no es un
+ *  tropiezo, es que hoy no toca. */
+const BACKOFF_MS = 8000;
+const GIVE_UP_AFTER_429 = 5;
+
+/** Tope por pasada. Eran 1.500, que a 700 ms cabían en 18 minutos; a 4.000 ms
+ *  serían cien minutos y el workflow corta a los 45. 500 son 33 minutos de
+ *  peticiones más lo que se vaya en esperas, que entra con margen.
+ *
+ *  Que un inventario de 608 objetos ya no quepa en una sola noche no es un
+ *  problema nuevo ni una regresión: la cola va por orden de rancio, así que lo
+ *  que no entra hoy es justo lo que entra primero mañana, y ningún precio se
+ *  queda atrás más de dos días. */
+const MAX_ITEMS = Number(process.env.MAX_ITEMS ?? 500);
 
 /** Filas por escritura y por página de lectura. PostgREST corta las lecturas en
  *  1.000 SIN AVISAR, así que aquí no hay ningún `select` sin `range`. */
@@ -180,19 +228,47 @@ async function flush(): Promise<void> {
   batch = [];
 }
 
+/** Una petición a Steam, con su espera si dice 429.
+ *
+ *  Devuelve la respuesta, o `null` si Steam sigue diciendo 429 después de
+ *  `GIVE_UP_AFTER_429` intentos — y entonces quien llama corta la pasada.
+ *
+ *  El reintento es SOBRE EL MISMO OBJETO y no un salto al siguiente: la espera
+ *  ya está pagada, y saltar dejaría un hueco por cada corte suelto cuando lo
+ *  único que hacía falta era esperar. Antes de esto un solo 429 mataba la noche
+ *  entera; con el ritmo bien puesto los cortes sueltos son normales —30 de 40 en
+ *  la medida del 29-08-2026— así que rendirse al primero era tirar la pasada por
+ *  un tropiezo. */
+async function pedir(url: string): Promise<Response | null> {
+  for (let intento = 1; intento <= GIVE_UP_AFTER_429; intento++) {
+    const res = await fetch(url, {
+      /* El agente es lo que decide si Steam contesta. Ver `UA` arriba: sin él,
+         429 en la primera petición y todas las noches. */
+      headers: { "user-agent": UA, accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (res.status !== 429) return res;
+    if (intento === GIVE_UP_AFTER_429) return null;
+    /* El doble cada vez, que es lo que el cubo necesita para rellenarse. */
+    const espera = BACKOFF_MS * 2 ** (intento - 1);
+    console.log(`  Steam dice "espera" (${intento}/${GIVE_UP_AFTER_429}); ${espera / 1000}s…`);
+    await sleep(espera);
+  }
+  return null;
+}
+
 for (const item of queue.slice(0, MAX_ITEMS)) {
   const url =
     `https://steamcommunity.com/market/priceoverview/?appid=${item.appid}` +
     `&currency=${CURRENCY}&market_hash_name=${encodeURIComponent(item.name)}`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-    if (res.status === 429) {
-      /* Un 429 no es "este objeto falla", es "para". Insistir alarga el bloqueo,
-         así que se corta la pasada entera y lo que quede va mañana — que es
-         exactamente lo que el orden de la cola garantiza que sea lo menos
-         urgente. */
+    const res = await pedir(url);
+    if (res === null) {
+      /* `pedir` ya ha esperado y reintentado lo suyo, y sigue diciendo 429. Eso
+         ya no es un tropiezo: se corta la pasada y lo que quede va mañana, que
+         es exactamente lo que el orden de rancio garantiza que sea lo primero. */
       blocked = true;
-      console.log(`Steam ha cortado tras ${refreshed} precios; el resto, mañana.`);
+      console.log(`Steam sigue cortando tras ${refreshed} precios; el resto, mañana.`);
       break;
     }
     if (!res.ok) {
