@@ -358,11 +358,6 @@ function splitHistory(history: unknown[]): unknown[][] {
   return parts;
 }
 
-/** Sube un fichero del recolector.
- *
- *  Acepta los dos que produce —el del inventario y el del histórico— sin
- *  distinguirlos: la función mira qué trae cada uno. Así el orden en que se
- *  suban da igual, que es lo que uno espera de dos botones. */
 /** Cómo va la subida. Con un histórico entero son unas cincuenta y seis llamadas
  *  en serie —siete minutos largos—, y un botón girando sin decir nada durante
  *  siete minutos es indistinguible de uno colgado. */
@@ -379,6 +374,11 @@ export interface UploadInput {
   onProgress?: (p: UploadProgress) => void;
 }
 
+/** Sube un fichero del recolector.
+ *
+ *  Acepta los dos que produce —el del inventario y el del histórico— sin
+ *  distinguirlos: la función mira qué trae cada uno. Así el orden en que se
+ *  suban da igual, que es lo que uno espera de dos botones. */
 export function useUploadSteamDump() {
   const qc = useQueryClient();
   return useMutation({

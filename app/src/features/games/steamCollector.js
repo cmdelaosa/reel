@@ -858,9 +858,13 @@
     log("Vuelve a pasar esto cuando conteste.");
     return;
   }
-  /* Media hora, y se dice antes de empezar: es la parte larga y quien la lanza
-     tiene que saber que la pestaña se queda ocupada. */
-  const minutos = Math.round((top.length * 3) / 60);
+  /* Media hora larga, y se dice antes de empezar: es la parte lenta y quien la
+     lanza tiene que saber que la pestaña se queda ocupada.
+     3,5 y no 3: los tres segundos son la ESPERA entre peticiones, y encima de
+     eso está lo que tarda cada una — `pricehistory` devuelve dos años de velas,
+     no un precio. Redondear por lo bajo en el único número que alguien va a
+     usar para decidir si le da tiempo es la clase de optimismo que sobra. */
+  const minutos = Math.round((top.length * 3.5) / 60);
   log(
     `Trayendo el histórico de los ${top.length} objetos — unos ${minutos} minutos…` +
       (pricesGaveUp ? ` (ordenados con los ${prices.length} precios que hay)` : ""),
@@ -873,6 +877,16 @@
     .toISOString()
     .slice(0, 10);
   const history = [];
+  /* El mismo freno que llevan los precios, y aquí hace más falta que allí.
+     `get` reintenta con espera creciente y luego tira, y el `catch` de abajo lo
+     apunta y sigue: con sesenta objetos, una negativa sostenida de Steam eran
+     diecisiete minutos de pestaña ocupada para acabar sin nada. Con seiscientos
+     son casi TRES HORAS, y nadie va a estar delante para pararlo.
+     Cinco seguidos sin respuesta no es mala suerte, es que hoy no toca — y lo
+     que ya se haya traído se ofrece igual, porque el orden es por valor y lo
+     primero es lo que más pesa. */
+  const HISTORY_GIVE_UP_AFTER = 5;
+  let sinHistorico = 0;
   for (let i = 0; i < top.length; i++) {
     const h = top[i];
     try {
@@ -917,8 +931,15 @@
           .map((a) => [a.day, Math.round(a.cents / a.vol), a.vol])
           .sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0)),
       });
+      sinHistorico = 0;
     } catch (e) {
       log(`  sin histórico: ${h.market_hash_name} (${e.message})`);
+      sinHistorico += 1;
+      if (sinHistorico >= HISTORY_GIVE_UP_AFTER) {
+        log(`  ${HISTORY_GIVE_UP_AFTER} seguidos sin respuesta: dejo el histórico aquí.`);
+        log("  Lo que ya está traído se puede guardar igual; el resto, otro día.");
+        break;
+      }
     }
     /* Cada 25 y no cada 10: con seiscientos objetos, uno de cada diez son
        sesenta renglones y el panel se convierte en una cuenta atrás ilegible. */
