@@ -2,8 +2,9 @@
  *
  * Hermano pequeño de steamPortfolio.ts: aquel contesta «cuánto vale todo esto»
  * con los precios de HOY, y este «qué ha hecho esto desde que lo compré» con los
- * de cada día. Los datos salen de `steam_price_history` (la vela diaria, global
- * y subida por el recolector) y de `steam_ledger` (tus compras y ventas).
+ * de cada día. Los datos salen de `steam_price_history` (la vela, global y
+ * subida por el recolector: diaria en los dos últimos años y trimestral más
+ * atrás) y de `steam_ledger` (tus compras y ventas).
  *
  * La curva de la CARTERA entera no está aquí: son cuarenta mil velas y se suman
  * en la base, en `rpc_steam_value_series` (migración 0092). Lo que sí está aquí

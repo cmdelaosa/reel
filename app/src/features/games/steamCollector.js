@@ -56,10 +56,16 @@
      traduce el mismo precio, trae otro precio distinto. */
   const CURRENCY = 3;
 
-  /* Cuánto histórico se trae por objeto. Steam guarda desde 2013, y traerlo
-     entero para un inventario grande son megas de JSON que luego hay que subir.
-     Dos años cubren cualquier gráfica que se vaya a mirar. */
-  const HISTORY_DAYS = 730;
+  /* Hasta dónde se trae la vela DIARIA. Steam guarda desde 2013 y da el
+     histórico entero de una vez: lo que no cabe es subirlo, porque un objeto que
+     se mueve todos los días son mil filas por cada mil días y eso multiplicado
+     por sesenta objetos son megas de JSON.
+
+     Así que ya no se corta por fecha, se corta por RESOLUCIÓN: los dos últimos
+     años, día a día, y lo de más atrás en un punto por trimestre. Un cromo de
+     2013 pasa de cuatro mil velas a cincuenta y dos, que es todo lo que se
+     necesita para ver que costaba treinta céntimos y hoy cuesta seis euros. */
+  const HISTORY_DAILY_DAYS = 730;
 
   /* Para cuántos objetos. Los más valiosos primero: la curva de una caja de
      0,03 € no la va a abrir nadie, y son las que más filas meten. */
@@ -838,7 +844,12 @@
     `Trayendo el histórico de los ${top.length} más valiosos…` +
       (pricesGaveUp ? ` (ordenados con los ${prices.length} precios que hay)` : ""),
   );
-  const cutoff = Date.now() - HISTORY_DAYS * 864e5;
+  /* La frontera es un DÍA y no un instante, para que las horas de un mismo día
+     no se repartan entre el cubo diario y el trimestral: serían dos puntos con
+     la misma fecha, y el segundo lo tiraría el upsert de la ingesta. */
+  const dailyFrom = new Date(Date.now() - HISTORY_DAILY_DAYS * 864e5)
+    .toISOString()
+    .slice(0, 10);
   const history = [];
   for (let i = 0; i < top.length; i++) {
     const h = top[i];
@@ -849,24 +860,40 @@
         { tries: 3 },
       );
       /* Steam da ["Jul 12 2014 01: +0", 1.234, "5"], y el último mes viene POR
-         HORA. Se agrega a día aquí —media ponderada por volumen— porque subir
-         720 velas donde caben 30 sesga la curva hacia las horas de más
-         movimiento y multiplica por 24 lo que hay que subir. */
-      const byDay = new Map();
+         HORA. Se agrega aquí —media ponderada por volumen— porque subir 720
+         velas donde caben 30 sesga la curva hacia las horas de más movimiento y
+         multiplica por 24 lo que hay que subir.
+
+         El cubo es el día dentro de los dos últimos años y el TRIMESTRE más
+         atrás. La media ponderada es la misma cuenta en los dos casos: un
+         trimestre es un día muy largo. */
+      const byBucket = new Map();
       for (const [when, price, vol] of p.prices ?? []) {
         const t = Date.parse(String(when).replace(/ (\d{2}): \+0$/, " $1:00:00 GMT"));
-        if (!Number.isFinite(t) || t < cutoff) continue;
+        if (!Number.isFinite(t)) continue;
         const day = new Date(t).toISOString().slice(0, 10);
+        const bucket =
+          day >= dailyFrom
+            ? day
+            : `${day.slice(0, 4)}-Q${Math.ceil(Number(day.slice(5, 7)) / 3)}`;
         const n = Number(vol) || 0;
-        const acc = byDay.get(day) ?? { cents: 0, vol: 0 };
+        const acc = byBucket.get(bucket) ?? { day, cents: 0, vol: 0 };
+        /* El punto del trimestre se fecha en su PRIMER día con ventas, no en el
+           1 de enero: quien lo lee arrastra el precio hacia adelante hasta el
+           punto siguiente —lo hace la gráfica de la ficha y lo hace
+           `rpc_steam_value_series`—, y fechar antes de la primera venta sería
+           afirmar un precio los días en que no lo hubo. */
+        if (day < acc.day) acc.day = day;
         acc.cents += Math.round(price * 100) * Math.max(n, 1);
         acc.vol += Math.max(n, 1);
-        byDay.set(day, acc);
+        byBucket.set(bucket, acc);
       }
       history.push({
         appid: h.appid,
         market_hash_name: h.market_hash_name,
-        days: [...byDay.entries()].map(([day, a]) => [day, Math.round(a.cents / a.vol), a.vol]),
+        days: [...byBucket.values()]
+          .map((a) => [a.day, Math.round(a.cents / a.vol), a.vol])
+          .sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0)),
       });
     } catch (e) {
       log(`  sin histórico: ${h.market_hash_name} (${e.message})`);
