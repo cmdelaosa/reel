@@ -504,11 +504,11 @@ function Items({ rows }: { rows: InventoryRow[] }) {
 
 /** La rejilla: la imagen manda y la cifra la acompaña.
  *
- *  Es la vista por defecto porque es la que cabe. Quinientos treinta cromos en
- *  una tabla de seis columnas son quinientas treinta filas de 40 px —veintiún
- *  mil píxeles de scroll— y de todas ellas lo único que se distingue de un
- *  vistazo es el nombre. En rejilla entran ocho por fila, y lo que se reconoce
- *  es el dibujo, que es como uno tiene guardado su inventario en la cabeza.
+ *  Es la vista por defecto porque es la que cabe. Los 608 objetos en la tabla
+ *  son 25.118 px de scroll y en rejilla 11.625, menos de la mitad, medido a
+ *  1.280 px de ancho. Y de una fila de tabla lo único que se distingue de un
+ *  vistazo es el nombre; en rejilla se reconoce el dibujo, que es como uno
+ *  tiene guardado su inventario en la cabeza.
  *
  *  De las cinco cifras de la tabla aquí solo salen dos: cuántos tienes y cuánto
  *  suman. Las otras tres —unitario, mínimo, coste— son para comparar, y para
@@ -525,11 +525,12 @@ function ItemsGrid({ rows }: { rows: InventoryRow[] }) {
            pantalla y un cromo de 96 px acaba pixelado dentro de una caja
            gigante. Con `auto-fill` las tarjetas conservan su tamaño y la fila se
            queda a medias, que es lo que uno espera de una rejilla.
-           Y 116 y no 148: la primera rejilla que escribí ocupaba MÁS que la
-           tabla —26.810 px contra 24.508 con los 608 objetos— porque siete
-           tarjetas altas por fila gastan más alto que siete filas de 40 px.
-           Una rejilla que no cabe mejor que una tabla no es una rejilla, es una
-           tabla con fotos. */
+           Y 96 y no 148, que es donde empezó esto: con 148 entraban CINCO
+           tarjetas por fila y la rejilla ocupaba MÁS que la tabla —26.810 px
+           contra 24.508 con los 608 objetos—, porque cinco tarjetas altas
+           gastan más alto que cinco filas de 40 px. Con 96 entran siete y el
+           total baja a 11.625. Una rejilla que no cabe mejor que una tabla no
+           es una rejilla, es una tabla con fotos. */
         gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
       }}
     >
@@ -559,9 +560,12 @@ function ItemsGrid({ rows }: { rows: InventoryRow[] }) {
               overflow: "hidden",
             }}
           >
-            {iconUrl(r.iconUrl, 128) ? (
+            {/* 96 y no 128: la caja mide 42 px de alto, así que 96 ya sobra
+                para una pantalla al doble de densidad, y aquí no se piden uno
+                ni dos iconos sino los seiscientos y pico del inventario. */}
+            {iconUrl(r.iconUrl, 96) ? (
               <img
-                src={iconUrl(r.iconUrl, 128)!}
+                src={iconUrl(r.iconUrl, 96)!}
                 alt=""
                 loading="lazy"
                 style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
