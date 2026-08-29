@@ -2238,35 +2238,42 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    etiqueta ya holgada. Así que el de terminar se queda en lo que mide su texto
    y cede el resto.
 
-   Y ahora el de la plataforma también: aquí ya no crece nadie. Con el menú
-   ajustado a su opción más ancha (0100), el botón de encima era lo único que
-   seguía midiéndose por el hueco que sobraba —371 px en una ficha de
-   escritorio, dijera «Game Boy Advance» o dijera «PC»— con un suelo de 200 px
-   que lo dejaba gordo hasta cuando no decía nada. Medido el 28-08-2026 con la
-   ventana a 2752: 324,3 px con la Game Boy Advance puesta, 93,7 con «PC» y 97
-   sin poner, y sin recortar el nombre en ninguno de los tres — que era el
-   motivo entero de que se estirara.
+   El desplegable, en cambio, mide SIEMPRE lo mismo: 325 px, un ancho fijo. Lo
+   normal en un control sería que midiera su contenido, y se probó —de 371 px
+   fijos pasaba a 324,3 con la Game Boy Advance puesta, 93,7 con «PC» y 97 sin
+   poner—, pero eso es un botón que cambia de tamaño cada vez que eliges: la
+   fila se recoloca sola delante de ti y lo que ibas a pulsar se mueve. Con el
+   ancho quieto, lo único que se mueve es lo que dice dentro.
 
-   Encoge por la IZQUIERDA, y de ahí el `flex-end`: el borde derecho se queda
-   donde estaba siempre. No es estética, es lo que evita que el menú se salga.
-   Cuelga anclado a la derecha del botón (.pick-menu) y crece hacia la
-   izquierda, así que con el botón hecho una pastilla de 93 px pegada al
-   principio de la fila, un menú de 322 se sale por la izquierda de la ficha —
-   y la ficha lleva `overflow-hidden`, o sea que no asoma: se CORTA. Con el
-   borde derecho quieto, la geometría del menú es exactamente la de antes.
+   Y 325 son los que pide el nombre más largo que puede salir ahí, que es la
+   Game Boy Advance, por lo mismo que el techo del menú son 322 (0100): su
+   logotipo ES el nombre escrito y mide 8,583 veces su alto — a los 16 px de
+   este botón, 137,3 px de dibujo, más 127,9 px de «Game Boy Advance» al lado
+   (13,5/650), los dos huecos de 9, el galón de 15, el relleno de 12 y el borde
+   de 1 a cada lado: 324,3 px medidos en el navegador. Cualquier otra plataforma
+   cabe de sobra; una que no quepa se recorta con puntos suspensivos, que es
+   justo lo que hace `truncate` en `.pick-value`.
 
-   `flex: 0 1 auto` y no `0 0 auto`: en una ficha estrecha tiene que poder
-   encoger. Y el suelo de 200 px no se BORRA, se pone a cero: un elemento de
-   caja flexible arranca con `min-width: auto`, que es su contenido, así que
-   quitar la línea le habría dado un suelo nuevo —el nombre entero— y la fila
-   se desbordaría en vez de recortar. */
+   De propina, el ancho fijo se lleva por delante el problema que arrastraba
+   esta fila: el menú cuelga anclado a la DERECHA del botón y crece hacia la
+   izquierda, y con el botón encogido a 93 px se salía por la izquierda de la
+   ficha —que lleva `overflow-hidden`, o sea que no asoma: se corta—. Con 325
+   fijos el menú, que como mucho mide 322, cae SIEMPRE dentro del propio botón.
+   Por eso aquí ya no hace falta ni el `justify-content: flex-end` que lo
+   sujetaba ni la excepción del móvil que lo acompañaba.
+
+   El `min-width: 0` sigue puesto, y no es adorno: un elemento de caja flexible
+   arranca con `min-width: auto` —su contenido—, así que sin él una ficha
+   estrecha desbordaría la fila en vez de recortar el nombre. */
 .game-done { display: flex; align-items: center; gap: 12px; }
-.game-done > .btn { flex: 0 1 auto; }
-.game-plat { display: flex; align-items: center; gap: 9px; flex: 1 1 auto; min-width: 0;
-  justify-content: flex-end; }
+/* El de terminar se queda TODO lo que sobre, que es la otra mitad de esto: con
+   el desplegable quieto, el hueco variable de la fila tiene que ir a alguna
+   parte, y va al botón que no tiene nada que perder por ser ancho. */
+.game-done > .btn { flex: 1 1 auto; }
+.game-plat { display: flex; align-items: center; gap: 9px; flex: 0 1 auto; min-width: 0; }
 .game-plat .eyebrow { flex: 0 0 auto; }
 .game-plat .pick-wrap { flex: 0 1 auto; min-width: 0; }
-.game-plat .pick { min-width: 0; }
+.game-plat .pick { width: 325px; min-width: 0; }
 /* «Lo tengo» vive en el héroe, encima de los logos: es lo primero que se mira
    de un juego. Con fondo propio, que un arte claro se lo comía. */
 .game-own { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px;
@@ -2425,13 +2432,10 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   .game-shots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .game-states { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .game-done { flex-direction: column; align-items: stretch; }
-  /* Aquí el desplegable SÍ se estira, al revés que en la ficha ancha: con la
-     fila apilada y el grupo centrado, un botón hecho pastilla dejaría el menú
-     colgando de un punto medio de la pantalla, y de 322 px que llega a medir se
-     saldría por la izquierda. Estirado, su borde derecho vuelve a ser el de la
-     fila y el menú cae dentro. De paso, en un móvil un blanco grande se agradece. */
+  /* Centrado, que aquí la fila se apila y el grupo se queda solo en su renglón.
+     El desplegable mantiene sus 325 px si caben —y en una pantalla de 360 no
+     caben, así que encoge y recorta el nombre, como cualquier otro—. */
   .game-plat { justify-content: center; }
-  .game-plat .pick-wrap { flex: 1 1 auto; }
   .game-facts { grid-template-columns: minmax(0, 1fr); }
   .ttb { flex-direction: column; gap: 12px; }
   .ttb-sep { width: auto; height: 1px; }
