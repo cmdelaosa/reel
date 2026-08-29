@@ -185,8 +185,35 @@ describe("cashFlow", () => {
   });
 
   it("dice cuánto de lo gastado en la tienda no salió de tu bolsillo", () => {
-    const c = cashFlow([e("wallet_topup", 1000), e("store_purchase", -2500)]);
+    const c = cashFlow([
+      e("wallet_topup", 1000),
+      e("market_sell", 2000),
+      e("store_purchase", -2500),
+    ]);
     expect(c.storeFundedByMarketCents).toBe(1500);
+  });
+
+  it("el mercado no paga juegos con dinero que no ha dado", () => {
+    // El hueco entre lo metido y lo gastado son 1.500, pero el mercado solo ha
+    // dado 400: el resto salió de otro sitio y atribuírselo es inventar.
+    const c = cashFlow([
+      e("wallet_topup", 1000),
+      e("market_sell", 400),
+      e("store_purchase", -2500),
+    ]);
+    expect(c.storeFundedByMarketCents).toBe(400);
+  });
+
+  it("un mercado que te ha costado dinero no ha pagado nada", () => {
+    // El caso que sacó esto a la luz: realizado negativo y la pantalla diciendo
+    // igualmente "el mercado te pagó 2.803 € de juegos".
+    const c = cashFlow([
+      e("wallet_topup", 1000),
+      e("market_buy", -2000),
+      e("store_purchase", -2500),
+    ]);
+    expect(c.realizedCents).toBe(-2000);
+    expect(c.storeFundedByMarketCents).toBe(0);
   });
 
   it("gastar menos de lo que metiste no es una deuda", () => {
