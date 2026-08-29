@@ -243,6 +243,13 @@ const ES: Record<string, string> = {
   "Name": "Nombre",
   "Filter by name": "Filtrar por nombre",
   "Nothing matches that.": "No hay nada que case con eso.",
+  /* "Todo" y no "Todas": la clave "All" ya existe más abajo con el femenino de
+     las plataformas, y aquí lo que se agrupa son objetos. Una clave propia
+     cuesta menos que una concordancia que falla en una de las dos pantallas. */
+  "Everything": "Todo",
+  "Grid": "Cuadrícula",
+  "List": "Lista",
+  "no image": "sin imagen",
   "locked": "bloqueado",
   "price not confirmed yet": "precio sin confirmar",
   "Value over time": "Valor con el tiempo",

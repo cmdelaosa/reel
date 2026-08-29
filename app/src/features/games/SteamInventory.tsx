@@ -332,19 +332,66 @@ function Cash({ data }: { data: NonNullable<ReturnType<typeof useSteamInventory>
   );
 }
 
-/* ── La tabla ─────────────────────────────────────────────────────────────── */
+/* ── Tus objetos ──────────────────────────────────────────────────────────── */
 
 type Sort = "value" | "unit" | "quantity" | "name";
+type View = "grid" | "list";
+
+/** Cómo se llama cada juego, para el rótulo de su pestaña.
+ *
+ *  Son los dos inventarios que el recolector lee —730 es CS2 y 753 son los
+ *  cromos, fondos y emoticonos de la comunidad—, y no hay una tercera fuente de
+ *  la que sacar el nombre: el volcado trae el appid y nada más. De ahí el
+ *  respaldo con el número en vez de un hueco: una pestaña sin nombre sigue
+ *  siendo utilizable, y el día que Valve abra otro mercado se verá cuál es. */
+const APP_NAMES: Record<number, string> = {
+  730: "CS2",
+  753: "Steam",
+};
+const appName = (appid: number) => APP_NAMES[appid] ?? `App ${appid}`;
 
 function Items({ rows }: { rows: InventoryRow[] }) {
   const [sort, setSort] = useState<Sort>("value");
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<View>("grid");
+  /** null es "todos". No es un appid más para que añadir un juego nuevo no
+   *  obligue a tocar nada, y para que el estado de estreno sea "lo veo todo". */
+  const [app, setApp] = useState<number | null>(null);
+
+  /** Una pestaña por juego, con lo que hay dentro.
+   *
+   *  El orden lo pone el dinero y no el appid: la pestaña que se mira primero es
+   *  la que más pesa en el total, y con dos inventarios de tamaños tan distintos
+   *  —76 objetos de CS2 valen mucho más que 532 cromos— ordenar por número
+   *  dejaría delante la que menos dice. El recuento va en el rótulo porque es la
+   *  mitad de la pregunta que hace clic ahí. */
+  const tabs = useMemo(() => {
+    const by = new Map<number, { count: number; valueCents: number }>();
+    for (const r of rows) {
+      const acc = by.get(r.appid) ?? { count: 0, valueCents: 0 };
+      acc.count += 1;
+      acc.valueCents += r.valueCents;
+      by.set(r.appid, acc);
+    }
+    return [...by.entries()]
+      .map(([appid, v]) => ({ appid, ...v }))
+      .sort((a, b) => b.valueCents - a.valueCents);
+  }, [rows]);
+
+  /* Con un solo juego no hay nada que elegir, y una pestaña suelta es un mando
+     que no manda: ocupa una fila entera para decir lo que ya se ve. */
+  const showTabs = tabs.length > 1;
+  /* Un filtro que apunta a un juego que ya no está —se vendió el último objeto
+     de CS2 y el volcado siguiente no lo trae— dejaría la rejilla vacía sin que
+     ninguna pestaña se vea encendida. */
+  const activeApp = app !== null && tabs.some((t) => t.appid === app) ? app : null;
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const inApp = activeApp === null ? rows : rows.filter((r) => r.appid === activeApp);
     const filtered = q
-      ? rows.filter((r) => r.marketHashName.toLowerCase().includes(q))
-      : rows;
+      ? inApp.filter((r) => r.marketHashName.toLowerCase().includes(q))
+      : inApp;
     const sorted = [...filtered];
     /* Los que no tienen precio se van al final en los órdenes de dinero, en vez
        de amontonarse arriba como si valieran cero. */
@@ -355,7 +402,7 @@ function Items({ rows }: { rows: InventoryRow[] }) {
     if (sort === "quantity") sorted.sort((a, b) => b.quantity - a.quantity);
     if (sort === "name") sorted.sort((a, b) => a.marketHashName.localeCompare(b.marketHashName));
     return sorted;
-  }, [rows, sort, query]);
+  }, [rows, sort, query, activeApp]);
 
   const SORTS: { key: Sort; label: string }[] = [
     { key: "value", label: tr("Total value") },
@@ -364,8 +411,43 @@ function Items({ rows }: { rows: InventoryRow[] }) {
     { key: "name", label: tr("Name") },
   ];
 
+  const VIEWS: { key: View; label: string }[] = [
+    { key: "grid", label: tr("Grid") },
+    { key: "list", label: tr("List") },
+  ];
+
   return (
     <div className="card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Las pestañas van en su propia fila y ARRIBA del buscador: eligen de qué
+          hablamos, y lo demás —filtrar, ordenar, cómo se ve— actúa sobre lo que
+          hayan elegido. En una fila con lo otro parecerían un filtro más.
+          `.segmented` y no chips por la regla de la hoja de estilos: un chip es
+          algo que enciendes y puedes apagar; aquí siempre hay una encendida. */}
+      {showTabs && (
+        <div className="segmented scroll" role="tablist">
+          <button
+            role="tab"
+            aria-selected={activeApp === null}
+            className={activeApp === null ? "seg seg-active" : "seg"}
+            onClick={() => setApp(null)}
+          >
+            {tr("Everything")}
+            <span className="mute" style={{ fontWeight: 600 }}>{rows.length}</span>
+          </button>
+          {tabs.map((t) => (
+            <button
+              key={t.appid}
+              role="tab"
+              aria-selected={activeApp === t.appid}
+              className={activeApp === t.appid ? "seg seg-active" : "seg"}
+              onClick={() => setApp(t.appid)}
+            >
+              {appName(t.appid)}
+              <span className="mute" style={{ fontWeight: 600 }}>{t.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex items-center gap-2" style={{ flexWrap: "wrap" }}>
         <input
           value={query}
@@ -376,7 +458,11 @@ function Items({ rows }: { rows: InventoryRow[] }) {
             minWidth: 0,
             padding: "7px 10px",
             borderRadius: "var(--r)",
-            border: "1px solid var(--line)",
+            /* `--line` no existe: no está definida en ninguna hoja de la app, y
+               los otros sesenta y pico sitios usan `--border`. El buscador
+               llevaba desde el primer día sin caja visible, y la tabla sin
+               líneas entre filas, porque el borde se resolvía a nada. */
+            border: "1px solid var(--border)",
             background: "transparent",
             color: "inherit",
           }}
@@ -384,15 +470,171 @@ function Items({ rows }: { rows: InventoryRow[] }) {
         {SORTS.map((s) => (
           <button
             key={s.key}
-            className={sort === s.key ? "chip chip-on" : "chip"}
+            /* `chip-on` no existe en la hoja de estilos: el orden elegido nunca
+               se veía elegido. La clase buena es `chip-active`. */
+            className={sort === s.key ? "chip chip-active" : "chip"}
             onClick={() => setSort(s.key)}
           >
             {s.label}
           </button>
         ))}
+        {/* Al final de la fila y separado: no filtra ni ordena nada, solo cambia
+            la forma de lo mismo. */}
+        <div className="segmented" style={{ marginLeft: "auto" }}>
+          {VIEWS.map((v) => (
+            <button
+              key={v.key}
+              className={view === v.key ? "seg seg-active" : "seg"}
+              onClick={() => setView(v.key)}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div style={{ overflowX: "auto" }}>
+      {view === "grid" ? <ItemsGrid rows={shown} /> : <ItemsTable rows={shown} />}
+      {!shown.length && (
+        <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>{tr("Nothing matches that.")}</p>
+      )}
+    </div>
+  );
+}
+
+
+/** La rejilla: la imagen manda y la cifra la acompaña.
+ *
+ *  Es la vista por defecto porque es la que cabe. Quinientos treinta cromos en
+ *  una tabla de seis columnas son quinientas treinta filas de 40 px —veintiún
+ *  mil píxeles de scroll— y de todas ellas lo único que se distingue de un
+ *  vistazo es el nombre. En rejilla entran ocho por fila, y lo que se reconoce
+ *  es el dibujo, que es como uno tiene guardado su inventario en la cabeza.
+ *
+ *  De las cinco cifras de la tabla aquí solo salen dos: cuántos tienes y cuánto
+ *  suman. Las otras tres —unitario, mínimo, coste— son para comparar, y para
+ *  comparar está la lista; apretarlas en la tarjeta la volvería ilegible sin
+ *  hacerla más útil. */
+function ItemsGrid({ rows }: { rows: InventoryRow[] }) {
+  return (
+    <div
+      className="grid"
+      style={{
+        gap: 8,
+        /* `auto-fill` y no `auto-fit`: con cuatro objetos sueltos —un filtro que
+           casi no deja nada— `auto-fit` estira cada tarjeta hasta un cuarto de
+           pantalla y un cromo de 96 px acaba pixelado dentro de una caja
+           gigante. Con `auto-fill` las tarjetas conservan su tamaño y la fila se
+           queda a medias, que es lo que uno espera de una rejilla.
+           Y 116 y no 148: la primera rejilla que escribí ocupaba MÁS que la
+           tabla —26.810 px contra 24.508 con los 608 objetos— porque siete
+           tarjetas altas por fila gastan más alto que siete filas de 40 px.
+           Una rejilla que no cabe mejor que una tabla no es una rejilla, es una
+           tabla con fotos. */
+        gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+      }}
+    >
+      {rows.map((r) => (
+        <div
+          key={`${r.appid}:${r.marketHashName}`}
+          className="surface-2"
+          style={{
+            borderRadius: "var(--r)",
+            padding: 8,
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            minWidth: 0,
+          }}
+        >
+          {/* Alto fijo y `contain`: los iconos de Steam no comparten proporción
+              —una pegatina es cuadrada y un arma es 1,4 veces más ancha que
+              alta— y sin la caja las tarjetas de la misma fila acaban con la
+              cifra a distinta altura, que es lo que hace que una rejilla se lea
+              como un montón desordenado. */}
+          <div
+            style={{
+              height: 42,
+              display: "grid",
+              placeItems: "center",
+              overflow: "hidden",
+            }}
+          >
+            {iconUrl(r.iconUrl, 128) ? (
+              <img
+                src={iconUrl(r.iconUrl, 128)!}
+                alt=""
+                loading="lazy"
+                style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+              />
+            ) : (
+              <div className="mute" style={{ fontSize: 11 }}>
+                {tr("no image")}
+              </div>
+            )}
+          </div>
+          {/* Dos líneas y a partir de ahí puntos suspensivos. Los nombres de
+              Steam llegan a los sesenta caracteres —"Sticker | Renegades |
+              Berlin 2019"— y dejarlos crecer descuadra la fila entera; el
+              nombre completo se lee en el title, y entero está en la lista. */}
+          <div
+            title={r.marketHashName}
+            style={{
+              fontSize: 11,
+              lineHeight: 1.28,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              minHeight: "2.6em",
+            }}
+          >
+            {r.marketHashName}
+          </div>
+          <div
+            className="flex items-center"
+            style={{ justifyContent: "space-between", gap: 6, fontSize: 11.5 }}
+          >
+            <span className="mute">×{r.quantity}</span>
+            <span style={{ fontWeight: 700 }}>
+              {r.medianCents === null ? "—" : euros(r.valueCents)}
+            </span>
+          </div>
+          {/* Las mismas dos advertencias que la tabla. Un objeto bloqueado vale
+              lo que dice pero no se puede vender hoy, y un precio sin confirmar
+              es de fiar a medias: si la rejilla se las callara, sería una vista
+              más bonita que miente. */}
+          {(!r.marketable || r.provisional) && (
+            <div
+              className="mute"
+              style={{
+                fontSize: 10.5,
+                lineHeight: 1.25,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {!r.marketable && tr("locked")}
+              {!r.marketable && r.provisional && " · "}
+              {r.provisional && tr("price not confirmed yet")}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** La tabla de siempre: seis columnas y una fila por objeto.
+ *
+ *  Sigue aquí porque la rejilla no la sustituye, la acompaña. La rejilla enseña
+ *  QUÉ tienes —la imagen es lo que reconoces— y la tabla enseña CUÁNTO, que es
+ *  lo que se compara: precio unitario, coste y total, uno debajo de otro. Meter
+ *  esas cinco cifras en cada tarjeta la convertiría en una fila de tabla con
+ *  bordes redondeados. */
+function ItemsTable({ rows }: { rows: InventoryRow[] }) {
+  return (
+    <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr className="mute" style={{ fontSize: 11.5, textAlign: "left" }}>
@@ -405,8 +647,8 @@ function Items({ rows }: { rows: InventoryRow[] }) {
             </tr>
           </thead>
           <tbody>
-            {shown.map((r) => (
-              <tr key={`${r.appid}:${r.marketHashName}`} style={{ borderTop: "1px solid var(--line)" }}>
+            {rows.map((r) => (
+              <tr key={`${r.appid}:${r.marketHashName}`} style={{ borderTop: "1px solid var(--border)" }}>
                 <td style={{ padding: "6px 8px" }}>
                   <div className="flex items-center gap-2">
                     {iconUrl(r.iconUrl, 48) && (
@@ -448,10 +690,6 @@ function Items({ rows }: { rows: InventoryRow[] }) {
           </tbody>
         </table>
       </div>
-      {!shown.length && (
-        <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>{tr("Nothing matches that.")}</p>
-      )}
-    </div>
   );
 }
 
