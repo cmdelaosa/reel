@@ -4,6 +4,7 @@ import collectorSource from "@/features/games/steamCollector.js?raw";
 import {
   euros,
   iconUrl,
+  marketUrl,
   useSteamInventory,
   useUploadSteamDump,
   type IngestSummary,
@@ -638,10 +639,12 @@ function Items({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
 /** La rejilla: la imagen manda y la cifra la acompaña.
  *
  *  Es la vista por defecto porque es la que cabe. Los 608 objetos en la tabla
- *  son 25.118 px de scroll y en rejilla 11.625, menos de la mitad, medido a
- *  1.280 px de ancho. Y de una fila de tabla lo único que se distingue de un
- *  vistazo es el nombre; en rejilla se reconoce el dibujo, que es como uno
- *  tiene guardado su inventario en la cabeza.
+ *  son 24.957 px de scroll y en rejilla 8.152, un tercio, medido en un
+ *  contenedor de 1.072 px. Y de una fila de tabla lo único que se distingue de
+ *  un vistazo es el nombre; en rejilla se reconoce el dibujo, que es como uno
+ *  tiene guardado su inventario en la cabeza — de ahí que la baldosa sea un
+ *  cuadrado con el icono a sangre y el texto encima, y no un cromo de 42 px
+ *  con tres renglones debajo, que es de donde viene.
  *
  *  De las cinco cifras de la tabla aquí solo salen dos: cuántos tienes y cuánto
  *  suman. Las otras tres —unitario, mínimo, coste— son para comparar, y para
@@ -655,50 +658,72 @@ function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
         gap: 8,
         /* `auto-fill` y no `auto-fit`: con cuatro objetos sueltos —un filtro que
            casi no deja nada— `auto-fit` estira cada tarjeta hasta un cuarto de
-           pantalla y un cromo de 96 px acaba pixelado dentro de una caja
+           pantalla y un cromo de 128 px acaba pixelado dentro de una caja
            gigante. Con `auto-fill` las tarjetas conservan su tamaño y la fila se
            queda a medias, que es lo que uno espera de una rejilla.
-           Y 96 y no 148, que es donde empezó esto: con 148 entraban CINCO
-           tarjetas por fila y la rejilla ocupaba MÁS que la tabla —26.810 px
-           contra 24.508 con los 608 objetos—, porque cinco tarjetas altas
-           gastan más alto que cinco filas de 40 px. Con 96 entran siete y el
-           total baja a 11.625. Una rejilla que no cabe mejor que una tabla no
-           es una rejilla, es una tabla con fotos. */
-        gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+           Y 108 y no 148, que es donde empezó esto: con 148 entran cinco
+           tarjetas por fila y la rejilla ocupa MÁS que la tabla, porque cinco
+           tarjetas altas gastan más alto que cinco filas de 40 px. Una rejilla
+           que no cabe mejor que una tabla no es una rejilla, es una tabla con
+           fotos.
+           Los 12 px que ha subido el mínimo —de 96 a 108— los paga la baldosa
+           cuadrada: medido con los 608 objetos en un contenedor de 1.072 px,
+           la tarjeta de antes eran 100×135 y 8.273 px de scroll, y esta es
+           112×112 y 8.152. Doce por ciento más de lado por menos alto total. */
+        gridTemplateColumns: "repeat(auto-fill, minmax(108px, 1fr))",
       }}
     >
       {rows.map((r) => (
-        <div
+        /* La baldosa entera es un enlace a la ficha del mercado de Steam, que
+           es a donde va uno en cuanto ve un número que no esperaba: a mirar el
+           gráfico y las ofertas de verdad. En pestaña nueva y con `noreferrer`
+           —es un dominio de terceros— y sin subrayado ni azul, porque un
+           enlace que se ve como un enlace en 608 baldosas es ruido. */
+        <a
           key={`${r.appid}:${r.marketHashName}`}
+          href={marketUrl(r.appid, r.marketHashName)}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={r.marketHashName}
           className="surface-2"
           style={{
+            position: "relative",
+            display: "block",
             borderRadius: "var(--r)",
-            padding: 8,
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
+            overflow: "hidden",
             minWidth: 0,
+            color: "inherit",
+            textDecoration: "none",
           }}
         >
-          {/* Alto fijo y `contain`: los iconos de Steam no comparten proporción
-              —una pegatina es cuadrada y un arma es 1,4 veces más ancha que
-              alta— y sin la caja las tarjetas de la misma fila acaban con la
-              cifra a distinta altura, que es lo que hace que una rejilla se lea
-              como un montón desordenado. */}
+          {/* El icono a sangre, en un cuadrado. Antes vivía en una caja de 42
+              px de alto y de un cromo de Steam no se distinguía más que el
+              color: la rejilla existe para reconocer el dibujo, y a 42 px no
+              se reconoce. Cuadrado y no la proporción de cada objeto porque
+              siguen sin compartirla —una pegatina es cuadrada y un arma es 1,4
+              veces más ancha que alta—, y sin caja fija las tarjetas de una
+              misma fila acaban a distinta altura.
+
+              El dibujo ocupa el cuadrado ENTERO y el texto se le pone encima;
+              reservarle su franja abajo era lo primero que probé y deja el
+              icono en una tira de medio centímetro, que es de donde veníamos.
+              Lo que hace que se lea igual es el degradado de la capa. */}
           <div
             style={{
-              height: 42,
+              aspectRatio: "1 / 1",
               display: "grid",
               placeItems: "center",
               overflow: "hidden",
+              padding: 8,
             }}
           >
-            {/* 96 y no 128: la caja mide 42 px de alto, así que 96 ya sobra
-                para una pantalla al doble de densidad, y aquí no se piden uno
-                ni dos iconos sino los seiscientos y pico del inventario. */}
-            {iconUrl(r.iconUrl, 96) ? (
+            {/* 128 y ya no 96: la caja ha pasado de 42 px de alto a todo el
+                ancho de la baldosa —del orden de 100 a 130 px— y con 96 el
+                cromo se veía blando. 256 sería el siguiente escalón y son
+                seiscientas y pico peticiones; 128 llega. */}
+            {iconUrl(r.iconUrl, 128) ? (
               <img
-                src={iconUrl(r.iconUrl, 96)!}
+                src={iconUrl(r.iconUrl, 128)!}
                 alt=""
                 loading="lazy"
                 style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
@@ -709,56 +734,81 @@ function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
               </div>
             )}
           </div>
-          {/* Dos líneas y a partir de ahí puntos suspensivos. Los nombres de
-              Steam llegan a los sesenta caracteres —"Sticker | Renegades |
-              Berlin 2019"— y dejarlos crecer descuadra la fila entera; el
-              nombre completo se lee en el title, y entero está en la lista. */}
+          {/* La cantidad, arriba a la derecha. Es la cifra que dice si esto son
+              160 cajas o una, iba de gris claro al lado del euro y se perdía;
+              aquí tiene esquina propia.
+
+              `badge-glass`, que es la chapa que ya usa la app encima de una
+              carátula: cristal oscuro y texto blanco en todos los temas. Con
+              los colores del tema —fondo oscuro y `--text`— en claro salía
+              texto casi negro sobre cristal casi negro. */}
           <div
-            title={r.marketHashName}
+            className="badge badge-glass"
+            style={{ position: "absolute", top: 6, right: 6, height: 20, padding: "0 7px" }}
+          >
+            ×{r.quantity}
+          </div>
+          {/* El texto encima del dibujo, sobre un degradado que se funde con
+              él: si fuera una banda opaca haría falta reservarle su franja y la
+              baldosa volvería a crecer de alto.
+
+              Degradado y NO `backdrop-filter`: el desenfoque quedaba igual —el
+              degradado ya llega al 92% donde va el texto— y son 608 baldosas.
+              Cada capa desenfocada es una composición aparte, y la chapa de la
+              cantidad ya pone una por baldosa. */}
+          <div
             style={{
-              fontSize: 11,
-              lineHeight: 1.28,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-              minHeight: "2.6em",
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              padding: "10px 8px 7px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 1,
+              background:
+                "linear-gradient(to top, color-mix(in srgb, var(--bg) 92%, transparent) 55%, transparent)",
             }}
           >
-            {r.marketHashName}
-          </div>
-          <div
-            className="flex items-center"
-            style={{ justifyContent: "space-between", gap: 6, fontSize: 11.5 }}
-          >
-            <span className="mute">×{r.quantity}</span>
-            <span style={{ fontWeight: 700 }}>
-              {r.medianCents === null
-                ? "—"
-                : euros(net ? netLineCents(r.medianCents, r.quantity) : r.valueCents)}
-            </span>
-          </div>
-          {/* Las mismas dos advertencias que la tabla. Un objeto bloqueado vale
-              lo que dice pero no se puede vender hoy, y un precio sin confirmar
-              es de fiar a medias: si la rejilla se las callara, sería una vista
-              más bonita que miente. */}
-          {(!r.marketable || r.provisional) && (
+            {/* UNA línea, no dos. Los nombres de Steam llegan a los sesenta
+                caracteres —"Sticker | Renegades | Berlin 2019"— y dos líneas
+                aquí no son texto de más: son doce píxeles más de capa tapando
+                el dibujo, que es justo lo que esta vista venía a arreglar. El
+                nombre completo se lee en el title, y entero está en la lista. */}
             <div
-              className="mute"
               style={{
                 fontSize: 10.5,
-                lineHeight: 1.25,
+                lineHeight: 1.3,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
               }}
             >
-              {!r.marketable && tr("locked")}
-              {!r.marketable && r.provisional && " · "}
-              {r.provisional && tr("price not confirmed yet")}
+              {r.marketHashName}
             </div>
-          )}
-        </div>
+            <div
+              className="flex items-center"
+              style={{ justifyContent: "space-between", gap: 6 }}
+            >
+              <span style={{ fontWeight: 700, fontSize: 12 }}>
+                {r.medianCents === null
+                  ? "—"
+                  : euros(net ? netLineCents(r.medianCents, r.quantity) : r.valueCents)}
+              </span>
+              {/* De las dos advertencias que llevaba la baldosa queda esta.
+                  «Bloqueado» cambia lo que ese dinero es —vale lo que dice pero
+                  hoy no se puede vender—, así que se dice aquí; «precio sin
+                  confirmar» matiza una cifra y para los matices está la lista,
+                  donde sigue. Once palabras repetidas en cientos de baldosas
+                  eran la línea que más ruido hacía de la pantalla. */}
+              {!r.marketable && (
+                <span className="mute" style={{ fontSize: 10.5 }}>
+                  {tr("locked")}
+                </span>
+              )}
+            </div>
+          </div>
+        </a>
       ))}
     </div>
   );

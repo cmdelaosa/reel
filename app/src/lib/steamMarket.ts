@@ -375,3 +375,13 @@ export function iconUrl(hash: string | null, size = 96): string | null {
     ? `https://community.fastly.steamstatic.com/economy/image/${hash}/${size}fx${size}f`
     : null;
 }
+
+/** La ficha del objeto en el mercado de Steam, para poder abrirla desde la
+ *  rejilla.
+ *
+ *  El nombre va dentro de la ruta y hay que codificarlo entero: casi todos
+ *  llevan barra vertical y espacios —"AK-47 | Redline (Field-Tested)"— y sin
+ *  escapar la barra Steam no da la ficha del objeto, da una búsqueda vacía. */
+export function marketUrl(appid: number, marketHashName: string): string {
+  return `https://steamcommunity.com/market/listings/${appid}/${encodeURIComponent(marketHashName)}`;
+}
