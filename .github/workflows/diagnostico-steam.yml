@@ -1,22 +1,35 @@
 name: diagnostico-steam
 
-# TEMPORAL, segunda pasada. La primera ya contestó la pregunta:
+# TEMPORAL, tercera y última pasada. Lo medido hasta ahora, todo desde el mismo
+# runner y con la misma URL:
 #
-#   curl x10           -> 200, 200, 200, 200, 200, 200, 200, 200, 200, 200
-#   fetch de Node x10  -> 429, 429, 429, 429, 429, 429, 429, 429, 429, 429
-#   fetch + UA Chrome  -> 200, 200, 200, 200, 200, 200, 200, 200, 200, 200
+#   pasada 1   curl/8.5.0                        -> 200 x10
+#              fetch de Node (User-Agent «node») -> 429 x10
+#              fetch + User-Agent de Chrome      -> 200 x10
 #
-# Misma IP (20.3.231.117), mismo segundo, misma URL, mismo ritmo. No es la IP
-# compartida ni el cupo: es el User-Agent. `fetch` de Node manda «node» y
-# `curl` manda «curl/8.5.0», y Steam corta al primero.
+#   pasada 2   Reel/1.0 (+https://reel-app.com)  -> 200 x6
+#              Reel/1.0 (cron de precios…)       -> 200 x6
+#              curl/8.5.0                        -> 429 x6   ← ¡había pasado!
+#              User-Agent «node»                 -> 429 x6
 #
-# Lo que queda por decidir es CUÁL ponerle, y no es cosmético: imitar a Chrome
-# es mentir sobre quién llama, y aquí no hace falta si Steam solo está filtrando
-# el «node» pelado — `curl/8.5.0` no es un navegador y pasa. Esta pasada mide
-# tres candidatos para poder elegir el honesto con datos y no con fe.
+# Que `curl/8.5.0` pasara en la primera y no en la segunda tira la explicación
+# fácil («Steam tiene una lista de agentes permitidos») y deja otra que encaja
+# con las dos: el cupo es POR IP Y AGENTE. La IP de un runner de GitHub la
+# comparte medio mundo, así que los agentes comunes —«node», «curl/8.5.0»— ya
+# los ha gastado otro antes de que lleguemos, y uno nuestro entra con su cubo
+# limpio. Eso explica también por qué desde una IP doméstica funciona todo: allí
+# el cubo de «node» es solo nuestro.
 #
-# Se borra en cuanto conteste. Corre al empujar este fichero, porque
-# `workflow_dispatch` solo se lanza desde la rama por defecto.
+# Lo que falta antes de arreglar nada: CUÁNTO aguanta ese cubo. El guión pide
+# hasta 1.500 precios seguidos cada 700 ms —85 por minuto— y ese ritmo se eligió
+# sin poder medirlo, porque hasta hoy la primera petición ya salía 429. Si el
+# cubo es de veinte por minuto, el arreglo del agente se muere en la petición
+# treinta y volvemos a lo mismo.
+#
+# Dos secuencias largas, cada una con SU agente para que no se pisen los cubos,
+# y se anota en qué número aparece el primer 429.
+#
+# Se borra cuando conteste.
 
 on:
   push:
@@ -29,39 +42,47 @@ permissions:
 jobs:
   medir:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - name: ¿Qué User-Agent acepta Steam?
+      - name: ¿Cuánto aguanta el cubo, y a qué ritmo?
         run: |
-          cat > /tmp/ua.mjs <<'JS'
+          cat > /tmp/ritmo.mjs <<'JS'
           const name = 'AK-47 | Redline (Field-Tested)';
           const url = 'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3'
             + '&market_hash_name=' + encodeURIComponent(name);
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-          /* De más honesto a menos. El primero que aguante seis seguidas gana. */
-          const CANDIDATOS = [
-            ['nuestro',      'Reel/1.0 (+https://reel-app.com)'],
-            ['nuestro largo','Reel/1.0 (cron de precios de mercado; +https://reel-app.com)'],
-            ['curl',         'curl/8.5.0'],
-            ['node (control)', null],
-          ];
-
-          for (const [etiqueta, ua] of CANDIDATOS) {
-            const codes = [];
-            for (let i = 0; i < 6; i++) {
+          /* Un agente propio POR PRUEBA: si las dos compartieran el suyo, la
+             segunda heredaría el cubo gastado por la primera y saldría un
+             resultado que no significa nada. Y ninguno es el que va a llevar
+             producción, para no gastarle el cubo al de verdad. */
+          async function tanda(etiqueta, ua, gapMs, n) {
+            let primeros429 = null;
+            let ok = 0;
+            const t0 = Date.now();
+            for (let i = 1; i <= n; i++) {
+              let code;
               try {
                 const res = await fetch(url, {
-                  headers: ua ? { 'user-agent': ua } : {},
+                  headers: { 'user-agent': ua },
                   signal: AbortSignal.timeout(15000),
                 });
-                codes.push(res.status);
-              } catch (e) {
-                codes.push('ERR');
+                code = res.status;
+              } catch {
+                code = 'ERR';
               }
-              await sleep(700);
+              if (code === 200) ok += 1;
+              else if (primeros429 === null) primeros429 = i;
+              await sleep(gapMs);
             }
-            console.log(`  ${etiqueta.padEnd(16)} ${JSON.stringify(ua)} -> ${codes.join(', ')}`);
+            const seg = Math.round((Date.now() - t0) / 1000);
+            console.log(
+              `  ${etiqueta}: ${ok}/${n} con 200 en ${seg}s` +
+                (primeros429 === null ? ', ni un corte' : `, primer corte en la #${primeros429}`),
+            );
           }
+
+          await tanda('700ms  x40', 'ReelSonda-rapida/1.0 (+https://reel-app.com)', 700, 40);
+          await tanda('3000ms x40', 'ReelSonda-lenta/1.0 (+https://reel-app.com)', 3000, 40);
           JS
-          node /tmp/ua.mjs
+          node /tmp/ritmo.mjs
