@@ -1,20 +1,22 @@
 name: diagnostico-steam
 
-# TEMPORAL. Mide por qué `steam-prices` trae cero precios desde hace días.
+# TEMPORAL, segunda pasada. La primera ya contestó la pregunta:
 #
-# Lo que hay que explicar: el sondeo del propio workflow pide `priceoverview`
-# con su `market_hash_name` y saca 200, y cinco segundos después el guión pide
-# ESO MISMO y saca 429 a la primera. Desde una IP doméstica, 5 de 5 con 200.
+#   curl x10           -> 200, 200, 200, 200, 200, 200, 200, 200, 200, 200
+#   fetch de Node x10  -> 429, 429, 429, 429, 429, 429, 429, 429, 429, 429
+#   fetch + UA Chrome  -> 200, 200, 200, 200, 200, 200, 200, 200, 200, 200
 #
-# Tres hipótesis, y este fichero las separa:
-#   A. la IP del runner es compartida y el cupo ya está gastado — entonces el
-#      200 del sondeo es suerte y las tandas saldrán mezcladas;
-#   B. Steam distingue por User-Agent — entonces curl pasa y `fetch` de Node no,
-#      consistentemente;
-#   C. el propio sondeo gasta el cupo — entonces la primera pasa y las demás no.
+# Misma IP (20.3.231.117), mismo segundo, misma URL, mismo ritmo. No es la IP
+# compartida ni el cupo: es el User-Agent. `fetch` de Node manda «node» y
+# `curl` manda «curl/8.5.0», y Steam corta al primero.
 #
-# Se borra cuando conteste. Corre al empujar este fichero, porque
-# `workflow_dispatch` solo se puede lanzar desde la rama por defecto.
+# Lo que queda por decidir es CUÁL ponerle, y no es cosmético: imitar a Chrome
+# es mentir sobre quién llama, y aquí no hace falta si Steam solo está filtrando
+# el «node» pelado — `curl/8.5.0` no es un navegador y pasa. Esta pasada mide
+# tres candidatos para poder elegir el honesto con datos y no con fe.
+#
+# Se borra en cuanto conteste. Corre al empujar este fichero, porque
+# `workflow_dispatch` solo se lanza desde la rama por defecto.
 
 on:
   push:
@@ -29,81 +31,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Quién es este runner
+      - name: ¿Qué User-Agent acepta Steam?
         run: |
-          echo "IP saliente: $(curl -s --max-time 10 https://api.ipify.org)"
-          echo "Node: $(node --version)"
-
-      # A y C: diez peticiones con curl, espaciadas como las del cron (700ms).
-      # Si salen mezcladas, es la IP compartida. Si la primera pasa y el resto
-      # no, el cupo es de uno.
-      - name: curl x10
-        run: |
-          for i in $(seq 1 10); do
-            code=$(curl -s -o /tmp/c.json -w '%{http_code}' --max-time 15 \
-              --get --data-urlencode 'market_hash_name=AK-47 | Redline (Field-Tested)' \
-              'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3')
-            echo "  curl #$i -> $code  $(head -c 80 /tmp/c.json)"
-            sleep 0.7
-          done
-
-      # B: lo mismo con el `fetch` de Node, que es lo que usa el guión. Mismo
-      # ritmo, misma URL: lo único que cambia son las cabeceras que pone cada
-      # cliente.
-      - name: fetch de Node x10
-        run: |
-          cat > /tmp/f.mjs <<'JS'
+          cat > /tmp/ua.mjs <<'JS'
           const name = 'AK-47 | Redline (Field-Tested)';
           const url = 'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3'
             + '&market_hash_name=' + encodeURIComponent(name);
           const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-          for (let i = 1; i <= 10; i++) {
-            try {
-              const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-              const body = (await res.text()).slice(0, 80);
-              console.log(`  fetch #${i} -> ${res.status}  ${body}`);
-            } catch (e) {
-              console.log(`  fetch #${i} -> ERROR ${e.message}`);
+
+          /* De más honesto a menos. El primero que aguante seis seguidas gana. */
+          const CANDIDATOS = [
+            ['nuestro',      'Reel/1.0 (+https://reel-app.com)'],
+            ['nuestro largo','Reel/1.0 (cron de precios de mercado; +https://reel-app.com)'],
+            ['curl',         'curl/8.5.0'],
+            ['node (control)', null],
+          ];
+
+          for (const [etiqueta, ua] of CANDIDATOS) {
+            const codes = [];
+            for (let i = 0; i < 6; i++) {
+              try {
+                const res = await fetch(url, {
+                  headers: ua ? { 'user-agent': ua } : {},
+                  signal: AbortSignal.timeout(15000),
+                });
+                codes.push(res.status);
+              } catch (e) {
+                codes.push('ERR');
+              }
+              await sleep(700);
             }
-            await sleep(700);
+            console.log(`  ${etiqueta.padEnd(16)} ${JSON.stringify(ua)} -> ${codes.join(', ')}`);
           }
           JS
-          node /tmp/f.mjs
-
-      # Y la misma tanda de Node poniéndole el User-Agent de un navegador. Si
-      # esta pasa y la de arriba no, la respuesta es B y el arreglo son dos
-      # líneas.
-      - name: fetch de Node con User-Agent de navegador x10
-        run: |
-          cat > /tmp/g.mjs <<'JS'
-          const name = 'AK-47 | Redline (Field-Tested)';
-          const url = 'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3'
-            + '&market_hash_name=' + encodeURIComponent(name);
-          const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-            + ' (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
-          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-          for (let i = 1; i <= 10; i++) {
-            try {
-              const res = await fetch(url, {
-                headers: { 'user-agent': UA, accept: 'application/json' },
-                signal: AbortSignal.timeout(15000),
-              });
-              const body = (await res.text()).slice(0, 80);
-              console.log(`  fetch+UA #${i} -> ${res.status}  ${body}`);
-            } catch (e) {
-              console.log(`  fetch+UA #${i} -> ERROR ${e.message}`);
-            }
-            await sleep(700);
-          }
-          JS
-          node /tmp/g.mjs
-
-      # Qué cabeceras manda cada uno de verdad, que es lo que decide si B se
-      # sostiene. Contra un eco, no contra Steam.
-      - name: Las cabeceras de cada cliente
-        run: |
-          echo "── curl ──"
-          curl -s --max-time 10 https://echo.free.beeceptor.com/ | head -c 600 || true
-          echo
-          echo "── fetch ──"
-          node -e "fetch('https://echo.free.beeceptor.com/').then(r=>r.text()).then(t=>console.log(t.slice(0,600)))" || true
+          node /tmp/ua.mjs
