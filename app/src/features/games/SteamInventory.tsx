@@ -382,11 +382,16 @@ function ValueChart({
      es donde se puede explicar. */
   const gaps = geo.points.filter((p) => p.source === "snapshot" && p.missing_prices > 0);
 
-  /* Cuántos objetos sigue de verdad la reconstrucción, del último día que la
-     use. Es la cifra que califica la curva entera —«esto son 60 de tus 608»— y
-     no cabía en ningún sitio hasta que dejó de haber puntos naranjas. */
-  const rebuilt = geo.points.filter((p) => p.source === "reconstructed");
-  const lastRebuilt = rebuilt[rebuilt.length - 1];
+  /* Cuántos objetos sigue de verdad el tramo reconstruido, medidos en el último
+     día que lo sea. Es la cifra que lo califica —«esto son 60 de tus 610»— y no
+     cabía en ningún sitio hasta que dejó de haber puntos naranjas.
+     Se dice «el tramo reconstruido» y no «la curva» a propósito: el día que las
+     fotos diarias lleven años escribiéndose, ese último día reconstruido será
+     viejo y sus cifras también, y una frase que hablara de la curva entera
+     estaría contando el inventario de entonces como si fuera el de hoy. */
+  /* `.at(-1)` no: el `lib` de este proyecto es anterior a es2022 y no lo tiene. */
+  const rebuiltPoints = geo.points.filter((p) => p.source === "reconstructed");
+  const lastRebuilt = rebuiltPoints.length ? rebuiltPoints[rebuiltPoints.length - 1] : null;
   const tracked = lastRebuilt ? lastRebuilt.distinct_items - lastRebuilt.missing_prices : 0;
 
   return (
@@ -479,10 +484,10 @@ function ValueChart({
             trae el histórico de los sesenta objetos más valiosos y de ahí no
             pasa, así que esta frase es permanente y no un aviso de avería: sin
             ella, el hueco entre la curva y el total de al lado no se explica. */}
-        {tracked > 0 && lastRebuilt && lastRebuilt.missing_prices > 0 && (
+        {lastRebuilt && lastRebuilt.missing_prices > 0 && tracked > 0 && (
           <>
             {" "}
-            {tv("It follows the {tracked} of your {held} items that have a price history — the rest have no candles to ask for.", {
+            {tv("The rebuilt part follows the {tracked} of your {held} items that have a price history — the rest have no candles to ask for.", {
               tracked,
               held: lastRebuilt.distinct_items,
             })}

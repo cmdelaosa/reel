@@ -277,8 +277,8 @@ const ES: Record<string, string> = {
     "{n} días apuntados según pasaban; todo lo anterior está reconstruido con tu libro y el histórico de precios.",
   /* Permanente, no un aviso de avería: el recolector trae el histórico de los
      sesenta objetos más valiosos y de ahí no pasa. */
-  "It follows the {tracked} of your {held} items that have a price history — the rest have no candles to ask for.":
-    "Sigue los {tracked} de tus {held} objetos que tienen histórico de precios — de los demás no hay velas que pedir.",
+  "The rebuilt part follows the {tracked} of your {held} items that have a price history — the rest have no candles to ask for.":
+    "El tramo reconstruido sigue los {tracked} de tus {held} objetos que tienen histórico de precios — de los demás no hay velas que pedir.",
   "Rebuilt from your ledger and the price history: no day here was recorded as it happened.":
     "Reconstruido con tu libro y el histórico de precios: ningún día de aquí se apuntó según pasaba.",
   "No graph yet: the price history is what draws it, and it comes from the collector's second button.":
