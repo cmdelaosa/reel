@@ -14,9 +14,11 @@ import { test, expect, type Page } from "@playwright/test";
    juntos pedían 405px sobre 375 de pantalla (440 en español, con un steam_id de
    los largos).
 
-   Sigue en pie con la cuenta ya convertida en cabecera de página: lo que se
-   mide no es una tarjeta concreta sino que NADA se salga, y la fila de arriba
-   —h1, pastilla de la cuenta y dos botones— es justo donde más cabe que pase.
+   Sigue en pie con la cuenta ya convertida en cabecera de página, y cubre más
+   que antes: lo que se mide no es una tarjeta concreta sino que NADA se salga,
+   y desde que el segmentado Inventario/Importar comparte fila con la pastilla
+   de la cuenta y los dos botones, esa fila lleva cuatro controles en vez de
+   dos. Es justo donde más cabe que pase.
 
    Hermética: no toca datos. El estado "conectada" se finge interceptando la
    única lectura que lo decide (profiles.steam_id), porque el usuario sembrado

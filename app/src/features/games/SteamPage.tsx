@@ -200,7 +200,12 @@ export default function SteamPage() {
        inventario dentro —608 objetos y su rejilla— lo que hacía era meter en
        cinco columnas lo que en cualquier otra pantalla entra en nueve, y dejar
        medio monitor en blanco a cada lado. */
-    <div className="screen mq-page">
+    /* Y arranca 16px más arriba que el resto de páginas. Sin el h1, la fila de
+       la cuenta es lo primero que se lee, y una fila de 40px de alto no pide el
+       mismo aire por encima que un título de 34px: con el hueco entero se leía
+       como un bloque suelto en medio del blanco. El margen es de esta pantalla
+       y no del `--pad` de .mq-main, que lo comparten las nueve. */
+    <div className="screen mq-page" style={{ marginTop: -16 }}>
 
       {message && (
         <p
@@ -216,26 +221,57 @@ export default function SteamPage() {
         </p>
       )}
 
-      {/* ── Paso 1: la cuenta ────────────────────────────────────────────── */}
-      {/* Conectada, la cuenta es CABECERA y no tarjeta. Una tarjeta de veinte
+      {/* ── Paso 1: la cuenta ─────────────────────────────────────────────
+
+          Conectada, la cuenta es CABECERA y no tarjeta. Una tarjeta de veinte
           píxeles de relleno para decir «conectada» y dos botones era el bloque
-          más alto de la pantalla diciendo lo que menos cambia, y encima no se
-          parecía a ninguna otra página: el resto de la casa abre con h1, frase
-          y acciones a la derecha (mq-sechead + mq-h1 + mq-sub). Esto es eso.
+          más alto de la pantalla diciendo lo que menos cambia.
+
+          Y la cabecera ya no lleva h1 ni frase. «Steam» estaba dicho tres veces
+          en cuatro centímetros —la pestaña encendida del carril, el logotipo de
+          la pastilla y el título—, y el subtítulo describía la pantalla a quien
+          ya la tenía delante. Lo que queda es lo único que esa franja tiene que
+          resolver: en qué mitad estás y qué cuenta es. En una sola fila, porque
+          las dos cosas se leen juntas y sobre la misma cuenta.
 
           Sin conectar sí hay tarjeta, debajo: ahí hay algo que explicar —qué se
           lee, qué no se publica y lo del perfil público— y eso son párrafos,
-          no una fila de botones. */}
-      <div className="mq-sechead">
-        <div>
-          <h1 className="mq-h1">{tr("Steam")}</h1>
-          <p className="mq-sub dim">{tr("Your market inventory, and the games you bring into Reel.")}</p>
-        </div>
-        {link?.steamId && (
-          /* Con wrap, y no solo en la fila de fuera: los dos botones juntos
-             piden más que un teléfono, y en móvil eso no saca barra de
-             desplazamiento —encoge la página entera y se lleva el dock fuera
-             del área táctil—. Ver e2e/steam-header-fit.spec.ts. */
+          no una fila de botones. Ahí la pantalla se identifica con el rótulo de
+          la tarjeta y con la pestaña del carril, que es de donde vienes. */}
+      {link?.steamId && (
+        /* `align-items: center` y no el `flex-end` de .mq-sechead: eso alineaba
+           una frase con unos botones, y aquí los dos lados son controles de
+           alturas distintas —34 el segmentado, 40 los botones—. */
+        <div className="mq-sechead" style={{ alignItems: "center" }}>
+          {/* ── Las dos mitades ──────────────────────────────────────────
+              Antes esto era una pantalla larga: la importación arriba y el
+              inventario debajo, con el argumento de que las dos cuelgan de la
+              misma cuenta. Con el inventario ya crecido —608 objetos, su
+              gráfica y sus cuatro cifras— ese argumento se dio la vuelta: para
+              llegar a lo que se mira a diario había que pasar por delante de lo
+              que se usa una vez al año. Inventario primero y por defecto.
+
+              Y siguen colgando de la misma cuenta: por eso comparten fila con
+              ella y no van en una propia. Sincronizar y desconectar son de las
+              dos mitades, que es lo que evita el «¿en cuál de las dos estaba
+              desconectar?». */}
+          <div className="segmented" role="tablist">
+            {SECTIONS.map((x) => (
+              <button
+                key={x.key}
+                role="tab"
+                aria-selected={section === x.key}
+                className={section === x.key ? "seg seg-active" : "seg"}
+                onClick={() => setSection(x.key)}
+              >
+                {tr(x.label)}
+              </button>
+            ))}
+          </div>
+          {/* Con wrap, y no solo en la fila de fuera: los dos botones juntos
+              piden más que un teléfono, y en móvil eso no saca barra de
+              desplazamiento —encoge la página entera y se lleva el dock fuera
+              del área táctil—. Ver e2e/steam-header-fit.spec.ts. */}
           <div className="flex items-center gap-2 flex-wrap">
             {/* El id entero son diecisiete dígitos que no dicen nada a nadie y
                 se comían la fila. Los cuatro de cada punta bastan para
@@ -260,7 +296,7 @@ export default function SteamPage() {
                 className="btn btn-outline"
                 disabled={busy}
                 /* Y salta a Importar, que es donde se ve. El botón vive en la
-                   tarjeta de la cuenta —fuera de las dos secciones— pero todo
+                   fila de la cuenta —fuera de las dos secciones— pero todo
                    lo que produce, la rueda, la lista y el recibo, se pinta
                    dentro de una: pulsarlo desde Inventario dejaba la pantalla
                    igual que estaba, con el escaneo corriendo y sin una sola
@@ -281,8 +317,8 @@ export default function SteamPage() {
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {linkPending && (
         <div className="skeleton" style={{ height: 44, borderRadius: "var(--r)" }} />
@@ -310,34 +346,6 @@ export default function SteamPage() {
           <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
             {tr("Your Steam profile's game details have to be public, or Steam sends back an empty list.")}
           </p>
-        </div>
-      )}
-
-      {/* ── Las dos secciones ─────────────────────────────────────────────── */}
-      {/* Antes esto era una pantalla larga: la importación arriba y el
-          inventario debajo, con el argumento de que las dos cuelgan de la misma
-          cuenta y separarlas obligaría a recordar dónde está cada cosa. Con el
-          inventario ya crecido —608 objetos, su gráfica y sus cuatro cifras—
-          ese argumento se dio la vuelta: para llegar a lo que se mira a diario
-          había que pasar por delante de lo que se usa una vez al año.
-          Inventario primero y por defecto, por eso mismo.
-
-          Y siguen colgando de la misma cuenta: la tarjeta de arriba —conectada,
-          tu id, sincronizar, desconectar— se queda FUERA de las dos, que es lo
-          que evita el "¿en cuál de las dos estaba desconectar?". */}
-      {link?.steamId && (
-        <div className="segmented" role="tablist" style={{ alignSelf: "flex-start" }}>
-          {SECTIONS.map((x) => (
-            <button
-              key={x.key}
-              role="tab"
-              aria-selected={section === x.key}
-              className={section === x.key ? "seg seg-active" : "seg"}
-              onClick={() => setSection(x.key)}
-            >
-              {tr(x.label)}
-            </button>
-          ))}
         </div>
       )}
 

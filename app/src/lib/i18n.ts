@@ -282,10 +282,6 @@ const ES: Record<string, string> = {
     "El neto descuenta la comisión del 15 % de Steam: lo que te llega de verdad a la cartera.",
   "{items} items · {distinct} different · about {quick} if you sold it all today":
     "{items} objetos · {distinct} distintos · unos {quick} si lo vendieras todo hoy",
-  "{n} items have no price yet, and are not in that total.":
-    "{n} objetos aún no tienen precio, y no están en ese total.",
-  "One item has no price yet, and is not in that total.":
-    "Un objeto aún no tiene precio, y no está en ese total.",
   "One item had no price on {day}": "Un objeto no tenía precio el {day}",
   "one item": "un objeto",
   "one market row": "una fila de mercado",
@@ -333,8 +329,6 @@ const ES: Record<string, string> = {
   "{n} rows had a date Steam wrote in a way we couldn't read, and were left out rather than dated wrong.":
     "{n} filas traían una fecha que Steam escribió de una forma que no supimos leer, y se han quedado fuera en vez de fecharse mal.",
   "Steam account": "Cuenta de Steam",
-  "Your market inventory, and the games you bring into Reel.":
-    "Tu inventario del mercado, y los juegos que traes a Reel.",
   "Connect Steam": "Conectar Steam",
   "Connected": "Conectada",
   "Disconnect": "Desconectar",
