@@ -232,6 +232,10 @@ const ES: Record<string, string> = {
      · "Made trading" es «Sacado con el mercado» y no «Ganado»: el saldo de la
        cartera de Steam no se puede sacar, y «ganado» sugiere un ingreso. */
   "Market inventory": "Inventario del mercado",
+  "Inventory": "Inventario",
+  "Bring your Steam games into Reel": "Trae tus juegos de Steam a Reel",
+  "Reel reads the games you own and the hours you've played, and shows you a list before writing anything. Start it with \"Look at my Steam library\" up there.":
+    "Reel lee los juegos que tienes y las horas que les has echado, y te enseña la lista antes de escribir nada. Se arranca con «Mirar mi biblioteca de Steam», ahí arriba.",
   "Item": "Objeto",
   "How many": "Cuántos",
   "Worth": "Vale",
@@ -243,6 +247,13 @@ const ES: Record<string, string> = {
   "Name": "Nombre",
   "Filter by name": "Filtrar por nombre",
   "Nothing matches that.": "No hay nada que case con eso.",
+  /* "Todo" y no "Todas": la clave "All" ya existe más abajo con el femenino de
+     las plataformas, y aquí lo que se agrupa son objetos. Una clave propia
+     cuesta menos que una concordancia que falla en una de las dos pantallas. */
+  "Everything": "Todo",
+  "Grid": "Cuadrícula",
+  "List": "Lista",
+  "no image": "sin imagen",
   "locked": "bloqueado",
   "price not confirmed yet": "precio sin confirmar",
   "Value over time": "Valor con el tiempo",
