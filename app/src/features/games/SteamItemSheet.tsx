@@ -185,7 +185,10 @@ export function SteamItemSheet({
               pantalla, y esconderlo debajo de la curva lo convertiría en un
               secreto. Pestaña nueva y `noreferrer` — es un dominio de terceros. */}
           <a
-            className="btn btn-sm"
+            /* `btn-ghost` y no `.btn` a secas: `.btn` sin variante es borde
+               transparente y sin fondo, o sea un texto con relleno. Al lado de
+               la equis, que sí se ve, parecía una etiqueta y no un enlace. */
+            className="btn btn-sm btn-ghost"
             href={marketUrl(row.appid, row.marketHashName)}
             target="_blank"
             rel="noreferrer noopener"

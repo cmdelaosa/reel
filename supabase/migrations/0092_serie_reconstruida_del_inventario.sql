@@ -221,12 +221,6 @@ cover as (
 ),
 -- Cuántos tenías de cada objeto cada día.
 --
--- La cantidad de un día es la de hoy MENOS todo lo que entró después. Compraste
--- después → antes tenías menos; vendiste después → antes tenías más. La misma
--- regla, en cliente, está en app/src/domain/steamSeries.ts (`heldOn`), que es la
--- que tiene los tests; y las dos direcciones están afirmadas en
--- supabase/sql-checks/0092_serie_reconstruida.sql.
---
 -- ── Por qué esto no es una rejilla con un `left join` ─────────────────────
 -- Porque la rejilla —todos los objetos × todos los días, juntada después con los
 -- precios— tardaba 38 segundos con el inventario del usuario (600 objetos,
