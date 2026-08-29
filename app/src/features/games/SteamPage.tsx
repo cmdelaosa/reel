@@ -98,9 +98,12 @@ const hours = (minutes: number) => (minutes > 0 ? formatPlaytime(minutes) : "—
  *  la otra tus horas y tu biblioteca— y se usan a ritmos distintos: el
  *  inventario a diario, la importación cuando conectas la cuenta y poco más. */
 type Section = "inventory" | "import";
+/* El inglés en la constante y `tr()` al pintar, que es como lo hace el resto de
+   la casa. Traducirlo aquí lo congelaría en el idioma que hubiera cuando se
+   cargó el módulo. */
 const SECTIONS: { key: Section; label: string }[] = [
-  { key: "inventory", label: tr("Inventory") },
-  { key: "import", label: tr("Import") },
+  { key: "inventory", label: "Inventory" },
+  { key: "import", label: "Import" },
 ];
 
 export default function SteamPage() {
@@ -236,7 +239,16 @@ export default function SteamPage() {
               <button
                 className="btn"
                 disabled={busy}
-                onClick={() => scan.mutate()}
+                /* Y salta a Importar, que es donde se ve. El botón vive en la
+                   tarjeta de la cuenta —fuera de las dos secciones— pero todo
+                   lo que produce, la rueda, la lista y el recibo, se pinta
+                   dentro de una: pulsarlo desde Inventario dejaba la pantalla
+                   igual que estaba, con el escaneo corriendo y sin una sola
+                   señal de que hubiera pasado algo. */
+                onClick={() => {
+                  setSection("import");
+                  scan.mutate();
+                }}
               >
                 {busy ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
                 {run ? tr("Sync again") : tr("Look at my Steam library")}
@@ -292,7 +304,7 @@ export default function SteamPage() {
               className={section === x.key ? "seg seg-active" : "seg"}
               onClick={() => setSection(x.key)}
             >
-              {x.label}
+              {tr(x.label)}
             </button>
           ))}
         </div>
@@ -313,7 +325,11 @@ export default function SteamPage() {
           nunca se veía vacía. Ahora es una sección entera en blanco, así que
           dice qué es y adónde ir: el botón que la arranca vive en la tarjeta de
           la cuenta, que es de las dos y no de esta. */}
-      {!run && (
+      {/* `draft &&` para no decirlo antes de saberlo: mientras la consulta va,
+          `run` es null igual que cuando de verdad no hay nada, y quien tiene una
+          importación hecha veía "trae tus juegos" un instante antes de que el
+          recibo lo desmintiera. */}
+      {draft && !run && (
         <div className="card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontWeight: 750 }}>{tr("Bring your Steam games into Reel")}</div>
           <p className="dim" style={{ margin: 0, fontSize: 13.5 }}>
