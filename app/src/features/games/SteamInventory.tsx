@@ -10,6 +10,7 @@ import {
   type IngestSummary,
   type InventoryRow,
   type SteamSeriesPoint,
+  type UploadProgress,
 } from "@/lib/steamMarket";
 import { SteamItemSheet } from "@/features/games/SteamItemSheet";
 import {
@@ -30,6 +31,26 @@ import { dateLocale } from "@/lib/locale";
  *  función resuelven lo que hay, que son cuatro sitios. */
 const plural = (n: number, one: string, many: string) =>
   n === 1 ? tr(one) : tv(many, { n });
+
+/** Lo que dice el botón de subir mientras sube.
+ *
+ *  Con el histórico entero son unas cincuenta y seis llamadas en serie, siete
+ *  minutos largos, y el volcado se trocea porque la función no puede con él de
+ *  una vez. Un botón girando sin contar nada durante siete minutos se lee como
+ *  colgado, y lo primero que hace uno es recargar — que es justo lo que deja la
+ *  subida a medias.
+ *
+ *  El primer trozo no lleva número: hasta que vuelve la primera llamada no se
+ *  sabe cuántos son, y «0 de 0» es peor que nada. */
+const uploadLabel = (
+  uploading: boolean,
+  progress: UploadProgress | null,
+  idle: string,
+): string => {
+  if (!uploading) return idle;
+  if (!progress || progress.total <= 1) return tr("Uploading…");
+  return tv("Uploading… {done} of {total}", { done: progress.done, total: progress.total });
+};
 
 /* El inventario del mercado, dentro de la pestaña Steam (0088). Lo que la
    importación de juegos es a tu biblioteca, esto es a tu dinero — y son dos
@@ -58,6 +79,11 @@ export function SteamInventory() {
   /** El objeto cuya ficha está abierta, o null. Vive aquí y no dentro de la
    *  lista porque la ficha necesita el libro, que lo tiene esta consulta. */
   const [open, setOpen] = useState<InventoryRow | null>(null);
+  /** Por qué trozo va la subida. Vive aquí y no dentro de la consulta porque el
+   *  histórico entero son unas cincuenta y seis llamadas en serie: sin esto, el
+   *  botón gira siete minutos sin decir nada y no hay forma de distinguirlo de
+   *  uno colgado. */
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
 
   if (isLoading) {
     return (
@@ -86,6 +112,7 @@ export function SteamInventory() {
           }}
           onPick={() => fileInput.current?.click()}
           uploading={upload.isPending}
+          progress={progress}
         />
       ) : (
         <>
@@ -108,6 +135,7 @@ export function SteamInventory() {
             }}
             copied={copied}
             uploading={upload.isPending}
+            progress={progress}
           />
         </>
       )}
@@ -137,7 +165,10 @@ export function SteamInventory() {
         style={{ display: "none" }}
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) upload.mutate(file);
+          if (file) {
+            setProgress(null);
+            upload.mutate({ file, onProgress: setProgress });
+          }
           /* Se limpia para que subir DOS VECES el mismo fichero vuelva a
              disparar el change. Sin esto, re-subir el volcado corregido no hace
              nada y parece que la pantalla se ha colgado. */
@@ -382,14 +413,15 @@ function ValueChart({
      La misma columna cuenta dos cosas distintas según de dónde venga el punto, y
      eso no se vio hasta tener datos de verdad delante. En una foto diaria, «sin
      precio» es un accidente: el cron no trajo esa tanda, y son ocho de 608. En
-     el tramo reconstruido es la REGLA, porque el recolector solo trae el
-     histórico de los sesenta objetos más valiosos —los otros 548 son cromos de
-     tres céntimos y su curva no la va a abrir nadie—, así que ahí faltan 548
-     todos los días.
-     Marcándolos igual, la curva salía con un punto naranja en los 731 días:
-     un aviso que está siempre no avisa de nada, y de paso tapaba el único día
-     en que decía algo. El recuento estructural se cuenta abajo con palabras, que
-     es donde se puede explicar. */
+     el tramo reconstruido depende de hasta dónde llegue el histórico subido, y
+     cuando el recolector solo traía los sesenta objetos más valiosos faltaban
+     548 TODOS los días: la curva salía con un punto naranja en los 731, un aviso
+     que está siempre y por tanto no avisa de nada, tapando además el único día
+     en que decía algo.
+     El recolector ya los trae todos, así que ese caso se vacía solo — pero la
+     regla se queda: un volcado a medias, o uno viejo de antes del cambio, lo
+     reproduce entero. Lo estructural se cuenta abajo con palabras, que es donde
+     se puede explicar. */
   const gaps = geo.points.filter((p) => p.source === "snapshot" && p.missing_prices > 0);
 
   /* Cuántos objetos sigue de verdad el tramo reconstruido, medidos en el último
@@ -490,10 +522,12 @@ function ValueChart({
               "{n} days recorded as they happened; everything before them is rebuilt from your ledger and the price history.",
             )
           : tr("Rebuilt from your ledger and the price history: no day here was recorded as it happened.")}
-        {/* Y lo que la reconstrucción NO cubre, con su porqué. El recolector
-            trae el histórico de los sesenta objetos más valiosos y de ahí no
-            pasa, así que esta frase es permanente y no un aviso de avería: sin
-            ella, el hueco entre la curva y el total de al lado no se explica. */}
+        {/* Y lo que la reconstrucción NO cubre, con su porqué. Desde que el
+            recolector trae el histórico de TODOS los objetos esto no sale casi
+            nunca —la condición es que falte alguno— pero sigue haciendo falta:
+            lo saca un volcado a medias, uno viejo de cuando el tope eran sesenta,
+            o un objeto que Steam no quiso dar. Sin ella, el hueco entre la curva
+            y el total de al lado no se explica en ninguna parte. */}
         {lastRebuilt && lastRebuilt.missing_prices > 0 && tracked > 0 && (
           <>
             {" "}
@@ -1087,12 +1121,14 @@ function Onboarding({
   onCopy,
   onPick,
   uploading,
+  progress,
 }: {
   source: string;
   copied: boolean;
   onCopy: () => void;
   onPick: () => void;
   uploading: boolean;
+  progress: UploadProgress | null;
 }) {
   return (
     <div className="card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1110,7 +1146,7 @@ function Onboarding({
           ni borde, como si no fuera un botón. */}
       <button className="btn btn-accent" onClick={onPick} disabled={uploading}>
         {uploading ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
-        {tr("Upload the file")}
+        {uploadLabel(uploading, progress, tr("Upload the file"))}
       </button>
     </div>
   );
@@ -1122,12 +1158,14 @@ function Footer({
   onCopy,
   copied,
   uploading,
+  progress,
 }: {
   collectedAt: string | null;
   onPick: () => void;
   onCopy: () => void;
   copied: boolean;
   uploading: boolean;
+  progress: UploadProgress | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -1147,7 +1185,7 @@ function Footer({
         <div className="flex items-center gap-2" style={{ flexWrap: "wrap" }}>
           <button className="btn btn-accent" onClick={onPick} disabled={uploading}>
             {uploading ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
-            {tr("Upload a new dump")}
+            {uploadLabel(uploading, progress, tr("Upload a new dump"))}
           </button>
           <button className="btn btn-outline" onClick={() => setOpen((v) => !v)}>
             <Clipboard size={15} />
