@@ -81,6 +81,14 @@
      el fichero de dos megas a unos trece. Por eso sigue siendo el SEGUNDO botón
      y el segundo fichero — quien solo quiera el valor de hoy ya lo tiene
      descargado antes de que esto empiece.
+     Y lo que cuesta del otro lado, medido en local el 29-08-2026 con el peor
+     caso de las dos cosas juntas —la ventana sin tope de 0094, o sea desde 2013,
+     por estos 610 objetos: medio millón de velas y 820.000 celdas—:
+     `rpc_steam_value_series` tarda 1,2-1,7 s y devuelve 1.340 puntos. Con solo
+     sesenta objetos eran 0,5 s. Sigue muy por debajo del `statement_timeout`,
+     pero es la cifra que hay que volver a mirar si alguien sube otra vez el
+     techo: `p_days` es la salida de emergencia y sigue ahí.
+
      El tope se queda escrito por si algún día hace falta acotarlo: `null` es
      todos. El ORDEN por valor no es decorativo aunque ya no recorte nada — si
      cierras la pestaña a mitad, lo que se ha traído es lo que más pesa. */

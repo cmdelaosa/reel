@@ -260,9 +260,21 @@ export function useSteamValueSeries() {
     queryKey: qk.steamValueSeries,
     enabled: Boolean(session),
     queryFn: async (): Promise<SteamSeriesPoint[]> => {
-      const { data, error } = await supabase.rpc("rpc_steam_value_series", {});
-      if (error) throw new Error(error.message);
-      return (data ?? []).map((r: unknown) => seriesRow.parse(r));
+      /* PAGINADA, y no es precaución: PostgREST corta en mil filas SIN AVISAR, y
+         eso vale también para una función que devuelve una tabla.
+         Con la ventana de dos años eran 731 puntos y no se notaba. Desde que la
+         serie llega hasta donde llegue el histórico (0094), un inventario con
+         velas de 2013 son 1.340 puntos — y sin paginar la curva se dibujaba
+         entera y terminaba en septiembre de 2025, once meses antes de hoy, sin
+         un error por ninguna parte. Medido en local el 29-08-2026.
+         Es la misma avería que se comió los episodios de One Piece; ver
+         lib/paging. El precio es que la función se ejecuta una vez por página
+         —1,7 s cada una en el peor caso medido—, y por eso esta consulta va
+         aparte de la del inventario y no bloquea la pantalla. */
+      const rows = await fetchPaged((from, to) =>
+        supabase.rpc("rpc_steam_value_series", {}).range(from, to),
+      );
+      return rows.map((r) => seriesRow.parse(r));
     },
   });
 }
