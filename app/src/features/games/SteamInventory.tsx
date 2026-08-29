@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { AlertTriangle, Clipboard, Loader2, Upload } from "lucide-react";
+import { Clipboard, Loader2, Upload } from "lucide-react";
 import collectorSource from "@/features/games/steamCollector.js?raw";
 import {
   euros,
@@ -502,13 +502,10 @@ function Items({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
 
   /* El total de lo que estás mirando, que cambia con la pestaña y con el filtro
      por nombre — «¿cuánto de esto es CS2?» es la otra mitad de la pregunta que
-     hace clic ahí arriba. Y el recuento de los que no tienen precio sale de lo
-     MISMO que se está sumando: un aviso global al lado de un total filtrado
-     estaría hablando de otros objetos. */
+     hace clic ahí arriba. */
   const shownTotalCents = net
     ? netTotalCents(shown)
     : shown.reduce((a, r) => a + (r.medianCents === null ? 0 : r.valueCents), 0);
-  const shownMissing = shown.filter((r) => r.medianCents === null).length;
 
   const SORTS: { key: Sort; label: string }[] = [
     { key: "value", label: tr("Total value") },
@@ -564,24 +561,12 @@ function Items({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
           </span>
         </div>
       </div>
-      {/* La advertencia que antes colgaba del número grande. Aquí califica el
-          total que tiene al lado, que es el que ahora se puede filtrar — y un
-          total al que le faltan objetos solo es honesto si las dos cosas se leen
-          a la vez. */}
-      {shownMissing > 0 && (
-        <div
-          className="flex items-center gap-2"
-          style={{ fontSize: 12.5, color: "var(--warn, #d90)", marginTop: -4 }}
-        >
-          <AlertTriangle size={14} />
-          {/* «1 items» le quita autoridad a la línea justo donde hace falta. */}
-          {plural(
-            shownMissing,
-            "One item has no price yet, and is not in that total.",
-            "{n} items have no price yet, and are not in that total.",
-          )}
-        </div>
-      )}
+      {/* Aquí iba la advertencia de los objetos sin precio —«N items have no
+          price yet, and are not in that total»—. Quitada: eran cinco objetos de
+          seiscientos y una línea ámbar permanente en la barra de herramientas,
+          o sea un aviso que no se puede atender y que nunca se apaga. El total
+          filtrado sigue siendo el de los objetos con precio, que es la única
+          suma que se puede hacer. */}
       <div className="flex items-center gap-2" style={{ flexWrap: "wrap" }}>
         <input
           value={query}
