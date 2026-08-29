@@ -75,11 +75,16 @@ function anchoDelBoton(): number {
   return Number(m[1]);
 }
 
-/** El segundo argumento del `min()` del techo, en px. */
-function techoDelMenu(): number {
-  const m = /max-width:\s*min\(calc\(100vw - 32px\),\s*([\d.]+)px\)/.exec(regla(".pick-menu"));
-  if (!m) throw new Error("no encuentro el max-width de .pick-menu en marquee.css");
-  return Number(m[1]);
+/** Lo que mide el menú, que ya no es un número suyo: hereda el del botón. */
+function anchoDelMenu(): number {
+  const cuerpo = regla(".pick-menu");
+  if (!/[;{\s]width:\s*100%/.test(cuerpo)) {
+    throw new Error("el .pick-menu ya no mide el 100% de su botón; la cuenta de aquí no vale");
+  }
+  if (/max-width:/.test(cuerpo)) {
+    throw new Error("el .pick-menu ha vuelto a tener techo propio; hay que decidir cuál manda");
+  }
+  return anchoDelBoton();
 }
 
 /** La marca más apaisada del catálogo: `r` es ancho ÷ alto. */
@@ -89,10 +94,10 @@ function masApaisada(): { clave: string; r: number } {
     .reduce((a, b) => (b.r > a.r ? b : a));
 }
 
-describe("el techo del desplegable y el logotipo más ancho", () => {
+describe("el ancho del desplegable y el logotipo más ancho", () => {
   it("la Game Boy Advance sigue siendo el logotipo más ancho", () => {
-    /* Si esto falla, el techo de marquee.css se ha quedado sin dueño: hay que
-       medir en el navegador la opción de la marca nueva y poner ese número. */
+    /* Si esto falla, el 325 de marquee.css se ha quedado sin dueño: hay que
+       medir en el navegador el botón con la marca nueva y poner ese número. */
     expect(masApaisada().clave).toBe("gba");
   });
 
@@ -111,10 +116,6 @@ describe("el techo del desplegable y el logotipo más ancho", () => {
     expect(picker).toContain("<ChevronDown size={15}");
   });
 
-  it("el techo deja pasar entera la opción de la Game Boy Advance", () => {
-    expect(pideLaGba()).toBeCloseTo(321.2, 1);
-    expect(techoDelMenu()).toBeGreaterThanOrEqual(pideLaGba());
-  });
 
   it("el botón está fijado justo en lo que pide la Game Boy Advance", () => {
     /* Si esto falla es que la cuenta del botón se movió —otra altura de dibujo,
@@ -125,16 +126,18 @@ describe("el techo del desplegable y el logotipo más ancho", () => {
     expect(anchoDelBoton()).toBe(Math.ceil(pideLaGbaEnElBoton()));
   });
 
-  it("el botón no es más estrecho que su menú, que es lo que lo mantiene dentro", () => {
-    /* El menú cuelga anclado a la derecha del botón y crece hacia la izquierda.
-       Mientras el botón sea el más ancho de los dos, el menú cae dentro de su
-       propio hueco y no hay forma de que la ficha lo recorte. */
-    expect(anchoDelBoton()).toBeGreaterThanOrEqual(techoDelMenu());
+  it("el menú mide lo mismo que el botón, y por herencia y no por copia", () => {
+    /* `anchoDelMenu` revienta si la hoja deja de decir `width: 100%` o si le
+       vuelve a poner un techo propio: los dos anchos tienen que seguir siendo
+       el mismo número, que es lo que hace que el menú caiga clavado debajo. */
+    expect(anchoDelMenu()).toBe(anchoDelBoton());
   });
 
-  it("y no sobra ni un píxel: el techo es esa medida redondeada hacia arriba", () => {
-    /* Por encima es hueco que no pisa nadie —era el caso de los 340 de antes— y
-       por debajo la GBA sale con puntos suspensivos. */
-    expect(techoDelMenu()).toBe(Math.ceil(pideLaGba()));
+  it("y la opción más ancha cabe dentro de ese ancho, sin recortarse", () => {
+    /* La lista mide su opción más larga —la de la GBA, 321,2— y ahora el ancho
+       lo manda el botón: si un día la opción pidiera más que él, el nombre
+       saldría con puntos suspensivos en todas las fichas a la vez. */
+    expect(pideLaGba()).toBeCloseTo(321.2, 1);
+    expect(anchoDelMenu()).toBeGreaterThanOrEqual(pideLaGba());
   });
 });
