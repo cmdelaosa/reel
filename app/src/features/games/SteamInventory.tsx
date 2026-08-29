@@ -277,7 +277,8 @@ const W = 900;
 const H = 150;
 const PAD = { top: 12, right: 12, bottom: 22, left: 56 };
 
-/** El valor de tu cartera, un punto por día, HACIA ATRÁS.
+/** El valor de tu cartera HACIA ATRÁS: un punto por día en los dos últimos años
+ *  y uno por semana antes, que es lo que dibuja `rpc_steam_value_series`.
  *
  *  Empezaba el día del primer volcado, porque antes nadie guardó esa foto. Desde
  *  0092 se reconstruye lo de antes con el histórico de cada objeto y el libro:
@@ -320,14 +321,23 @@ function ValueChart({
     const max = Math.max(...values);
     /* Un rango plano (todo igual) partiría por cero al escalar. */
     const span = max - min || Math.max(max, 1);
-    const x = (i: number) =>
-      PAD.left + (i / (series.length - 1)) * (W - PAD.left - PAD.right);
+    /* El eje va por FECHA y no por posición, y desde 0094 la diferencia importa:
+       la serie ya no es un punto por día de punta a punta —el tramo de más de
+       dos años viene por semanas—, así que repartir a distancias iguales
+       estiraría cada semana vieja hasta ocupar lo que un día reciente y el tramo
+       reconstruido saldría siete veces más ancho de lo que es. Es la misma
+       cuenta que la ficha de un objeto, y allí ya estaba por lo mismo. */
+    const t0 = new Date(series[0].day).getTime();
+    const t1 = new Date(series[series.length - 1].day).getTime();
+    const dt = t1 - t0 || 1;
+    const x = (day: string) =>
+      PAD.left + ((new Date(day).getTime() - t0) / dt) * (W - PAD.left - PAD.right);
     const y = (v: number) =>
       H - PAD.bottom - ((v - min) / span) * (H - PAD.top - PAD.bottom);
     return {
       min,
       max,
-      points: series.map((s, i) => ({ ...s, x: x(i), y: y(values[i]) })),
+      points: series.map((s, i) => ({ ...s, x: x(s.day), y: y(values[i]) })),
     };
   }, [series]);
 
