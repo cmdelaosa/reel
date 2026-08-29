@@ -33,6 +33,18 @@ name: steam-prices
 # (app/src/features/games/steamCollector.js). Lo que cambia a diario no es lo que
 # tienes: es lo que vale.
 #
+# ── Lo que Steam mira de verdad, medido el 29-08-2026 ────────────────────
+# El cupo va por IP Y User-Agent, no solo por IP. Desde este mismo runner y en
+# el mismo minuto: con `User-Agent: node` —el que pone el `fetch` de Node— 429
+# diez de diez; con uno propio, 200 diez de diez. Y `curl/8.5.0` pasó diez
+# seguidas en una pasada y falló seis en la siguiente, que es lo que descarta
+# una lista blanca de agentes y deja el cupo compartido: la IP de un runner la
+# usa medio mundo, así que los agentes comunes llegan con el cubo gastado.
+#
+# El cubo son unas veinte peticiones y se sostiene alrededor de una cada cuatro
+# segundos. Los dos números viven en scripts/steam-prices/index.ts, que es quien
+# los usa.
+#
 # A las 4:10 UTC: después de que el mercado europeo se calme, y a una hora en la
 # que un 429 no le estropea la pantalla a nadie. El minuto raro es para no caer
 # en el pico de trabajos programados en punto.
@@ -52,7 +64,7 @@ on:
     inputs:
       max_items:
         description: "Tope de precios que pedir en esta pasada"
-        default: "1500"
+        default: "500"
 
 # `checkout` necesita leer el repo, y con `permissions: {}` el token va sin un
 # solo permiso. En un repo público suele colar y ese "suele" es justo lo que no
@@ -68,10 +80,21 @@ jobs:
       # La medida que justifica que este trabajo exista, tomada cada vez. Nunca
       # falla el job: si sale 429, el paso siguiente lo dirá con sus propias
       # cifras y esto es la explicación que ahorra media hora de diagnóstico.
+      #
+      # Va con el MISMO User-Agent que el guión, y eso es la mitad del valor del
+      # sondeo. Antes iba con el de `curl`, que es otro cupo distinto: el
+      # 29-08-2026 el sondeo decía 200 y cinco segundos después el guión sacaba
+      # 429 a la primera, todas las noches. Un sondeo que mide otra cosa que el
+      # trabajo que sondea no ahorra media hora de diagnóstico, la cuesta.
+      #
+      # Gasta una de las ~20 peticiones del cubo, y vale lo que cuesta: es la
+      # única línea del registro que distingue «Steam no nos habla» de «no había
+      # nada que refrescar».
       - name: ¿Steam contesta a este runner?
         continue-on-error: true
         run: |
           code=$(curl -s -o /tmp/po.json -w '%{http_code}' \
+            -H 'User-Agent: Reel/1.0 (+https://reel-app.com)' \
             --get --data-urlencode 'market_hash_name=AK-47 | Redline (Field-Tested)' \
             'https://steamcommunity.com/market/priceoverview/?appid=730&currency=3')
           echo "priceoverview desde este runner -> $code"
@@ -92,7 +115,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          MAX_ITEMS: ${{ github.event.inputs.max_items || '1500' }}
+          MAX_ITEMS: ${{ github.event.inputs.max_items || '500' }}
         run: npm start
 
       # La foto del día se escribe SIEMPRE, aunque falten precios: el hueco se

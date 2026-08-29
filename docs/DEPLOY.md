@@ -431,8 +431,36 @@ Measured against `tmdb-proxy/warm` on 2026-08-24:
 | legacy `service_role` JWT (dashboard) | `{"code":"UNAUTHORIZED_LEGACY_JWT"}` — never reaches it |
 
 The middle row is the cruel one: a 403 that reads like an invite-gate problem
-when it is actually the wrong key. Get the right one without it touching your
-history:
+when it is actually the wrong key.
+
+#### The same mistake, seen from GitHub Actions
+
+The **repo secret** of the same name is a second copy of this value, and it can
+drift from the function's without anything saying so. Measured on 2026-08-29,
+the `steam-prices` job had been failing every night like this:
+
+```
+608 filas de inventario, 600 precios guardados, 608 por refrescar.
+curl: (22) The requested URL returned error: 401
+{"error":"unauthorized"}
+```
+
+Those two lines together are the fingerprint, and the first one is what makes it
+confusing: **the script read the tables fine and only the function refused it.**
+PostgREST accepts both the legacy `service_role` JWT and the `sb_secret_…` one,
+so a stale secret reads and writes rows all night and looks healthy; the edge
+functions compare byte for byte, so only they notice. `isService` even checks the
+length first, and the two keys are nowhere near the same length.
+
+So: `{"error":"unauthorized"}` from a `/snapshot`-style route, with the same job's
+database work succeeding above it, means the **Actions secret** holds the legacy
+JWT. Fix it in Settings → Secrets and variables → Actions, with the value below.
+Nothing in the code needs to change, and the cost of leaving it is invisible —
+for `steam-market/snapshot` it is the daily portfolio photo, so the chart quietly
+falls back to the rebuilt series (migration 0092) and shows one recorded day
+where it should show hundreds.
+
+Get the right one without it touching your history:
 
 ```bash
 SR=$(supabase projects api-keys --project-ref <ref> --reveal -o env | grep '^SUPABASE_DEFAULT_KEY=' | cut -d= -f2- | tr -d '"')
