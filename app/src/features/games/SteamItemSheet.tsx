@@ -106,14 +106,24 @@ export function SteamItemSheet({
       /* Las compras se clavan a la altura de LO QUE PAGASTE, no de la vela de
          ese día: la distancia entre las dos es exactamente lo que se quiere
          ver —pagaste por encima o por debajo del mercado— y aplastarlas contra
-         la línea la borraría. Las que se salgan de la escala se recortan al
-         borde en vez de dibujarse fuera del recuadro. */
-      buys: series.buys.map((b) => ({
-        ...b,
-        x: x(b.day),
-        y: Math.min(H - PAD.bottom, Math.max(PAD.top, y(b.unitCents))),
-        offScale: b.unitCents < min || b.unitCents > max,
-      })),
+         la línea la borraría.
+         Las dos coordenadas se recortan al recuadro. La altura, porque pagar el
+         triple del máximo de la curva es normal y dibujarlo fuera lo saca del
+         SVG. Y la fecha, porque la curva empieza en la primera VELA a partir de
+         la compra, que no es el día de la compra: si el objeto no se vendió en
+         tres semanas, la primera vela es posterior y el aro se iría a la
+         izquierda del eje, fuera del dibujo. El aro punteado dice que ese punto
+         está recortado. */
+      buys: series.buys.map((b) => {
+        const bx = x(b.day);
+        const by = y(b.unitCents);
+        return {
+          ...b,
+          x: Math.min(W - PAD.right, Math.max(PAD.left, bx)),
+          y: Math.min(H - PAD.bottom, Math.max(PAD.top, by)),
+          offScale: bx < PAD.left || bx > W - PAD.right || by < PAD.top || by > H - PAD.bottom,
+        };
+      }),
     };
   }, [series]);
 

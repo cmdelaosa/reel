@@ -46,7 +46,7 @@ export function SteamInventory() {
   const { data, isLoading } = useSteamInventory();
   /* Aparte del inventario y sin bloquearlo: la serie suma cuarenta mil velas en
      la base y tarda lo suyo, y el total no tiene por qué esperarla. */
-  const { data: series } = useSteamValueSeries();
+  const { data: series, isLoading: seriesLoading } = useSteamValueSeries();
   const upload = useUploadSteamDump();
   const fileInput = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
@@ -95,7 +95,7 @@ export function SteamInventory() {
               antes de que se viera un solo objeto. */}
           <div className="steam-band">
             <Totals data={data} net={net} onNet={setNet} />
-            <ValueChart series={series ?? []} net={net} />
+            <ValueChart series={series ?? []} loading={seriesLoading} net={net} />
           </div>
           <CashNotes data={data} />
           <Items rows={data.rows} net={net} onOpen={setOpen} />
@@ -304,7 +304,15 @@ const PAD = { top: 12, right: 12, bottom: 22, left: 56 };
  *  Así que en vez de dibujar una curva aproximada sin decirlo, se dibuja la de
  *  siempre con su etiqueta. Es la misma regla que el resto de la pantalla: un
  *  total con un asterisco es útil, uno equivocado no. */
-function ValueChart({ series, net }: { series: SteamSeriesPoint[]; net: boolean }) {
+function ValueChart({
+  series,
+  loading,
+  net,
+}: {
+  series: SteamSeriesPoint[];
+  loading: boolean;
+  net: boolean;
+}) {
   const geo = useMemo(() => {
     if (series.length < 2) return null;
     const values = series.map((s) => s.value_cents);
@@ -331,12 +339,21 @@ function ValueChart({ series, net }: { series: SteamSeriesPoint[]; net: boolean 
      que es el segundo botón del recolector y el que se olvida. */
   if (!geo) {
     return (
-      <div className="card" style={{ padding: "16px 18px", display: "grid", alignItems: "center" }}>
-        <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
-          {tr(
-            "No graph yet: the price history is what draws it, and it comes from the collector's second button.",
-          )}
-        </p>
+      <div className="card" style={{ padding: "16px 18px", display: "grid", placeItems: "center" }}>
+        {/* Mientras la serie viene, un giro y no la frase. La serie va en su
+            propia consulta —el inventario carga antes—, así que sin esto la
+            tarjeta acusaba de no haber subido el histórico durante el segundo que
+            tarda en llegar, en cada carga de la pantalla y aunque estuviera
+            subido. */}
+        {loading ? (
+          <Loader2 size={18} className="spin" style={{ color: "var(--accent)" }} />
+        ) : (
+          <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
+            {tr(
+              "No graph yet: the price history is what draws it, and it comes from the collector's second button.",
+            )}
+          </p>
+        )}
       </div>
     );
   }

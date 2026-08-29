@@ -118,15 +118,31 @@ moves as (
 -- El universo es la UNIÓN de las dos: lo que tienes hoy y lo que alguna vez
 -- pasó por el libro. Con solo lo primero, un objeto que compraste y vendiste
 -- desaparecería del pasado, y ahí sí estaba.
+-- A cada objeto se le pone un número, `iid`, y de aquí en adelante TODO se junta
+-- por él. No es cosmético. El par (appid, market_hash_name) es un entero y un
+-- texto de hasta cincuenta caracteres —"Sticker | Natus Vincere (Holo) |
+-- Katowice 2019"—, y juntar cuatrocientas mil filas por esa pareja es lo que
+-- convertía el plan en un merge join con 348 MILLONES de filas materializadas:
+-- 31 de los 38 segundos que tardaba, medido el 29-08-2026 con un inventario del
+-- tamaño del real.
 items as (
-  select appid, name from today
-  union
-  select appid, name from moves
+  select u.appid, u.name, row_number() over (order by u.appid, u.name) as iid
+  from (
+    select appid, name from today
+    union
+    select appid, name from moves
+  ) u
 ),
 anchor as (
-  select i.appid, i.name, coalesce(t.qty, 0) as qty_today
+  select i.iid, coalesce(t.qty, 0) as qty_today
   from items i
   left join today t on t.appid = i.appid and t.name = i.name
+),
+-- Los movimientos, ya numerados. Son decenas de filas: cabe en cualquier sitio.
+steps as (
+  select i.iid, m.d, m.delta
+  from moves m
+  join items i on i.appid = m.appid and i.name = m.name
 ),
 -- Dónde empieza la curva. Lo más viejo que haya en el histórico de TUS objetos,
 -- con un tope: `p_days` días. El tope no es cosmético — sin él, un cromo de 2013
@@ -154,56 +170,137 @@ days as (
 -- que un objeto que no se mueve deja huecos de semanas; sin arrastrar, esos días
 -- valdrían cero y la curva se llenaría de dientes que no ocurrieron.
 --
--- `lead` da el día de la vela siguiente, y cada vela se estira hasta ahí. Se
--- hace así y no con una subconsulta por celda porque son cuarenta mil celdas:
--- esto es un barrido del índice, aquello son cuarenta mil búsquedas.
+-- `lead` da el día de la vela siguiente, y cada vela vale desde el suyo hasta la
+-- víspera de esa — o hasta hoy, si es la última.
 candles as (
   select
-    h.appid,
-    h.market_hash_name as name,
+    i.iid,
     h.day,
     h.median_cents,
-    lead(h.day) over (partition by h.appid, h.market_hash_name order by h.day) as next_day
+    lead(h.day) over (partition by i.iid order by h.day) as next_day
   from public.steam_price_history h
   join items i on i.appid = h.appid and i.name = h.market_hash_name
   where h.currency = p_currency
+    and h.day <= current_date
 ),
+-- Cada vela se ESTIRA sobre los días que cubre, en vez de juntarla con la lista
+-- de días por rango.
+--
+-- La diferencia importa: un `join days d on d.day >= c.day and d.day <
+-- c.next_day` es una condición de rango, y el planificador la resuelve
+-- comparando cada vela con cada día. Con 456.000 velas y 760 días eso son
+-- cientos de millones de comparaciones. Estirando, cada vela produce
+-- exactamente los días que dura y no se compara con nada: el total de filas es
+-- el mismo, el trabajo no.
+--
+-- El recorte a la ventana va DENTRO del `generate_series`: una vela anterior a
+-- `from_day` cuyo tramo entra en la ventana la cubre desde el borde, y una que
+-- se queda entera fuera devuelve cero filas y no cuesta nada.
 priced as (
-  select c.appid, c.name, d.day, c.median_cents
+  select c.iid, (c.day + s)::date as day, c.median_cents
   from candles c
-  join days d on d.day >= c.day and (c.next_day is null or d.day < c.next_day)
+  cross join span
+  cross join lateral generate_series(
+    greatest(0, span.from_day - c.day),
+    least(coalesce(c.next_day - 1, current_date), current_date) - c.day
+  ) as s
+  where span.from_day is not null
 ),
--- Una celda por objeto y día: cuántos tenías y cuánto valía uno.
+-- Desde qué día tiene precio cada objeto, dentro de la ventana.
+--
+-- La cobertura de un objeto es un TRAMO SEGUIDO: cada vela llega hasta la
+-- víspera de la siguiente y la última hasta hoy, así que en cuanto hay una
+-- primera vela ya no vuelve a faltar precio. Eso es lo que permite contar los
+-- objetos sin precio de un día sin volver a juntar la rejilla entera con
+-- `priced`: basta con comparar el día contra esta fecha.
+cover as (
+  select c.iid, greatest(min(c.day), span.from_day) as from_day
+  from candles c
+  cross join span
+  group by c.iid, span.from_day
+),
+-- Cuántos tenías de cada objeto cada día.
 --
 -- La cantidad de un día es la de hoy MENOS todo lo que entró después. Compraste
--- después → antes tenías menos; vendiste después → antes tenías más. Se escribe
--- como una resta de la cola y no como un bucle porque es lo mismo y se lee.
--- La misma regla, en cliente, está en app/src/domain/steamSeries.ts (`heldOn`),
--- que es la que tiene los tests.
-cells as (
+-- después → antes tenías menos; vendiste después → antes tenías más. La misma
+-- regla, en cliente, está en app/src/domain/steamSeries.ts (`heldOn`), que es la
+-- que tiene los tests; y las dos direcciones están afirmadas en
+-- supabase/sql-checks/0092_serie_reconstruida.sql.
+--
+-- ── Por qué esto no es una rejilla con un `left join` ─────────────────────
+-- Porque la rejilla —todos los objetos × todos los días, juntada después con los
+-- precios— tardaba 38 segundos con el inventario del usuario (600 objetos,
+-- 456.000 velas), medido el 29-08-2026. La pantalla no habría enseñado la curva
+-- NUNCA: el `statement_timeout` de PostgREST corta mucho antes, y el fallo
+-- habría sido un 57014 en producción y nada en desarrollo, donde con cuatro
+-- objetos de prueba tardaba 48 ms.
+--
+-- Así que la rejilla no se construye. Se recorren las filas de `priced`, que ya
+-- son una por objeto y día CON precio, y a cada una se le cuelga su cantidad. Y
+-- los días sin precio de un objeto —que son los que faltarían— se sacan aparte
+-- comparando contra `cover`, sin volver a juntar nada grande.
+--
+-- La cantidad de un día es la de hoy MENOS todo lo que entró después. Compraste
+-- después → antes tenías menos; vendiste después → antes tenías más. La misma
+-- regla, en cliente, está en app/src/domain/steamSeries.ts (`heldOn`), que es la
+-- que tiene los tests; y las dos direcciones están afirmadas en
+-- supabase/sql-checks/0092_serie_reconstruida.sql.
+priced_cells as (
+  select
+    p.day,
+    p.median_cents,
+    a.qty_today - coalesce(sum(s.delta) filter (where s.d > p.day), 0) as qty
+  from priced p
+  join anchor a on a.iid = p.iid
+  left join steps s on s.iid = p.iid
+  group by p.day, p.iid, p.median_cents, a.qty_today
+),
+-- Lo que ese día tenías y no sabemos qué valía: o no tiene ni una vela, o las
+-- suyas empiezan después. Son pocos, y por eso salen baratos.
+unpriced_cells as (
   select
     d.day,
-    a.qty_today - coalesce((
-      select sum(m.delta) from moves m
-       where m.appid = a.appid and m.name = a.name and m.d > d.day
-    ), 0) as qty,
-    p.median_cents
+    a.qty_today - coalesce(sum(s.delta) filter (where s.d > d.day), 0) as qty
   from anchor a
   cross join days d
-  left join priced p on p.appid = a.appid and p.name = a.name and p.day = d.day
+  left join cover c on c.iid = a.iid
+  left join steps s on s.iid = a.iid
+  where c.iid is null or d.day < c.from_day
+  group by d.day, a.iid, a.qty_today
 ),
+-- Los dos montones, sumados día a día. Se parte de `days` y no de los montones
+-- para que la serie no se salte un día en el que no hubiera ni una cosa ni la
+-- otra: un hueco en el eje se lee como una caída y no lo es.
 recon as (
   select
-    c.day,
-    coalesce(sum(c.qty * c.median_cents) filter (where c.qty > 0 and c.median_cents is not null), 0)::bigint as value_cents,
-    coalesce(sum(c.qty) filter (where c.qty > 0), 0)::bigint as item_count,
-    count(*) filter (where c.qty > 0)::bigint as distinct_items,
-    -- Los que ese día tenías y no sabemos qué valían. Es la misma columna que la
-    -- foto diaria, y sirve para lo mismo: distinguir un bache de la línea de una
-    -- tanda de precios que no llegó.
-    count(*) filter (where c.qty > 0 and c.median_cents is null)::bigint as missing_prices
-  from cells c
-  group by c.day
+    d.day,
+    coalesce(sum(parts.value_cents), 0)::bigint    as value_cents,
+    coalesce(sum(parts.units), 0)::bigint          as item_count,
+    coalesce(sum(parts.names), 0)::bigint          as distinct_items,
+    -- La misma columna que la foto diaria, y sirve para lo mismo: distinguir un
+    -- bache de la línea de una tanda de precios que no llegó.
+    coalesce(sum(parts.missing), 0)::bigint        as missing_prices
+  from days d
+  left join (
+    select
+      p.day,
+      sum(p.qty * p.median_cents) filter (where p.qty > 0)::bigint as value_cents,
+      sum(p.qty) filter (where p.qty > 0)::bigint                  as units,
+      count(*) filter (where p.qty > 0)::bigint                    as names,
+      0::bigint                                                    as missing
+    from priced_cells p
+    group by p.day
+    union all
+    select
+      u.day,
+      0::bigint,
+      sum(u.qty) filter (where u.qty > 0)::bigint,
+      count(*) filter (where u.qty > 0)::bigint,
+      count(*) filter (where u.qty > 0)::bigint
+    from unpriced_cells u
+    group by u.day
+  ) parts on parts.day = d.day
+  group by d.day
 ),
 joined as (
   select

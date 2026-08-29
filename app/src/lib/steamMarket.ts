@@ -420,7 +420,16 @@ export function useUploadSteamDump() {
       }
       return total;
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: qk.steamInventory }),
+    /* Las TRES consultas, y no solo el inventario. El volcado del histórico es
+       justamente el que no toca `steam_holdings`: subirlo e invalidar solo el
+       inventario dejaba la curva exactamente igual que antes —y la curva es lo
+       único que ese fichero viene a cambiar—, así que parecía que no había
+       servido de nada hasta recargar la página. */
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: qk.steamInventory });
+      qc.invalidateQueries({ queryKey: qk.steamValueSeries });
+      qc.invalidateQueries({ queryKey: ["steamItemHistory"] });
+    },
   });
 }
 
