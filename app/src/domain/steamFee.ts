@@ -56,3 +56,55 @@ export function netCents(grossCents: number): number {
 export function netOrNull(grossCents: number | null): number | null {
   return grossCents === null ? null : netCents(grossCents);
 }
+
+/* ── Y por qué un total en neto NO es el neto del total ────────────────────
+   Porque la comisión se paga POR VENTA y tiene un mínimo, y cada unidad es su
+   propia venta en el mercado de Steam. Descontársela a la suma la reparte como
+   si vendieras el inventario entero de una vez, que no es una opción que Valve
+   ofrezca.
+
+   Con cromos la diferencia no es de redondeo: 532 cromos de 0,03 € son 15,96 €
+   en bruto; el neto de la suma diría 13,87 € y lo que de verdad cobras son
+   5,32 €, uno por cromo. Casi el triple de diferencia, y encima el número de
+   arriba contradiría a la vista lo que pone en cada ficha.
+
+   De ahí que todo lo que suma vaya por aquí y no por `netCents` a secas. */
+
+/** Lo que hace falta saber de una fila para poder netearla. Estructural a
+ *  propósito: `InventoryRow` trae esto y bastante más, y este módulo no tiene
+ *  por qué saber de la forma que tenga la pantalla. */
+export interface NetLine {
+  medianCents: number | null;
+  quantity: number;
+  /** Lo que costó CADA unidad, si consta la compra. */
+  costCents?: number | null;
+}
+
+/** Lo que te queda por todas las unidades de una línea, vendidas de una en una.
+ *  Null si no hay precio: sin precio no hay neto, igual que no hay bruto. */
+export function netLineCents(medianCents: number | null, quantity: number): number | null {
+  return medianCents === null ? null : netCents(medianCents) * quantity;
+}
+
+/** El neto de un montón de líneas. Lo que no tiene precio no suma, que es lo
+ *  mismo que hace el total en bruto (domain/steamPortfolio: sin mediana no hay
+ *  valor, y se cuenta aparte). */
+export function netTotalCents(lines: NetLine[]): number {
+  return lines.reduce((acc, l) => acc + (netLineCents(l.medianCents, l.quantity) ?? 0), 0);
+}
+
+/** Lo no realizado, en neto: espejo de `unrealized` (domain/steamPortfolio) con
+ *  la mediana pasada por la comisión.
+ *
+ *  Se recalcula aquí en vez de netear la cifra ya hecha porque una ganancia no
+ *  se netea: es una resta entre un precio de venta —que sí lleva comisión— y un
+ *  coste —que no—, y aplicarle el 15 % a la diferencia descontaría comisión
+ *  también de lo que pagaste. */
+export function netUnrealizedCents(lines: NetLine[]): number {
+  let gain = 0;
+  for (const l of lines) {
+    if (l.costCents == null || l.medianCents === null) continue;
+    gain += (netCents(l.medianCents) - l.costCents) * l.quantity;
+  }
+  return gain;
+}

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { netCents, netOrNull } from "@/domain/steamFee";
+import {
+  netCents,
+  netLineCents,
+  netOrNull,
+  netTotalCents,
+  netUnrealizedCents,
+} from "@/domain/steamFee";
 
 /** La regla que define el neto, escrita al derecho: lo que paga el comprador
  *  para que el vendedor reciba `net`. Si el neto que devolvemos no cumple esto,
@@ -53,5 +59,63 @@ describe("netCents", () => {
   it("el hueco se respeta: sin precio no hay neto", () => {
     expect(netOrNull(null)).toBeNull();
     expect(netOrNull(300)).toBe(netCents(300));
+  });
+});
+
+describe("netTotalCents", () => {
+  /* 532 cromos de 0,03 €, que es la mitad larga de un inventario de verdad. */
+  const cromos = [{ medianCents: 3, quantity: 532 }];
+
+  it("suma unidad a unidad, no netea el total", () => {
+    // Cada cromo es su propia venta y paga sus dos comisiones mínimas: cobras
+    // un céntimo por cromo. Netear la suma (1596 → 1387) diría casi el triple.
+    expect(netTotalCents(cromos)).toBe(532);
+    expect(netCents(1596)).toBeGreaterThan(1300);
+  });
+
+  it("lo que no tiene precio no suma, igual que en bruto", () => {
+    expect(
+      netTotalCents([
+        { medianCents: null, quantity: 4 },
+        { medianCents: 6240, quantity: 2 },
+      ]),
+    ).toBe(netCents(6240) * 2);
+  });
+
+  it("y es exactamente la suma de sus líneas", () => {
+    const lines = [
+      { medianCents: 6240, quantity: 2 },
+      { medianCents: 16, quantity: 9 },
+      { medianCents: null, quantity: 3 },
+    ];
+    const uno = lines.map((l) => netLineCents(l.medianCents, l.quantity) ?? 0);
+    expect(netTotalCents(lines)).toBe(uno[0] + uno[1] + uno[2]);
+  });
+});
+
+describe("netUnrealizedCents", () => {
+  it("la comisión se le quita a la venta, no al coste", () => {
+    // Compraste a 50 lo que hoy vale 100: en bruto ganas 50, en neto 38 —
+    // porque cobras 88, no porque el coste encoja.
+    expect(netUnrealizedCents([{ medianCents: 100, quantity: 1, costCents: 50 }])).toBe(
+      netCents(100) - 50,
+    );
+  });
+
+  it("lo que no costó nada no cuenta, igual que en bruto", () => {
+    // Espejo de `unrealized`: lo que salió de una caja no tiene coste, así que
+    // no hay ganancia que calcular — ni en bruto ni en neto.
+    expect(
+      netUnrealizedCents([
+        { medianCents: 100, quantity: 1, costCents: null },
+        { medianCents: 100, quantity: 1 },
+        { medianCents: null, quantity: 1, costCents: 20 },
+      ]),
+    ).toBe(0);
+  });
+
+  it("puede salir negativo, y no se maquilla", () => {
+    // Lo compraste a 100 y hoy vale 100: con la comisión, pierdes.
+    expect(netUnrealizedCents([{ medianCents: 100, quantity: 2, costCents: 100 }])).toBeLessThan(0);
   });
 });

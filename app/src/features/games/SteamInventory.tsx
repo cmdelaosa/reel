@@ -10,7 +10,12 @@ import {
   type InventoryRow,
   type SteamSnapshot,
 } from "@/lib/steamMarket";
-import { netCents, netOrNull } from "@/domain/steamFee";
+import {
+  netLineCents,
+  netOrNull,
+  netTotalCents,
+  netUnrealizedCents,
+} from "@/domain/steamFee";
 import { t as tr, tv } from "@/lib/i18n";
 import { dateLocale } from "@/lib/locale";
 
@@ -148,7 +153,13 @@ function Totals({
   net: boolean;
   onNet: (v: boolean) => void;
 }) {
-  const { totals, cash, gain } = data;
+  const { totals, cash, gain, rows } = data;
+  /* Las tres primeras son dinero que YA pasó por tu cartera —lo metiste, lo
+     gastaste, te llegó de una venta con su comisión ya descontada—, así que el
+     conmutador no las toca: no hay comisión que quitarle a lo que ya cobraste.
+     La cuarta sí, porque no es dinero sino una valoración de lo que tienes: en
+     neto se recalcula sobre lo que de verdad cobrarías (domain/steamFee). */
+  const unrealisedCents = net ? netUnrealizedCents(rows) : gain.gainCents;
   /* El orden cuenta una historia y por eso no es alfabético: de tu bolsillo
      hacia dentro, lo que el mercado ha dado, y lo que queda en pie.
 
@@ -164,8 +175,8 @@ function Totals({
     },
     {
       label: tr("Unrealised"),
-      value: euros(gain.gainCents),
-      tone: gain.gainCents >= 0 ? "ok" : "bad",
+      value: euros(unrealisedCents),
+      tone: unrealisedCents >= 0 ? "ok" : "bad",
     },
   ];
   return (
@@ -205,7 +216,12 @@ function Totals({
           marginTop: 4,
         }}
       >
-        {euros(net ? netCents(totals.valueCents) : totals.valueCents)}
+        {/* `netTotalCents` sobre las filas, y no la comisión aplicada al total
+            ya hecho: cada unidad es su propia venta y paga su propio mínimo.
+            Con 532 cromos de tres céntimos, netear la suma diría casi el triple
+            de lo que cobrarías — y contradiría a la vista lo que pone en cada
+            ficha de la rejilla. */}
+        {euros(net ? netTotalCents(rows) : totals.valueCents)}
       </div>
       <div style={{ height: 1, background: "var(--border)", margin: "14px 0 12px" }} />
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
@@ -250,14 +266,22 @@ const PAD = { top: 12, right: 12, bottom: 22, left: 56 };
  *  foto. Reconstruirla con la serie de cada objeto multiplicaría los precios de
  *  entonces por las cantidades de HOY, que es otra cosa — se puede dibujar, pero
  *  no es lo que valía tu inventario, y esta gráfica no lo va a fingir. */
+/** La curva se queda SIEMPRE en bruto, y lo dice.
+ *
+ *  Es la única cifra de la pantalla que el conmutador no puede seguir. La foto
+ *  diaria (`steam_portfolio_snapshots`) guarda un total y nada más: qué objetos
+ *  lo componían ese día no está en ninguna parte, y sin eso no hay forma de
+ *  aplicar una comisión que tiene un mínimo POR objeto. Pasarle el 15 % al
+ *  total daría una línea que no coincide ni con su propio último punto — el
+ *  total de arriba, que sí se calcula objeto a objeto.
+ *
+ *  Así que en vez de dibujar una curva aproximada sin decirlo, se dibuja la de
+ *  siempre con su etiqueta. Es la misma regla que el resto de la pantalla: un
+ *  total con un asterisco es útil, uno equivocado no. */
 function ValueChart({ snapshots, net }: { snapshots: SteamSnapshot[]; net: boolean }) {
   const geo = useMemo(() => {
     if (snapshots.length < 2) return null;
-    /* La curva sigue al conmutador como todo lo demás. Se transforma punto a
-       punto y no el total al final: la comisión tiene un mínimo por objeto, así
-       que descontarla del valor de un día no es lo mismo que descontársela a la
-       suma — y lo que se dibuja es el valor de cada día. */
-    const values = snapshots.map((s) => (net ? netCents(s.value_cents) : s.value_cents));
+    const values = snapshots.map((s) => s.value_cents);
     const min = Math.min(...values);
     const max = Math.max(...values);
     /* Un rango plano (todo igual) partiría por cero al escalar. */
@@ -269,14 +293,9 @@ function ValueChart({ snapshots, net }: { snapshots: SteamSnapshot[]; net: boole
     return {
       min,
       max,
-      points: snapshots.map((s, i) => ({
-        ...s,
-        value_cents: values[i],
-        x: x(i),
-        y: y(values[i]),
-      })),
+      points: snapshots.map((s, i) => ({ ...s, x: x(i), y: y(values[i]) })),
     };
-  }, [snapshots, net]);
+  }, [snapshots]);
 
   /* Con un solo día todavía no hay curva, pero sí hay hueco: la tarjeta se
      pinta igual para que la banda siga siendo dos tarjetas y el total no se
@@ -305,7 +324,12 @@ function ValueChart({ snapshots, net }: { snapshots: SteamSnapshot[]; net: boole
   return (
     <div className="card" style={{ padding: "16px 18px" }}>
       <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-        <div className="eyebrow">{tr("Value over time")}</div>
+        {/* Con el neto puesto, la etiqueta dice que esta cifra no lo sigue. Sin
+            ella, la última punta de la curva y el total de al lado se
+            contradicen y no hay nada en pantalla que lo explique. */}
+        <div className="eyebrow" title={net ? tr("The daily photo only stores a total, so there's no way to take the per-item cut off the past.") : undefined}>
+          {net ? tr("Value over time · gross") : tr("Value over time")}
+        </div>
         <div style={{ fontSize: 13, fontWeight: 700, color: change >= 0 ? "var(--ok, #3a7)" : "var(--bad, #e26)" }}>
           {change >= 0 ? "+" : "−"}
           {euros(Math.abs(change))}
@@ -480,7 +504,9 @@ function Items({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
      hace clic ahí arriba. Y el recuento de los que no tienen precio sale de lo
      MISMO que se está sumando: un aviso global al lado de un total filtrado
      estaría hablando de otros objetos. */
-  const shownTotalCents = shown.reduce((a, r) => a + (r.medianCents === null ? 0 : r.valueCents), 0);
+  const shownTotalCents = net
+    ? netTotalCents(shown)
+    : shown.reduce((a, r) => a + (r.medianCents === null ? 0 : r.valueCents), 0);
   const shownMissing = shown.filter((r) => r.medianCents === null).length;
 
   const SORTS: { key: Sort; label: string }[] = [
@@ -533,7 +559,7 @@ function Items({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
         <div className="flex items-baseline gap-2" style={{ marginLeft: "auto" }}>
           <span className="eyebrow">{tr("Total")}</span>
           <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.01em" }}>
-            {euros(net ? netCents(shownTotalCents) : shownTotalCents)}
+            {euros(shownTotalCents)}
           </span>
         </div>
       </div>
@@ -707,7 +733,9 @@ function ItemsGrid({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
           >
             <span className="mute">×{r.quantity}</span>
             <span style={{ fontWeight: 700 }}>
-              {r.medianCents === null ? "—" : euros(net ? netCents(r.valueCents) : r.valueCents)}
+              {r.medianCents === null
+                ? "—"
+                : euros(net ? netLineCents(r.medianCents, r.quantity) : r.valueCents)}
             </span>
           </div>
           {/* Las mismas dos advertencias que la tabla. Un objeto bloqueado vale
@@ -798,7 +826,9 @@ function ItemsTable({ rows, net }: { rows: InventoryRow[]; net: boolean }) {
                   {euros(r.costCents)}
                 </td>
                 <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700 }}>
-                  {r.medianCents === null ? "—" : euros(net ? netCents(r.valueCents) : r.valueCents)}
+                  {r.medianCents === null
+                    ? "—"
+                    : euros(net ? netLineCents(r.medianCents, r.quantity) : r.valueCents)}
                 </td>
               </tr>
             ))}

@@ -257,6 +257,12 @@ const ES: Record<string, string> = {
   "locked": "bloqueado",
   "price not confirmed yet": "precio sin confirmar",
   "Value over time": "Valor con el tiempo",
+  /* Con el conmutador en neto, el rótulo de la gráfica avisa de que ella se
+     queda en bruto: la foto diaria solo guarda un total y la comisión tiene un
+     mínimo por objeto, así que el pasado no se puede netear. */
+  "Value over time · gross": "Valor con el tiempo · bruto",
+  "The daily photo only stores a total, so there's no way to take the per-item cut off the past.":
+    "La foto diaria solo guarda un total, así que no hay forma de descontarle al pasado la comisión de cada objeto.",
   "Out of your own pocket": "De tu bolsillo",
   "Spent on games": "Gastado en juegos",
   "Made trading": "Sacado con el mercado",
