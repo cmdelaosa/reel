@@ -75,15 +75,11 @@ function anchoDelBoton(): number {
   return Number(m[1]);
 }
 
-/** Lo que mide el menú, que ya no es un número suyo: hereda el del botón. */
+/** Lo que mide el menú. No es un número suyo: hereda el del botón, así que esto
+ *  solo vale mientras la hoja siga diciendo `width: 100%` y sin techo propio —y
+ *  eso lo comprueba la prueba de al lado, no esta función, que si no la
+ *  comparación saldría cierta por definición. */
 function anchoDelMenu(): number {
-  const cuerpo = regla(".pick-menu");
-  if (!/[;{\s]width:\s*100%/.test(cuerpo)) {
-    throw new Error("el .pick-menu ya no mide el 100% de su botón; la cuenta de aquí no vale");
-  }
-  if (/max-width:/.test(cuerpo)) {
-    throw new Error("el .pick-menu ha vuelto a tener techo propio; hay que decidir cuál manda");
-  }
   return anchoDelBoton();
 }
 
@@ -116,7 +112,6 @@ describe("el ancho del desplegable y el logotipo más ancho", () => {
     expect(picker).toContain("<ChevronDown size={15}");
   });
 
-
   it("el botón está fijado justo en lo que pide la Game Boy Advance", () => {
     /* Si esto falla es que la cuenta del botón se movió —otra altura de dibujo,
        otro relleno, otro galón— y el ancho fijo se quedó corto: el nombre más
@@ -126,11 +121,12 @@ describe("el ancho del desplegable y el logotipo más ancho", () => {
     expect(anchoDelBoton()).toBe(Math.ceil(pideLaGbaEnElBoton()));
   });
 
-  it("el menú mide lo mismo que el botón, y por herencia y no por copia", () => {
-    /* `anchoDelMenu` revienta si la hoja deja de decir `width: 100%` o si le
-       vuelve a poner un techo propio: los dos anchos tienen que seguir siendo
-       el mismo número, que es lo que hace que el menú caiga clavado debajo. */
-    expect(anchoDelMenu()).toBe(anchoDelBoton());
+  it("el menú saca su ancho del botón, y no de un número suyo", () => {
+    /* Lo que se mira es la hoja, no una cuenta: mientras diga `width: 100%` el
+       menú mide su envoltorio, que es el botón, y los dos bordes cuadran. Y sin
+       `max-width`, porque un techo propio volvería a separarlos por debajo. */
+    expect(regla(".pick-menu")).toMatch(/[;{\s]width:\s*100%/);
+    expect(regla(".pick-menu")).not.toMatch(/max-width:/);
   });
 
   it("y la opción más ancha cabe dentro de ese ancho, sin recortarse", () => {
