@@ -76,13 +76,17 @@ for (const ancho of [375, 320] as const) {
     await expect(page.getByText(STEAM_ID)).toBeVisible();
 
     const medida = await page.evaluate(() => {
-      const ancho = document.documentElement.clientWidth;
-      const desbordan = [...document.querySelectorAll<HTMLElement>("body *")]
-        .filter((el) => Math.ceil(el.getBoundingClientRect().right) > ancho)
-        .map((el) => `${el.tagName.toLowerCase()}.${el.className}`.slice(0, 90));
+      const pantalla = document.documentElement.clientWidth;
+      /* Con `class` leído del atributo y no de `el.className`: en un SVG esa
+         propiedad es un SVGAnimatedString, y el mensaje del fallo —que es la
+         mitad del valor de esta prueba— salía lleno de "[object
+         SVGAnimatedString]" en vez de decir qué elemento se sale. */
+      const desbordan = [...document.querySelectorAll("body *")]
+        .filter((el) => Math.ceil(el.getBoundingClientRect().right) > pantalla)
+        .map((el) => `${el.tagName.toLowerCase()}.${el.getAttribute("class") ?? ""}`.slice(0, 90));
       return {
         scrollWidth: document.documentElement.scrollWidth,
-        clientWidth: ancho,
+        clientWidth: pantalla,
         desbordan: desbordan.slice(0, 5),
       };
     });
