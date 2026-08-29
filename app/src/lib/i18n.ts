@@ -269,8 +269,16 @@ const ES: Record<string, string> = {
   "Value over time · approximate · gross": "Valor con el tiempo · aproximado · bruto",
   "Before the first daily photo the line is rebuilt from your ledger: what came out of a case, a drop or a trade isn't in it, so it counts as if you'd always had it. The further back, the rougher.":
     "Antes de la primera foto diaria la línea se reconstruye con tu libro: lo que salió de una caja, de un drop o de un intercambio no está en él, así que cuenta como si lo hubieras tenido siempre. Cuanto más atrás, más gruesa la aproximación.",
-  "{recorded} days recorded day by day; the {rebuilt} before them are rebuilt from your ledger and the price history.":
-    "{recorded} días apuntados día a día; los {rebuilt} anteriores están reconstruidos con tu libro y el histórico de precios.",
+  /* Con `plural`, porque el primer día que existe esta frase el número es UNO:
+     en producción salió «1 days recorded» el día del estreno. */
+  "One day recorded as it happened; everything before it is rebuilt from your ledger and the price history.":
+    "Un día apuntado según pasaba; todo lo anterior está reconstruido con tu libro y el histórico de precios.",
+  "{n} days recorded as they happened; everything before them is rebuilt from your ledger and the price history.":
+    "{n} días apuntados según pasaban; todo lo anterior está reconstruido con tu libro y el histórico de precios.",
+  /* Permanente, no un aviso de avería: el recolector trae el histórico de los
+     sesenta objetos más valiosos y de ahí no pasa. */
+  "It follows the {tracked} of your {held} items that have a price history — the rest have no candles to ask for.":
+    "Sigue los {tracked} de tus {held} objetos que tienen histórico de precios — de los demás no hay velas que pedir.",
   "Rebuilt from your ledger and the price history: no day here was recorded as it happened.":
     "Reconstruido con tu libro y el histórico de precios: ningún día de aquí se apuntó según pasaba.",
   "No graph yet: the price history is what draws it, and it comes from the collector's second button.":
