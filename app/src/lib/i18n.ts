@@ -232,6 +232,10 @@ const ES: Record<string, string> = {
      · "Made trading" es «Sacado con el mercado» y no «Ganado»: el saldo de la
        cartera de Steam no se puede sacar, y «ganado» sugiere un ingreso. */
   "Market inventory": "Inventario del mercado",
+  "Inventory": "Inventario",
+  "Bring your Steam games into Reel": "Trae tus juegos de Steam a Reel",
+  "Reel reads the games you own and the hours you've played, and shows you a list before writing anything. Start it with \"Look at my Steam library\" up there.":
+    "Reel lee los juegos que tienes y las horas que les has echado, y te enseña la lista antes de escribir nada. Se arranca con «Mirar mi biblioteca de Steam», ahí arriba.",
   "Item": "Objeto",
   "How many": "Cuántos",
   "Worth": "Vale",

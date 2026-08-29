@@ -94,9 +94,22 @@ const RETURN_MESSAGE: Record<string, { text: string; bad: boolean }> = {
 
 const hours = (minutes: number) => (minutes > 0 ? formatPlaytime(minutes) : "—");
 
+/** Las dos mitades de Steam. Miran cosas distintas —una tus objetos y su dinero,
+ *  la otra tus horas y tu biblioteca— y se usan a ritmos distintos: el
+ *  inventario a diario, la importación cuando conectas la cuenta y poco más. */
+type Section = "inventory" | "import";
+const SECTIONS: { key: Section; label: string }[] = [
+  { key: "inventory", label: tr("Inventory") },
+  { key: "import", label: tr("Import") },
+];
+
 export default function SteamPage() {
   const [params, setParams] = useSearchParams();
   const { data: link, isPending: linkPending } = useSteamLink();
+  /** Qué mitad de Steam se está mirando. Inventario primero y por defecto: es
+   *  lo que se abre a diario; importar es de una vez al año. */
+  const [section, setSection] = useState<Section>("inventory");
+
   const { data: draft } = useSteamImport();
   const scan = useScanSteam();
   const apply = useApplySteamImport();
@@ -177,11 +190,16 @@ export default function SteamPage() {
   const summary = (run?.summary ?? {}) as Record<string, unknown>;
   const num = (k: string) => Number(summary[k] ?? 0);
 
+  /* La revisión de la importación es lo único que necesita el ancho entero, y
+     ahora vive dentro de una sección: estando en Inventario, ensanchar la
+     página por una lista que no se ve deja el inventario nadando en una columna
+     que no le corresponde. */
+  const ancha = section === "import" && run?.state === "ready" && items.length > 0;
+
   return (
     /* La columna de 760px se queda para conectar la cuenta y para el recibo —
-       son dos párrafos y cuatro botones—, y la revisión sale de ella: es lo
-       único de esta pantalla que necesita el ancho entero. */
-    <div className="screen mq-page" style={{ maxWidth: run?.state === "ready" && items.length > 0 ? "none" : 760, marginInline: "auto" }}>
+       son dos párrafos y cuatro botones—, y la revisión sale de ella. */
+    <div className="screen mq-page" style={{ maxWidth: ancha ? "none" : 760, marginInline: "auto" }}>
       <h1 className="sr-only">{tr("Steam")}</h1>
 
       {message && (
@@ -252,13 +270,57 @@ export default function SteamPage() {
         )}
       </div>
 
+      {/* ── Las dos secciones ─────────────────────────────────────────────── */}
+      {/* Antes esto era una pantalla larga: la importación arriba y el
+          inventario debajo, con el argumento de que las dos cuelgan de la misma
+          cuenta y separarlas obligaría a recordar dónde está cada cosa. Con el
+          inventario ya crecido —608 objetos, su gráfica y sus cuatro cifras—
+          ese argumento se dio la vuelta: para llegar a lo que se mira a diario
+          había que pasar por delante de lo que se usa una vez al año.
+          Inventario primero y por defecto, por eso mismo.
+
+          Y siguen colgando de la misma cuenta: la tarjeta de arriba —conectada,
+          tu id, sincronizar, desconectar— se queda FUERA de las dos, que es lo
+          que evita el "¿en cuál de las dos estaba desconectar?". */}
+      {link?.steamId && (
+        <div className="segmented" role="tablist" style={{ alignSelf: "flex-start" }}>
+          {SECTIONS.map((x) => (
+            <button
+              key={x.key}
+              role="tab"
+              aria-selected={section === x.key}
+              className={section === x.key ? "seg seg-active" : "seg"}
+              onClick={() => setSection(x.key)}
+            >
+              {x.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── El inventario del mercado (0088) ──────────────────────────────── */}
-      {/* Debajo de la importación de juegos y no en una pestaña propia: las dos
-          cuelgan de la misma cuenta enlazada, y una pestaña "Steam" que no
-          enseñara lo de Steam obligaría a recordar en cuál de las dos está cada
-          cosa. Son bloques distintos porque miran cosas distintas —aquello son
-          tus horas, esto es tu dinero—, no sitios distintos. */}
-      {link?.steamId && <SteamInventory />}
+      {link?.steamId && section === "inventory" && <SteamInventory />}
+
+      {/* ── Lo de importar, de aquí abajo ─────────────────────────────────── */}
+      {/* El escaneo sigue corriendo aunque estés mirando el inventario —lo lanza
+          el botón de la tarjeta de la cuenta, que está fuera de las dos
+          secciones—, así que lo que se esconde es la vista y no el trabajo: al
+          volver a Importar está lo que haya pasado mientras. */}
+      {section === "import" && (
+      <>
+      {/* Sin ningún intento todavía, esta sección no tiene NADA que enseñar, y
+          antes daba igual porque el inventario venía justo debajo y la página
+          nunca se veía vacía. Ahora es una sección entera en blanco, así que
+          dice qué es y adónde ir: el botón que la arranca vive en la tarjeta de
+          la cuenta, que es de las dos y no de esta. */}
+      {!run && (
+        <div className="card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontWeight: 750 }}>{tr("Bring your Steam games into Reel")}</div>
+          <p className="dim" style={{ margin: 0, fontSize: 13.5 }}>
+            {tr("Reel reads the games you own and the hours you've played, and shows you a list before writing anything. Start it with \"Look at my Steam library\" up there.")}
+          </p>
+        </div>
+      )}
 
       {/* ── El perfil cerrado y los demás errores del escaneo ─────────────── */}
       {run?.state === "error" && (
@@ -362,6 +424,8 @@ export default function SteamPage() {
             </p>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   );
