@@ -267,7 +267,13 @@ export function useSteamValueSeries() {
   });
 }
 
-/** El histórico de UN objeto: una vela por día, tal y como la dio Steam.
+/** El histórico de UN objeto, tal y como lo dejó el recolector: una vela por día
+ *  en los dos últimos años y una por TRIMESTRE más atrás.
+ *
+ *  Esa segunda resolución no se nota aquí ni hace falta tratarla aparte: la
+ *  gráfica reparte el eje por fecha, así que un punto cada tres meses se dibuja
+ *  a tres meses de distancia y se lee como lo que es. Steam tampoco escribe
+ *  vela los días sin ventas, de modo que los huecos ya existían.
  *
  *  `steam_price_history` es global y la lee cualquiera que haya iniciado sesión
  *  —no es de nadie, es lo que valía un objeto—, así que aquí no hay filtro por
@@ -334,8 +340,9 @@ function splitHistory(history: unknown[]): unknown[][] {
     const n = Array.isArray((item as { days?: unknown[] }).days)
       ? (item as { days: unknown[] }).days.length
       : 0;
-    /* Un objeto no se parte por dentro: 730 velas es un objeto entero y cabe de
-       sobra. Lo que se corta es dónde empieza el siguiente volcado. */
+    /* Un objeto no se parte por dentro: dos años de velas diarias más un puñado
+       de trimestres es un objeto entero y cabe de sobra. Lo que se corta es
+       dónde empieza el siguiente volcado. */
     if (current.length && candles + n > CANDLES_PER_CALL) {
       parts.push(current);
       current = [];
