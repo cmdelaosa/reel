@@ -535,7 +535,21 @@
    *  Las dos fechas de la fila son "cuándo se puso" y "cuándo se cerró"; la que
    *  vale es la SEGUNDA. Y el signo lo da el rótulo de la izquierda, que dice
    *  "Vendido"/"Comprado" en tu idioma — así que no se lee el texto, se lee la
-   *  clase `market_listing_gainorloss`, que es "+" o "-" en todos. */
+   *  clase `market_listing_gainorloss`, que es "+" o "-" en todos.
+   *
+   *  ── Ese signo habla del OBJETO, no del dinero ──
+   *  Y es justo al revés de lo que parece: "+" es un objeto que ENTRA en tu
+   *  inventario, o sea una compra, y "-" uno que sale, o sea una venta. Leerlo
+   *  como si fuera el dinero cambiaba de bando cada compra y cada venta, y el
+   *  realizado salía con el signo cambiado: "he perdido 2.850 € trapicheando"
+   *  cuando eran 2.850 € ganados.
+   *
+   *  Comprobado el 29-08-2026 contra el historial de la cartera, que es la
+   *  contabilidad de verdad y sí habla de dinero: las quince filas de "-" de
+   *  9,13 € del 7-ago-2026 son en la cartera una sola línea de +136,95 € (15 ×
+   *  9,13). Y cuadra el saldo entero de doce años: 304,98 de recargas + 2.850,93
+   *  del mercado - 3.108,77 de la tienda - 9,17 de lo demás = 37,97 €, que es el
+   *  saldo que enseña Steam hoy. Con el signo al revés no cuadraba nada. */
   /** Qué objeto es cada fila, sacado del bloque `hovers` de la respuesta.
    *
    *  El HTML de la fila no basta para identificar lo que se compró. No trae el
@@ -617,9 +631,11 @@
            se sube tal cual y también el índice, que es lo que no se puede
            recuperar después. */
         raw_date: dates[dates.length - 1] ?? null,
-        kind: sign === "+" ? "market_sell" : "market_buy",
+        /* "-" es el objeto que se va: eso es una venta. Ver el bloque de
+           arriba, que es donde está la comprobación. */
+        kind: sign === "-" ? "market_sell" : "market_buy",
         /* Signo desde tu cartera: una venta la llena, una compra la vacía. */
-        amount_cents: sign === "+" ? amount : -amount,
+        amount_cents: sign === "-" ? amount : -amount,
         /* El de la ficha manda; el raspado del HTML es el respaldo para cuando
            `assets` no traiga ese objeto. Que sean distintos no es un detalle:
            en 753 son namespaces diferentes y con el equivocado no casa nada. */

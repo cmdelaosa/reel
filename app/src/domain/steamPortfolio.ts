@@ -250,7 +250,10 @@ export interface CashFlow {
   realizedCents: number;
   /** Lo que has sacado de la cartera para comprar juegos, comparado con lo que
    *  metiste de tu bolsillo. Es la pregunta de "¿me he pagado juegos con las
-   *  pegatinas?", y solo tiene respuesta con las dos cifras juntas. */
+   *  pegatinas?", y solo tiene respuesta con las dos cifras juntas.
+   *
+   *  Nunca mayor que lo realizado, y cero cuando el mercado te ha costado
+   *  dinero: el mercado no puede haber pagado más de lo que ha dado. */
   storeFundedByMarketCents: number;
 }
 
@@ -290,8 +293,19 @@ export function cashFlow(entries: LedgerEntry[]): CashFlow {
     realizedCents,
     /* Cuánto de lo gastado en la tienda no salió de tu bolsillo. Cero cuando
        metiste más de lo que gastaste; nunca negativo, porque "he gastado menos
-       de lo que puse" no es una deuda. */
-    storeFundedByMarketCents: Math.max(0, spentInStoreCents - toppedUpCents),
+       de lo que puse" no es una deuda.
+
+       Y nunca más que el realizado, que es el otro tope y el que faltaba: la
+       resta sola atribuye al mercado TODO el hueco entre lo que metiste y lo
+       que gastaste, venga de donde venga —un regalo, un reembolso, una fila del
+       historial que no supimos leer—, y con un realizado negativo llegaba a
+       decir "el mercado te pagó 2.803 € en juegos" de un mercado que te había
+       costado 2.850 €. Que el mercado te dé dinero es condición para que haya
+       podido pagar nada. */
+    storeFundedByMarketCents: Math.max(
+      0,
+      Math.min(spentInStoreCents - toppedUpCents, realizedCents),
+    ),
   };
 }
 
