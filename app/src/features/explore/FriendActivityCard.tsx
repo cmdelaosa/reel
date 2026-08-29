@@ -47,7 +47,7 @@ function AddedBatch({
   if (isPending) {
     return (
       <div className="surface-2" style={{ borderRadius: "var(--r)", padding: 12, margin: "0 0 8px 52px" }}>
-        <div className="skeleton" style={{ height: 64, borderRadius: "var(--r-md)" }} />
+        <div className="skeleton" style={{ height: 64 }} />
       </div>
     );
   }

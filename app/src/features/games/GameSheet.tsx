@@ -262,7 +262,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
         {isPending || !title ? (
           <div className="overflow-y-auto p-6 flex flex-col gap-4">
             {[220, 60, 120].map((h, i) => (
-              <div key={i} className="skeleton" style={{ height: h, borderRadius: "var(--r-md)" }} />
+              <div key={i} className="skeleton" style={{ height: h }} />
             ))}
           </div>
         ) : (
