@@ -500,10 +500,16 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                       <button
                         className={`btn ${finished ? "btn-outline" : "btn-accent"}`}
                         disabled={markWatched.isPending || unmarkWatched.isPending}
+                        /* Puesto que el rótulo ya no dice que se puede quitar —decía
+                           «Finished — tap to clear» y ahora dice «Finished» a secas—,
+                           lo dice el `title`: el botón sigue siendo un interruptor. */
+                        title={finished ? tr("Tap to clear") : undefined}
                         onClick={() => (watchEventId ? unmarkWatched.mutate(watchEventId) : markWatched.mutate(episodeId))}
                       >
                         <Check size={16} />
-                        {finished ? tr("Finished — tap to clear") : tr("Mark finished")}
+                        {/* Clave propia y no "Finished": esa dice «Terminadas», que es
+                            la de las series. Mismo motivo que "Finished it" de 0078. */}
+                        {finished ? tr("games: Finished") : tr("Mark finished")}
                       </button>
                     )}
                     <span className="game-plat">

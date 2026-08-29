@@ -28,24 +28,51 @@ import { PLATFORM_MARKS } from "@/ui/icons/platformMarks";
 
 /** La altura a la que ui/PlatformPicker pide el dibujo en la lista. */
 const ALTO = 15;
+/** Y en el botón, que lo pide un píxel más grande. */
+const ALTO_BOTON = 16;
 /** «Game Boy Advance» a 13,5px/600 con Inter, medido en la app el 28-08-2026. */
 const NOMBRE_GBA = 127.45;
+/** El mismo nombre a 13,5px/650, que es el peso del botón. Medido igual. */
+const NOMBRE_GBA_BOTON = 127.94;
 /** `.pick-opt`: relleno de 10 a cada lado, dos huecos de 9 y la marca de 13. */
 const CAJA_OPCION = 10 * 2 + 9 * 2 + 13;
 /** `.pick-menu`: relleno de 6 y borde de 1, a cada lado. */
 const CAJA_MENU = 6 * 2 + 1 * 2;
+/** `.pick`: relleno de 12 y borde de 1 a cada lado, dos huecos de 9 y el galón de 15. */
+const CAJA_BOTON = 12 * 2 + 1 * 2 + 9 * 2 + 15;
 
 /** Lo que pide la opción de la GBA, de un borde del menú al otro. */
 function pideLaGba(): number {
   return ALTO * PLATFORM_MARKS.gba.r + NOMBRE_GBA + CAJA_OPCION + CAJA_MENU;
 }
 
-/** El cuerpo de una regla de la hoja, para no buscar a ciegas en 131 kB. */
+/** Y lo que pide en el botón, que es donde el ancho está FIJADO a esa medida:
+ *  el desplegable no cambia de tamaño al elegir, así que el número tiene que
+ *  ser el del nombre más largo que puede caer ahí — el de la GBA. */
+function pideLaGbaEnElBoton(): number {
+  return ALTO_BOTON * PLATFORM_MARKS.gba.r + NOMBRE_GBA_BOTON + CAJA_BOTON;
+}
+
+/** El cuerpo de una regla de la hoja, para no buscar a ciegas en 131 kB.
+ *
+ *  Se busca con el salto de línea delante, y eso no es maña: `.pick {` a secas
+ *  casa dentro de `.game-plat .pick {`, que está antes en el fichero, así que
+ *  la prueba del botón leía la regla equivocada y fallaba diciendo que a `.pick`
+ *  le faltaba un relleno que sí tiene. */
 function regla(selector: string): string {
-  const i = css.indexOf(`${selector} {`);
+  const i = css.indexOf(`\n${selector} {`);
   if (i < 0) throw new Error(`no encuentro la regla ${selector} en marquee.css`);
   const fin = css.indexOf("}", i);
   return css.slice(i, fin);
+}
+
+/** El ancho fijo del botón, en px. La frontera de delante es por lo mismo que
+ *  el salto de línea de `regla`: `width:` casa dentro de `min-width:`, y un
+ *  `min-width` en píxeles escrito antes se leería como si fuera el ancho. */
+function anchoDelBoton(): number {
+  const m = /[;{\s]width:\s*([\d.]+)px/.exec(regla(".game-plat .pick"));
+  if (!m) throw new Error("no encuentro el width de .game-plat .pick en marquee.css");
+  return Number(m[1]);
 }
 
 /** El segundo argumento del `min()` del techo, en px. */
@@ -76,11 +103,33 @@ describe("el techo del desplegable y el logotipo más ancho", () => {
     // La altura del dibujo y el tamaño de la marca de selección, en la lista.
     expect(picker).toContain("<PlatformMarkIcon model={p} size={15} />");
     expect(picker).toContain("<Check size={13}");
+    // Y la caja del botón, que es la otra cuenta.
+    expect(regla(".pick")).toContain("gap: 9px");
+    expect(regla(".pick")).toContain("padding: 0 12px");
+    expect(regla(".pick")).toContain("border: 1px solid");
+    expect(picker).toContain("<PlatformMarkIcon model={puesta} size={16} />");
+    expect(picker).toContain("<ChevronDown size={15}");
   });
 
   it("el techo deja pasar entera la opción de la Game Boy Advance", () => {
     expect(pideLaGba()).toBeCloseTo(321.2, 1);
     expect(techoDelMenu()).toBeGreaterThanOrEqual(pideLaGba());
+  });
+
+  it("el botón está fijado justo en lo que pide la Game Boy Advance", () => {
+    /* Si esto falla es que la cuenta del botón se movió —otra altura de dibujo,
+       otro relleno, otro galón— y el ancho fijo se quedó corto: el nombre más
+       largo empezaría a salir con puntos suspensivos SIEMPRE, en todas las
+       fichas, que es lo que un ancho fijo hace cuando se queda pequeño. */
+    expect(pideLaGbaEnElBoton()).toBeCloseTo(324.3, 1);
+    expect(anchoDelBoton()).toBe(Math.ceil(pideLaGbaEnElBoton()));
+  });
+
+  it("el botón no es más estrecho que su menú, que es lo que lo mantiene dentro", () => {
+    /* El menú cuelga anclado a la derecha del botón y crece hacia la izquierda.
+       Mientras el botón sea el más ancho de los dos, el menú cae dentro de su
+       propio hueco y no hay forma de que la ficha lo recorte. */
+    expect(anchoDelBoton()).toBeGreaterThanOrEqual(techoDelMenu());
   });
 
   it("y no sobra ni un píxel: el techo es esa medida redondeada hacia arriba", () => {
