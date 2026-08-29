@@ -2359,49 +2359,29 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .pick-value { flex: 1 1 auto; min-width: 0; text-align: left; }
 .pick-menu {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
-  /* El menú mide su opción más ancha y nada más. Antes decía `min-width: 100%`
-     —nunca más estrecho que el botón—, y como min-width le gana a max-width, en
-     una ficha de escritorio mandaba eso y solo eso: medido el 28-08-2026 en la
-     de Wario Land 4 con la ventana a 2752, botón 432,6 px y menú 432,6 px para
-     una lista cuya opción más ancha pide 321,2. Ciento once píxeles de aire, y
-     un techo que no llegaba a tocar nunca.
+  /* El menú mide EXACTAMENTE lo que su botón: `100%` del envoltorio, que se
+     ajusta al botón, que a su vez está fijado en 325 px (.game-plat .pick).
+     Cien por cien y no un 325 escrito otra vez: el número vive en un solo
+     sitio, así que los dos no pueden separarse nunca, y si algún día el botón
+     encoge —una ficha estrecha, un móvil— el menú encoge con él y siguen
+     cuadrando al píxel.
 
-     `max-content` y no dejarlo en automático: un absoluto sin ancho se estira
-     hasta el hueco que le deja su contenedor, así que en una ficha estrecha el
-     menú seguiría midiendo lo que el botón en vez de lo que su contenido.
+     Y con eso se va el techo que hubo aquí desde 0091. Su historia, por si
+     alguien la echa de menos: eran 340 px puestos a ojo, bajaron a 322 —la
+     opción más ancha que existe, la de la Game Boy Advance, medida— y ahora no
+     hacen falta, porque el ancho ya no lo decide el contenido del menú sino el
+     botón. El `100vw - 32px` que lo acompañaba tampoco: el botón vive dentro de
+     la ficha y la ficha dentro de la pantalla, así que el menú no puede
+     salirse aunque quiera.
 
-     Y sí, ahora puede quedar MÁS ESTRECHO que el botón: un juego que solo salga
-     en PC enseña un menú de ~127 px colgado del lado derecho de un botón de
-     382. Es lo que se buscaba — la pastilla mide lo que dice, no lo que le
-     cabe. */
-  width: max-content;
-  /* Y un techo, desde 0091: el menú crece con el logotipo más ancho que haya
-     dentro —«NINTENDO 64» son 110 px él solo— y crece hacia la IZQUIERDA,
-     porque va anclado a la derecha del botón. En un móvil de 360 con la ficha
-     de un juego de seis consolas viejas eso se salía por el lado de fuera de la
-     pantalla. Con el techo puesto, lo que sobra lo recorta el nombre, que para
-     eso lleva `truncate` — y el logotipo, que es lo que se reconoce, no.
-
-     Son 322 porque es lo que mide la opción más ancha que sale hoy, no un
-     número redondo puesto a ojo como eran los 340 de antes: la Game Boy
-     Advance. Su logotipo ES el nombre escrito y mide 8,583 veces su alto, así
-     que a los 15 px de la lista son 128,7 px de dibujo; más los 127,5 px de
-     «Game Boy Advance» escrito al lado (13,5/600), los dos huecos de 9, la
-     marca de 13, el relleno de la opción y el del menú: 321,2 px medidos en el
-     navegador. La segunda ni se acerca —«3DO Interactive Multiplayer», 258.
-
-     El techo recorta en un solo sitio, y es el otro brazo del `min()`: por
-     debajo de unos 354 px de ventana manda `100vw - 32px` y la GBA sale con
-     puntos suspensivos. Ahí es justo lo que se quiere — el logotipo entero, que
-     es lo que se reconoce, y el nombre cortado.
-
-     Lo que NO se promete es que no pueda aparecer una más ancha: las reglas
-     coladeras de domain/platformModel se quedan con el nombre crudo de IGDB, y
-     ese no tiene tope. El día que llegue uno kilométrico se recortará, que es
-     justo lo que este techo existe para hacer. Lo que sí se comprueba, en
-     ui/icons/platformMarks.test.ts, es que la GBA sigue siendo el logotipo más
-     ancho del catálogo: media cuenta de este número vive en ese fichero. */
-  max-width: min(calc(100vw - 32px), 322px);
+     Lo que hay que seguir mirando es que la opción más ancha QUEPA en esos 325:
+     pide 321,2 px con la Game Boy Advance —su logotipo es el nombre escrito y
+     mide 8,583 veces su alto: 128,7 px de dibujo a los 15 px de la lista, más
+     127,5 del nombre, más huecos, marca y rellenos— así que sobran 3,8. Eso lo
+     comprueba ui/icons/platformMarks.test.ts, que es donde vive la otra mitad
+     de la cuenta. Si algún día no cupiera, el nombre se recorta y el logotipo
+     no: para eso lleva `truncate` el rótulo de cada opción. */
+  width: 100%;
   /* Opaco DE VERDAD, con las dos partes sumando 100: la mezcla decía 90+5 y
      color-mix reparte en alfa lo que falta, así que el menú tenía un 5% de
      transparencia. Sobre un póster no se nota —el desenfoque de detrás lo
