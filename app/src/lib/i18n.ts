@@ -123,9 +123,9 @@ const ES: Record<string, string> = {
   "of {total}": "de {total}",
   "Mark finished": "Marcar terminado",
   /* Clave propia y no "Finished", que dice «Terminadas» — la de las series. Es
-     el mismo apaño que "Finished it" de 0078, con prefijo porque aquí la
-     traducción es la palabra sola. */
-  "game: Finished": "Terminado",
+     el mismo apaño que "Finished it" de 0078, con el prefijo "games:" que ya
+     usan las pestañas porque aquí la traducción es la palabra sola. */
+  "games: Finished": "Terminado",
   "Tap to clear": "Toca para quitarlo",
   "Platforms": "Plataformas",
   /* El selector de 0083. "En cuál lo juegas" y no "Plataforma": la fila de
@@ -1232,6 +1232,7 @@ const EN: Record<string, string> = {
   "games: My releases": "My releases",
   "games: Announced": "Announced",
   "games: Tonight": "Play",
+  "games: Finished": "Finished",
   "self: watched {eps} of {name}": "watched {eps} of {name}",
   "self: finished {name}": "finished {name}",
   "self: added {name} to their backlog": "added {name} to your backlog",
@@ -1265,7 +1266,6 @@ const EN: Record<string, string> = {
   "friend: Playing it": "Playing it",
   "friend: Keeps playing it": "Keeps playing it",
   "friend: Finished it": "Finished it",
-  "game: Finished": "Finished",
   "friend: Dropped it": "Dropped it",
 };
 

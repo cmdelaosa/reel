@@ -66,9 +66,11 @@ function regla(selector: string): string {
   return css.slice(i, fin);
 }
 
-/** El ancho fijo del botón, en px. */
+/** El ancho fijo del botón, en px. La frontera de delante es por lo mismo que
+ *  el salto de línea de `regla`: `width:` casa dentro de `min-width:`, y un
+ *  `min-width` en píxeles escrito antes se leería como si fuera el ancho. */
 function anchoDelBoton(): number {
-  const m = /width:\s*([\d.]+)px/.exec(regla(".game-plat .pick"));
+  const m = /[;{\s]width:\s*([\d.]+)px/.exec(regla(".game-plat .pick"));
   if (!m) throw new Error("no encuentro el width de .game-plat .pick en marquee.css");
   return Number(m[1]);
 }

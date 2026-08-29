@@ -509,7 +509,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                         <Check size={16} />
                         {/* Clave propia y no "Finished": esa dice «Terminadas», que es
                             la de las series. Mismo motivo que "Finished it" de 0078. */}
-                        {finished ? tr("game: Finished") : tr("Mark finished")}
+                        {finished ? tr("games: Finished") : tr("Mark finished")}
                       </button>
                     )}
                     <span className="game-plat">
