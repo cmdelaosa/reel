@@ -28,6 +28,14 @@ export const qk = {
      separarlos solo daría cuatro estados de carga en una pantalla que no puede
      enseñar un total a medias. */
   steamInventory: ["steamInventory"] as const,
+  /* La serie reconstruida (0092) va aparte del inventario, y no por capricho:
+     es una llamada a una función que suma cuarenta mil velas en la base, y
+     colgarla de `steamInventory` la volvería a pedir cada vez que se sube un
+     volcado o se refresca cualquier otra cosa de la pantalla. */
+  steamValueSeries: ["steamValueSeries"] as const,
+  /* El histórico de UN objeto, que solo se pide cuando abres su ficha. Con el
+     nombre dentro de la clave para que abrir dos fichas seguidas no se pisen. */
+  steamItemHistory: (appid: number, name: string) => ["steamItemHistory", appid, name] as const,
   title: (tmdbId: number) => ["title", tmdbId] as const,
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,

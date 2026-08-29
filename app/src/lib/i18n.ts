@@ -261,6 +261,40 @@ const ES: Record<string, string> = {
      queda en bruto: la foto diaria solo guarda un total y la comisión tiene un
      mínimo por objeto, así que el pasado no se puede netear. */
   "Value over time · gross": "Valor con el tiempo · bruto",
+  /* Desde 0092 la curva va hacia atrás más allá de la primera foto, y ese tramo
+     se reconstruye con el libro. Se rotula «aproximada» entera —una sola línea,
+     un solo aviso— porque dos tramos con dos precisiones obligan a mirar dónde
+     empieza cuál antes de entender el dibujo. */
+  "Value over time · approximate": "Valor con el tiempo · aproximado",
+  "Value over time · approximate · gross": "Valor con el tiempo · aproximado · bruto",
+  "Before the first daily photo the line is rebuilt from your ledger: what came out of a case, a drop or a trade isn't in it, so it counts as if you'd always had it. The further back, the rougher.":
+    "Antes de la primera foto diaria la línea se reconstruye con tu libro: lo que salió de una caja, de un drop o de un intercambio no está en él, así que cuenta como si lo hubieras tenido siempre. Cuanto más atrás, más gruesa la aproximación.",
+  "{recorded} days recorded day by day; the {rebuilt} before them are rebuilt from your ledger and the price history.":
+    "{recorded} días apuntados día a día; los {rebuilt} anteriores están reconstruidos con tu libro y el histórico de precios.",
+  "Rebuilt from your ledger and the price history: no day here was recorded as it happened.":
+    "Reconstruido con tu libro y el histórico de precios: ningún día de aquí se apuntó según pasaba.",
+  "No graph yet: the price history is what draws it, and it comes from the collector's second button.":
+    "Todavía no hay gráfica: la dibuja el histórico de precios, y ese sale del segundo botón del recolector.",
+  /* La ficha de un objeto (0092). */
+  "See its price since you bought it": "Ver su precio desde que lo compraste",
+  /* El enlace al mercado, dentro de la ficha. Dos palabras: comparte fila con
+     el nombre del objeto y la equis, y «Ver en el mercado de Steam» la parte. */
+  "On Steam": "En Steam",
+  "{n} in your inventory": "{n} en tu inventario",
+  /* "Worth" ya está arriba, con la tabla del inventario: es la misma palabra y
+     el mismo significado —lo que vale uno—, así que aquí solo hace falta la
+     variante en neto. */
+  "Worth · net": "Vale · neto",
+  "You paid": "Pagaste",
+  "Difference": "Diferencia",
+  "Price of {item} from {from} to {to}": "Precio de {item} del {from} al {to}",
+  "Bought {n} at {price} on {day}": "Compraste {n} a {price} el {day}",
+  "No price history for this one yet. It comes from the collector's second button, and Steam only hands it to your own browser.":
+    "Este todavía no tiene histórico. Sale del segundo botón del recolector, y Steam solo se lo da a tu propio navegador.",
+  "The line starts the day you first bought it. {n} candles, gross prices — what the buyer pays.":
+    "La línea empieza el día que lo compraste por primera vez. {n} velas, precios en bruto — lo que paga el comprador.",
+  "No purchase on record — it came out of a case, a drop or a trade — so the whole history is drawn. {n} candles, gross prices.":
+    "No consta ninguna compra —salió de una caja, de un drop o de un intercambio— así que se dibuja el histórico entero. {n} velas, precios en bruto.",
   "The daily photo only stores a total, so there's no way to take the per-item cut off the past.":
     "La foto diaria solo guarda un total, así que no hay forma de descontarle al pasado la comisión de cada objeto.",
   "Out of your own pocket": "De tu bolsillo",
@@ -290,8 +324,6 @@ const ES: Record<string, string> = {
     "Una fila traía una fecha que Steam escribió de una forma que no supimos leer, y se ha quedado fuera en vez de fecharse mal.",
   "{n} items had no price on {day}": "{n} objetos no tenían precio el {day}",
   "Inventory value from {from} to {to}": "Valor del inventario del {from} al {to}",
-  "The value graph starts the day you first upload: nobody recorded what your inventory was worth before that.":
-    "La gráfica del valor empieza el día que subes el primer volcado: nadie guardó lo que valía tu inventario antes de eso.",
   "{n} of what you've spent on games didn't come from your pocket — the market paid for it.":
     "{n} de lo que has gastado en juegos no salió de tu bolsillo — lo puso el mercado.",
   "Unrealised covers the {covered} items you actually bought. The other {uncovered} came out of cases or trades and never cost you anything, so there's no gain to compute.":
