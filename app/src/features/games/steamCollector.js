@@ -67,9 +67,32 @@
      necesita para ver que costaba treinta céntimos y hoy cuesta seis euros. */
   const HISTORY_DAILY_DAYS = 730;
 
-  /* Para cuántos objetos. Los más valiosos primero: la curva de una caja de
-     0,03 € no la va a abrir nadie, y son las que más filas meten. */
-  const HISTORY_TOP = 60;
+  /* Para cuántos objetos. TODOS, desde el 29-08-2026.
+     Eran los sesenta más valiosos, y el motivo escrito era que «la curva de una
+     caja de 0,03 € no la va a abrir nadie». Con la pantalla ya hecha se vio que
+     eso era verdad para la curva de la CARTERA —los otros 548 objetos de este
+     inventario valen siete euros entre todos— y falso para todo lo demás:
+       · la ficha de un objeto abre su gráfica, y con el tope decía «este
+         todavía no tiene histórico» en 548 de 608 fichas, o sea en el 90 % de
+         las veces que alguien pincha;
+       · y la curva de la cartera marcaba «faltan 548 precios» los 731 días, un
+         aviso permanente que no avisa de nada.
+     Lo que cuesta: la pasada del histórico pasa de tres minutos a media hora, y
+     el fichero de dos megas a unos trece. Por eso sigue siendo el SEGUNDO botón
+     y el segundo fichero — quien solo quiera el valor de hoy ya lo tiene
+     descargado antes de que esto empiece.
+     Y lo que cuesta del otro lado, medido en local el 29-08-2026 con el peor
+     caso de las dos cosas juntas —la ventana sin tope de 0094, o sea desde 2013,
+     por estos 610 objetos: medio millón de velas y 820.000 celdas—:
+     `rpc_steam_value_series` tarda 1,2-1,7 s y devuelve 1.340 puntos. Con solo
+     sesenta objetos eran 0,5 s. Sigue muy por debajo del `statement_timeout`,
+     pero es la cifra que hay que volver a mirar si alguien sube otra vez el
+     techo: `p_days` es la salida de emergencia y sigue ahí.
+
+     El tope se queda escrito por si algún día hace falta acotarlo: `null` es
+     todos. El ORDEN por valor no es decorativo aunque ya no recorte nada — si
+     cierras la pestaña a mitad, lo que se ha traído es lo que más pesa. */
+  const HISTORY_TOP = null;
 
   /* ── Herramientas ─────────────────────────────────────────────────────── */
 
@@ -821,29 +844,40 @@
   const medians = new Map(
     prices.map((p) => [`${p.appid}:${p.market_hash_name}`, p.median_cents ?? 0]),
   );
-  const top = [...holdings]
+  const ordenados = [...holdings]
     .map((h) => ({
       ...h,
       value: (medians.get(`${h.appid}:${h.market_hash_name}`) ?? 0) * h.quantity,
     }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, HISTORY_TOP);
+    .sort((a, b) => b.value - a.value);
+  const top = HISTORY_TOP === null ? ordenados : ordenados.slice(0, HISTORY_TOP);
 
   log("");
-  /* Sin un solo precio no hay "los más valiosos": el orden sale de las medianas
-     que acabamos de traer, y con la lista vacía todos valen cero y el `sort` se
-     queda con los sesenta primeros por casualidad. Tres minutos de peticiones
-     para traer la curva de sesenta objetos elegidos a dedo por el azar no le
-     sirven a nadie, así que se dice y se deja para la próxima. */
+  /* Sin un solo precio, esto no empieza. Ya no es porque no se sepa a cuáles
+     recortar —desde que se traen todos no hay recorte— sino por lo que significa
+     esa lista vacía: Steam acaba de negarse a dar seiscientos precios, que es la
+     petición BARATA. Encadenarle seiscientas de histórico, que es la cara, es
+     media hora para acabar con las manos igual de vacías.
+     Y de paso el orden por valor sale de esas medianas: sin ellas todos valen
+     cero, así que cerrar la pestaña a mitad dejaría traído un montón al azar en
+     vez de lo que más pesa. */
   if (!prices.length) {
-    log("Sin precios no sé cuáles son los 60 más valiosos: dejo el histórico.");
-    log("Vuelve a pasar esto cuando Steam conteste y saldrá con los de verdad.");
+    log("Steam no ha dado ni un precio, así que tampoco dará el histórico: lo dejo.");
+    log("Vuelve a pasar esto cuando conteste.");
     return;
   }
+  /* Media hora larga, y se dice antes de empezar: es la parte lenta y quien la
+     lanza tiene que saber que la pestaña se queda ocupada.
+     3,5 y no 3: los tres segundos son la ESPERA entre peticiones, y encima de
+     eso está lo que tarda cada una — `pricehistory` devuelve dos años de velas,
+     no un precio. Redondear por lo bajo en el único número que alguien va a
+     usar para decidir si le da tiempo es la clase de optimismo que sobra. */
+  const minutos = Math.round((top.length * 3.5) / 60);
   log(
-    `Trayendo el histórico de los ${top.length} más valiosos…` +
+    `Trayendo el histórico de los ${top.length} objetos — unos ${minutos} minutos…` +
       (pricesGaveUp ? ` (ordenados con los ${prices.length} precios que hay)` : ""),
   );
+  log("Puedes dejar la pestaña de fondo; no la cierres.");
   /* La frontera es un DÍA y no un instante, para que las horas de un mismo día
      no se repartan entre el cubo diario y el trimestral: serían dos puntos con
      la misma fecha, y el segundo lo tiraría el upsert de la ingesta. */
@@ -851,6 +885,16 @@
     .toISOString()
     .slice(0, 10);
   const history = [];
+  /* El mismo freno que llevan los precios, y aquí hace más falta que allí.
+     `get` reintenta con espera creciente y luego tira, y el `catch` de abajo lo
+     apunta y sigue: con sesenta objetos, una negativa sostenida de Steam eran
+     diecisiete minutos de pestaña ocupada para acabar sin nada. Con seiscientos
+     son casi TRES HORAS, y nadie va a estar delante para pararlo.
+     Cinco seguidos sin respuesta no es mala suerte, es que hoy no toca — y lo
+     que ya se haya traído se ofrece igual, porque el orden es por valor y lo
+     primero es lo que más pesa. */
+  const HISTORY_GIVE_UP_AFTER = 5;
+  let sinHistorico = 0;
   for (let i = 0; i < top.length; i++) {
     const h = top[i];
     try {
@@ -895,10 +939,19 @@
           .map((a) => [a.day, Math.round(a.cents / a.vol), a.vol])
           .sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0)),
       });
+      sinHistorico = 0;
     } catch (e) {
       log(`  sin histórico: ${h.market_hash_name} (${e.message})`);
+      sinHistorico += 1;
+      if (sinHistorico >= HISTORY_GIVE_UP_AFTER) {
+        log(`  ${HISTORY_GIVE_UP_AFTER} seguidos sin respuesta: dejo el histórico aquí.`);
+        log("  Lo que ya está traído se puede guardar igual; el resto, otro día.");
+        break;
+      }
     }
-    if (i % 10 === 9) log(`  ${i + 1}/${top.length}…`);
+    /* Cada 25 y no cada 10: con seiscientos objetos, uno de cada diez son
+       sesenta renglones y el panel se convierte en una cuenta atrás ilegible. */
+    if (i % 25 === 24) log(`  ${i + 1}/${top.length}…`);
     await sleep(3000);
   }
 

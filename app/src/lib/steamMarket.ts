@@ -260,9 +260,21 @@ export function useSteamValueSeries() {
     queryKey: qk.steamValueSeries,
     enabled: Boolean(session),
     queryFn: async (): Promise<SteamSeriesPoint[]> => {
-      const { data, error } = await supabase.rpc("rpc_steam_value_series", {});
-      if (error) throw new Error(error.message);
-      return (data ?? []).map((r: unknown) => seriesRow.parse(r));
+      /* PAGINADA, y no es precaución: PostgREST corta en mil filas SIN AVISAR, y
+         eso vale también para una función que devuelve una tabla.
+         Con la ventana de dos años eran 731 puntos y no se notaba. Desde que la
+         serie llega hasta donde llegue el histórico (0094), un inventario con
+         velas de 2013 son 1.340 puntos — y sin paginar la curva se dibujaba
+         entera y terminaba en septiembre de 2025, once meses antes de hoy, sin
+         un error por ninguna parte. Medido en local el 29-08-2026.
+         Es la misma avería que se comió los episodios de One Piece; ver
+         lib/paging. El precio es que la función se ejecuta una vez por página
+         —1,7 s cada una en el peor caso medido—, y por eso esta consulta va
+         aparte de la del inventario y no bloquea la pantalla. */
+      const rows = await fetchPaged((from, to) =>
+        supabase.rpc("rpc_steam_value_series", {}).range(from, to),
+      );
+      return rows.map((r) => seriesRow.parse(r));
     },
   });
 }
@@ -321,14 +333,17 @@ export interface IngestSummary {
 
 /** Cuántas velas caben en una llamada a `/ingest`.
  *
- *  El histórico de sesenta objetos son cuarenta mil velas, y la función las
- *  escribe en tandas de 500 una detrás de otra: ochenta y cinco viajes a la
- *  base dentro de una sola invocación, que se pasa del tiempo que le dan y
- *  devuelve un 5xx con todo el fichero ya subido. Troceado aquí, cada llamada
- *  son quince tandas largas. El corte es por VELAS y no por objetos porque lo
- *  que tarda son las filas: un objeto trae dos años de curva y otro dos
- *  semanas. Y repetir es inofensivo — el upsert del histórico ignora las velas
- *  que ya están—, así que un corte a la mitad se arregla volviendo a subir. */
+ *  El histórico de un inventario entero pasa de cuatrocientas mil velas —hasta
+ *  730 por objeto y seiscientos objetos—, y la función las escribe en tandas de
+ *  500 una detrás de otra. Sin trocear serían casi novecientos viajes a la base
+ *  dentro de una sola invocación: se pasa del tiempo que le dan y devuelve un
+ *  5xx con todo el fichero ya subido. Troceado aquí, cada llamada son dieciséis
+ *  tandas y hacen falta unas cincuenta y seis.
+ *
+ *  El corte es por VELAS y no por objetos porque lo que tarda son las filas: un
+ *  objeto trae dos años de curva y otro dos semanas. Y repetir es inofensivo
+ *  —el upsert del histórico ignora las velas que ya están—, así que un corte a
+ *  la mitad se arregla volviendo a subir. */
 const CANDLES_PER_CALL = 8000;
 
 /** Parte el histórico en volcados que quepan de uno en uno. */
@@ -355,6 +370,22 @@ function splitHistory(history: unknown[]): unknown[][] {
   return parts;
 }
 
+/** Cómo va la subida. Con un histórico entero son unas cincuenta y seis llamadas
+ *  en serie —siete minutos largos—, y un botón girando sin decir nada durante
+ *  siete minutos es indistinguible de uno colgado. */
+export interface UploadProgress {
+  done: number;
+  total: number;
+}
+
+export interface UploadInput {
+  file: File;
+  /** Se llama al terminar cada trozo. Lo pone quien llama y el estado vive en
+   *  el componente: la alternativa era colar un campo propio en el objeto que
+   *  devuelve `useMutation`, y eso es apoyarse en su forma interna. */
+  onProgress?: (p: UploadProgress) => void;
+}
+
 /** Sube un fichero del recolector.
  *
  *  Acepta los dos que produce —el del inventario y el del histórico— sin
@@ -363,7 +394,7 @@ function splitHistory(history: unknown[]): unknown[][] {
 export function useUploadSteamDump() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File): Promise<IngestSummary> => {
+    mutationFn: async ({ file, onProgress }: UploadInput): Promise<IngestSummary> => {
       const text = await file.text();
       let dump: unknown;
       try {
@@ -416,7 +447,8 @@ export function useUploadSteamDump() {
          conexiones justo cuando el fichero es grande, que es el caso que esto
          viene a arreglar. */
       const total: IngestSummary = {};
-      for (const payload of payloads) {
+      onProgress?.({ done: 0, total: payloads.length });
+      for (const [i, payload] of payloads.entries()) {
         const part = (await call("/ingest", {
           method: "POST",
           body: JSON.stringify(payload),
@@ -424,6 +456,7 @@ export function useUploadSteamDump() {
         for (const k of ["holdings", "prices", "ledger", "undated", "history", "swept"] as const) {
           if (typeof part[k] === "number") total[k] = (total[k] ?? 0) + part[k];
         }
+        onProgress?.({ done: i + 1, total: payloads.length });
       }
       return total;
     },

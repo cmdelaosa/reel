@@ -275,12 +275,16 @@ const ES: Record<string, string> = {
     "Un día apuntado según pasaba; todo lo anterior está reconstruido con tu libro y el histórico de precios.",
   "{n} days recorded as they happened; everything before them is rebuilt from your ledger and the price history.":
     "{n} días apuntados según pasaban; todo lo anterior está reconstruido con tu libro y el histórico de precios.",
-  /* Permanente, no un aviso de avería: el recolector trae el histórico de los
-     sesenta objetos más valiosos y de ahí no pasa. */
+  /* Sale cuando al histórico subido le faltan objetos: un volcado a medias, o
+     uno de cuando el recolector solo traía los sesenta más valiosos. */
   "The rebuilt part follows the {tracked} of your {held} items that have a price history — the rest have no candles to ask for.":
     "El tramo reconstruido sigue los {tracked} de tus {held} objetos que tienen histórico de precios — de los demás no hay velas que pedir.",
   "Rebuilt from your ledger and the price history: no day here was recorded as it happened.":
     "Reconstruido con tu libro y el histórico de precios: ningún día de aquí se apuntó según pasaba.",
+  /* El histórico entero se sube en unas cincuenta y seis llamadas: sin contarlas,
+     el botón gira siete minutos y parece colgado. */
+  "Uploading…": "Subiendo…",
+  "Uploading… {done} of {total}": "Subiendo… {done} de {total}",
   "No graph yet: the price history is what draws it, and it comes from the collector's second button.":
     "Todavía no hay gráfica: la dibuja el histórico de precios, y ese sale del segundo botón del recolector.",
   /* La ficha de un objeto (0092). */
