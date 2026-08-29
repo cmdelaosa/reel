@@ -58,11 +58,6 @@ name: steam-prices
 # silencio.
 
 on:
-  # TEMPORAL, para probar el arreglo del User-Agent desde el runner de verdad
-  # antes de fusionarlo. Se quita antes de la PR.
-  push:
-    paths:
-      - ".github/workflows/steam-prices.yml"
   schedule:
     - cron: "10 4 * * *"
   workflow_dispatch:

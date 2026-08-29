@@ -68,7 +68,12 @@ const CURRENCY = Number(process.env.STEAM_CURRENCY ?? 3);
  *  permite que quien mire los registros de Valve sepa a quién escribir.
  *
  *  Cambiarlo por algo genérico vuelve a romper el cron, y el síntoma será otra
- *  vez «Refrescados 0» sin ningún error. */
+ *  vez «Refrescados 0» sin ningún error.
+ *
+ *  Probado entero contra producción el 29-08-2026, 35 minutos seguidos:
+ *  «Refrescados 500, fallidos 0, 245 velas de histórico», y ni una sola espera
+ *  por 429 en toda la pasada. La noche anterior, con el agente de Node y los
+ *  700 ms: «Refrescados 0, cortado por Steam». */
 const UA = "Reel/1.0 (+https://reel-app.com)";
 
 /** El hueco entre peticiones.
