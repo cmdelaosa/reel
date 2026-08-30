@@ -963,9 +963,13 @@
     `Trayendo el histórico de los ${top.length} objetos — unos ${minutos} minutos…` +
       (pricesGaveUp ? ` (ordenados con los ${prices.length} precios que hay)` : ""),
   );
-  if (vendidos.size) {
+  /* Contado sobre `top` y no sobre `holdings`/`vendidos`: con un `HISTORY_TOP`
+     puesto, la lista va recortada y las dos cifras de arriba describirían un
+     trabajo que no se va a hacer. */
+  const idos = top.filter((h) => !enInventario.has(`${h.appid}:${h.market_hash_name}`)).length;
+  if (idos) {
     log(
-      `  ${holdings.length} son del inventario y ${vendidos.size} ya no los tienes:` +
+      `  ${top.length - idos} son del inventario y ${idos} ya no los tienes:` +
         " esos van porque la curva del pasado los necesita.",
     );
   }
