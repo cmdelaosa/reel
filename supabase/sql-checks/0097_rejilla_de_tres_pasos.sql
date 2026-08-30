@@ -1,11 +1,16 @@
--- Pruebas de la REJILLA de `rpc_steam_value_series` (0095): hasta dónde llega y
--- con qué paso. Hermano de 0092_serie_reconstruida.sql, que prueba las reglas
--- —cuántos tenías tal día, el arrastre del precio, la foto que manda— y sigue
--- valiendo entero. Se corren igual:
+-- Pruebas de la REJILLA de `rpc_steam_value_series`: hasta dónde llega y con qué
+-- paso. Hermano de 0092_serie_reconstruida.sql, que prueba las reglas —cuántos
+-- tenías tal día, el arrastre del precio, la foto que manda— y sigue valiendo
+-- entero. Se corren igual:
 --
 --   supabase db reset
---   docker cp supabase/sql-checks/0095_rejilla_de_la_curva.sql supabase_db_tvtime:/tmp/t.sql
+--   docker cp supabase/sql-checks/0097_rejilla_de_tres_pasos.sql supabase_db_tvtime:/tmp/t.sql
 --   docker exec supabase_db_tvtime psql -U postgres -f /tmp/t.sql
+--
+-- Nació con 0095, que hizo la rejilla mensual+quincenal, y se renombró con 0097,
+-- que le puso un tercer paso: trimestral en los años viejos. Es UNA matriz y no
+-- dos a propósito — la rejilla es una sola pieza móvil, y dos ficheros probando
+-- lo mismo es cómo uno se queda viejo sin que nadie lo note.
 --
 -- Lo que hay aquí es lo que 0095 promete y no se ve leyendo la función: que la
 -- curva llega hasta la vela más vieja que haya, y que su tamaño NO crece con lo
@@ -21,7 +26,7 @@
 begin;
 
 insert into auth.users (id, email) values
-  ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'steam-rejilla-0095@example.com')
+  ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'steam-rejilla-0097@example.com')
 on conflict (id) do nothing;
 
 select set_config(
@@ -54,31 +59,49 @@ begin
 end $$;
 
 -- ── 2. Y aun así son pocos puntos: el tamaño no crece con los años ────────
--- Trece años son ~156 meses más las trece quincenas de los últimos seis meses.
--- El número exacto baila con el calendario, y lo que importa es el orden de
--- magnitud: doscientos y pico, no cuatro mil setecientos.
+-- Trece años son ~44 trimestres hasta hace dos años, más ~18 meses hasta hace
+-- seis, más las trece quincenas de los últimos seis meses. El número exacto
+-- baila con el calendario, y lo que importa es el orden de magnitud: ochenta y
+-- pico, no cuatro mil setecientos.
+--
+-- Con 0095 esta misma cuenta daba «entre 150 y 250». El margen de abajo es lo
+-- que de verdad prueba algo: si alguien devuelve la rejilla a mensual sin querer,
+-- el número se dispara y esto se para.
 do $$
 declare n bigint;
 begin
   select count(*) into n from public.rpc_steam_value_series();
-  assert n between 150 and 250,
-    format('trece anos deberian caber en ~170 puntos, y salen %s', n);
+  assert n between 60 and 120,
+    format('trece anos deberian caber en ~80 puntos, y salen %s', n);
 end $$;
 
--- ── 3. El paso: mensual atrás, quincenal en los últimos seis meses ────────
+-- ── 3. El paso: trimestral, mensual y quincenal, cada uno en su tramo ─────
 -- Se comprueba la FORMA y no unas fechas concretas, porque las fechas dependen
--- de qué día se corran las pruebas. El primer día se excluye de las dos: es el
+-- de qué día se corran las pruebas. El primer día se excluye de las tres: es el
 -- arranque de la curva y entra siempre, caiga donde caiga.
+--
+-- El tramo viejo pide día 1 Y mes de trimestre (1, 4, 7, 10): con solo «día 1»
+-- un punto mensual colado ahí pasaría desapercibido, que es justo el fallo que
+-- este tramo viene a vigilar.
 do $$
 declare sueltos bigint;
 begin
   select count(*) into sueltos
     from public.rpc_steam_value_series()
-   where day < current_date - 183
+   where day < current_date - 730
+     and day <> current_date - 4700
+     and (extract(day from day) <> 1 or extract(month from day)::int % 3 <> 1);
+  assert sueltos = 0,
+    format('%s puntos viejos que no son principio de trimestre', sueltos);
+
+  select count(*) into sueltos
+    from public.rpc_steam_value_series()
+   where day >= current_date - 730
+     and day < current_date - 183
      and day <> current_date - 4700
      and extract(day from day) <> 1;
   assert sueltos = 0,
-    format('%s puntos viejos que no son dia 1 de mes', sueltos);
+    format('%s puntos de los dos ultimos anos que no son dia 1 de mes', sueltos);
 
   select count(*) into sueltos
     from public.rpc_steam_value_series()
@@ -122,4 +145,4 @@ end $$;
 
 rollback;
 
-\echo 'Las seis comprobaciones de la rejilla de 0095 han pasado.'
+\echo 'Las siete comprobaciones de la rejilla de tres pasos han pasado.'
