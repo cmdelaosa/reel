@@ -334,8 +334,9 @@ export interface IngestSummary {
 /** Cuántas velas caben en una llamada a `/ingest`.
  *
  *  El histórico de un inventario entero pasa de cuatrocientas mil velas —hasta
- *  730 por objeto y seiscientos objetos—, y la función las escribe en tandas de
- *  500 una detrás de otra. Sin trocear serían casi novecientos viajes a la base
+ *  730 por objeto y seiscientos objetos, y desde el 30-08-2026 también los que
+ *  vendiste, porque la curva del pasado los necesita—, y la función las escribe
+ *  en tandas de 500 una detrás de otra. Sin trocear serían casi novecientos viajes a la base
  *  dentro de una sola invocación: se pasa del tiempo que le dan y devuelve un
  *  5xx con todo el fichero ya subido. Troceado aquí, cada llamada son dieciséis
  *  tandas y hacen falta unas cincuenta y seis.
