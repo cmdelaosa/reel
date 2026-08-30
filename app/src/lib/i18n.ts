@@ -354,8 +354,8 @@ const ES: Record<string, string> = {
   "Come back here and upload the files.": "Vuelve aquí y sube los ficheros.",
   "Open the browser console there (⌥⌘J on Chrome for Mac) and paste this.":
     "Abre ahí la consola del navegador (⌥⌘J en Chrome para Mac) y pega esto.",
-  "Wait — it asks Steam one price at a time on purpose — then press its buttons to save the files.":
-    "Espera —pregunta los precios de uno en uno a propósito— y pulsa sus botones para guardar los ficheros.",
+  "Wait — it asks Steam for one item at a time on purpose — then press its buttons to save the files.":
+    "Espera —pregunta a Steam objeto por objeto a propósito— y pulsa sus botones para guardar los ficheros.",
   "Copy the collector": "Copiar el recolector",
   "Show the collector": "Ver el recolector",
   "Hide the collector": "Ocultar el recolector",
