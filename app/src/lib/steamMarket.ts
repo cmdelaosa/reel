@@ -8,12 +8,8 @@ import { fetchPaged } from "@/lib/paging";
 import {
   cashFlow,
   costBasis,
-  portfolioValue,
   priceIndex,
-  unrealized,
   type CashFlow,
-  type Holding,
-  type PortfolioValue,
   type Price,
 } from "@/domain/steamPortfolio";
 
@@ -130,9 +126,14 @@ export interface InventoryRow {
 
 export interface Inventory {
   rows: InventoryRow[];
-  totals: PortfolioValue;
   cash: CashFlow;
-  gain: { gainCents: number; coveredItems: number; uncoveredItems: number };
+  /* Aquí iban `totals` y `gain`, las dos sumas del inventario ENTERO que daban
+     `portfolioValue` y `unrealized`. Fuera desde que la pantalla oculta lo que
+     no se puede vender: el número grande y la rejilla tienen que decir lo mismo,
+     y esas dos contaban también lo oculto. Un campo que nadie usa y que
+     contradice lo que se ve es el que alguien vuelve a enchufar sin saberlo.
+     Las dos funciones siguen en el dominio, con sus pruebas, para el día que
+     haga falta la cifra del inventario completo. */
   /** El libro entero, tal cual. Lo usa la ficha de un objeto para clavar sus
    *  compras en la curva; ya está leído aquí, así que abrir una ficha no cuesta
    *  ni una petición más. */
@@ -188,11 +189,6 @@ export function useSteamInventory() {
       );
       const ledger = ledgerRows.map((r) => ledgerRow.parse(r));
 
-      const asHoldings: Holding[] = holdings.map((h) => ({
-        appid: h.appid,
-        marketHashName: h.market_hash_name,
-        quantity: h.quantity,
-      }));
       const asPrices: Price[] = prices.map((p) => ({
         appid: p.appid,
         marketHashName: p.market_hash_name,
@@ -234,11 +230,9 @@ export function useSteamInventory() {
 
       return {
         rows,
-        totals: portfolioValue(asHoldings, asPrices),
         cash: cashFlow(
           ledger.map((l) => ({ kind: l.kind, amountCents: l.amount_cents })),
         ),
-        gain: unrealized(asHoldings, asPrices, basis),
         ledger,
         collectedAt: holdings[0]?.collected_at ?? null,
       };
