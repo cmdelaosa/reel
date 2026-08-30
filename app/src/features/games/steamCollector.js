@@ -915,18 +915,25 @@
     if (!l.appid || !l.market_hash_name) continue;
     const k = `${l.appid}:${l.market_hash_name}`;
     const movido = Math.abs(l.amount_cents ?? 0);
-    if (movido > (movidoEnElLibro.get(k) ?? 0)) movidoEnElLibro.set(k, movido);
+    const antes = movidoEnElLibro.get(k);
+    /* El objeto entero y no solo la cifra: `vendidos` necesita appid y nombre, y
+       sacarlos de vuelta partiendo la clave es una forma tonta de estropear los
+       nombres con dos puntos —los cromos de 753 los tienen a montones— cuando
+       los dos valores están aquí delante. */
+    if (!antes) {
+      movidoEnElLibro.set(k, {
+        appid: l.appid,
+        market_hash_name: l.market_hash_name,
+        value: movido,
+      });
+    } else if (movido > antes.value) {
+      antes.value = movido;
+    }
   }
   const vendidos = new Map();
-  for (const [k, movido] of movidoEnElLibro) {
+  for (const [k, o] of movidoEnElLibro) {
     if (enInventario.has(k)) continue;
-    const corte = k.indexOf(":");
-    vendidos.set(k, {
-      appid: Number(k.slice(0, corte)),
-      market_hash_name: k.slice(corte + 1),
-      quantity: 0,
-      value: movido,
-    });
+    vendidos.set(k, { ...o, quantity: 0 });
   }
   /* Los que tienes primero, y dentro de cada grupo por valor. A igualdad de
      cifra vale más una vela de algo que sigue en la cartera: esa mueve el
@@ -938,7 +945,7 @@
         const mediana = medians.get(k) ?? 0;
         return {
           ...h,
-          value: mediana ? mediana * h.quantity : (movidoEnElLibro.get(k) ?? 0),
+          value: mediana ? mediana * h.quantity : (movidoEnElLibro.get(k)?.value ?? 0),
         };
       })
       .sort((a, b) => b.value - a.value),
