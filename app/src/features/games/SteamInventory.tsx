@@ -1330,6 +1330,21 @@ function UploadReceipt({ summary }: { summary: IngestSummary }) {
       {/* Lo que se ha caído se cuenta. Una fila cuya fecha no se pudo leer se
           descarta a propósito —fecharla con hoy la metería en el realizado de
           este año— y callarlo dejaría un descuadre sin explicación. */}
+      {/* Fechas imposibles: anteriores al mercado de Steam, que abrió en diciembre
+          de 2012. No es un caso que pueda darse, así que decirlo es todo el
+          objetivo — el fallo que lo estrenó (el recolector subía la fecha del
+          anuncio y el año se iba restando solo, hasta 1752) vivió meses porque
+          nada lo miraba. Las filas se guardan igual; lo que no se hace es
+          callarse. */}
+      {summary.impossible ? (
+        <p className="mute" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #e26)" }}>
+          {plural(
+            summary.impossible,
+            "One row came out dated before Steam's market existed — the year could not be worked out. Run the collector again; if it stays, tell me.",
+            "{n} rows came out dated before Steam's market existed — the year could not be worked out. Run the collector again; if it stays, tell me.",
+          )}
+        </p>
+      ) : null}
       {summary.undated ? (
         <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
           {plural(

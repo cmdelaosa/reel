@@ -106,6 +106,32 @@ describe("datesWithYear", () => {
     expect(out[0]).toBe("2025-12-20T12:00:00.000Z");
     expect(out[1]).toBe("2026-02-03T12:00:00.000Z");
   });
+
+  it("una lista que no viene ordenada pierde un año por cada salto", () => {
+    /* Esta prueba NO describe lo que queremos: describe lo que pasa cuando la
+       premisa de arriba —la lista va ordenada por la fecha que se lee— es falsa.
+       Está aquí porque esa premisa se rompió de verdad y nadie se enteró.
+
+       Hasta el 30-08-2026 el recolector subía la fecha del ANUNCIO en vez de la
+       del MOVIMIENTO. Steam ordena el historial por la segunda, así que la
+       primera iba y venía —"25 feb", "28 feb", "27 feb", "28 feb"— y cada
+       vaivén restaba un año. Con 12.026 filas ese libro acabó repartido desde
+       1752: 8.907 filas antes de 1900 y solo 1.387 en el tramo real de 2013 a
+       2026. La curva de la cartera camina el libro para saber cuántos tenías
+       tal día, así que todo lo que había comprado y vendido quedaba fuera del
+       dibujo por siglos, y la gráfica salía plausible.
+
+       La función hacía lo que promete; lo que le daban, no. Estas fechas son
+       reales, de la columna equivocada de esa cuenta. Si alguien vuelve a poner
+       `dates[dates.length - 1]` en el recolector, esto es lo que va a pasar —y
+       esta prueba es lo que le va a mandar a leer este comentario. */
+    const saltarinas = ["25 feb", "28 feb", "27 feb", "28 feb"];
+    const out = datesWithYear(
+      saltarinas.map((d, i) => row(`r${i}`, d, i)),
+      now,
+    );
+    expect(out.map((d) => d?.slice(0, 4))).toEqual(["2026", "2025", "2025", "2024"]);
+  });
 });
 
 describe("portfolioValue", () => {

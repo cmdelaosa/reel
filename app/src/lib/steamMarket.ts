@@ -322,6 +322,9 @@ export interface IngestSummary {
   ledger?: number;
   undated?: number;
   history?: number;
+  /** Filas fechadas antes de que existiera el mercado de Steam: la
+   *  reconstrucción del año diciendo que se ha perdido. Ver `writeLedger`. */
+  impossible?: number;
   swept?: number;
 }
 
@@ -448,7 +451,7 @@ export function useUploadSteamDump() {
           method: "POST",
           body: JSON.stringify(payload),
         })) as IngestSummary;
-        for (const k of ["holdings", "prices", "ledger", "undated", "history", "swept"] as const) {
+        for (const k of ["holdings", "prices", "ledger", "undated", "history", "swept", "impossible"] as const) {
           if (typeof part[k] === "number") total[k] = (total[k] ?? 0) + part[k];
         }
         onProgress?.({ done: i + 1, total: payloads.length });
