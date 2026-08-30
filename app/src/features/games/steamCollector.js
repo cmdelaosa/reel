@@ -902,55 +902,79 @@
    *  Y `market_sell` y `market_buy` los dos, no solo las ventas: algo comprado
    *  y regalado o intercambiado tampoco está en el inventario de hoy. */
   const enInventario = new Set(holdings.map((h) => `${h.appid}:${h.market_hash_name}`));
-  const vendidos = new Map();
+  /** Lo más gordo que movió cada objeto en tu libro, en céntimos.
+   *
+   *  Es la tasación de repuesto para ORDENAR, y hace dos trabajos:
+   *  · de lo vendido no hay mediana de hoy, porque no se le pidió precio;
+   *  · y de lo que tienes tampoco, los días en que `priceoverview` contesta 429
+   *    a todo. Antes eso dejaba los 608 objetos empatados a cero.
+   *  No es lo que vale: es lo que costó o lo que dio, que para decidir a cuál
+   *  preguntarle primero se le parece bastante. */
+  const movidoEnElLibro = new Map();
   for (const l of ledger) {
     if (!l.appid || !l.market_hash_name) continue;
     const k = `${l.appid}:${l.market_hash_name}`;
-    if (enInventario.has(k)) continue;
     const movido = Math.abs(l.amount_cents ?? 0);
-    const yaVisto = vendidos.get(k);
-    /* `value` es el movimiento más gordo que tuvo ese objeto, no una tasación:
-       de lo que ya no tienes no hay mediana de hoy con la que ordenar, y lo que
-       más dinero movió es el mejor sustituto. Solo decide el ORDEN, y el orden
-       solo importa si Steam corta a mitad: se trae antes lo que más pesa. */
-    if (!yaVisto) {
-      vendidos.set(k, {
+    const antes = movidoEnElLibro.get(k);
+    /* El objeto entero y no solo la cifra: `vendidos` necesita appid y nombre, y
+       sacarlos de vuelta partiendo la clave es una forma tonta de estropear los
+       nombres con dos puntos —los cromos de 753 los tienen a montones— cuando
+       los dos valores están aquí delante. */
+    if (!antes) {
+      movidoEnElLibro.set(k, {
         appid: l.appid,
         market_hash_name: l.market_hash_name,
-        quantity: 0,
         value: movido,
       });
-    } else if (movido > yaVisto.value) {
-      yaVisto.value = movido;
+    } else if (movido > antes.value) {
+      antes.value = movido;
     }
+  }
+  const vendidos = new Map();
+  for (const [k, o] of movidoEnElLibro) {
+    if (enInventario.has(k)) continue;
+    vendidos.set(k, { ...o, quantity: 0 });
   }
   /* Los que tienes primero, y dentro de cada grupo por valor. A igualdad de
      cifra vale más una vela de algo que sigue en la cartera: esa mueve el
      número de hoy, y la del vendido solo el dibujo del pasado. */
   const ordenados = [
     ...[...holdings]
-      .map((h) => ({
-        ...h,
-        value: (medians.get(`${h.appid}:${h.market_hash_name}`) ?? 0) * h.quantity,
-      }))
+      .map((h) => {
+        const k = `${h.appid}:${h.market_hash_name}`;
+        const mediana = medians.get(k) ?? 0;
+        return {
+          ...h,
+          value: mediana ? mediana * h.quantity : (movidoEnElLibro.get(k)?.value ?? 0),
+        };
+      })
       .sort((a, b) => b.value - a.value),
     ...[...vendidos.values()].sort((a, b) => b.value - a.value),
   ];
   const top = HISTORY_TOP === null ? ordenados : ordenados.slice(0, HISTORY_TOP);
 
   log("");
-  /* Sin un solo precio, esto no empieza. Ya no es porque no se sepa a cuáles
-     recortar —desde que se traen todos no hay recorte— sino por lo que significa
-     esa lista vacía: Steam acaba de negarse a dar seiscientos precios, que es la
-     petición BARATA. Encadenarle seiscientas de histórico, que es la cara, es
-     media hora para acabar con las manos igual de vacías.
-     Y de paso el orden por valor sale de esas medianas: sin ellas todos valen
-     cero, así que cerrar la pestaña a mitad dejaría traído un montón al azar en
-     vez de lo que más pesa. */
+  /* Aquí había un freno: sin un solo precio no se empezaba el histórico. Se
+     quita, y el motivo es que su premisa la desmiente la medida que está escrita
+     doce líneas más arriba, en `GIVE_UP_AFTER`.
+     Decía que una lista de precios vacía significa que Steam se acaba de negar a
+     la petición BARATA, así que encadenarle la cara es media hora para acabar
+     igual de vacío. Pero Steam NO estrangula por cuenta, estrangula por EXTREMO:
+     el 28-08-2026, en la misma pestaña y el mismo minuto, `priceoverview`
+     contestaba 429 a las tres sondas mientras el inventario, `myhistory` y
+     `pricehistory` iban a 200. Y el 30-08-2026 volvió a pasar con los 608
+     objetos de esta cuenta: cero precios, y el histórico —que era lo único que
+     se había venido a buscar— ni se intentó.
+     Del freno viejo queda en pie lo secundario, y ese sí se arregla en vez de
+     frenar: sin medianas el orden por valor salía plano. Ahora, cuando no hay
+     mediana, ordena `movidoEnElLibro`, que a esas alturas ya está leído.
+     Lo que protege de la media hora tirada no es esto, es
+     `HISTORY_GIVE_UP_AFTER`: cinco negativas seguidas de `pricehistory` y la
+     fase se deja sola. Que es lo que había que mirar desde el principio. */
   if (!prices.length) {
-    log("Steam no ha dado ni un precio, así que tampoco dará el histórico: lo dejo.");
-    log("Vuelve a pasar esto cuando conteste.");
-    return;
+    log("Ni un precio de hoy, pero el histórico va aparte y se pide igual:");
+    log("Steam estrangula por extremo, no por cuenta. Si tampoco lo da, lo verás");
+    log("aquí en cinco intentos. El orden sale de tus compras y ventas.");
   }
   /* Media hora larga, y se dice antes de empezar: es la parte lenta y quien la
      lanza tiene que saber que la pestaña se queda ocupada.
@@ -959,10 +983,15 @@
      no un precio. Redondear por lo bajo en el único número que alguien va a
      usar para decidir si le da tiempo es la clase de optimismo que sobra. */
   const minutos = Math.round((top.length * 3.5) / 60);
-  log(
-    `Trayendo el histórico de los ${top.length} objetos — unos ${minutos} minutos…` +
-      (pricesGaveUp ? ` (ordenados con los ${prices.length} precios que hay)` : ""),
-  );
+  /* Con qué se ha ordenado, dicho solo cuando NO es lo normal: «con los 412
+     precios que hay» y «con tus compras y ventas» son dos cosas distintas, y
+     «con los 0 precios que hay» no era ninguna de las dos. */
+  const conQue = !prices.length
+    ? " (ordenados con tus compras y ventas: hoy no hay precios)"
+    : pricesGaveUp
+      ? ` (ordenados con los ${prices.length} precios que hay)`
+      : "";
+  log(`Trayendo el histórico de los ${top.length} objetos — unos ${minutos} minutos…${conQue}`);
   /* Contado sobre `top` y no sobre `holdings`/`vendidos`: con un `HISTORY_TOP`
      puesto, la lista va recortada y las dos cifras de arriba describirían un
      trabajo que no se va a hacer. */
