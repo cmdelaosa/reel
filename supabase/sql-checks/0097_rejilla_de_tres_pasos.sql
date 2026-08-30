@@ -143,6 +143,44 @@ begin
   assert repetidos = 0, format('%s dias repetidos en la serie', repetidos);
 end $$;
 
+-- ── 7. Los cuatro largos de histórico, y la costura entre tramos ──────────
+-- El resto del fichero mira trece años, que es el caso que rompió producción.
+-- Pero una rejilla de TRES pasos tiene dos costuras, y las dos se mueven según
+-- lo atrás que llegue tu histórico: quien tenga cuatro meses no llega a la
+-- mensual, y quien tenga catorce no llega a la trimestral. Ahí es donde un
+-- `generate_series` mal acotado sale al revés —cero puntos— o deja un boquete.
+--
+-- Lo que se exige es lo que de verdad importa de una rejilla: que empiece en la
+-- vela más vieja, que hoy sea siempre un punto, y que no haya ningún hueco mayor
+-- que el paso más grande que existe (un trimestre, 92 días).
+do $$
+declare dias int; puntos bigint; primero date; hueco int; hoy_esta bool; vieja date;
+begin
+  foreach dias in array array[120, 400, 1200, 4700] loop
+    delete from public.steam_price_history where appid = 999501;
+    insert into public.steam_price_history (appid, market_hash_name, currency, day, median_cents, volume)
+    select 999501, 'V', 3, (current_date - g)::date, 100, 1 from generate_series(0, dias, 7) g;
+
+    select min(day) into vieja from public.steam_price_history where appid = 999501;
+    with s as (select day from public.rpc_steam_value_series()),
+         d as (select day, day - lag(day) over (order by day) as salto from s)
+    select (select count(*) from s), (select min(day) from s),
+           (select coalesce(max(salto), 0) from d), (select bool_or(day = current_date) from s)
+      into puntos, primero, hueco, hoy_esta;
+
+    assert hoy_esta, format('con %s dias de historico, hoy no es un punto', dias);
+    -- Contra la vela más vieja de verdad y no contra `current_date - dias`:
+    -- `generate_series(0, 120, 7)` se queda en 119, y esa resta ya engañó una vez
+    -- a este mismo fichero mientras se escribía.
+    assert primero = vieja,
+      format('con %s dias deberia empezar en la vela mas vieja (%s) y empieza en %s',
+             dias, vieja, primero);
+    assert hueco <= 93,
+      format('con %s dias de historico hay un hueco de %s dias, mas que un trimestre',
+             dias, hueco);
+  end loop;
+end $$;
+
 rollback;
 
-\echo 'Las siete comprobaciones de la rejilla de tres pasos han pasado.'
+\echo 'Las ocho comprobaciones de la rejilla de tres pasos han pasado.'
