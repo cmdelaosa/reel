@@ -1,4 +1,4 @@
--- Pruebas de rpc_steam_value_series (0092), en SQL puro y contra una base de
+-- Pruebas de rpc_steam_value_series, en SQL puro y contra una base de
 -- desarrollo. Se corren a mano:
 --
 --   supabase db reset
@@ -16,6 +16,17 @@
 -- en app/src/domain/steamSeries.ts, que sí tiene su matriz en vitest; si las dos
 -- se separan, la ficha de un objeto y la curva de la cartera contarían cosas
 -- distintas del mismo día y las dos parecerían correctas.
+--
+-- ── Por qué las fechas del escenario son múltiplos de catorce ─────────────
+-- Hasta 0094 la serie traía un punto por día y aquí se podía preguntar por «la
+-- víspera» de cualquier cosa. Desde 0095 no: la rejilla es mensual, quincenal en
+-- los últimos seis meses, y contada hacia atrás desde hoy. Un `where day =
+-- current_date - 11` no devuelve fila y el `select into` deja un null, que en un
+-- `assert` se lee como fallo raro en vez de como «ese día no existe».
+--
+-- Así que los movimientos del escenario se ponen ENCIMA de puntos de la rejilla
+-- —hoy, -14, -28, -42— y las vísperas se miran en el punto anterior. La regla
+-- que se prueba es la misma: el movimiento del propio día ya cuenta.
 --
 -- Todo va dentro de una transacción que termina en `rollback`: la base queda
 -- como estaba. Los appid son 999xxx —que no existen en Steam— por si algún día
@@ -44,10 +55,10 @@ end $$;
 
 -- ── El escenario ──────────────────────────────────────────────────────────
 -- Tres objetos, uno por cada forma de llegar y de irse:
---   A — comprado hace 10 días. Antes de esa fecha no lo tenías.
+--   A — comprado hace 14 días. Antes de esa fecha no lo tenías.
 --   B — nunca pasó por el libro: salió de una caja o de un drop. Se reconstruye
 --       como si lo hubieras tenido siempre, que es la limitación conocida.
---   C — vendido hace 8 días. Hoy no está en el inventario, y hacia atrás sí.
+--   C — vendido hace 28 días. Hoy no está en el inventario, y hacia atrás sí.
 insert into public.steam_holdings (user_id, appid, market_hash_name, quantity) values
   ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 999001, 'A', 2),
   ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 999001, 'B', 1);
@@ -55,75 +66,73 @@ insert into public.steam_holdings (user_id, appid, market_hash_name, quantity) v
 insert into public.steam_ledger
   (user_id, happened_at, kind, amount_cents, currency, appid, market_hash_name, quantity, external_id)
 values
-  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', now() - interval '10 days',
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', now() - interval '14 days',
    'market_buy', -180, 3, 999001, 'A', 2, 'test_buy_a'),
-  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', now() - interval '8 days',
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', now() - interval '28 days',
    'market_sell', 850, 3, 999001, 'C', 1, 'test_sell_c'),
   -- Una recarga de cartera: mueve dinero y NO mueve objetos. Si la función la
   -- contara, todas las cantidades de antes de hoy saldrían mal.
-  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', now() - interval '9 days',
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', now() - interval '20 days',
    'wallet_topup', 2000, 3, null, null, 1, 'test_topup');
 
--- Las velas. A cambia de precio hace 5 días; B y C no se han movido desde hace
--- 30, y esos huecos son los que la función tiene que arrastrar.
+-- Las velas. A cambia de precio hace 7 días; B y C no se han movido desde hace
+-- 300, y esos huecos son los que la función tiene que arrastrar.
 insert into public.steam_price_history (appid, market_hash_name, currency, day, median_cents, volume) values
-  (999001, 'A', 3, current_date - 30, 100, 1),
-  (999001, 'A', 3, current_date - 5,  200, 1),
-  (999001, 'B', 3, current_date - 30, 50,  1),
-  (999001, 'C', 3, current_date - 30, 1000, 1);
+  (999001, 'A', 3, current_date - 300, 100, 1),
+  (999001, 'A', 3, current_date - 7,   200, 1),
+  (999001, 'B', 3, current_date - 300, 50,  1),
+  (999001, 'C', 3, current_date - 300, 1000, 1);
 
--- ── 1. El día más viejo: A todavía no era tuyo, C sí ───────────────────────
+-- ── 1. Hace 42 días: A todavía no era tuyo, C sí ──────────────────────────
 do $$
 declare v bigint; n bigint;
 begin
   select value_cents, item_count into v, n
-    from public.rpc_steam_value_series() where day = current_date - 30;
-  -- B (1 × 50) + C (1 × 1000). A no cuenta: se compró veinte días después.
-  assert v = 1050, format('hace 30 dias deberian ser 1050, son %s', v);
-  assert n = 2, format('hace 30 dias deberian ser 2 unidades, son %s', n);
+    from public.rpc_steam_value_series() where day = current_date - 42;
+  -- B (1 × 50) + C (1 × 1000). A no cuenta: se compró cuatro semanas después.
+  assert v = 1050, format('hace 42 dias deberian ser 1050, son %s', v);
+  assert n = 2, format('hace 42 dias deberian ser 2 unidades, son %s', n);
 end $$;
 
--- ── 2. El día de la compra ya cuenta como tuyo ─────────────────────────────
+-- ── 2. La venta: C está en el punto anterior y ya no el día que lo vendes ──
+-- El movimiento del propio día cuenta como YA ocurrido. Es la misma regla que
+-- `heldOn` en app/src/domain/steamSeries.ts, y está escrita aquí porque es justo
+-- la que se elige mal cuando se reescribe.
 do $$
 declare antes bigint; ese bigint;
 begin
   select value_cents into antes
-    from public.rpc_steam_value_series() where day = current_date - 11;
+    from public.rpc_steam_value_series() where day = current_date - 42;
   select value_cents into ese
-    from public.rpc_steam_value_series() where day = current_date - 10;
-  assert antes = 1050, format('la vispera de la compra deberia ser 1050, es %s', antes);
-  -- A entra con 2 × 100, que es la vela de hace 30 días arrastrada hasta aquí.
-  assert ese = 1250, format('el dia de la compra deberia ser 1250, es %s', ese);
+    from public.rpc_steam_value_series() where day = current_date - 28;
+  assert antes = 1050, format('antes de la venta C todavia cuenta: %s', antes);
+  -- Solo queda B. A sigue sin ser tuyo.
+  assert ese = 50, format('el dia de la venta deberian quedar 50, hay %s', ese);
 end $$;
 
--- ── 3. La venta: C está la víspera y ya no el día que lo vendes ────────────
--- El movimiento del propio día cuenta como YA ocurrido, en las dos direcciones:
--- el día que compras algo ya lo tienes (comprobación 2) y el día que lo vendes
--- ya no. Es la misma regla que `heldOn` en app/src/domain/steamSeries.ts, y está
--- escrita aquí porque es justo la que se elige mal cuando se reescribe.
+-- ── 3. El día de la compra ya cuenta como tuyo, y con el precio arrastrado ─
 do $$
-declare vispera bigint; ese bigint;
+declare antes bigint; ese bigint; n bigint;
 begin
-  select value_cents into vispera
-    from public.rpc_steam_value_series() where day = current_date - 9;
-  select value_cents into ese
-    from public.rpc_steam_value_series() where day = current_date - 8;
-  assert vispera = 1250, format('la vispera de la venta C todavia cuenta: %s', vispera);
-  assert ese = 250, format('el dia de la venta deberian quedar 250, hay %s', ese);
+  select value_cents into antes
+    from public.rpc_steam_value_series() where day = current_date - 28;
+  select value_cents, item_count into ese, n
+    from public.rpc_steam_value_series() where day = current_date - 14;
+  assert antes = 50, format('la quincena anterior a la compra deberia ser 50, es %s', antes);
+  -- A entra con 2 × 100, que es la vela de hace 300 días arrastrada hasta aquí
+  -- —la de 200 es de hace 7 y todavía no ha pasado—, más B.
+  assert ese = 250, format('el dia de la compra deberia ser 250, es %s', ese);
+  assert n = 3, format('el dia de la compra deberian ser 3 unidades, son %s', n);
 end $$;
 
--- ── 4. El precio se arrastra, y el cambio se nota el día que toca ──────────
+-- ── 4. Y la vela nueva se nota en cuanto le toca ──────────────────────────
 do $$
-declare v1 bigint; v2 bigint;
+declare v bigint;
 begin
-  select value_cents into v1
-    from public.rpc_steam_value_series() where day = current_date - 6;
-  select value_cents into v2
-    from public.rpc_steam_value_series() where day = current_date - 5;
-  -- Hace 6 días no hay vela de A: vale la de hace 30. 2 × 100 + 50.
-  assert v1 = 250, format('con el precio arrastrado deberian ser 250, son %s', v1);
-  -- Hace 5 sí la hay. 2 × 200 + 50.
-  assert v2 = 450, format('con la vela nueva deberian ser 450, son %s', v2);
+  select value_cents into v
+    from public.rpc_steam_value_series() where day = current_date;
+  -- Hoy manda la vela de hace 7 días: 2 × 200 + 50.
+  assert v = 450, format('hoy deberian ser 450, son %s', v);
 end $$;
 
 -- ── 5. Un objeto sin ninguna vela se cuenta como precio que falta ──────────
@@ -141,7 +150,10 @@ begin
    where user_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee' and market_hash_name = 'D';
 end $$;
 
--- ── 6. La foto real gana donde la hay, y lo dice ───────────────────────────
+-- ── 6. La foto real gana donde la hay, y aunque no caiga en la rejilla ─────
+-- Desde 0095 esto prueba dos cosas de una: que la foto manda, y que las fotos
+-- ENTRAN en la serie aunque su día no sea un punto de la rejilla —hace 2 días no
+-- lo es—, porque son exactas y leerlas no cuesta nada.
 do $$
 declare v bigint; s text;
 begin
@@ -153,7 +165,7 @@ begin
   assert v = 777777, format('la foto real deberia mandar, y el valor es %s', v);
   assert s = 'snapshot', format('ese dia deberia decir snapshot, dice %s', s);
   select source into s
-    from public.rpc_steam_value_series() where day = current_date - 3;
+    from public.rpc_steam_value_series() where day = current_date - 14;
   assert s = 'reconstructed', format('el dia sin foto deberia decir reconstructed, dice %s', s);
 end $$;
 
@@ -168,4 +180,4 @@ end $$;
 
 rollback;
 
-\echo 'Las siete comprobaciones de 0092 han pasado.'
+\echo 'Las siete comprobaciones de la serie han pasado.'

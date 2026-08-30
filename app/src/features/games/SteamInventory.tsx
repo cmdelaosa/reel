@@ -308,8 +308,11 @@ const W = 900;
 const H = 150;
 const PAD = { top: 12, right: 12, bottom: 22, left: 56 };
 
-/** El valor de tu cartera HACIA ATRÁS: un punto por día en los dos últimos años
- *  y uno por semana antes, que es lo que dibuja `rpc_steam_value_series`.
+/** El valor de tu cartera HACIA ATRÁS: un punto por mes, uno cada dos semanas en
+ *  los últimos seis meses, y además todos los días con foto real. Lo reparte
+ *  así `rpc_steam_value_series` (0095) y no es cosmético: con un punto por día,
+ *  trece años de histórico se pasaban del statement_timeout y la tarjeta
+ *  enseñaba «todavía no hay gráfica».
  *
  *  Empezaba el día del primer volcado, porque antes nadie guardó esa foto. Desde
  *  0092 se reconstruye lo de antes con el histórico de cada objeto y el libro:
@@ -353,11 +356,10 @@ function ValueChart({
     /* Un rango plano (todo igual) partiría por cero al escalar. */
     const span = max - min || Math.max(max, 1);
     /* El eje va por FECHA y no por posición, y desde 0094 la diferencia importa:
-       la serie ya no es un punto por día de punta a punta —el tramo de más de
-       dos años viene por semanas—, así que repartir a distancias iguales
-       estiraría cada semana vieja hasta ocupar lo que un día reciente y el tramo
-       reconstruido saldría siete veces más ancho de lo que es. Es la misma
-       cuenta que la ficha de un objeto, y allí ya estaba por lo mismo. */
+       la serie no es un punto por día, así que repartir a distancias iguales
+       estiraría cada mes viejo hasta ocupar lo que una quincena reciente y el
+       tramo antiguo saldría muchísimo más ancho de lo que es. Es la misma cuenta
+       que la ficha de un objeto, y allí ya estaba por lo mismo. */
     const t0 = new Date(series[0].day).getTime();
     const t1 = new Date(series[series.length - 1].day).getTime();
     const dt = t1 - t0 || 1;
