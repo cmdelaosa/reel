@@ -76,6 +76,11 @@ export function SteamInventory() {
    *  arriba justamente por eso — media pantalla en bruto y media en neto no
    *  sería una opción, sería un error de lectura esperando a ocurrir. */
   const [net, setNet] = useState(false);
+  /** Si se enseña lo que no se puede vender. Apagado de estreno, y vive aquí
+   *  arriba por lo mismo que `net`: manda a la vez sobre el número grande y
+   *  sobre la rejilla, y media pantalla contando una cosa y media otra no es
+   *  una opción, es un error de lectura esperando a ocurrir. */
+  const [showHidden, setShowHidden] = useState(false);
   /** El objeto cuya ficha está abierta, o null. Vive aquí y no dentro de la
    *  lista porque la ficha necesita el libro, que lo tiene esta consulta. */
   const [open, setOpen] = useState<InventoryRow | null>(null);
@@ -121,11 +126,17 @@ export function SteamInventory() {
               y las cuatro baldosas del dinero se comían la pantalla entera
               antes de que se viera un solo objeto. */}
           <div className="steam-band">
-            <Totals data={data} net={net} onNet={setNet} />
+            <Totals data={data} net={net} onNet={setNet} showHidden={showHidden} />
             <ValueChart series={series ?? []} loading={seriesLoading} net={net} />
           </div>
-          <CashNotes data={data} />
-          <Items rows={data.rows} net={net} onOpen={setOpen} />
+          <CashNotes data={data} showHidden={showHidden} />
+          <Items
+            rows={data.rows}
+            net={net}
+            onOpen={setOpen}
+            showHidden={showHidden}
+            onShowHidden={setShowHidden}
+          />
           <Footer
             collectedAt={data.collectedAt}
             onPick={() => fileInput.current?.click()}
@@ -179,6 +190,46 @@ export function SteamInventory() {
   );
 }
 
+/* ── Lo que cuenta como cartera ───────────────────────────────────────────── */
+
+/** Lo que no es dinero: no se puede vender, o nadie sabe cuánto vale.
+ *
+ *  Son dos cosas distintas con la misma consecuencia. `marketable` en false es
+ *  un objeto que Valve no deja poner en el mercado —un regalo bloqueado, una
+ *  llave sin canjear—; mediana en null es un objeto que sí se vende pero del
+ *  que no hay precio, o porque el cron aún no ha pasado o porque el histórico
+ *  vino 500, que es Steam diciendo «esto no se vende» (0090).
+ *
+ *  Se ocultan de entrada, y el interruptor de al lado de las pestañas los
+ *  devuelve — el mismo que manda sobre el número grande. */
+const unsellable = (r: InventoryRow) => !r.marketable || r.medianCents === null;
+
+/** Las filas que cuentan, según esté el interruptor. Una sola función porque el
+ *  total de arriba y la rejilla de abajo tienen que estar mirando lo mismo: dos
+ *  criterios parecidos escritos en dos sitios es cómo la tarjeta acababa
+ *  diciendo 690 € encima de una rejilla que sumaba 679. */
+const counted = (rows: InventoryRow[], showHidden: boolean) =>
+  showHidden ? rows : rows.filter((r) => !unsellable(r));
+
+/** La suma en bruto de unas filas. Sin precio no suma: es la misma regla que
+ *  `portfolioValue` en el dominio —un total incompleto no se completa con una
+ *  cifra parecida—, aplicada aquí porque aquí la lista ya viene filtrada. */
+const grossTotalCents = (rows: InventoryRow[]) =>
+  rows.reduce((a, r) => a + (r.medianCents === null ? 0 : r.valueCents), 0);
+
+/** Lo que ganarías si vendieras hoy lo que compraste, en bruto. Solo las filas
+ *  con las dos cifras: sin coste no hay nada que restar, y sin precio no hay
+ *  nada a lo que restarlo. Es `unrealized` del dominio, pero sobre las filas ya
+ *  filtradas — el hermano en bruto de `netUnrealizedCents`. */
+const grossUnrealisedCents = (rows: InventoryRow[]) =>
+  rows.reduce(
+    (a, r) =>
+      r.costCents == null || r.medianCents === null
+        ? a
+        : a + (r.medianCents - r.costCents) * r.quantity,
+    0,
+  );
+
 /* ── El número grande ─────────────────────────────────────────────────────── */
 
 /** El total, el conmutador que decide qué significa, y el dinero.
@@ -196,18 +247,31 @@ function Totals({
   data,
   net,
   onNet,
+  showHidden,
 }: {
   data: NonNullable<ReturnType<typeof useSteamInventory>["data"]>;
   net: boolean;
   onNet: (v: boolean) => void;
+  showHidden: boolean;
 }) {
-  const { totals, cash, gain, rows } = data;
+  const { cash, rows } = data;
+  /* `totals.valueCents` del dominio ya no se usa aquí: suma el inventario
+     ENTERO, y este número tiene que decir lo mismo que la rejilla de abajo. Con
+     el interruptor apagado la diferencia eran los bloqueados con precio, que
+     valen lo que valen pero hoy no se pueden vender. La función del dominio
+     sigue viva para la serie y para lo que cuenta el inventario completo. */
+  const mine = counted(rows, showHidden);
   /* Las tres primeras son dinero que YA pasó por tu cartera —lo metiste, lo
      gastaste, te llegó de una venta con su comisión ya descontada—, así que el
      conmutador no las toca: no hay comisión que quitarle a lo que ya cobraste.
      La cuarta sí, porque no es dinero sino una valoración de lo que tienes: en
      neto se recalcula sobre lo que de verdad cobrarías (domain/steamFee). */
-  const unrealisedCents = net ? netUnrealizedCents(rows) : gain.gainCents;
+  /* También sobre lo contado, y no el `gain` del dominio: la plusvalía de un
+     objeto que no puedes vender es una cifra que no puedes cobrar, y dejarla
+     dentro mientras el total de encima la deja fuera hace que las dos cifras de
+     la misma tarjeta se contradigan. Lo que YA pasó por la cartera —las tres
+     primeras— no se toca: eso son cobros hechos, no valoraciones. */
+  const unrealisedCents = net ? netUnrealizedCents(mine) : grossUnrealisedCents(mine);
   /* El orden cuenta una historia y por eso no es alfabético: de tu bolsillo
      hacia dentro, lo que el mercado ha dado, y lo que queda en pie.
 
@@ -269,7 +333,7 @@ function Totals({
             Con 532 cromos de tres céntimos, netear la suma diría casi el triple
             de lo que cobrarías — y contradiría a la vista lo que pone en cada
             ficha de la rejilla. */}
-        {euros(net ? netTotalCents(rows) : totals.valueCents)}
+        {euros(net ? netTotalCents(mine) : grossTotalCents(mine))}
       </div>
       <div style={{ height: 1, background: "var(--border)", margin: "14px 0 12px" }} />
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
@@ -552,9 +616,22 @@ function ValueChart({
  *  las dos frases, que son prosa y no caben en una baldosa. Van debajo de la
  *  banda porque califican lo de arriba, y las dos aparecen solo cuando hay algo
  *  que calificar. */
-function CashNotes({ data }: { data: NonNullable<ReturnType<typeof useSteamInventory>["data"]> }) {
-  const { cash, gain } = data;
-  if (!cash.storeFundedByMarketCents && !gain.uncoveredItems) return null;
+function CashNotes({
+  data,
+  showHidden,
+}: {
+  data: NonNullable<ReturnType<typeof useSteamInventory>["data"]>;
+  showHidden: boolean;
+}) {
+  const { cash, rows } = data;
+  /* Los dos recuentos, sobre lo contado y no sobre `gain` del dominio: esta
+     frase explica de dónde sale la cifra de "No realizado" de la tarjeta de
+     arriba, y esa ya solo cuenta lo que se puede vender. Con los números del
+     inventario entero, la explicación no cuadraría con lo explicado. */
+  const mine = counted(rows, showHidden);
+  const coveredItems = mine.filter((r) => r.costCents != null && r.medianCents !== null).length;
+  const uncoveredItems = mine.length - coveredItems;
+  if (!cash.storeFundedByMarketCents && !uncoveredItems) return null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       {/* La frase que ninguna de esas cuatro cifras dice sola, y que es la que
@@ -568,11 +645,11 @@ function CashNotes({ data }: { data: NonNullable<ReturnType<typeof useSteamInven
       )}
       {/* Sin esto, "no realizado" parece calculado sobre todo el inventario, y
           casi nunca lo está: lo que salió de una caja no tiene coste. */}
-      {gain.uncoveredItems > 0 && (
+      {uncoveredItems > 0 && (
         <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
           {tv(
             "Unrealised covers the {covered} items you actually bought. The other {uncovered} came out of cases or trades and never cost you anything, so there's no gain to compute.",
-            { covered: gain.coveredItems, uncovered: gain.uncoveredItems },
+            { covered: coveredItems, uncovered: uncoveredItems },
           )}
         </p>
       )}
@@ -598,28 +675,18 @@ const APP_NAMES: Record<number, string> = {
 };
 const appName = (appid: number) => APP_NAMES[appid] ?? `App ${appid}`;
 
-/** Lo que no es dinero: no se puede vender, o nadie sabe cuánto vale.
- *
- *  Son dos cosas distintas con la misma consecuencia. `marketable` en false es
- *  un objeto que Valve no deja poner en el mercado —un regalo bloqueado, una
- *  llave sin canjear—; mediana en null es un objeto que sí se vende pero del
- *  que no hay precio, o porque el cron aún no ha pasado o porque el histórico
- *  vino 500, que es Steam diciendo «esto no se vende» (0090).
- *
- *  Ninguno de los dos entra en el total —esa suma ya era solo de los que tienen
- *  precio—, así que enseñarlos por defecto era enseñar seiscientas baldosas para
- *  hablar de las que valen algo. Se ocultan, y el toggle de al lado de las
- *  pestañas los devuelve. */
-const unsellable = (r: InventoryRow) => !r.marketable || r.medianCents === null;
-
 function Items({
   rows,
   net,
   onOpen,
+  showHidden,
+  onShowHidden,
 }: {
   rows: InventoryRow[];
   net: boolean;
   onOpen: (row: InventoryRow) => void;
+  showHidden: boolean;
+  onShowHidden: (v: boolean) => void;
 }) {
   const [sort, setSort] = useState<Sort>("value");
   const [query, setQuery] = useState("");
@@ -627,18 +694,10 @@ function Items({
   /** null es "todos". No es un appid más para que añadir un juego nuevo no
    *  obligue a tocar nada, y para que el estado de estreno sea "lo veo todo". */
   const [app, setApp] = useState<number | null>(null);
-  /** Apagado de estreno: la pantalla habla de dinero, y lo que no se vende no
-   *  es dinero. Vive aquí y no en la URL ni en el almacenamiento porque es una
-   *  mirada, no una preferencia: se enciende para buscar algo concreto. */
-  const [showHidden, setShowHidden] = useState(false);
-
   /* De aquí para abajo `rows` ya no se usa: todo —pestañas, recuentos, filtro,
      total— se cuenta sobre lo que se está viendo. Si el recuento de la pestaña
      dijera 76 y en la rejilla hubiera 41, la pestaña estaría mintiendo. */
-  const visible = useMemo(
-    () => (showHidden ? rows : rows.filter((r) => !unsellable(r))),
-    [rows, showHidden],
-  );
+  const visible = useMemo(() => counted(rows, showHidden), [rows, showHidden]);
   const hiddenCount = useMemo(() => rows.filter((r) => unsellable(r)).length, [rows]);
 
   /** Una pestaña por juego, con lo que hay dentro.
@@ -690,9 +749,7 @@ function Items({
   /* El total de lo que estás mirando, que cambia con la pestaña y con el filtro
      por nombre — «¿cuánto de esto es CS2?» es la otra mitad de la pregunta que
      hace clic ahí arriba. */
-  const shownTotalCents = net
-    ? netTotalCents(shown)
-    : shown.reduce((a, r) => a + (r.medianCents === null ? 0 : r.valueCents), 0);
+  const shownTotalCents = net ? netTotalCents(shown) : grossTotalCents(shown);
 
   const SORTS: { key: Sort; label: string }[] = [
     { key: "value", label: tr("Total value") },
@@ -740,18 +797,26 @@ function Items({
           </div>
         )}
         {/* Al lado de las pestañas porque es de la misma familia: eligen QUÉ se
-            mira. Chip y no pestaña, por la regla de la hoja de estilos —esto se
-            enciende y se apaga—. No se pinta cuando no hay nada oculto: un
-            interruptor que no cambia nada es ruido, y en un inventario sin
-            bloqueados y con todos los precios puestos no hay nada que devolver. */}
+            mira. Interruptor de ranura y no chip: los chips de esta pantalla son
+            el orden de la fila de abajo, y este no ordena ni filtra por nombre —
+            enciende y apaga una parte del inventario, y de paso el número grande
+            de arriba. La forma lo dice antes de leer el rótulo.
+            No se pinta cuando no hay nada oculto: un interruptor que no cambia
+            nada es ruido, y en un inventario sin bloqueados y con todos los
+            precios puestos no hay nada que devolver. */}
         {hiddenCount > 0 && (
           <button
-            className={showHidden ? "chip chip-active" : "chip"}
-            aria-pressed={showHidden}
-            onClick={() => setShowHidden((v) => !v)}
+            type="button"
+            role="switch"
+            aria-checked={showHidden}
+            className="switch"
+            onClick={() => onShowHidden(!showHidden)}
           >
+            <span className="switch-track" aria-hidden="true">
+              <span className="switch-knob" />
+            </span>
             {tr("Show hidden")}
-            <span className="mute" style={{ fontWeight: 600, marginLeft: 6 }}>{hiddenCount}</span>
+            <span className="mute" style={{ fontWeight: 600 }}>{hiddenCount}</span>
           </button>
         )}
         {/* Se pinta con pestañas y sin ellas: con un solo juego sigue habiendo
