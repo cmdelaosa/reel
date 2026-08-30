@@ -417,9 +417,13 @@ async function writeLedger(
         undated += 1;
         return null;
       }
-      if (at < "2012-12-01") impossible += 1;
       const amount = int(r.amount_cents);
       if (amount === null || !r.external_id) return null;
+      /* Después de los descartes y no antes: el recibo dice «tantas filas han
+         salido con una fecha imposible», y una fila que no se guarda no ha
+         salido con nada. Contarla ahí mandaba a repetir el recolector por algo
+         que no está en la tabla. */
+      if (at < "2012-12-01") impossible += 1;
       return {
         user_id: userId,
         happened_at: at,
