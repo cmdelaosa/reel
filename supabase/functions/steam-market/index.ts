@@ -383,7 +383,7 @@ async function writeLedger(
    *  entonces se barre lo viejo: con una lectura a medias, barrer sería borrar
    *  años de movimientos porque la tienda cortó en la página doce. */
   walletComplete = false,
-): Promise<{ written: number; undated: number; swept: number }> {
+): Promise<{ written: number; undated: number; swept: number; impossible: number }> {
   const dated = datesWithYear(
     rows.map((r, i) => ({
       externalId: String(r.external_id ?? ""),
@@ -394,6 +394,19 @@ async function writeLedger(
   );
 
   let undated = 0;
+  /** Filas fechadas ANTES de que existiera el mercado de Steam (diciembre de
+   *  2012). No es un caso posible: es la reconstrucción del año diciendo que se
+   *  ha perdido, y hasta hoy lo decía en silencio.
+   *
+   *  El 30-08-2026 este libro tenía 11.831 de 12.026 filas antes del año 2000, la
+   *  más vieja en 1752, porque el recolector subía la fecha del ANUNCIO en vez de
+   *  la del movimiento y `datesWithYear` restaba un año en cada falso avance. Se
+   *  arregló donde tocaba —`raw_date: dates[0]` en el recolector— pero el fallo
+   *  vivió meses sin que nada chistara, y eso es lo que arregla este contador:
+   *  las filas se guardan igual, con su fecha rara, y el recibo de la subida dice
+   *  cuántas son. Un dato imposible que se escribe sin una queja es peor que uno
+   *  que falta. */
+  let impossible = 0;
   const clean = rows
     .map((r, i) => {
       const at = dated[i];
@@ -406,6 +419,11 @@ async function writeLedger(
       }
       const amount = int(r.amount_cents);
       if (amount === null || !r.external_id) return null;
+      /* Después de los descartes y no antes: el recibo dice «tantas filas han
+         salido con una fecha imposible», y una fila que no se guarda no ha
+         salido con nada. Contarla ahí mandaba a repetir el recolector por algo
+         que no está en la tabla. */
+      if (at < "2012-12-01") impossible += 1;
       return {
         user_id: userId,
         happened_at: at,
@@ -453,7 +471,7 @@ async function writeLedger(
     if (error) throw new Error(`barriendo la cartera: ${error.message}`);
     swept = (data ?? []).length;
   }
-  return { written: clean.length, undated, swept };
+  return { written: clean.length, undated, swept, impossible };
 }
 
 const KINDS = new Set([
@@ -698,6 +716,7 @@ Deno.serve(async (req) => {
         );
         summary.ledger = r.written;
         summary.undated = r.undated;
+        summary.impossible = r.impossible;
         if (r.swept) summary.swept = r.swept;
       }
       if (Array.isArray(dump.history) && dump.history.length) {

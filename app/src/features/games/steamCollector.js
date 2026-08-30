@@ -697,11 +697,38 @@
            nombre o sin él— pero se queda fuera del coste base, y eso hay que
            poder distinguirlo de "no la hemos guardado". */
         appid: ref?.appid ?? null,
-        /* La fecha de Steam es "24 ago" sin año: la reconstruye el servidor
-           con el orden de las filas, que llegan de más nueva a más vieja. Aquí
-           se sube tal cual y también el índice, que es lo que no se puede
-           recuperar después. */
-        raw_date: dates[dates.length - 1] ?? null,
+        /* LA PRIMERA de las dos, y no la última.
+         *
+         *  Cada fila del historial trae DOS fechas y no son la misma cosa: la
+         *  primera es cuándo ocurrió la compra o la venta, y la segunda cuándo
+         *  pusiste el anuncio — que puede ser meses antes, porque un objeto se
+         *  queda a la venta hasta que alguien lo compra.
+         *
+         *  Esto cogía la segunda, y de ahí salía una avería que no se veía
+         *  desde aquí. Steam no manda el año —comprobado el 30-08-2026 a 11.000
+         *  filas de profundidad, ni una trae cuatro dígitos—, así que lo
+         *  reconstruye el servidor (`datesWithYear`) caminando la lista de más
+         *  nueva a más vieja: si una fecha AVANZA, es que ha cruzado el 1 de
+         *  enero hacia atrás, y resta un año. Esa regla necesita que la lista
+         *  vaya ordenada por la fecha que se lee, y Steam la ordena por la del
+         *  MOVIMIENTO, no por la del anuncio.
+         *
+         *  Medido sobre 400 filas reales de esta cuenta, 122 de ellas con las
+         *  dos fechas distintas:
+         *
+         *    con la primera fecha:   3 avances   ← fines de año de verdad
+         *    con la última:         25 avances
+         *
+         *  Veintidós años de más cada cuatrocientas filas. Con 12.026, el libro
+         *  acababa repartido desde 1752: 8.907 filas antes de 1900 y solo 1.387
+         *  en el tramo real de 2013 a 2026. Y como la curva de la cartera camina
+         *  el libro para saber cuántos tenías tal día, lo que compraste y
+         *  vendiste quedaba fuera del dibujo por siglos.
+         *
+         *  Se sube tal cual, con su índice, que es lo que no se puede recuperar
+         *  después. El año lo sigue poniendo el servidor, que es donde tiene que
+         *  estar: es la cuenta que decide en qué año cae cada compra. */
+        raw_date: dates[0] ?? null,
         /* "-" es el objeto que se va: eso es una venta. Ver el bloque de
            arriba, que es donde está la comprobación. */
         kind: sign === "-" ? "market_sell" : "market_buy",

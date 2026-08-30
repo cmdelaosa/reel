@@ -335,6 +335,10 @@ const ES: Record<string, string> = {
   "one item": "un objeto",
   "one market row": "una fila de mercado",
   "one price point": "un punto de precio",
+  "One row came out dated before Steam's market existed — the year could not be worked out. Run the collector again; if it stays, tell me.":
+    "Una fila ha salido fechada antes de que existiera el mercado de Steam: el año no se ha podido reconstruir. Vuelve a pasar el recolector; si sigue, avísame.",
+  "{n} rows came out dated before Steam's market existed — the year could not be worked out. Run the collector again; if it stays, tell me.":
+    "{n} filas han salido fechadas antes de que existiera el mercado de Steam: el año no se ha podido reconstruir. Vuelve a pasar el recolector; si sigue, avísame.",
   "One row had a date Steam wrote in a way we couldn't read, and was left out rather than dated wrong.":
     "Una fila traía una fecha que Steam escribió de una forma que no supimos leer, y se ha quedado fuera en vez de fecharse mal.",
   "{n} items had no price on {day}": "{n} objetos no tenían precio el {day}",
