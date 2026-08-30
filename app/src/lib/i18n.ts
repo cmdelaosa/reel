@@ -247,6 +247,8 @@ const ES: Record<string, string> = {
   "Name": "Nombre",
   "Filter by name": "Filtrar por nombre",
   "Show hidden": "Ver ocultos",
+  "Nothing here has a price yet, so it is all hidden. Turn on «Show hidden» to see it.":
+    "Todavía no hay precio de nada, así que está todo oculto. Enciende «Ver ocultos» para verlo.",
   "Nothing matches that.": "No hay nada que case con eso.",
   /* "Todo" y no "Todas": la clave "All" ya existe más abajo con el femenino de
      las plataformas, y aquí lo que se agrupa son objetos. Una clave propia

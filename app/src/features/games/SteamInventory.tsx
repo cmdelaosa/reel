@@ -817,8 +817,17 @@ function Items({
       {view === "grid"
         ? <ItemsGrid rows={shown} net={net} onOpen={onOpen} />
         : <ItemsTable rows={shown} net={net} onOpen={onOpen} />}
+      {/* Dos vacíos distintos. El de siempre es «has filtrado y no hay nada»;
+          el otro es el del día del estreno: se sube el volcado y todavía no hay
+          UN SOLO precio —los trae el segundo botón del recolector, o el cron al
+          día siguiente—, así que todo cae en lo oculto y la rejilla se queda a
+          cero. Con el texto de filtrar ahí, esa pantalla parece averiada. */}
       {!shown.length && (
-        <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>{tr("Nothing matches that.")}</p>
+        <p className="mute" style={{ margin: 0, fontSize: 12.5 }}>
+          {!showHidden && !query.trim() && rows.length > 0
+            ? tr("Nothing here has a price yet, so it is all hidden. Turn on «Show hidden» to see it.")
+            : tr("Nothing matches that.")}
+        </p>
       )}
     </div>
   );
