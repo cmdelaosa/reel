@@ -1218,7 +1218,7 @@ function CollectorSteps({ onCopy, copied }: { onCopy: () => void; copied: boolea
       <ol className="mute" style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
         <li>{tr("Open steamcommunity.com/market in another tab, signed in.")}</li>
         <li>{tr("Open the browser console there (⌥⌘J on Chrome for Mac) and paste this.")}</li>
-        <li>{tr("Wait — it asks Steam one price at a time on purpose — then press its buttons to save the files.")}</li>
+        <li>{tr("Wait — it asks Steam for one item at a time on purpose — then press its buttons to save the files.")}</li>
         {/* El segundo pase es un paso aparte y no una nota al pie: sin él, «de
             tu bolsillo» y «gastado en juegos» salen a cero, y un cero se lee
             como un dato y no como algo que falta. Son dos orígenes distintos y

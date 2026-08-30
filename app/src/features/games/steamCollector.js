@@ -8,8 +8,9 @@
  * Se pega DOS VECES, en dos pestañas distintas, y hace algo distinto en cada
  * una — mira `IS_STORE` más abajo para el porqué:
  *
- *   · en `steamcommunity.com`, el inventario, los precios, el histórico y tus
- *     compras y ventas del mercado;
+ *   · en `steamcommunity.com`, el inventario, el histórico de precios y tus
+ *     compras y ventas del mercado. El precio de HOY no: ese lo trae el cron
+ *     `steam-prices` desde un runner, y el porqué está en la fase 3;
  *   · en `store.steampowered.com/account/history/`, el movimiento de la cartera:
  *     lo que metiste de tu bolsillo y lo que se te fue en juegos.
  *
@@ -789,89 +790,48 @@
     log("  grande: querrá decir que Steam ha movido el bloque de los hovers.");
   }
 
-  /* ── 3. Precios de ahora ──────────────────────────────────────────────── */
+  /* ── 3. Aquí estaban los precios de ahora, y ya no ───────────────────── */
 
-  /* Los trae también el cron de Reel a diario, y los del cron son los que
-     mandan. Estos son para que la pantalla enseñe algo el primer día en vez de
-     una tabla de guiones: Reel solo los acepta para objetos de los que todavía
-     no sabe el precio, y los sustituye en cuanto el cron pasa. */
-  /** Cuántos fallos SEGUIDOS se aguantan antes de dejar la fase entera.
-   *
-   *  `priceoverview` se estrangula por su cuenta y a su ritmo: medido el
-   *  28-08-2026 en la misma pestaña y el mismo minuto, contestaba 429 a las
-   *  tres sondas mientras el inventario, `myhistory` y `pricehistory` iban a
-   *  200 — y el mismo extremo desde `curl`, misma máquina y misma IP, a 200
-   *  también. Cuando le da por ahí, recorrer los 608 objetos son casi tres
-   *  horas fallando uno a uno, cada uno con sus esperas de 2, 4 y 8 segundos, y
-   *  el botón de descarga no aparece hasta el final: el inventario y el libro
-   *  ya leídos, esperando a que termine de no traer nada.
-   *
-   *  Rendirse no cuesta nada, y por eso el número es bajo. Estos precios son el
-   *  adorno del primer día: los que mandan los trae el cron `steam-prices`
-   *  desde un runner —que sí recibe 200— y Reel solo acepta estos para lo que
-   *  todavía no conoce. Un fallo suelto no cuenta: la racha se pone a cero en
-   *  cuanto uno responde. */
-  const GIVE_UP_AFTER = 5;
-  let inARow = 0;
-  let pricesGaveUp = false;
+  /* Eran 608 peticiones a `priceoverview`, tres segundos cada una: media hora
+     de pestaña para traer lo que el cron `steam-prices` trae cada noche desde un
+     runner de GitHub, mejor y sin molestar a nadie. Se van, y este es el porqué
+     con sus medidas:
 
-  log(`Preguntando precios (${holdings.length}; esto es lo que más tarda)…`);
-  const prices = [];
-  for (let i = 0; i < holdings.length; i++) {
-    const h = holdings[i];
-    try {
-      const p = await get(
-        `/market/priceoverview/?appid=${h.appid}&currency=${CURRENCY}` +
-          `&market_hash_name=${encodeURIComponent(h.market_hash_name)}`,
-        { tries: 3 },
-      );
-      prices.push({
-        appid: h.appid,
-        market_hash_name: h.market_hash_name,
-        lowest_cents: cents(p.lowest_price),
-        median_cents: cents(p.median_price),
-        volume: p.volume ? Number(String(p.volume).replace(/[^\d]/g, "")) : null,
-      });
-      inARow = 0;
-    } catch (e) {
-      log(`  sin precio: ${h.market_hash_name} (${e.message})`);
-      inARow += 1;
-      if (inARow >= GIVE_UP_AFTER) {
-        pricesGaveUp = true;
-        log(`  ${GIVE_UP_AFTER} seguidos sin respuesta: dejo los precios y sigo.`);
-        log("  Los pondrá el cron esta madrugada; lo demás no se pierde.");
-        break;
-      }
-    }
-    if (i % 25 === 24) log(`  ${i + 1}/${holdings.length}…`);
-    /* ~3s por petición. Parece lento y es lo que hace que termine: por debajo
-       de eso llega el 429 y entonces sí que se tarda. */
-    await sleep(3000);
-  }
+      · Steam elige por IP. Medido el 27-08-2026 contra el mismo extremo: desde
+        una edge function, 429 a la primera; desde un runner, 5 de 5 con 200;
+        desde una IP doméstica, 12 seguidas sin un corte… ese día. El 30-08-2026,
+        desde la misma casa, fueron CERO de 608: `priceoverview` se estrangula
+        por su cuenta y a su ritmo, y cuando le da por ahí no hay vuelta.
+      · Y no hacían falta. `steam_market_prices` es global —un precio es del
+        mercado, no tuyo— y la ingesta solo aceptaba estos para objetos cuyo
+        precio Reel todavía no conociera. Eran el adorno del primer día.
 
-  /* Por appid Y nombre, no por nombre solo: un cromo de 753 y una caja de 730
-     pueden llamarse igual y valen cosas distintas. Es la misma regla que la
-     clave de `steamPortfolio`, y aquí se colaba porque este total es solo un
-     rótulo — pero un rótulo equivocado en la única cifra que se lee al terminar
-     hace dudar de todo lo demás. */
-  const qty = new Map(holdings.map((h) => [`${h.appid}:${h.market_hash_name}`, h.quantity]));
-  const totalCents = prices.reduce(
-    (sum, p) =>
-      sum + (p.median_cents ?? 0) * (qty.get(`${p.appid}:${p.market_hash_name}`) ?? 0),
-    0,
-  );
-  /* Con la fase de precios abandonada este total es un trozo del real, y decirlo
-     importa: un "0,00 €" a secas después de leer un inventario entero parece
-     que lo roto es el inventario. */
-  log(
-    `Valor ahora mismo: ${(totalCents / 100).toFixed(2)} €` +
-      (pricesGaveUp ? ` (solo ${prices.length} de ${holdings.length} precios; falta lo demás)` : ""),
-  );
+     Lo que se pierde, y no es un detalle: quien enlace Steam por primera vez y
+     traiga objetos que nadie más tiene no verá guiones en la columna del precio,
+     verá la pantalla VACÍA. `unsellable` en SteamInventory.tsx esconde toda fila
+     sin mediana, así que hasta que pase el cron —04:10 UTC, o a mano desde
+     Actions → steam-prices → Run workflow— su inventario entero queda detrás del
+     interruptor «Ver ocultos», con el aviso que la pantalla ya tiene escrito
+     para ese caso. Con el mercado de Steam compartido eso es raro —los precios
+     son globales y casi todo lo tiene alguien más— pero cuando pasa dura un día.
+     A cambio, la pasada empieza por el histórico en vez de por media hora de
+     peticiones que Steam puede negar enteras, que fue exactamente lo que pasó.
+
+     Lo que NO se pierde: el histórico, que solo puede traer tu navegador porque
+     `pricehistory` pide la cookie de sesión. Esa es la fase de abajo y es la
+     razón de que esto exista.
+
+     `prices: []` se sigue mandando en el volcado: la ingesta mira qué trae cada
+     fichero y una lista vacía no escribe ni borra nada, así que la forma del
+     volcado no cambia para nadie. */
+  log("");
+  log(`Inventario y libro listos: ${ledger.length} compras y ventas leídas.`);
+  log("Los precios de hoy los pone el cron de Reel; aquí ya no se piden.");
 
   offer("Guardar inventario", `reel-steam-${steamId}.json`, {
     ...base,
     holdings,
-    prices,
+    prices: [],
     ledger,
   });
   log("");
@@ -882,9 +842,6 @@
   /* En su propio fichero y con su propio botón por dos razones: pesa mucho más
      que todo lo anterior junto, y no hace falta para ver el valor de hoy. Si
      esta parte se cae a medias, lo de arriba ya está descargado. */
-  const medians = new Map(
-    prices.map((p) => [`${p.appid}:${p.market_hash_name}`, p.median_cents ?? 0]),
-  );
   /* Lo que tienes HOY más lo que alguna vez pasó por el libro.
    *
    *  ── Por qué lo vendido también ───────────────────────────────────────────
@@ -904,12 +861,14 @@
   const enInventario = new Set(holdings.map((h) => `${h.appid}:${h.market_hash_name}`));
   /** Lo más gordo que movió cada objeto en tu libro, en céntimos.
    *
-   *  Es la tasación de repuesto para ORDENAR, y hace dos trabajos:
-   *  · de lo vendido no hay mediana de hoy, porque no se le pidió precio;
-   *  · y de lo que tienes tampoco, los días en que `priceoverview` contesta 429
-   *    a todo. Antes eso dejaba los 608 objetos empatados a cero.
-   *  No es lo que vale: es lo que costó o lo que dio, que para decidir a cuál
-   *  preguntarle primero se le parece bastante. */
+   *  Es con lo que se ORDENA, y desde que la fase de los precios de hoy se fue
+   *  es lo único que hay: no es lo que vale, es lo que costó o lo que dio. Para
+   *  decidir a cuál preguntarle primero se le parece bastante, y tiene la
+   *  ventaja de no depender de que Steam conteste nada.
+   *
+   *  Lo que salió de una caja o de un drop no está en el libro y se queda a
+   *  cero, o sea al final de la cola. Es correcto: de eso no sabemos ni lo que
+   *  costó. */
   const movidoEnElLibro = new Map();
   for (const l of ledger) {
     if (!l.appid || !l.market_hash_name) continue;
@@ -940,42 +899,28 @@
      número de hoy, y la del vendido solo el dibujo del pasado. */
   const ordenados = [
     ...[...holdings]
-      .map((h) => {
-        const k = `${h.appid}:${h.market_hash_name}`;
-        const mediana = medians.get(k) ?? 0;
-        return {
-          ...h,
-          value: mediana ? mediana * h.quantity : (movidoEnElLibro.get(k)?.value ?? 0),
-        };
-      })
+      .map((h) => ({
+        ...h,
+        value: movidoEnElLibro.get(`${h.appid}:${h.market_hash_name}`)?.value ?? 0,
+      }))
       .sort((a, b) => b.value - a.value),
     ...[...vendidos.values()].sort((a, b) => b.value - a.value),
   ];
   const top = HISTORY_TOP === null ? ordenados : ordenados.slice(0, HISTORY_TOP);
 
   log("");
-  /* Aquí había un freno: sin un solo precio no se empezaba el histórico. Se
-     quita, y el motivo es que su premisa la desmiente la medida que está escrita
-     doce líneas más arriba, en `GIVE_UP_AFTER`.
-     Decía que una lista de precios vacía significa que Steam se acaba de negar a
-     la petición BARATA, así que encadenarle la cara es media hora para acabar
-     igual de vacío. Pero Steam NO estrangula por cuenta, estrangula por EXTREMO:
-     el 28-08-2026, en la misma pestaña y el mismo minuto, `priceoverview`
-     contestaba 429 a las tres sondas mientras el inventario, `myhistory` y
-     `pricehistory` iban a 200. Y el 30-08-2026 volvió a pasar con los 608
-     objetos de esta cuenta: cero precios, y el histórico —que era lo único que
-     se había venido a buscar— ni se intentó.
-     Del freno viejo queda en pie lo secundario, y ese sí se arregla en vez de
-     frenar: sin medianas el orden por valor salía plano. Ahora, cuando no hay
-     mediana, ordena `movidoEnElLibro`, que a esas alturas ya está leído.
-     Lo que protege de la media hora tirada no es esto, es
-     `HISTORY_GIVE_UP_AFTER`: cinco negativas seguidas de `pricehistory` y la
-     fase se deja sola. Que es lo que había que mirar desde el principio. */
-  if (!prices.length) {
-    log("Ni un precio de hoy, pero el histórico va aparte y se pide igual:");
-    log("Steam estrangula por extremo, no por cuenta. Si tampoco lo da, lo verás");
-    log("aquí en cinco intentos. El orden sale de tus compras y ventas.");
-  }
+  /* Aquí había un freno: sin un solo precio de hoy no se empezaba el histórico.
+     Ya no queda ni el freno ni la fase que lo alimentaba, pero el porqué se
+     queda escrito, porque es el que ordena todo este trozo: Steam NO estrangula
+     por cuenta, estrangula por EXTREMO. El 28-08-2026, misma pestaña y mismo
+     minuto, `priceoverview` contestaba 429 a las tres sondas mientras el
+     inventario, `myhistory` y `pricehistory` iban a 200. Atar lo caro a lo
+     barato era atar dos cosas que Steam no ata, y el 30-08-2026 costó la pasada
+     entera: cero precios, y el histórico —lo único que se venía a buscar— ni se
+     intentó.
+     Lo que protege de la media hora tirada es `HISTORY_GIVE_UP_AFTER`: cinco
+     negativas seguidas de `pricehistory` y la fase se deja sola. */
+
   /* Media hora larga, y se dice antes de empezar: es la parte lenta y quien la
      lanza tiene que saber que la pestaña se queda ocupada.
      3,5 y no 3: los tres segundos son la ESPERA entre peticiones, y encima de
@@ -983,15 +928,7 @@
      no un precio. Redondear por lo bajo en el único número que alguien va a
      usar para decidir si le da tiempo es la clase de optimismo que sobra. */
   const minutos = Math.round((top.length * 3.5) / 60);
-  /* Con qué se ha ordenado, dicho solo cuando NO es lo normal: «con los 412
-     precios que hay» y «con tus compras y ventas» son dos cosas distintas, y
-     «con los 0 precios que hay» no era ninguna de las dos. */
-  const conQue = !prices.length
-    ? " (ordenados con tus compras y ventas: hoy no hay precios)"
-    : pricesGaveUp
-      ? ` (ordenados con los ${prices.length} precios que hay)`
-      : "";
-  log(`Trayendo el histórico de los ${top.length} objetos — unos ${minutos} minutos…${conQue}`);
+  log(`Trayendo el histórico de los ${top.length} objetos — unos ${minutos} minutos…`);
   /* Contado sobre `top` y no sobre `holdings`/`vendidos`: con un `HISTORY_TOP`
      puesto, la lista va recortada y las dos cifras de arriba describirían un
      trabajo que no se va a hacer. */
