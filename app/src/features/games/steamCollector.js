@@ -91,7 +91,11 @@
 
      El tope se queda escrito por si algún día hace falta acotarlo: `null` es
      todos. El ORDEN por valor no es decorativo aunque ya no recorte nada — si
-     cierras la pestaña a mitad, lo que se ha traído es lo que más pesa. */
+     cierras la pestaña a mitad, lo que se ha traído es lo que más pesa.
+
+     Y «todos» son todos los que han pasado por tu inventario, no solo los que
+     siguen dentro: desde el 30-08-2026 la lista también trae lo que vendiste.
+     El porqué está donde se arma la lista, junto a `vendidos`. */
   const HISTORY_TOP = null;
 
   /* ── Herramientas ─────────────────────────────────────────────────────── */
@@ -881,12 +885,57 @@
   const medians = new Map(
     prices.map((p) => [`${p.appid}:${p.market_hash_name}`, p.median_cents ?? 0]),
   );
-  const ordenados = [...holdings]
-    .map((h) => ({
-      ...h,
-      value: (medians.get(`${h.appid}:${h.market_hash_name}`) ?? 0) * h.quantity,
-    }))
-    .sort((a, b) => b.value - a.value);
+  /* Lo que tienes HOY más lo que alguna vez pasó por el libro.
+   *
+   *  ── Por qué lo vendido también ───────────────────────────────────────────
+   *  `rpc_steam_value_series` reconstruye la curva de la cartera hacia atrás y
+   *  SÍ sabe que entre la compra y la venta tuviste aquel AWP: el universo de
+   *  la migración 0092 es la unión de `steam_holdings` y `steam_ledger`. Lo que
+   *  no sabía es cuánto valía, porque el histórico solo se pedía de lo que
+   *  sigue en el inventario. Sin vela, el `left join lateral` del precio no
+   *  devuelve fila, esas unidades suman CERO al valor de aquel día y solo
+   *  aparecen en `missing_prices`. O sea: el pasado salía sistemáticamente por
+   *  debajo, y tanto más cuanto más hubieras rotado.
+   *
+   *  Objetos sin `appid` fuera: son las filas que no encontraron su ficha en
+   *  `assets` (ver `parseHistory`), y `pricehistory` necesita las dos cosas.
+   *  Y `market_sell` y `market_buy` los dos, no solo las ventas: algo comprado
+   *  y regalado o intercambiado tampoco está en el inventario de hoy. */
+  const enInventario = new Set(holdings.map((h) => `${h.appid}:${h.market_hash_name}`));
+  const vendidos = new Map();
+  for (const l of ledger) {
+    if (!l.appid || !l.market_hash_name) continue;
+    const k = `${l.appid}:${l.market_hash_name}`;
+    if (enInventario.has(k)) continue;
+    const movido = Math.abs(l.amount_cents ?? 0);
+    const yaVisto = vendidos.get(k);
+    /* `value` es el movimiento más gordo que tuvo ese objeto, no una tasación:
+       de lo que ya no tienes no hay mediana de hoy con la que ordenar, y lo que
+       más dinero movió es el mejor sustituto. Solo decide el ORDEN, y el orden
+       solo importa si Steam corta a mitad: se trae antes lo que más pesa. */
+    if (!yaVisto) {
+      vendidos.set(k, {
+        appid: l.appid,
+        market_hash_name: l.market_hash_name,
+        quantity: 0,
+        value: movido,
+      });
+    } else if (movido > yaVisto.value) {
+      yaVisto.value = movido;
+    }
+  }
+  /* Los que tienes primero, y dentro de cada grupo por valor. A igualdad de
+     cifra vale más una vela de algo que sigue en la cartera: esa mueve el
+     número de hoy, y la del vendido solo el dibujo del pasado. */
+  const ordenados = [
+    ...[...holdings]
+      .map((h) => ({
+        ...h,
+        value: (medians.get(`${h.appid}:${h.market_hash_name}`) ?? 0) * h.quantity,
+      }))
+      .sort((a, b) => b.value - a.value),
+    ...[...vendidos.values()].sort((a, b) => b.value - a.value),
+  ];
   const top = HISTORY_TOP === null ? ordenados : ordenados.slice(0, HISTORY_TOP);
 
   log("");
@@ -914,6 +963,16 @@
     `Trayendo el histórico de los ${top.length} objetos — unos ${minutos} minutos…` +
       (pricesGaveUp ? ` (ordenados con los ${prices.length} precios que hay)` : ""),
   );
+  /* Contado sobre `top` y no sobre `holdings`/`vendidos`: con un `HISTORY_TOP`
+     puesto, la lista va recortada y las dos cifras de arriba describirían un
+     trabajo que no se va a hacer. */
+  const idos = top.filter((h) => !enInventario.has(`${h.appid}:${h.market_hash_name}`)).length;
+  if (idos) {
+    log(
+      `  ${top.length - idos} son del inventario y ${idos} ya no los tienes:` +
+        " esos van porque la curva del pasado los necesita.",
+    );
+  }
   log("Puedes dejar la pestaña de fondo; no la cierres.");
   /* La frontera es un DÍA y no un instante, para que las horas de un mismo día
      no se repartan entre el cubo diario y el trimestral: serían dos puntos con
