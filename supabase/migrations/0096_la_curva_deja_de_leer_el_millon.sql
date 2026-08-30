@@ -198,6 +198,14 @@ days as (
   where not exists (select 1 from fotos f where f.day = r.day)
 ),
 -- CAMBIO 2: tramos de cantidad constante en vez de una celda por objeto y día.
+--
+-- Los extremos van con `infinity` y `-infinity` y no con nulos: el cruce con la
+-- rejilla es la comparación que más veces se hace de toda la función —7.497
+-- tramos por 173 puntos— y con nulos eran cuatro ramas por comparación en vez de
+-- dos. No mueve el reloj (medido: 277-288 ms contra 272-315), pero dice una vez
+-- al construir el tramo lo que si no habría que volver a preguntar en cada
+-- comparación: que un tramo sin siguiente movimiento llega hasta hoy, y que el
+-- primero viene de siempre.
 resumen as (
   select iid, min(d) as primer_dia, sum(delta) as total
   from steps
@@ -207,7 +215,7 @@ tramos as (
   select
     a.appid, a.name,
     k.d as desde,
-    lead(k.d) over (partition by k.iid order by k.d) as hasta,
+    coalesce(lead(k.d) over (partition by k.iid order by k.d), 'infinity'::date) as hasta,
     a.qty_today - coalesce(
       sum(k.delta) over (partition by k.iid order by k.d desc
                          rows between unbounded preceding and 1 preceding), 0) as qty
@@ -216,8 +224,8 @@ tramos as (
   union all
   select
     a.appid, a.name,
-    null::date as desde,
-    r.primer_dia as hasta,
+    '-infinity'::date as desde,
+    coalesce(r.primer_dia, 'infinity'::date) as hasta,
     a.qty_today - coalesce(r.total, 0) as qty
   from anchor a
   left join resumen r on r.iid = a.iid
@@ -226,8 +234,7 @@ celdas as (
   select d.day, t.qty, v.median_cents
   from tramos t
   join days d
-    on (t.desde is null or d.day >= t.desde)
-   and (t.hasta is null or d.day < t.hasta)
+    on d.day >= t.desde and d.day < t.hasta
   left join lateral (
     select h.median_cents
     from public.steam_price_history h
