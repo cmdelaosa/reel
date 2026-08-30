@@ -944,6 +944,12 @@
   let sinMercado = 0;
   for (let i = 0; i < top.length; i++) {
     const h = top[i];
+    /* Al principio de la vuelta y no al final: los objetos sin mercado salen
+       por un `continue` y con el contador abajo el panel se quedaba mudo
+       durante tandas enteras. Cada 25 y no cada 10 porque con seiscientos
+       objetos, uno de cada diez son sesenta renglones y el panel se convierte
+       en una cuenta atrás ilegible. */
+    if (i && i % 25 === 0) log(`  ${i}/${top.length}…`);
     try {
       const p = await get(
         `/market/pricehistory/?country=ES&currency=${CURRENCY}&appid=${h.appid}` +
@@ -954,7 +960,11 @@
          hay que esperar tres segundos por él — no se ha leído nada. */
       if (p === null) {
         sinMercado += 1;
-        sinHistorico = 0;
+        /* Y NO se rearma el freno: un objeto sin mercado no es una respuesta de
+           Steam, es la ausencia de una pregunta. Rearmándolo, una tanda de
+           medallas entre dos negativas de verdad haría que los cinco seguidos
+           no llegaran nunca y la fase se comería las tres horas que el freno
+           existe para evitar. */
         continue;
       }
       /* Steam da ["Jul 12 2014 01: +0", 1.234, "5"], y el último mes viene POR
@@ -1003,9 +1013,6 @@
         break;
       }
     }
-    /* Cada 25 y no cada 10: con seiscientos objetos, uno de cada diez son
-       sesenta renglones y el panel se convierte en una cuenta atrás ilegible. */
-    if (i % 25 === 24) log(`  ${i + 1}/${top.length}…`);
     await sleep(3000);
   }
 
