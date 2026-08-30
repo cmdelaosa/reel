@@ -1,11 +1,16 @@
--- Pruebas de la REJILLA de `rpc_steam_value_series` (0095): hasta dónde llega y
--- con qué paso. Hermano de 0092_serie_reconstruida.sql, que prueba las reglas
--- —cuántos tenías tal día, el arrastre del precio, la foto que manda— y sigue
--- valiendo entero. Se corren igual:
+-- Pruebas de la REJILLA de `rpc_steam_value_series`: hasta dónde llega y con qué
+-- paso. Hermano de 0092_serie_reconstruida.sql, que prueba las reglas —cuántos
+-- tenías tal día, el arrastre del precio, la foto que manda— y sigue valiendo
+-- entero. Se corren igual:
 --
 --   supabase db reset
---   docker cp supabase/sql-checks/0095_rejilla_de_la_curva.sql supabase_db_tvtime:/tmp/t.sql
+--   docker cp supabase/sql-checks/0097_rejilla_de_tres_pasos.sql supabase_db_tvtime:/tmp/t.sql
 --   docker exec supabase_db_tvtime psql -U postgres -f /tmp/t.sql
+--
+-- Nació con 0095, que hizo la rejilla mensual+quincenal, y se renombró con 0097,
+-- que le puso un tercer paso: trimestral en los años viejos. Es UNA matriz y no
+-- dos a propósito — la rejilla es una sola pieza móvil, y dos ficheros probando
+-- lo mismo es cómo uno se queda viejo sin que nadie lo note.
 --
 -- Lo que hay aquí es lo que 0095 promete y no se ve leyendo la función: que la
 -- curva llega hasta la vela más vieja que haya, y que su tamaño NO crece con lo
@@ -21,7 +26,7 @@
 begin;
 
 insert into auth.users (id, email) values
-  ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'steam-rejilla-0095@example.com')
+  ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'steam-rejilla-0097@example.com')
 on conflict (id) do nothing;
 
 select set_config(
@@ -54,31 +59,49 @@ begin
 end $$;
 
 -- ── 2. Y aun así son pocos puntos: el tamaño no crece con los años ────────
--- Trece años son ~156 meses más las trece quincenas de los últimos seis meses.
--- El número exacto baila con el calendario, y lo que importa es el orden de
--- magnitud: doscientos y pico, no cuatro mil setecientos.
+-- Trece años son ~44 trimestres hasta hace dos años, más ~18 meses hasta hace
+-- seis, más las trece quincenas de los últimos seis meses. El número exacto
+-- baila con el calendario, y lo que importa es el orden de magnitud: ochenta y
+-- pico, no cuatro mil setecientos.
+--
+-- Con 0095 esta misma cuenta daba «entre 150 y 250». El margen de abajo es lo
+-- que de verdad prueba algo: si alguien devuelve la rejilla a mensual sin querer,
+-- el número se dispara y esto se para.
 do $$
 declare n bigint;
 begin
   select count(*) into n from public.rpc_steam_value_series();
-  assert n between 150 and 250,
-    format('trece anos deberian caber en ~170 puntos, y salen %s', n);
+  assert n between 60 and 120,
+    format('trece anos deberian caber en ~80 puntos, y salen %s', n);
 end $$;
 
--- ── 3. El paso: mensual atrás, quincenal en los últimos seis meses ────────
+-- ── 3. El paso: trimestral, mensual y quincenal, cada uno en su tramo ─────
 -- Se comprueba la FORMA y no unas fechas concretas, porque las fechas dependen
--- de qué día se corran las pruebas. El primer día se excluye de las dos: es el
+-- de qué día se corran las pruebas. El primer día se excluye de las tres: es el
 -- arranque de la curva y entra siempre, caiga donde caiga.
+--
+-- El tramo viejo pide día 1 Y mes de trimestre (1, 4, 7, 10): con solo «día 1»
+-- un punto mensual colado ahí pasaría desapercibido, que es justo el fallo que
+-- este tramo viene a vigilar.
 do $$
 declare sueltos bigint;
 begin
   select count(*) into sueltos
     from public.rpc_steam_value_series()
-   where day < current_date - 183
+   where day < current_date - 730
+     and day <> current_date - 4700
+     and (extract(day from day) <> 1 or extract(month from day)::int % 3 <> 1);
+  assert sueltos = 0,
+    format('%s puntos viejos que no son principio de trimestre', sueltos);
+
+  select count(*) into sueltos
+    from public.rpc_steam_value_series()
+   where day >= current_date - 730
+     and day < current_date - 183
      and day <> current_date - 4700
      and extract(day from day) <> 1;
   assert sueltos = 0,
-    format('%s puntos viejos que no son dia 1 de mes', sueltos);
+    format('%s puntos de los dos ultimos anos que no son dia 1 de mes', sueltos);
 
   select count(*) into sueltos
     from public.rpc_steam_value_series()
@@ -120,6 +143,44 @@ begin
   assert repetidos = 0, format('%s dias repetidos en la serie', repetidos);
 end $$;
 
+-- ── 7. Los cuatro largos de histórico, y la costura entre tramos ──────────
+-- El resto del fichero mira trece años, que es el caso que rompió producción.
+-- Pero una rejilla de TRES pasos tiene dos costuras, y las dos se mueven según
+-- lo atrás que llegue tu histórico: quien tenga cuatro meses no llega a la
+-- mensual, y quien tenga catorce no llega a la trimestral. Ahí es donde un
+-- `generate_series` mal acotado sale al revés —cero puntos— o deja un boquete.
+--
+-- Lo que se exige es lo que de verdad importa de una rejilla: que empiece en la
+-- vela más vieja, que hoy sea siempre un punto, y que no haya ningún hueco mayor
+-- que el paso más grande que existe (un trimestre, 92 días).
+do $$
+declare dias int; puntos bigint; primero date; hueco int; hoy_esta bool; vieja date;
+begin
+  foreach dias in array array[120, 400, 1200, 4700] loop
+    delete from public.steam_price_history where appid = 999501;
+    insert into public.steam_price_history (appid, market_hash_name, currency, day, median_cents, volume)
+    select 999501, 'V', 3, (current_date - g)::date, 100, 1 from generate_series(0, dias, 7) g;
+
+    select min(day) into vieja from public.steam_price_history where appid = 999501;
+    with s as (select day from public.rpc_steam_value_series()),
+         d as (select day, day - lag(day) over (order by day) as salto from s)
+    select (select count(*) from s), (select min(day) from s),
+           (select coalesce(max(salto), 0) from d), (select bool_or(day = current_date) from s)
+      into puntos, primero, hueco, hoy_esta;
+
+    assert hoy_esta, format('con %s dias de historico, hoy no es un punto', dias);
+    -- Contra la vela más vieja de verdad y no contra `current_date - dias`:
+    -- `generate_series(0, 120, 7)` se queda en 119, y esa resta ya engañó una vez
+    -- a este mismo fichero mientras se escribía.
+    assert primero = vieja,
+      format('con %s dias deberia empezar en la vela mas vieja (%s) y empieza en %s',
+             dias, vieja, primero);
+    assert hueco <= 93,
+      format('con %s dias de historico hay un hueco de %s dias, mas que un trimestre',
+             dias, hueco);
+  end loop;
+end $$;
+
 rollback;
 
-\echo 'Las seis comprobaciones de la rejilla de 0095 han pasado.'
+\echo 'Las ocho comprobaciones de la rejilla de tres pasos han pasado.'
