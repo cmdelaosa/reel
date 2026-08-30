@@ -806,11 +806,16 @@
         mercado, no tuyo— y la ingesta solo aceptaba estos para objetos cuyo
         precio Reel todavía no conociera. Eran el adorno del primer día.
 
-     Lo que se pierde: quien enlace Steam por primera vez y traiga objetos que
-     nadie más tiene verá guiones en la columna del precio hasta que pase el cron
-     —04:10 UTC, o a mano desde Actions → steam-prices → Run workflow—. A cambio,
-     la pasada empieza por el histórico en vez de por media hora de peticiones
-     que Steam puede negar enteras, que fue exactamente lo que pasó.
+     Lo que se pierde, y no es un detalle: quien enlace Steam por primera vez y
+     traiga objetos que nadie más tiene no verá guiones en la columna del precio,
+     verá la pantalla VACÍA. `unsellable` en SteamInventory.tsx esconde toda fila
+     sin mediana, así que hasta que pase el cron —04:10 UTC, o a mano desde
+     Actions → steam-prices → Run workflow— su inventario entero queda detrás del
+     interruptor «Ver ocultos», con el aviso que la pantalla ya tiene escrito
+     para ese caso. Con el mercado de Steam compartido eso es raro —los precios
+     son globales y casi todo lo tiene alguien más— pero cuando pasa dura un día.
+     A cambio, la pasada empieza por el histórico en vez de por media hora de
+     peticiones que Steam puede negar enteras, que fue exactamente lo que pasó.
 
      Lo que NO se pierde: el histórico, que solo puede traer tu navegador porque
      `pricehistory` pide la cookie de sesión. Esa es la fase de abajo y es la
