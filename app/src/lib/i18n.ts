@@ -246,6 +246,7 @@ const ES: Record<string, string> = {
   "Unit price": "Precio por unidad",
   "Name": "Nombre",
   "Filter by name": "Filtrar por nombre",
+  "Show hidden": "Ver ocultos",
   "Nothing matches that.": "No hay nada que case con eso.",
   /* "Todo" y no "Todas": la clave "All" ya existe más abajo con el femenino de
      las plataformas, y aquí lo que se agrupa son objetos. Una clave propia

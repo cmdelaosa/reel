@@ -598,6 +598,20 @@ const APP_NAMES: Record<number, string> = {
 };
 const appName = (appid: number) => APP_NAMES[appid] ?? `App ${appid}`;
 
+/** Lo que no es dinero: no se puede vender, o nadie sabe cuánto vale.
+ *
+ *  Son dos cosas distintas con la misma consecuencia. `marketable` en false es
+ *  un objeto que Valve no deja poner en el mercado —un regalo bloqueado, una
+ *  llave sin canjear—; mediana en null es un objeto que sí se vende pero del
+ *  que no hay precio, o porque el cron aún no ha pasado o porque el histórico
+ *  vino 500, que es Steam diciendo «esto no se vende» (0090).
+ *
+ *  Ninguno de los dos entra en el total —esa suma ya era solo de los que tienen
+ *  precio—, así que enseñarlos por defecto era enseñar seiscientas baldosas para
+ *  hablar de las que valen algo. Se ocultan, y el toggle de al lado de las
+ *  pestañas los devuelve. */
+const unsellable = (r: InventoryRow) => !r.marketable || r.medianCents === null;
+
 function Items({
   rows,
   net,
@@ -613,6 +627,19 @@ function Items({
   /** null es "todos". No es un appid más para que añadir un juego nuevo no
    *  obligue a tocar nada, y para que el estado de estreno sea "lo veo todo". */
   const [app, setApp] = useState<number | null>(null);
+  /** Apagado de estreno: la pantalla habla de dinero, y lo que no se vende no
+   *  es dinero. Vive aquí y no en la URL ni en el almacenamiento porque es una
+   *  mirada, no una preferencia: se enciende para buscar algo concreto. */
+  const [showHidden, setShowHidden] = useState(false);
+
+  /* De aquí para abajo `rows` ya no se usa: todo —pestañas, recuentos, filtro,
+     total— se cuenta sobre lo que se está viendo. Si el recuento de la pestaña
+     dijera 76 y en la rejilla hubiera 41, la pestaña estaría mintiendo. */
+  const visible = useMemo(
+    () => (showHidden ? rows : rows.filter((r) => !unsellable(r))),
+    [rows, showHidden],
+  );
+  const hiddenCount = useMemo(() => rows.filter((r) => unsellable(r)).length, [rows]);
 
   /** Una pestaña por juego, con lo que hay dentro.
    *
@@ -623,7 +650,7 @@ function Items({
    *  mitad de la pregunta que hace clic ahí. */
   const tabs = useMemo(() => {
     const by = new Map<number, { count: number; valueCents: number }>();
-    for (const r of rows) {
+    for (const r of visible) {
       const acc = by.get(r.appid) ?? { count: 0, valueCents: 0 };
       acc.count += 1;
       acc.valueCents += r.valueCents;
@@ -632,7 +659,7 @@ function Items({
     return [...by.entries()]
       .map(([appid, v]) => ({ appid, ...v }))
       .sort((a, b) => b.valueCents - a.valueCents);
-  }, [rows]);
+  }, [visible]);
 
   /* Con un solo juego no hay nada que elegir, y una pestaña suelta es un mando
      que no manda: ocupa una fila entera para decir lo que ya se ve. */
@@ -644,7 +671,7 @@ function Items({
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const inApp = activeApp === null ? rows : rows.filter((r) => r.appid === activeApp);
+    const inApp = activeApp === null ? visible : visible.filter((r) => r.appid === activeApp);
     const filtered = q
       ? inApp.filter((r) => r.marketHashName.toLowerCase().includes(q))
       : inApp;
@@ -658,7 +685,7 @@ function Items({
     if (sort === "quantity") sorted.sort((a, b) => b.quantity - a.quantity);
     if (sort === "name") sorted.sort((a, b) => a.marketHashName.localeCompare(b.marketHashName));
     return sorted;
-  }, [rows, sort, query, activeApp]);
+  }, [visible, sort, query, activeApp]);
 
   /* El total de lo que estás mirando, que cambia con la pestaña y con el filtro
      por nombre — «¿cuánto de esto es CS2?» es la otra mitad de la pregunta que
@@ -696,7 +723,7 @@ function Items({
               onClick={() => setApp(null)}
             >
               {tr("Everything")}
-              <span className="mute" style={{ fontWeight: 600 }}>{rows.length}</span>
+              <span className="mute" style={{ fontWeight: 600 }}>{visible.length}</span>
             </button>
             {tabs.map((t) => (
               <button
@@ -711,6 +738,21 @@ function Items({
               </button>
             ))}
           </div>
+        )}
+        {/* Al lado de las pestañas porque es de la misma familia: eligen QUÉ se
+            mira. Chip y no pestaña, por la regla de la hoja de estilos —esto se
+            enciende y se apaga—. No se pinta cuando no hay nada oculto: un
+            interruptor que no cambia nada es ruido, y en un inventario sin
+            bloqueados y con todos los precios puestos no hay nada que devolver. */}
+        {hiddenCount > 0 && (
+          <button
+            className={showHidden ? "chip chip-active" : "chip"}
+            aria-pressed={showHidden}
+            onClick={() => setShowHidden((v) => !v)}
+          >
+            {tr("Show hidden")}
+            <span className="mute" style={{ fontWeight: 600, marginLeft: 6 }}>{hiddenCount}</span>
+          </button>
         )}
         {/* Se pinta con pestañas y sin ellas: con un solo juego sigue habiendo
             un filtro por nombre, y esa suma es justo lo que no se sabía. */}
