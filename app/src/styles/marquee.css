@@ -2441,3 +2441,45 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   .ttb { flex-direction: column; gap: 12px; }
   .ttb-sep { width: auto; height: 1px; }
 }
+
+/* ---- Interruptor de ranura ---- */
+/* La tercera forma de encender algo, y la única que no es una elección entre
+   opciones: un chip vive en una fila de chips y se lee como "otro filtro más";
+   un segmento obliga a que siempre haya uno encendido. Esto es un ajuste de la
+   vista, sí o no, y se pone donde el resto de la fila son pestañas — de ahí que
+   traiga su propio lenguaje en vez de tomar prestado el de los filtros.
+   Nace en el inventario del mercado de Steam, para "ver ocultos". */
+.switch {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: var(--ctl-h-sm); padding: 0;
+  border: 0; background: none; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--text-dim);
+  white-space: nowrap; transition: color .16s ease;
+}
+.switch:hover { color: var(--text); }
+.switch[aria-checked="true"] { color: var(--text); }
+/* La ranura: 34×20 con la bola de 14 y 2px de aire a cada lado, así que el viaje
+   son exactamente 12px —(34 − 2 bordes) − 2 − 2 − 14—. Escrito a mano y no con
+   `calc`, porque cambiar cualquiera de los cuatro números obliga a repensar el
+   conjunto de todas formas. */
+.switch-track {
+  position: relative; flex: 0 0 auto;
+  width: 34px; height: 20px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  transition: background .16s ease, border-color .16s ease;
+}
+.switch-knob {
+  position: absolute; top: 50%; left: 2px;
+  width: 14px; height: 14px; margin-top: -7px;
+  border-radius: 999px; background: var(--text-dim);
+  transition: transform .16s ease, background .16s ease;
+}
+.switch[aria-checked="true"] .switch-track { background: var(--accent); border-color: var(--accent); }
+.switch[aria-checked="true"] .switch-knob { transform: translateX(12px); background: var(--on-accent); }
+/* El anillo, alrededor de la ranura y no de la caja entera con su rótulo: la
+   regla global lo dibujaría a lo ancho de "Ver ocultos 4". */
+.switch:focus-visible { outline: none; }
+.switch:focus-visible .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .switch, .switch-track, .switch-knob { transition: none; }
+}
