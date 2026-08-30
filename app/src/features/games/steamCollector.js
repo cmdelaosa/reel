@@ -185,12 +185,26 @@
    *
    *  `new URL(url, location.origin)` cuesta nada y quita la dependencia: con la
    *  dirección entera, la envoltura de turno no tiene que resolver nada. */
-  async function get(url, { tries = 5 } = {}) {
+  async function get(url, { tries = 5, vacioSi500 = false } = {}) {
     const entera = new URL(url, location.origin).toString();
     let wait = 2000;
     for (let i = 0; i < tries; i++) {
       const res = await fetch(entera, { credentials: "include" });
       if (res.ok) return res.json();
+      /* El 500 de `pricehistory` casi nunca es del servidor: es como Steam dice
+         que ESE OBJETO NO TIENE MERCADO. Una medalla, un coin, un grafiti
+         bloqueado, las gemas — cosas que no se venden y de las que no hay
+         ninguna vela que pedir. Viene con `{"success":false}` dentro, y quien
+         pregunta por un histórico lo entiende como un «no hay», no como un
+         «espera». Ver el porqué largo en la fase 4. */
+      if (vacioSi500 && res.status >= 500) {
+        const txt = await res.text();
+        if (txt.includes('"success":false')) return null;
+        log(`  Steam dice "espera" (${res.status}); reintento en ${wait / 1000}s…`);
+        await sleep(wait);
+        wait *= 2;
+        continue;
+      }
       if (res.status === 429 || res.status >= 500) {
         log(`  Steam dice "espera" (${res.status}); reintento en ${wait / 1000}s…`);
         await sleep(wait);
@@ -918,14 +932,31 @@
      primero es lo que más pesa. */
   const HISTORY_GIVE_UP_AFTER = 5;
   let sinHistorico = 0;
+  /* Los que no tienen mercado, contados aparte y sin tocar el freno.
+     ── Por qué esto no es un detalle ────────────────────────────────────────
+     El 30-08-2026 esta fase se rindió con 269 objetos por leer y el panel dijo
+     «Steam sigue diciendo 429 después de varios intentos». No había ningún 429:
+     eran 500 con `success:false` —medallas, coins, grafitis bloqueados— que el
+     `get` de arriba reintentaba tres veces cada uno y el `catch` apuntaba como
+     fallo. Cinco objetos no vendibles seguidos y la fase entera se abandonaba.
+     De 608 objetos del inventario real, 269 son de estos: la racha de cinco no
+     era mala suerte, era casi inevitable. */
+  let sinMercado = 0;
   for (let i = 0; i < top.length; i++) {
     const h = top[i];
     try {
       const p = await get(
         `/market/pricehistory/?country=ES&currency=${CURRENCY}&appid=${h.appid}` +
           `&market_hash_name=${encodeURIComponent(h.market_hash_name)}`,
-        { tries: 3 },
+        { tries: 3, vacioSi500: true },
       );
+      /* Sin mercado: ni es un fallo ni cuenta para el freno, y sobre todo no
+         hay que esperar tres segundos por él — no se ha leído nada. */
+      if (p === null) {
+        sinMercado += 1;
+        sinHistorico = 0;
+        continue;
+      }
       /* Steam da ["Jul 12 2014 01: +0", 1.234, "5"], y el último mes viene POR
          HORA. Se agrega aquí —media ponderada por volumen— porque subir 720
          velas donde caben 30 sesga la curva hacia las horas de más movimiento y
@@ -976,6 +1007,13 @@
        sesenta renglones y el panel se convierte en una cuenta atrás ilegible. */
     if (i % 25 === 24) log(`  ${i + 1}/${top.length}…`);
     await sleep(3000);
+  }
+
+  /* Decirlo, y decir que es normal. Sin esta línea, «339 de 608» parece que se
+     ha perdido la mitad del inventario por el camino. */
+  if (sinMercado) {
+    log(`  ${sinMercado} objetos no se venden en el mercado: no tienen histórico`);
+    log("  que pedir, y eso no es un fallo. Coins, medallas, grafitis y gemas.");
   }
 
   if (history.length) {
