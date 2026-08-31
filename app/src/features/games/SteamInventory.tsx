@@ -373,10 +373,6 @@ function Totals({
 
 /* ── La curva ─────────────────────────────────────────────────────────────── */
 
-/* Más ancha y más plana que antes (era 680×140), y no por gusto: la gráfica
-   comparte fila con el total, y el alto de una tarjeta cuyo SVG escala con el
-   ancho lo decide esta proporción. A 6:1 las dos miden casi lo mismo en la
-   página de 1.280, que es lo que hace que la banda se lea como una sola cosa. */
 /* El lienzo de la curva, en unidades de viewBox. Son DOS porque el SVG escala
    con la tarjeta y el texto escala con él: a 900 de ancho metidos en los 375 de
    un teléfono, las cifras de 10 salen a cuatro píxeles y no se leen. Con las
@@ -386,6 +382,11 @@ function Totals({
    que se estrecha es el viewBox, y a 420 el mismo 10 sale a nueve píxeles.
    El corte son los mismos 900 a los que `.steam-band` deja de ser dos columnas
    y la tarjeta se queda con la página entera. */
+/* El de escritorio es ancho y plano (era 680×140 antes de 0094) y no por gusto:
+   la gráfica comparte fila con el total, y el alto de una tarjeta cuyo SVG
+   escala con el ancho lo decide esta proporción. A 6:1 las dos miden casi lo
+   mismo en la página de 1.280, que es lo que hace que la banda se lea como una
+   sola cosa. */
 const CHART_LG = { w: 900, h: 150, pad: { top: 12, right: 12, bottom: 22, left: 56 }, ticks: 7 };
 /* Más cuadrado que el de escritorio (2,2:1 contra 6:1): a lo ancho del teléfono,
    una banda de 6:1 es una raya de sesenta píxeles de alto. */
@@ -409,8 +410,7 @@ function useNarrowChart(): boolean {
   );
 }
 
-/* Lo que dice cada botón de la ventana. Aparte del componente porque son claves
-   del diccionario y `tr` las quiere literales.
+/* Lo que dice cada botón de la ventana: la clave del diccionario de cada tramo.
    «All time» y no «All» a secas, aunque el botón sea más corto: la clave «All»
    ya está cogida por el filtro de las bibliotecas y traducida «Todas», que
    concuerda con series y no con tiempo. El diccionario es plano —la clave ES el
@@ -502,13 +502,41 @@ function ValueChart({
     const xAt = (ms: number) => pad.left + ((ms - t0) / dt) * (w - pad.left - pad.right);
     const y = (v: number) =>
       h - pad.bottom - ((v - min) / span) * (h - pad.top - pad.bottom);
+    const points = pts.map((s, i) => ({
+      ...s,
+      x: xAt(new Date(s.day).getTime()),
+      y: y(values[i]),
+    }));
+    /* Todo lo que se saca de los puntos se saca AQUÍ, no en el render. El foco
+       repinta la tarjeta a cada movimiento del puntero, y estas tres cosas no
+       dependen de dónde esté el dedo: la traza son dos `toFixed` por punto —mil
+       largos en una serie de trece años— y recalcularla ciento veinte veces por
+       segundo era trabajo tirado justo mientras se está pidiendo suavidad. */
     return {
       min,
       max,
       t0,
       t1,
       xAt,
-      points: pts.map((s, i) => ({ ...s, x: xAt(new Date(s.day).getTime()), y: y(values[i]) })),
+      points,
+      /* La traza de la línea. */
+      line: points.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" "),
+      /* Las x sueltas, que es lo único que mira la búsqueda del punto cercano. */
+      xs: points.map((p) => p.x),
+      /* Los días a los que les faltaban precios se marcan, pero SOLO en el tramo
+         de foto real. En el reconstruido no.
+         La misma columna cuenta dos cosas distintas según de dónde venga el
+         punto, y eso no se vio hasta tener datos de verdad delante. En una foto
+         diaria, «sin precio» es un accidente: el cron no trajo esa tanda, y son
+         ocho de 608. En el tramo reconstruido depende de hasta dónde llegue el
+         histórico subido, y cuando el recolector solo traía los sesenta objetos
+         más valiosos faltaban 548 TODOS los días: la curva salía con un punto
+         naranja en los 731, un aviso que está siempre y por tanto no avisa de
+         nada, tapando además el único día en que decía algo.
+         El recolector ya los trae todos, así que ese caso se vacía solo — pero
+         la regla se queda: un volcado a medias, o uno viejo de antes del cambio,
+         lo reproduce entero. */
+      gaps: points.filter((p) => p.source === "snapshot" && p.missing_prices > 0),
     };
   }, [series, shown, canvas]);
 
@@ -539,7 +567,6 @@ function ValueChart({
     );
   }
 
-  const line = geo.points.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
   const first = geo.points[0];
   const last = geo.points[geo.points.length - 1];
   /* El punto del que hablan las cifras de arriba. Sin ratón, el último — que es
@@ -577,29 +604,13 @@ function ValueChart({
         : { year: "numeric", timeZone: "UTC" },
   );
 
-  /* Los días a los que les faltaban precios se marcan, pero SOLO en el tramo de
-     foto real. En el reconstruido no.
-     La misma columna cuenta dos cosas distintas según de dónde venga el punto, y
-     eso no se vio hasta tener datos de verdad delante. En una foto diaria, «sin
-     precio» es un accidente: el cron no trajo esa tanda, y son ocho de 608. En
-     el tramo reconstruido depende de hasta dónde llegue el histórico subido, y
-     cuando el recolector solo traía los sesenta objetos más valiosos faltaban
-     548 TODOS los días: la curva salía con un punto naranja en los 731, un aviso
-     que está siempre y por tanto no avisa de nada, tapando además el único día
-     en que decía algo.
-     El recolector ya los trae todos, así que ese caso se vacía solo — pero la
-     regla se queda: un volcado a medias, o uno viejo de antes del cambio, lo
-     reproduce entero. */
-  const gaps = geo.points.filter((p) => p.source === "snapshot" && p.missing_prices > 0);
-
-  const xs = geo.points.map((p) => p.x);
   /* El foco sigue la POSICIÓN del puntero dentro del viewBox, no el píxel de
      pantalla: el SVG escala con la tarjeta, así que hay que devolver la x a las
      unidades del lienzo, que es donde están dibujados los puntos. */
   const track = (e: React.PointerEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     if (!rect.width) return;
-    setFocus(nearestIndex(xs, ((e.clientX - rect.left) / rect.width) * canvas.w));
+    setFocus(nearestIndex(geo.xs, ((e.clientX - rect.left) / rect.width) * canvas.w));
   };
 
   return (
@@ -714,8 +725,8 @@ function ValueChart({
             </g>
           );
         })}
-        <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2} />
-        {gaps.map((p) => (
+        <path d={geo.line} fill="none" stroke="var(--accent)" strokeWidth={2} />
+        {geo.gaps.map((p) => (
           <circle key={p.day} cx={p.x} cy={p.y} r={2.5} fill="var(--warn, #d90)">
             <title>
               {p.missing_prices === 1
