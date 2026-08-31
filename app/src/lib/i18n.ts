@@ -272,18 +272,12 @@ const ES: Record<string, string> = {
   "Value over time · approximate · gross": "Valor con el tiempo · aproximado · bruto",
   "Before the first daily photo the line is rebuilt from your ledger: what came out of a case, a drop or a trade isn't in it, so it counts as if you'd always had it. The further back, the rougher.":
     "Antes de la primera foto diaria la línea se reconstruye con tu libro: lo que salió de una caja, de un drop o de un intercambio no está en él, así que cuenta como si lo hubieras tenido siempre. Cuanto más atrás, más gruesa la aproximación.",
-  /* Con `plural`, porque el primer día que existe esta frase el número es UNO:
-     en producción salió «1 days recorded» el día del estreno. */
-  "One day recorded as it happened; everything before it is rebuilt from your ledger and the price history.":
-    "Un día apuntado según pasaba; todo lo anterior está reconstruido con tu libro y el histórico de precios.",
-  "{n} days recorded as they happened; everything before them is rebuilt from your ledger and the price history.":
-    "{n} días apuntados según pasaban; todo lo anterior está reconstruido con tu libro y el histórico de precios.",
-  /* Sale cuando al histórico subido le faltan objetos: un volcado a medias, o
-     uno de cuando el recolector solo traía los sesenta más valiosos. */
-  "The rebuilt part follows the {tracked} of your {held} items that have a price history — the rest have no candles to ask for.":
-    "El tramo reconstruido sigue los {tracked} de tus {held} objetos que tienen histórico de precios — de los demás no hay velas que pedir.",
-  "Rebuilt from your ledger and the price history: no day here was recorded as it happened.":
-    "Reconstruido con tu libro y el histórico de precios: ningún día de aquí se apuntó según pasaba.",
+  /* Las tres ventanas de la curva. «All time» y no «All»: esa clave ya está
+     cogida por el filtro de las bibliotecas, donde vale «Todas». */
+  "3 months": "3 meses",
+  "1 year": "1 año",
+  "All time": "Todo",
+  "Time range": "Tramo de tiempo", // aria-label del grupo de los tres botones
   /* El histórico entero se sube en unas cincuenta y seis llamadas: sin contarlas,
      el botón gira siete minutos y parece colgado. */
   "Uploading…": "Subiendo…",

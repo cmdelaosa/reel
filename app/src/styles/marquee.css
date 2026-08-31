@@ -886,6 +886,33 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    `chip-on`, y la tercera vez que aparece en esta pantalla. */
 .steam-chart .grid-line { stroke: var(--border); stroke-width: 1; }
 .steam-chart .grid-label { fill: var(--text-mute); font-size: 10px; }
+/* Las verticales del eje del tiempo. Más flojas que las dos horizontales a
+   propósito: esas dos son la escala del dinero, que es lo que se lee; estas solo
+   sitúan un pico en el calendario cuando uno va a buscarlo, y al mismo peso
+   convertían la tarjeta en papel cuadriculado. */
+.steam-chart .tick-line { stroke: var(--border); stroke-width: 1; opacity: .45; }
+/* El foco del puntero. La raya llega de arriba abajo para poder leer la fecha
+   del eje sin apartar el dedo, y el punto es hueco —relleno de la tarjeta, borde
+   de acento— para que no se confunda con los naranjas de «sin precio». */
+.steam-chart .steam-focus line { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 3 3; }
+.steam-chart .steam-focus circle { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+
+/* La cabecera de la curva: rótulo y ventanas a la izquierda, la lectura del
+   punto a la derecha. Envuelve en vez de encoger — a 900 la banda ya se apila y
+   la tarjeta se queda con el ancho del teléfono, donde las dos mitades no caben
+   en una línea y recortar la cifra sería recortar justo lo que se mira. */
+.steam-chart-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 4px;
+}
+.steam-chart-head-l { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Pastillas de cabecera, más bajas que las 34 de .seg: al lado de un rótulo de
+   11px, tres botones de altura de control mandaban en la tarjeta más que la
+   propia curva. */
+.steam-chart-ranges .seg { height: 24px; padding: 0 10px; font-size: 11.5px; }
+.steam-chart-read { display: inline-flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.steam-chart-when { color: var(--text-mute); font-size: 11px; }
+.steam-chart-worth { font-weight: 700; color: var(--text); }
 
 /* Episode sub-sheet — a small card over the detail sheet: synopsis + per-episode
    scores from both sources, and mark-watched. Reuses the sheet/backdrop system. */
