@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Clipboard, Loader2, Upload } from "lucide-react";
 import collectorSource from "@/features/games/steamCollector.js?raw";
 import {
@@ -19,6 +19,15 @@ import {
   netTotalCents,
   netUnrealizedCents,
 } from "@/domain/steamFee";
+import {
+  dateTicks,
+  nearestIndex,
+  rangeHasCurve,
+  SERIES_RANGES,
+  tickUnit,
+  windowSeries,
+  type SeriesRange,
+} from "@/domain/steamSeriesView";
 import { t as tr, tv } from "@/lib/i18n";
 import { dateLocale } from "@/lib/locale";
 
@@ -368,9 +377,49 @@ function Totals({
    comparte fila con el total, y el alto de una tarjeta cuyo SVG escala con el
    ancho lo decide esta proporción. A 6:1 las dos miden casi lo mismo en la
    página de 1.280, que es lo que hace que la banda se lea como una sola cosa. */
-const W = 900;
-const H = 150;
-const PAD = { top: 12, right: 12, bottom: 22, left: 56 };
+/* El lienzo de la curva, en unidades de viewBox. Son DOS porque el SVG escala
+   con la tarjeta y el texto escala con él: a 900 de ancho metidos en los 375 de
+   un teléfono, las cifras de 10 salen a cuatro píxeles y no se leen. Con las
+   dos fechas de antes eso se podía dejar pasar —eran dos borrones en las
+   esquinas—; con las marcas del eje ya no.
+   Y no se arregla haciendo el lienzo más alto: la escala la manda el ANCHO. Lo
+   que se estrecha es el viewBox, y a 420 el mismo 10 sale a nueve píxeles.
+   El corte son los mismos 900 a los que `.steam-band` deja de ser dos columnas
+   y la tarjeta se queda con la página entera. */
+const CHART_LG = { w: 900, h: 150, pad: { top: 12, right: 12, bottom: 22, left: 56 }, ticks: 7 };
+/* Más cuadrado que el de escritorio (2,2:1 contra 6:1): a lo ancho del teléfono,
+   una banda de 6:1 es una raya de sesenta píxeles de alto. */
+const CHART_SM = { w: 420, h: 190, pad: { top: 12, right: 12, bottom: 26, left: 54 }, ticks: 5 };
+
+/** Si la tarjeta se ha quedado con el ancho de la página, que es cuando la
+ *  banda se apila. Se escucha el cambio y no se lee una sola vez: girar el
+ *  teléfono no recarga nada, y el lienzo tiene que cambiar con él. */
+function useNarrowChart(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      /* jsdom declara matchMedia sin implementarlo — el mismo cuidado que se
+         toma lib/settings.ts con el tema. */
+      if (typeof window.matchMedia !== "function") return () => {};
+      const m = window.matchMedia("(max-width: 900px)");
+      m.addEventListener("change", onChange);
+      return () => m.removeEventListener("change", onChange);
+    },
+    () => typeof window.matchMedia === "function" && window.matchMedia("(max-width: 900px)").matches,
+    () => false,
+  );
+}
+
+/* Lo que dice cada botón de la ventana. Aparte del componente porque son claves
+   del diccionario y `tr` las quiere literales.
+   «All time» y no «All» a secas, aunque el botón sea más corto: la clave «All»
+   ya está cogida por el filtro de las bibliotecas y traducida «Todas», que
+   concuerda con series y no con tiempo. El diccionario es plano —la clave ES el
+   inglés—, así que dos sentidos piden dos claves. */
+const RANGE_LABEL: Record<SeriesRange, string> = {
+  "3m": "3 months",
+  "1y": "1 year",
+  all: "All time",
+};
 
 /** El valor de tu cartera HACIA ATRÁS: un punto por mes, uno cada dos semanas en
  *  los últimos seis meses, y además todos los días con foto real. Lo reparte
@@ -412,9 +461,32 @@ function ValueChart({
   loading: boolean;
   net: boolean;
 }) {
+  /* Qué tramo se mira. `all` de salida: es lo que la tarjeta ha enseñado desde
+     que existe, y es la única ventana que contesta «cuánto he ganado con esto»,
+     que es la pregunta con la que se abre la pantalla. Las otras dos contestan
+     «qué ha hecho últimamente», que se pregunta después. */
+  const [range, setRange] = useState<SeriesRange>("all");
+
+  /* Qué punto tiene el dedo encima. `null` es «ninguno», y entonces la cifra de
+     arriba habla del último día — que es exactamente lo que decía antes de que
+     esto existiera. Así el reposo de la tarjeta no cambia. */
+  const [focus, setFocus] = useState<number | null>(null);
+
+  /* Solo se ofrecen las ventanas que dan curva. Un inventario subido ayer no
+     tiene un año que enseñar, y el botón «1 año» llevaría al cartel de «todavía
+     no hay gráfica» — que acusa de no haber subido el histórico, cuando lo que
+     falta es pasado. */
+  const offered = useMemo(() => SERIES_RANGES.filter((r) => rangeHasCurve(series, r)), [series]);
+  const shown = offered.includes(range) ? range : "all";
+
+  /* El lienzo, que cambia con el ancho de la página. */
+  const canvas = useNarrowChart() ? CHART_SM : CHART_LG;
+
   const geo = useMemo(() => {
-    if (series.length < 2) return null;
-    const values = series.map((s) => s.value_cents);
+    const { w, h, pad } = canvas;
+    const pts = windowSeries(series, shown);
+    if (pts.length < 2) return null;
+    const values = pts.map((s) => s.value_cents);
     const min = Math.min(...values);
     const max = Math.max(...values);
     /* Un rango plano (todo igual) partiría por cero al escalar. */
@@ -424,19 +496,21 @@ function ValueChart({
        estiraría cada mes viejo hasta ocupar lo que una quincena reciente y el
        tramo antiguo saldría muchísimo más ancho de lo que es. Es la misma cuenta
        que la ficha de un objeto, y allí ya estaba por lo mismo. */
-    const t0 = new Date(series[0].day).getTime();
-    const t1 = new Date(series[series.length - 1].day).getTime();
+    const t0 = new Date(pts[0].day).getTime();
+    const t1 = new Date(pts[pts.length - 1].day).getTime();
     const dt = t1 - t0 || 1;
-    const x = (day: string) =>
-      PAD.left + ((new Date(day).getTime() - t0) / dt) * (W - PAD.left - PAD.right);
+    const xAt = (ms: number) => pad.left + ((ms - t0) / dt) * (w - pad.left - pad.right);
     const y = (v: number) =>
-      H - PAD.bottom - ((v - min) / span) * (H - PAD.top - PAD.bottom);
+      h - pad.bottom - ((v - min) / span) * (h - pad.top - pad.bottom);
     return {
       min,
       max,
-      points: series.map((s, i) => ({ ...s, x: x(s.day), y: y(values[i]) })),
+      t0,
+      t1,
+      xAt,
+      points: pts.map((s, i) => ({ ...s, x: xAt(new Date(s.day).getTime()), y: y(values[i]) })),
     };
-  }, [series]);
+  }, [series, shown, canvas]);
 
   /* Con un solo día todavía no hay curva, pero sí hay hueco: la tarjeta se
      pinta igual para que la banda siga siendo dos tarjetas y el total no se
@@ -468,11 +542,40 @@ function ValueChart({
   const line = geo.points.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
   const first = geo.points[0];
   const last = geo.points[geo.points.length - 1];
-  const change = last.value_cents - first.value_cents;
-  /* Cuántos de estos puntos son foto real. No cambia el dibujo —la línea es una
-     y el rótulo es uno— pero sí lo que dice el aviso de debajo: «aproximada» a
-     secas, teniendo diez meses de registro exacto, se pasa de humilde. */
-  const recorded = geo.points.filter((p) => p.source === "snapshot").length;
+  /* El punto del que hablan las cifras de arriba. Sin ratón, el último — que es
+     lo que decían antes. El `min` no sobra: un cambio de ventana deja el índice
+     apuntando a un punto que ya no existe durante el render que va entre el
+     clic y el `onPointerLeave` que nunca llega si el dedo levantó fuera. */
+  const at = focus === null ? last : geo.points[Math.min(focus, geo.points.length - 1)];
+  /* El cambio ya no es el de la serie entera sino el de lo que se está mirando,
+     y hasta donde se está mirando: con la ventana en 3 meses y el dedo en mayo,
+     «+312 €» son los de marzo a mayo. Es la única lectura que no se contradice
+     con lo que hay debajo — la línea que se ve empieza en `first` y el foco está
+     donde está. */
+  const change = at.value_cents - first.value_cents;
+
+  /* Las marcas del eje del tiempo. Eran dos —la primera fecha y la última— y a
+     esa densidad la curva no se podía leer: un pico a media anchura de trece
+     años podía ser 2019 o 2022 y no había forma de saberlo. Ahora el reparto lo
+     decide el tramo, y cambia de detalle con él: días en tres meses, meses en un
+     año, años en todo. En el lienzo estrecho salen menos: caben menos. */
+  const ticks = dateTicks(geo.t0, geo.t1, canvas.ticks);
+  const unit = tickUnit(geo.t0, geo.t1);
+  /* En UTC porque los días de la serie son fechas sueltas («2026-08-31»), que
+     Date lee como medianoche UTC: formateadas en la zona local, al oeste de
+     Greenwich cada marca retrocedería un día. */
+  const tickFmt = new Intl.DateTimeFormat(
+    dateLocale(),
+    unit === "day"
+      ? { day: "numeric", month: "short", timeZone: "UTC" }
+      : unit === "month"
+        ? /* El año entero y no dos cifras: en la ventana de un año las marcas
+             caen en el día 1 de cada dos meses, y «ago 26» al lado del «31 ago»
+             que enseña la ventana de tres meses se lee como el 26 de agosto. La
+             misma casilla diciendo un día en un tramo y un año en otro. */
+          { month: "short", year: "numeric", timeZone: "UTC" }
+        : { year: "numeric", timeZone: "UTC" },
+  );
 
   /* Los días a los que les faltaban precios se marcan, pero SOLO en el tramo de
      foto real. En el reconstruido no.
@@ -486,64 +589,99 @@ function ValueChart({
      en que decía algo.
      El recolector ya los trae todos, así que ese caso se vacía solo — pero la
      regla se queda: un volcado a medias, o uno viejo de antes del cambio, lo
-     reproduce entero. Lo estructural se cuenta abajo con palabras, que es donde
-     se puede explicar. */
+     reproduce entero. */
   const gaps = geo.points.filter((p) => p.source === "snapshot" && p.missing_prices > 0);
 
-  /* Cuántos objetos sigue de verdad el tramo reconstruido, medidos en el último
-     día que lo sea. Es la cifra que lo califica —«esto son 60 de tus 610»— y no
-     cabía en ningún sitio hasta que dejó de haber puntos naranjas.
-     Se dice «el tramo reconstruido» y no «la curva» a propósito: el día que las
-     fotos diarias lleven años escribiéndose, ese último día reconstruido será
-     viejo y sus cifras también, y una frase que hablara de la curva entera
-     estaría contando el inventario de entonces como si fuera el de hoy. */
-  /* `.at(-1)` no: el `lib` de este proyecto es anterior a es2022 y no lo tiene. */
-  const rebuiltPoints = geo.points.filter((p) => p.source === "reconstructed");
-  const lastRebuilt = rebuiltPoints.length ? rebuiltPoints[rebuiltPoints.length - 1] : null;
-  const tracked = lastRebuilt ? lastRebuilt.distinct_items - lastRebuilt.missing_prices : 0;
+  const xs = geo.points.map((p) => p.x);
+  /* El foco sigue la POSICIÓN del puntero dentro del viewBox, no el píxel de
+     pantalla: el SVG escala con la tarjeta, así que hay que devolver la x a las
+     unidades del lienzo, que es donde están dibujados los puntos. */
+  const track = (e: React.PointerEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (!rect.width) return;
+    setFocus(nearestIndex(xs, ((e.clientX - rect.left) / rect.width) * canvas.w));
+  };
 
   return (
     <div className="card" style={{ padding: "16px 18px" }}>
-      <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-        {/* Dos avisos en una etiqueta, y los dos hacen falta:
-            · «aproximada», porque el tramo anterior a la primera foto se
-              reconstruye con el libro, y lo que salió de una caja o de un drop
-              no está en el libro;
-            · «bruta», porque el conmutador de neto no puede seguir a esta cifra
-              (la foto diaria guarda un total y la comisión tiene un mínimo POR
-              objeto). Sin decirlo, la última punta de la curva y el total de al
-              lado se contradicen y nada en pantalla lo explica. */}
-        <div className="eyebrow" title={tr("Before the first daily photo the line is rebuilt from your ledger: what came out of a case, a drop or a trade isn't in it, so it counts as if you'd always had it. The further back, the rougher.")}>
-          {net ? tr("Value over time · approximate · gross") : tr("Value over time · approximate")}
+      <div className="steam-chart-head">
+        <div className="steam-chart-head-l">
+          {/* Dos avisos en una etiqueta, y los dos hacen falta:
+              · «aproximada», porque el tramo anterior a la primera foto se
+                reconstruye con el libro, y lo que salió de una caja o de un drop
+                no está en el libro;
+              · «bruta», porque el conmutador de neto no puede seguir a esta cifra
+                (la foto diaria guarda un total y la comisión tiene un mínimo POR
+                objeto). Sin decirlo, la última punta de la curva y el total de al
+                lado se contradicen y nada en pantalla lo explica. */}
+          <div className="eyebrow" title={tr("Before the first daily photo the line is rebuilt from your ledger: what came out of a case, a drop or a trade isn't in it, so it counts as if you'd always had it. The further back, the rougher.")}>
+            {net ? tr("Value over time · approximate · gross") : tr("Value over time · approximate")}
+          </div>
+          {/* Un segmentado y no chips: siempre hay una ventana encendida, y el
+              acento de `.chip-active` se quedaría ardiendo para siempre en algo
+              que no es un filtro que hayas puesto tú. Solo sale si hay más de
+              una que ofrecer. */}
+          {offered.length > 1 && (
+            <div className="segmented steam-chart-ranges" role="group" aria-label={tr("Time range")}>
+              {offered.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  className={r === shown ? "seg seg-active" : "seg"}
+                  aria-pressed={r === shown}
+                  onClick={() => {
+                    setRange(r);
+                    /* El foco apuntaba a un punto de la ventana anterior. */
+                    setFocus(null);
+                  }}
+                >
+                  {tr(RANGE_LABEL[r])}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: change >= 0 ? "var(--ok, #3a7)" : "var(--bad, #e26)" }}>
-          {change >= 0 ? "+" : "−"}
-          {euros(Math.abs(change))}
+        {/* La lectura del punto enfocado: cuándo, cuánto valía y cuánto llevaba
+            ganado hasta ahí. Las tres se mueven juntas con el dedo, y en reposo
+            son las del último día. La fecha va delante para que las dos cifras
+            no cambien solas sin decir de qué día hablan. */}
+        <div className="steam-chart-read">
+          <span className="steam-chart-when">
+            {new Date(at.day).toLocaleDateString(dateLocale())}
+          </span>
+          <span className="steam-chart-worth">{euros(at.value_cents)}</span>
+          <span style={{ fontWeight: 700, color: change >= 0 ? "var(--ok, #3a7)" : "var(--bad, #e26)" }}>
+            {change >= 0 ? "+" : "−"}
+            {euros(Math.abs(change))}
+          </span>
         </div>
       </div>
       <svg
         className="steam-chart"
-        viewBox={`0 0 ${W} ${H}`}
+        viewBox={`0 0 ${canvas.w} ${canvas.h}`}
         role="img"
         aria-label={tv("Inventory value from {from} to {to}", {
           from: new Date(first.day).toLocaleDateString(dateLocale()),
           to: new Date(last.day).toLocaleDateString(dateLocale()),
         })}
-        style={{ width: "100%", height: "auto" }}
+        style={{ width: "100%", height: "auto", touchAction: "pan-y" }}
+        onPointerMove={track}
+        onPointerDown={track}
+        onPointerLeave={() => setFocus(null)}
       >
         {[geo.max, geo.min].map((v, i) => (
           <g key={v + "-" + i}>
             <line
               className="grid-line"
-              x1={PAD.left}
-              y1={i === 0 ? PAD.top : H - PAD.bottom}
-              x2={W - PAD.right}
-              y2={i === 0 ? PAD.top : H - PAD.bottom}
+              x1={canvas.pad.left}
+              y1={i === 0 ? canvas.pad.top : canvas.h - canvas.pad.bottom}
+              x2={canvas.w - canvas.pad.right}
+              y2={i === 0 ? canvas.pad.top : canvas.h - canvas.pad.bottom}
             />
             <text
               className="grid-label"
-              x={PAD.left - 6}
-              y={i === 0 ? PAD.top : H - PAD.bottom}
+              x={canvas.pad.left - 6}
+              y={i === 0 ? canvas.pad.top : canvas.h - canvas.pad.bottom}
               dominantBaseline="middle"
               textAnchor="end"
             >
@@ -551,6 +689,31 @@ function ValueChart({
             </text>
           </g>
         ))}
+        {ticks.map((ms) => {
+          const x = geo.xAt(ms);
+          /* Las de los extremos se alinean por dentro; centradas se saldrían de
+             la tarjeta por la izquierda y por la derecha. */
+          const anchor =
+            x <= canvas.pad.left + 24
+              ? "start"
+              : x >= canvas.w - canvas.pad.right - 24
+                ? "end"
+                : "middle";
+          return (
+            <g key={ms}>
+              <line
+                className="tick-line"
+                x1={x}
+                y1={canvas.pad.top}
+                x2={x}
+                y2={canvas.h - canvas.pad.bottom}
+              />
+              <text className="grid-label" x={x} y={canvas.h - 6} textAnchor={anchor}>
+                {tickFmt.format(new Date(ms))}
+              </text>
+            </g>
+          );
+        })}
         <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2} />
         {gaps.map((p) => (
           <circle key={p.day} cx={p.x} cy={p.y} r={2.5} fill="var(--warn, #d90)">
@@ -566,44 +729,18 @@ function ValueChart({
             </title>
           </circle>
         ))}
-        <text className="grid-label" x={PAD.left} y={H - 6}>
-          {new Date(first.day).toLocaleDateString(dateLocale())}
-        </text>
-        <text className="grid-label" x={W - PAD.right} y={H - 6} textAnchor="end">
-          {new Date(last.day).toLocaleDateString(dateLocale())}
-        </text>
-      </svg>
-      {/* La letra pequeña de la curva, con los dos números que la califican. Va
-          debajo y no en un `title` porque es la diferencia entre leer la línea
-          como un registro y leerla como una estimación, y eso no puede vivir
-          escondido detrás de un puntero que en el móvil no existe. */}
-      <p className="mute" style={{ margin: "6px 0 0", fontSize: 12 }}>
-        {/* «1 days recorded» salía tal cual en producción el primer día, que es
-            justo el día en que esta frase estrena su número. Para eso está
-            `plural`, que ya usa media pantalla. */}
-        {recorded > 0
-          ? plural(
-              recorded,
-              "One day recorded as it happened; everything before it is rebuilt from your ledger and the price history.",
-              "{n} days recorded as they happened; everything before them is rebuilt from your ledger and the price history.",
-            )
-          : tr("Rebuilt from your ledger and the price history: no day here was recorded as it happened.")}
-        {/* Y lo que la reconstrucción NO cubre, con su porqué. Desde que el
-            recolector trae el histórico de TODOS los objetos esto no sale casi
-            nunca —la condición es que falte alguno— pero sigue haciendo falta:
-            lo saca un volcado a medias, uno viejo de cuando el tope eran sesenta,
-            o un objeto que Steam no quiso dar. Sin ella, el hueco entre la curva
-            y el total de al lado no se explica en ninguna parte. */}
-        {lastRebuilt && lastRebuilt.missing_prices > 0 && tracked > 0 && (
-          <>
-            {" "}
-            {tv("The rebuilt part follows the {tracked} of your {held} items that have a price history — the rest have no candles to ask for.", {
-              tracked,
-              held: lastRebuilt.distinct_items,
-            })}
-          </>
+        {focus !== null && (
+          <g className="steam-focus">
+            <line
+              x1={at.x}
+              y1={canvas.pad.top}
+              x2={at.x}
+              y2={canvas.h - canvas.pad.bottom}
+            />
+            <circle cx={at.x} cy={at.y} r={4} />
+          </g>
         )}
-      </p>
+      </svg>
     </div>
   );
 }
