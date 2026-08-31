@@ -22,8 +22,7 @@ import {
 import {
   dateTicks,
   nearestIndex,
-  rangeHasCurve,
-  SERIES_RANGES,
+  offeredRanges,
   tickUnit,
   windowSeries,
   type SeriesRange,
@@ -461,22 +460,23 @@ function ValueChart({
   loading: boolean;
   net: boolean;
 }) {
-  /* Qué tramo se mira. `all` de salida: es lo que la tarjeta ha enseñado desde
-     que existe, y es la única ventana que contesta «cuánto he ganado con esto»,
-     que es la pregunta con la que se abre la pantalla. Las otras dos contestan
-     «qué ha hecho últimamente», que se pregunta después. */
-  const [range, setRange] = useState<SeriesRange>("all");
+  /* Qué tramo se mira. Tres meses de salida, y no el todo que enseñaba la
+     tarjeta desde que existe: en trece años de curva lo último —lo que ha hecho
+     esto esta temporada, que es lo que se mira al abrir— cabe en el último
+     centímetro y no se puede leer. «Cuánto llevo ganado con esto en total»
+     sigue a un botón de distancia, y esa se pregunta una vez, no cada vez. */
+  const [range, setRange] = useState<SeriesRange>("3m");
 
   /* Qué punto tiene el dedo encima. `null` es «ninguno», y entonces la cifra de
      arriba habla del último día — que es exactamente lo que decía antes de que
      esto existiera. Así el reposo de la tarjeta no cambia. */
   const [focus, setFocus] = useState<number | null>(null);
 
-  /* Solo se ofrecen las ventanas que dan curva. Un inventario subido ayer no
-     tiene un año que enseñar, y el botón «1 año» llevaría al cartel de «todavía
-     no hay gráfica» — que acusa de no haber subido el histórico, cuando lo que
-     falta es pasado. */
-  const offered = useMemo(() => SERIES_RANGES.filter((r) => rangeHasCurve(series, r)), [series]);
+  /* Solo se ofrecen las ventanas que dan curva Y que recortan algo — el porqué
+     de las dos condiciones, en `offeredRanges`. Si la elegida no está entre
+     ellas (una serie corta, en la que tres meses son la serie entera), se
+     enseña el todo, que se ofrece siempre. */
+  const offered = useMemo(() => offeredRanges(series), [series]);
   const shown = offered.includes(range) ? range : "all";
 
   /* El lienzo, que cambia con el ancho de la página. */

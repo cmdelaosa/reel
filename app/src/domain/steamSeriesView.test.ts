@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   dateTicks,
   nearestIndex,
-  rangeHasCurve,
+  offeredRanges,
   tickUnit,
   windowSeries,
 } from "@/domain/steamSeriesView";
@@ -49,16 +49,37 @@ describe("windowSeries", () => {
   });
 });
 
-describe("rangeHasCurve", () => {
-  it("con un solo punto dentro de la ventana no hay curva que ofrecer", () => {
-    /* Puntos mensuales: dentro de los tres meses solo cae el último. */
-    const serie = [p("2025-01-01"), p("2025-03-01"), p("2025-07-01")];
-    expect(rangeHasCurve(serie, "3m")).toBe(false);
-    expect(rangeHasCurve(serie, "all")).toBe(true);
+describe("offeredRanges", () => {
+  it("una serie de años las ofrece las tres", () => {
+    expect(offeredRanges(days("2020-01-01", 2400))).toEqual(["3m", "1y", "all"]);
   });
 
-  it("con dos ya la hay", () => {
-    expect(rangeHasCurve(days("2026-08-01", 2), "3m")).toBe(true);
+  it("con un solo punto dentro de la ventana, esa ventana no se ofrece", () => {
+    /* Puntos espaciados: dentro de los tres meses solo cae el último, así que
+       «3 meses» llevaría al cartel de «todavía no hay gráfica». */
+    const serie = [p("2025-01-01"), p("2025-03-01"), p("2025-07-01")];
+    expect(offeredRanges(serie)).toEqual(["all"]);
+  });
+
+  it("una ventana que no recorta nada no se ofrece: dibujaría la misma curva", () => {
+    /* Un inventario de un mes cabe entero en las tres ventanas. Tres botones
+       que dibujan lo mismo no son una elección. */
+    expect(offeredRanges(days("2026-08-01", 30))).toEqual(["all"]);
+  });
+
+  it("se ofrece la que recorta aunque la de en medio no lo haga", () => {
+    /* Doscientos días: tres meses recortan, un año no — y «1 año» y «Todo»
+       serían el mismo dibujo. */
+    expect(offeredRanges(days("2026-02-11", 200))).toEqual(["3m", "all"]);
+  });
+
+  it("`all` se ofrece siempre que haya curva, y nunca se cae por no recortar", () => {
+    expect(offeredRanges(days("2026-08-01", 2))).toEqual(["all"]);
+  });
+
+  it("sin curva no se ofrece nada, ni siquiera el todo", () => {
+    expect(offeredRanges(days("2026-08-01", 1))).toEqual([]);
+    expect(offeredRanges([])).toEqual([]);
   });
 });
 

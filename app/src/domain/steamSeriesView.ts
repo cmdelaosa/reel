@@ -39,14 +39,31 @@ export function windowSeries<T extends { day: string }>(series: T[], range: Seri
   return series.filter((p) => new Date(p.day).getTime() >= from);
 }
 
-/** Si esa ventana da para dibujar algo.
+/** Qué ventanas merece la pena ofrecer para una serie.
  *
- *  Con un punto no hay línea, y el componente ya enseña «todavía no hay
- *  gráfica» cuando eso pasa — un mensaje que acusa de no haber subido el
- *  histórico y que sería mentira aquí, donde lo que falta es tramo, no datos.
- *  Así que el botón que llevaría a ese callejón no se ofrece. */
-export function rangeHasCurve<T extends { day: string }>(series: T[], range: SeriesRange): boolean {
-  return windowSeries(series, range).length >= 2;
+ *  Se cae una ventana por dos motivos distintos:
+ *
+ *  · **No da curva.** Con un punto no hay línea, y el componente enseña
+ *    entonces «todavía no hay gráfica» — un cartel que acusa de no haber subido
+ *    el histórico, y que aquí sería mentira: lo que falta es tramo, no datos.
+ *    El botón que lleva a ese callejón no se ofrece.
+ *
+ *  · **No recorta nada.** Un inventario subido hace un mes cabe entero en los
+ *    tres meses, así que las tres ventanas dibujarían exactamente la misma
+ *    curva. Tres botones que no hacen nada distinto entre sí no son una
+ *    elección: son tres formas de que te preguntes cuál es la buena. Con uno
+ *    solo en pie, el componente esconde el conmutador entero.
+ *
+ *  `all` no se descarta nunca por lo segundo — es la que las demás recortan. */
+export function offeredRanges<T extends { day: string }>(series: T[]): SeriesRange[] {
+  const out: SeriesRange[] = [];
+  for (const r of SERIES_RANGES) {
+    const win = windowSeries(series, r);
+    if (win.length < 2) continue;
+    if (r !== "all" && win.length === series.length) continue;
+    out.push(r);
+  }
+  return out;
 }
 
 /* Los saltos entre marcas del eje, de menos a más. Los de días para las
