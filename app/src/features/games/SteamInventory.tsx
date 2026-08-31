@@ -473,11 +473,17 @@ function ValueChart({
   const [focus, setFocus] = useState<number | null>(null);
 
   /* Solo se ofrecen las ventanas que dan curva Y que recortan algo — el porqué
-     de las dos condiciones, en `offeredRanges`. Si la elegida no está entre
-     ellas (una serie corta, en la que tres meses son la serie entera), se
-     enseña el todo, que se ofrece siempre. */
+     de las dos condiciones, en `offeredRanges`.
+     Si la elegida no está entre ellas, se cae a la MÁS ESTRECHA de las que sí,
+     que es la primera: `offeredRanges` las devuelve de estrecha a ancha. Caer
+     al todo sería ir al extremo contrario del que se pidió — el caso es una
+     serie a la que le falta el tramo corto (meses sin subir nada, y en los tres
+     últimos un solo punto), y ahí la respuesta a «enséñame lo reciente» es el
+     año, no trece. El `?? "all"` no llega a usarse con curva delante —si alguna
+     ventana da curva, el todo también, y el todo nunca se descarta— pero deja
+     el tipo cerrado sin un `!`. */
   const offered = useMemo(() => offeredRanges(series), [series]);
-  const shown = offered.includes(range) ? range : "all";
+  const shown = offered.includes(range) ? range : (offered[0] ?? "all");
 
   /* El lienzo, que cambia con el ancho de la página. */
   const canvas = useNarrowChart() ? CHART_SM : CHART_LG;

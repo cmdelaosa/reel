@@ -81,6 +81,33 @@ describe("offeredRanges", () => {
     expect(offeredRanges(days("2026-08-01", 1))).toEqual([]);
     expect(offeredRanges([])).toEqual([]);
   });
+
+  it("salen de estrecha a ancha, y con el todo siempre el último", () => {
+    /* El componente se apoya en las dos cosas: cuando la ventana elegida no
+       está ofrecida cae a `offered[0]` para quedarse con la más estrecha que
+       haya, y da por hecho que el todo está si hay algo. */
+    for (const serie of [
+      days("2020-01-01", 2400),
+      [p("2025-01-01"), p("2025-03-01"), p("2025-07-01")],
+      days("2026-02-11", 200),
+      days("2026-08-01", 30),
+    ]) {
+      const got = offeredRanges(serie);
+      expect(got).toEqual(["3m", "1y", "all"].filter((r) => got.includes(r as never)));
+      expect(got[got.length - 1]).toBe("all");
+    }
+  });
+
+  it("faltando el tramo corto, la más estrecha que queda es el año", () => {
+    /* Meses sin subir nada: en los tres últimos cae un solo punto, así que
+       «3 meses» no se ofrece y el componente tiene que caer al año — no al
+       todo, que es el extremo contrario del que se pide al abrir. */
+    const serie = [
+      p("2024-01-01"), p("2024-07-01"), p("2025-01-01"),
+      p("2025-11-01"), p("2026-01-01"), p("2026-08-31"),
+    ];
+    expect(offeredRanges(serie)).toEqual(["1y", "all"]);
+  });
 });
 
 describe("dateTicks", () => {
