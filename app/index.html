@@ -12,6 +12,16 @@
          PRIMERA conexión, que no empezaba hasta que el JS pedía la imagen. Aquí
          empiezan con el HTML, en paralelo con el bundle.
 
+         Aviso para quien venga a medirlo: el ahorro NO se ha podido ver desde
+         aquí. Ni en la app ni en una página estática de dos líneas, con Chrome
+         y con Chromium, lanzando un navegador nuevo por vuelta, la carátula
+         dejó de pagar su DNS+TLS (medido: 32 ms de TLS con y sin el `<link>`).
+         Puede ser el banco —un navegador automatizado, todo por localhost, la
+         caché de DNS del sistema caliente— o puede ser que aquí no sirva de
+         nada. Se deja porque no cuesta nada y en una conexión fría sí ayuda,
+         pero nadie ha visto el número en esta casa: si alguien lo mide de
+         verdad, que corrija este párrafo.
+
          SIN `crossorigin` a propósito, aunque el atributo se vea en casi todos
          los ejemplos: un `<img>` normal no pide CORS, así que su conexión va en
          el pozo de credenciales "incluidas". `crossorigin` precalienta la
