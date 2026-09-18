@@ -39,7 +39,21 @@ export const qk = {
   title: (tmdbId: number) => ["title", tmdbId] as const,
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,
+  /* La biblioteca, que desde 0099 son CUATRO cachés y no una: la de cada medio
+     y la de "todo". `library` es el PREFIJO común, y eso es lo que lo hace
+     manejable — TanStack invalida por prefijo, así que los seis sitios que ya
+     hacían `invalidateQueries({ queryKey: qk.library })` (la importación,
+     Steam, IGDB, seguir/parar/dejar, marcar visto) siguen alcanzándolas a las
+     cuatro sin enterarse de que se partió.
+     Lo que SÍ hay que escribir a mano es lo optimista: `setQueryData` es de
+     UNA clave, así que las escrituras de lib/library pasaron a `setQueriesData`
+     sobre este prefijo. Una que se quedara con la clave suelta dejaría la
+     rejilla de los otros dos medios con la fila de antes. */
   library: ["library"] as const,
+  /** La biblioteca de un medio, o la de los tres si es null — que es lo que
+   *  piden las pantallas compartidas de amigos, donde el medio lo pone el
+   *  conmutador y no la ruta. */
+  libraryOf: (kind: "tv" | "movie" | "game" | null) => ["library", kind ?? "all"] as const,
   watched: (titleId: string) => ["watched", titleId] as const,
   /* Cuándo viste UN episodio (0088). Clave propia y no una parte de `watched`:
      esa se invalida entera al marcar cualquier episodio de la serie, y esto

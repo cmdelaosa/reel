@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { qk } from "@/lib/queryKeys";
-import { fetchPaged } from "@/lib/paging";
+import { fetchPagedParallel, PagingError } from "@/lib/paging";
+import type { Medium } from "@/lib/medium";
 import { getMovie, getTitle, tmdbImg } from "@/lib/tmdb";
 import { libraryRowSchema, type LibraryRow, type TitleRow } from "@/lib/schemas";
 import { deriveStatus, watchProgress, type ShowStatus } from "@/domain/status";
@@ -52,6 +53,38 @@ function invalidateLibraryDerived(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["movieEpisodeIds"] });
 }
 
+/* Las escrituras optimistas, sobre las CUATRO cachés de la biblioteca.
+ *
+ *  Desde 0099 `qk.library` es un prefijo, no una clave: hay una caché por medio
+ *  más la de "todo" (qk.libraryOf). `invalidateQueries` ya las alcanza a todas
+ *  por prefijo y no hubo que tocarlo en ningún sitio; `setQueryData` NO —es de
+ *  una clave exacta— y dejarlo así habría sido el fallo silencioso de este
+ *  cambio: seguir una serie desde la búsqueda pintaba la tarjeta al instante en
+ *  Series y la dejaba sin pintar en las pantallas compartidas hasta que
+ *  volviera el refetch.
+ *
+ *  Escribir en las cuatro es correcto y no "de más" porque los tres lectores de
+ *  medio siguen filtrando por `kind` al leer: una fila de cine que caiga en la
+ *  caché de series no la enseña nadie. Ese filtro de cliente se queda por eso
+ *  y por lo de siempre —un tmdb_id solo es único dentro de su medio (0067)—,
+ *  aunque ahora el servidor prometa lo mismo. */
+function patchLibraries(
+  qc: ReturnType<typeof useQueryClient>,
+  update: (rows: LibraryRow[]) => LibraryRow[],
+) {
+  const prev = qc.getQueriesData<LibraryRow[]>({ queryKey: qk.library });
+  qc.setQueriesData<LibraryRow[]>({ queryKey: qk.library }, (old) => update(old ?? []));
+  return prev;
+}
+
+/** Deshacer lo anterior: cada caché a lo que tenía, no todas a lo mismo. */
+function restoreLibraries(
+  qc: ReturnType<typeof useQueryClient>,
+  prev: ReturnType<typeof patchLibraries> | undefined,
+) {
+  for (const [key, rows] of prev ?? []) qc.setQueryData(key, rows);
+}
+
 function decorate(row: LibraryRow): LibraryShow {
   return {
     ...row,
@@ -64,43 +97,87 @@ function decorate(row: LibraryRow): LibraryShow {
   };
 }
 
-/* La biblioteca es UNA, con los dos medios dentro (rpc_library_rollup no
-   filtra), y se pide una sola vez. Lo que hay son dos lecturas de ella.
+/* La biblioteca era UNA —los tres medios juntos, pedida una vez y repartida
+   aquí— y desde 0099 es una POR MEDIO, más la de "todo".
 
-   useLibrary() devuelve SOLO SERIES, y no por comodidad: media docena de
-   pantallas preguntan "¿sigo este tmdb_id?" comparando el número a secas, y un
-   id de TMDB solo es único dentro de su medio (0067). Sin el filtro, la
-   película 1399 aparecería como seguida porque lo está la serie 1399. El
-   filtro vive aquí, en el único sitio por el que pasan todas.
+   Por qué cambió: para pintar tu cine se leían también tus series y tus juegos.
+   Medido en producción el 18-sep-2026 en /movies/tonight con 2.109 filas, eso
+   eran tres ventanas de mil encadenadas y ni un póster pedido hasta t=5279 ms.
+   Ahora cada una de las tres lecturas pide su medio (`p_kind`) y ninguna paga
+   por los otros dos.
 
-   Se exporta la cruda para las pantallas COMPARTIDAS —las de amigos—, que no
-   son de un medio sino del que tengas puesto: allí el filtro lo pone quien lee,
-   con el `medium` del conmutador. Llamar a `useLibrary()` desde ellas daba por
-   no seguido todo tu cine y todos tus juegos. */
-/** Toda la biblioteca, ventana a ventana.
+   Lo que NO cambió, y conviene que no cambie: los tres lectores siguen
+   filtrando por `kind` después de leer. No es redundancia por pereza — media
+   docena de pantallas preguntan "¿sigo este tmdb_id?" comparando el número a
+   secas, y un id de TMDB solo es único dentro de su medio (0067). Sin el
+   filtro, la película 1399 saldría como seguida porque lo está la serie 1399.
+   El servidor promete ahora lo mismo, pero el filtro es también lo que hace
+   seguras las escrituras optimistas sobre las cuatro cachés (patchLibraries) y
+   lo que sostiene el respaldo PGRST202, que trae los tres medios.
+
+   Se sigue exportando la cruda —`useLibraryRows()` sin medio— para las
+   pantallas COMPARTIDAS, las de amigos, que no son de un medio sino del que
+   tengas puesto: allí el filtro lo pone quien lee, con el `medium` del
+   conmutador. Llamar a `useLibrary()` desde ellas daba por no seguido todo tu
+   cine y todos tus juegos. */
+/** La biblioteca de un medio —o la de los tres, con null—, ventana a ventana.
  *
- *  Sin esto, una biblioteca de más de mil títulos se lee a medias y la pantalla
- *  que la pinta no tiene forma de saberlo: PostgREST corta en mil y no avisa.
- *  El bucle y su matriz de pruebas viven en lib/paging, que es de donde lo
- *  copian las demás lecturas largas (la ficha de un amigo, la primera).
+ *  Sin paginar, una biblioteca de más de mil títulos se lee a medias y la
+ *  pantalla que la pinta no tiene forma de saberlo: PostgREST corta en mil y no
+ *  avisa. El bucle y su matriz de pruebas viven en lib/paging, que es de donde
+ *  lo copian las demás lecturas largas (la ficha de un amigo, la primera).
+ *
+ *  Dos cosas que se hacían caras y ya no (medido en producción el 18-sep-2026,
+ *  /movies/tonight, 2.109 filas: el primer póster no se pedía hasta t=5279 ms):
+ *
+ *   · el MEDIO se pide al servidor (`p_kind`, migración 0099) en vez de traer
+ *     los tres y tirar dos aquí. Con el cine en ~1.300 filas y los juegos en
+ *     ~390, /games pasa de tres ventanas a una;
+ *   · y las ventanas que quedan NO van en fila: `fetchPagedParallel` saca el
+ *     total de la primera y lanza las demás a la vez.
  *
  *  El `.order("title_id")` no es cosmético, y por eso lo pone quien llama: sin
- *  un orden TOTAL, dos ventanas consecutivas pueden repetir filas y saltarse
- *  otras — Postgres no promete un orden estable entre consultas—, y eso es
- *  justo lo que ese bucle provoca. */
-export function useLibraryRows() {
+ *  un orden TOTAL, dos ventanas pueden repetir filas y saltarse otras
+ *  —Postgres no promete un orden estable entre consultas— y eso vale igual en
+ *  paralelo que encadenadas. */
+export function useLibraryRows(kind: Medium | null = null) {
   return useQuery({
-    queryKey: qk.library,
+    queryKey: qk.libraryOf(kind),
     queryFn: async (): Promise<LibraryRow[]> => {
-      const data = await fetchPaged((from, to) =>
-        supabase.rpc("rpc_library_rollup").order("title_id").range(from, to));
+      const data = await fetchLibraryRows(kind);
       return rollupSchema.parse(data);
     },
   });
 }
 
+async function fetchLibraryRows(kind: Medium | null): Promise<unknown[]> {
+  const window = (args: Record<string, unknown>, from: number, to: number, withCount: boolean) =>
+    supabase
+      .rpc("rpc_library_rollup", args, withCount ? { count: "exact" } : undefined)
+      .order("title_id")
+      .range(from, to);
+
+  try {
+    return await fetchPagedParallel((from, to, withCount) =>
+      window({ p_kind: kind }, from, to, withCount));
+  } catch (e) {
+    /* PGRST202 = 0099 aún no aplicada, así que la función que hay es la de
+       antes, sin parámetro. Se reintenta sin él en vez de dejar la biblioteca
+       vacía: lo que se pierde mientras tanto es el ahorro —vuelven los tres
+       medios y los filtra el cliente, como hasta hoy—, no las filas. Es el
+       mismo respaldo que 0084 puso en useFriendships, y la razón de que el
+       orden de despliegue (migración primero) degrade en vez de romper.
+
+       El código llega hasta aquí porque `fetchPagedParallel` levanta un
+       PagingError que lo conserva: el MENSAJE de PostgREST para esto cambia
+       con la versión, el código no. */
+    if (!(e instanceof PagingError) || e.code !== "PGRST202") throw e;
+    return await fetchPagedParallel((from, to, withCount) => window({}, from, to, withCount));
+  }
+}
+
 export function useLibrary() {
-  const q = useLibraryRows();
+  const q = useLibraryRows("tv");
   const data = useMemo(
     () => (q.data ?? []).filter((r) => r.kind === "tv").map(decorate),
     [q.data],
@@ -111,7 +188,7 @@ export function useLibrary() {
 /** Tu cine. Mismo origen, otro estado: una película no tiene progreso, así que
  *  no pasa por deriveStatus sino por deriveMovieStatus. */
 export function useMovieLibrary() {
-  const q = useLibraryRows();
+  const q = useLibraryRows("movie");
   const data = useMemo(
     () =>
       (q.data ?? [])
@@ -131,7 +208,7 @@ export function useMovieLibrary() {
  *  aritmética: `play_state` es lo que la persona dijo a mano y manda sobre la
  *  fecha de salida (pero no sobre "terminado", que es el watch_event). */
 export function useGameLibrary() {
-  const q = useLibraryRows();
+  const q = useLibraryRows("game");
   const data = useMemo(
     () =>
       (q.data ?? [])
@@ -236,15 +313,14 @@ export function useFollow() {
     },
     onMutate: async (title) => {
       await queryClient.cancelQueries({ queryKey: qk.library });
-      const prev = queryClient.getQueryData<LibraryRow[]>(qk.library);
-      queryClient.setQueryData<LibraryRow[]>(qk.library, (old = []) =>
+      const prev = patchLibraries(queryClient, (old) =>
         old.some((r) => r.title_id === title.id)
           ? old.map((r) => (r.title_id === title.id ? { ...r, followed: true, stopped: false } : r))
           : [...old, optimisticRow(title)],
       );
       return { prev };
     },
-    onError: (_e, _t, ctx) => queryClient.setQueryData(qk.library, ctx?.prev),
+    onError: (_e, _t, ctx) => restoreLibraries(queryClient, ctx?.prev),
     onSettled: () => invalidateLibraryDerived(queryClient),
   });
 }
@@ -271,13 +347,12 @@ export function useSetStopped() {
     },
     onMutate: async ({ titleId, stopped }) => {
       await queryClient.cancelQueries({ queryKey: qk.library });
-      const prev = queryClient.getQueryData<LibraryRow[]>(qk.library);
-      queryClient.setQueryData<LibraryRow[]>(qk.library, (old = []) =>
+      const prev = patchLibraries(queryClient, (old) =>
         old.map((r) => (r.title_id === titleId ? { ...r, stopped, notify: stopped ? false : r.notify } : r)),
       );
       return { prev };
     },
-    onError: (_e, _v, ctx) => queryClient.setQueryData(qk.library, ctx?.prev),
+    onError: (_e, _v, ctx) => restoreLibraries(queryClient, ctx?.prev),
     onSettled: () => invalidateLibraryDerived(queryClient),
   });
 }
@@ -296,13 +371,10 @@ export function useUnfollow() {
     },
     onMutate: async (titleId) => {
       await queryClient.cancelQueries({ queryKey: qk.library });
-      const prev = queryClient.getQueryData<LibraryRow[]>(qk.library);
-      queryClient.setQueryData<LibraryRow[]>(qk.library, (old = []) =>
-        old.filter((r) => r.title_id !== titleId),
-      );
+      const prev = patchLibraries(queryClient, (old) => old.filter((r) => r.title_id !== titleId));
       return { prev };
     },
-    onError: (_e, _t, ctx) => queryClient.setQueryData(qk.library, ctx?.prev),
+    onError: (_e, _t, ctx) => restoreLibraries(queryClient, ctx?.prev),
     onSettled: () => invalidateLibraryDerived(queryClient),
   });
 }

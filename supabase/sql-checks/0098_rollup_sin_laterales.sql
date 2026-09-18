@@ -2,7 +2,9 @@
 -- se ve leyendo la función. Nació con 0098, que cambió las dos `left join
 -- lateral` por agregados agrupados; lo de aquí es lo que tenía que seguir
 -- valiendo IGUAL después de ese cambio, y sigue valiendo para quien la toque
--- mañana. Se corre así:
+-- mañana. Conserva el nombre de 0098 a propósito —es LA matriz del rollup, no
+-- la de una migración— y crece con cada cambio: el §6 es de 0099, que le añadió
+-- el parámetro `p_kind`. Se corre así:
 --
 --   supabase db reset
 --   docker cp supabase/sql-checks/0098_rollup_sin_laterales.sql supabase_db_tvtime:/tmp/t.sql
@@ -129,8 +131,30 @@ begin
   select string_agg(a.name, ',' order by a.ord) into hay
   from pg_proc p,
        unnest(p.proargnames, p.proargmodes) with ordinality as a(name, mode, ord)
-  where p.oid = 'public.rpc_library_rollup()'::regprocedure and a.mode = 't';
+  -- La firma lleva `(text)` desde 0099 (`p_kind`). Escribirla mal aquí no da un
+  -- fallo blando: `regprocedure` levanta "no existe la función", que es
+  -- exactamente lo que queremos si alguien cambia la firma sin pasar por aquí.
+  -- `a.mode = 't'` deja fuera el parámetro de entrada y solo mira el retorno.
+  where p.oid = 'public.rpc_library_rollup(text)'::regprocedure and a.mode = 't';
   assert hay = debe, format(E'el rollup no devuelve las columnas del contrato.\n  hay:  %s\n  debe: %s', hay, debe);
+end $$;
+
+-- Y el GRANT EXPLÍCITO, que es lo que se pierde al cambiar la firma: `drop
+-- function` se lleva la ACL entera y `create` no la devuelve. Todo lo demás de
+-- este fichero corre como `postgres`, que ejecuta igual, así que sin esta línea
+-- el olvido no se vería aquí.
+--
+-- Se mira la ACL y NO `has_function_privilege`, que aquí miente: Postgres da
+-- EXECUTE a PUBLIC en toda función nueva (el `=X/postgres` de `proacl`), así
+-- que el privilegio sale a true aunque nadie haya concedido nada. Comprobado:
+-- con el grant revocado, `has_function_privilege('authenticated', …)` seguía
+-- diciendo que sí.
+do $$
+declare acl aclitem[];
+begin
+  select p.proacl into acl from pg_proc p where p.oid = 'public.rpc_library_rollup(text)'::regprocedure;
+  assert acl::text[] @> array['authenticated=X/postgres'],
+    format('falta el grant a authenticated tras el drop de la firma vieja: %s', acl);
 end $$;
 
 -- Y que no basta con declararlas: el valor tiene que llegar. Una columna en el
@@ -234,7 +258,73 @@ begin
   assert proxima is not null, 'con episodios futuros tiene que haber proxima';
 end $$;
 
--- ── 6. Sin sesión no sale nada ────────────────────────────────────────────
+-- ── 6. El filtro por medio (0099) ─────────────────────────────────────────
+-- `p_kind` null es "todo", que es lo que siguen pidiendo las pantallas
+-- compartidas de amigos. Con un medio, solo ese — y sin perder por el camino
+-- ninguna de las cuentas de arriba, que es lo fácil de romper: el filtro acota
+-- también los CTE `eps` y `seen`, y un `in (select … from mine)` mal puesto
+-- deja los recuentos a cero sin que falte ninguna fila.
+--
+-- Una película CON visionado, que es el caso que solo este §6 mira: el
+-- escenario de arriba no tiene ninguno fuera de las series, así que un `seen`
+-- acotado al conjunto equivocado pasaría los §2 y §3 enteros.
+-- Sin `insert into episodes`: una película trae el suyo de serie. El trigger
+-- `movie_episode_sync` (0067) le pone su S1E1 sintético con la fecha de
+-- estreno, y por eso el estreno va en el pasado — sin él el episodio nace con
+-- `air_datetime` null y no contaría como emitido (que es el caso de 700004).
+insert into public.titles (tmdb_id, kind, name, first_air_date)
+  values (700010, 'movie', 'peli vista', (now() - interval '50 days')::date);
+insert into public.library_entries (user_id, title_id, followed)
+select 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', t.id, true from public.titles t where t.tmdb_id = 700010;
+insert into public.watch_events (user_id, episode_id, watched_at)
+select 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', e.id, now() - interval '3 days'
+from public.episodes e join public.titles t on t.id = e.title_id where t.tmdb_id = 700010;
+
+do $$
+declare n bigint; ajenas bigint; emitidos int; vistos int;
+begin
+  -- Sin parámetro y con null explícito son la misma llamada: el default.
+  select count(*) into n from public.rpc_library_rollup();
+  assert n = 8, format('sin parametro tienen que salir las 8 seguidas y salen %s', n);
+  select count(*) into n from public.rpc_library_rollup(null);
+  assert n = 8, format('p_kind null es "todo": deberian salir 8 y salen %s', n);
+
+  -- Cine: las dos películas seguidas, y nada más.
+  select count(*), count(*) filter (where r.kind <> 'movie') into n, ajenas
+    from public.rpc_library_rollup('movie') r;
+  assert n = 2, format('con p_kind movie deberian salir 2 peliculas y salen %s', n);
+  assert ajenas = 0, format('con p_kind movie se han colado %s filas de otro medio', ajenas);
+
+  select count(*), count(*) filter (where r.kind <> 'game') into n, ajenas
+    from public.rpc_library_rollup('game') r;
+  assert n = 1, format('con p_kind game deberia salir 1 juego y salen %s', n);
+  assert ajenas = 0, format('con p_kind game se han colado %s filas de otro medio', ajenas);
+
+  select count(*), count(*) filter (where r.kind <> 'tv') into n, ajenas
+    from public.rpc_library_rollup('tv') r;
+  assert n = 5, format('con p_kind tv deberian salir 5 series y salen %s', n);
+  assert ajenas = 0, format('con p_kind tv se han colado %s filas de otro medio', ajenas);
+
+  -- Un medio que no existe no es un error: es una biblioteca vacía.
+  select count(*) into n from public.rpc_library_rollup('opera');
+  assert n = 0, format('un medio inventado no puede devolver nada y devuelve %s', n);
+
+  -- Y las cuentas siguen siendo las de §2 y §4 cuando se pide el medio: si el
+  -- filtro de `eps`/`seen` acotara al conjunto equivocado, aqui saldrian 0.
+  select r.aired_count, r.watched_count into emitidos, vistos
+    from public.rpc_library_rollup('tv') r
+    join public.titles t on t.id = r.title_id where t.tmdb_id = 700001;
+  assert emitidos = 3, format('con p_kind tv los emitidos de 700001 siguen siendo 3, y salen %s', emitidos);
+  assert vistos = 2, format('con p_kind tv los vistos de 700001 siguen siendo 2, y salen %s', vistos);
+
+  select r.aired_count, r.watched_count into emitidos, vistos
+    from public.rpc_library_rollup('movie') r
+    join public.titles t on t.id = r.title_id where t.tmdb_id = 700010;
+  assert emitidos = 1, format('la peli vista tiene 1 emitido y salen %s', emitidos);
+  assert vistos = 1, format('el visionado de la peli tiene que sobrevivir al filtro, y salen %s', vistos);
+end $$;
+
+-- ── 7. Sin sesión no sale nada ────────────────────────────────────────────
 -- `security invoker` + `auth.uid()`: sin claim la funcion no puede devolver la
 -- biblioteca de nadie.
 select set_config('request.jwt.claims', '', true);
@@ -247,4 +337,4 @@ end $$;
 
 rollback;
 
-\echo 'Las siete comprobaciones del rollup de la biblioteca han pasado.'
+\echo 'Las ocho comprobaciones del rollup de la biblioteca han pasado.'
