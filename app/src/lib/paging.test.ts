@@ -207,6 +207,34 @@ describe("fetchPagedParallel", () => {
     expect(calls).toEqual([0, 1000, 2000, 2500]);
   });
 
+  it("una ventana corta se completa EN SU SITIO: ni huecos ni duplicados", async () => {
+    /* El caso que mata las dos formas ingenuas de arreglarlo. Total 3.000, la
+       primera trae 1.000, la de 1000 viene CORTA (800) y la de 2000 completa.
+       Sin red quedan 2.800 filas y faltan 200 —el hueco mudo—. Pidiendo "lo
+       que falte al final" se piden las 2800-2999, que ya estaban: el hueco se
+       cambia por 200 duplicados, que en la biblioteca son 200 títulos dos
+       veces en la rejilla y contados dos veces en las estadísticas. */
+    const total = 3000;
+    const pedidas: [number, number][] = [];
+    const all = (await fetchPagedParallel((from, to, withCount) => {
+      pedidas.push([from, to]);
+      const corta = from === 1000 && to === 1999;
+      const hasta = Math.min(corta ? 1800 : to + 1, total);
+      return Promise.resolve({
+        data: rows(Math.max(0, hasta - from), from),
+        error: null,
+        count: withCount ? total : undefined,
+      });
+    })) as { title_id: string }[];
+
+    expect(all.length).toBe(total);
+    expect(new Set(all.map((r) => r.title_id)).size).toBe(total);
+    // Y en orden, que es lo que las deja utilizables sin reordenar.
+    expect(all.map((r) => r.title_id)).toEqual(Array.from({ length: total }, (_, i) => `t${i}`));
+    // El remiendo se pide donde faltaba, no al final.
+    expect(pedidas).toContainEqual([1800, 1999]);
+  });
+
   it("un error se levanta, no se confunde con 'no hay nada'", async () => {
     await expect(
       fetchPagedParallel(() => Promise.resolve({ data: null, error: { message: "boom" }, count: null })),

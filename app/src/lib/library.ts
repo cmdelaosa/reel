@@ -151,7 +151,10 @@ export function useLibraryRows(kind: Medium | null = null) {
 }
 
 async function fetchLibraryRows(kind: Medium | null): Promise<unknown[]> {
-  const window = (args: Record<string, unknown>, from: number, to: number, withCount: boolean) =>
+  // `ventana` y no `window`: una función local con ese nombre tapa el global
+  // del navegador dentro de todo este ámbito, y el día que alguien añada aquí
+  // un `window.matchMedia` el error no se parecerá en nada a la causa.
+  const ventana = (args: Record<string, unknown>, from: number, to: number, withCount: boolean) =>
     supabase
       .rpc("rpc_library_rollup", args, withCount ? { count: "exact" } : undefined)
       .order("title_id")
@@ -159,7 +162,7 @@ async function fetchLibraryRows(kind: Medium | null): Promise<unknown[]> {
 
   try {
     return await fetchPagedParallel((from, to, withCount) =>
-      window({ p_kind: kind }, from, to, withCount));
+      ventana({ p_kind: kind }, from, to, withCount));
   } catch (e) {
     /* PGRST202 = 0099 aún no aplicada, así que la función que hay es la de
        antes, sin parámetro. Se reintenta sin él en vez de dejar la biblioteca
@@ -172,7 +175,7 @@ async function fetchLibraryRows(kind: Medium | null): Promise<unknown[]> {
        PagingError que lo conserva: el MENSAJE de PostgREST para esto cambia
        con la versión, el código no. */
     if (!(e instanceof PagingError) || e.code !== "PGRST202") throw e;
-    return await fetchPagedParallel((from, to, withCount) => window({}, from, to, withCount));
+    return await fetchPagedParallel((from, to, withCount) => ventana({}, from, to, withCount));
   }
 }
 

@@ -139,28 +139,39 @@ export async function fetchPagedParallel(
 
   const total = first.count;
   const step = rows.length;
+  const offsets = restOffsets(total, step);
   const rest = await Promise.all(
     // La flecha explícita no es adorno: `.map(page)` le pasaría el ÍNDICE como
     // segundo argumento, que aquí es el final de la ventana.
-    restOffsets(total, step).map((from) => page(from, from + step - 1, false)),
+    offsets.map((from) => page(from, from + step - 1, false)),
   );
-  for (const r of rest) {
-    if (r.error) throw new PagingError(r.error);
-    rows.push(...(r.data ?? []));
-  }
 
-  /* La red de debajo de la red. Las ventanas en paralelo tesela el total en
-     tramos de `step`, y eso supone que todas traen lo mismo que la primera. Si
-     una viniera corta —el servidor aprieta el tope a mitad de lectura— faltarían
-     filas sin un solo error, que es exactamente el fallo que este módulo
-     persigue. Así que si al final hay menos de las que el total prometía, se
-     terminan encadenando. En la lectura normal este bucle no se ejecuta. */
-  while (rows.length < total) {
-    const more = await page(rows.length, rows.length + PAGE_MAX - 1, false);
-    if (more.error) throw new PagingError(more.error);
-    const got = more.data ?? [];
-    if (got.length === 0) break;
-    rows.push(...got);
+  /* La red de debajo de la red. Tesela el total en tramos de `step` suponiendo
+     que todas las ventanas traen lo mismo que la primera; si una viniera corta
+     —el servidor aprieta su tope a mitad de lectura— faltarían filas sin un
+     solo error, que es exactamente el fallo que este módulo persigue.
+     Así que a la ventana corta se le pide SU trozo que falta, y no "lo que
+     falte al final": eso último parecía lo mismo y era peor que el hueco.
+     Con un total de 3.000, la ventana 1000 corta en 800 y la 2000 completa, al
+     final habría 2.800 filas y pedir desde la 2.800 traería la 2800-2999, que
+     YA ESTABAN — o sea, huecos cambiados por duplicados, y un duplicado aquí
+     es un título dos veces en la rejilla y contado dos veces en tus
+     estadísticas. En la lectura normal este bucle no da ni una vuelta. */
+  for (const [i, r] of rest.entries()) {
+    if (r.error) throw new PagingError(r.error);
+    const trozo = [...(r.data ?? [])];
+    const desde = offsets[i];
+    // El último tramo puede ser corto de verdad: lo que le toca es lo que
+    // quede hasta el total, nunca más de `step`.
+    const cuantas = Math.min(step, total - desde);
+    while (trozo.length < cuantas) {
+      const more = await page(desde + trozo.length, desde + cuantas - 1, false);
+      if (more.error) throw new PagingError(more.error);
+      const got = more.data ?? [];
+      if (got.length === 0) break;
+      trozo.push(...got);
+    }
+    rows.push(...trozo);
   }
   return rows;
 }
