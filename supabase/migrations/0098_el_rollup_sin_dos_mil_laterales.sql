@@ -31,6 +31,32 @@
 -- `episodes_title_air_idx (title_id, air_datetime)` desde 0002 y el UNIQUE
 -- `watch_events (user_id, episode_id)` desde 0003.
 --
+-- CUÁNTO GANA, medido en la pila local con una biblioteca de la forma de la de
+-- producción —2.100 títulos, 45.000 episodios, 34.000 visionados; los 34.000 son
+-- el dato que importa y vienen de la importación de TV Time—, las tres ventanas
+-- que pide el cliente:
+--
+--     vieja   33,4 + 36,9 + 30,5 ms = 100,8 ms
+--     nueva   16,7 + 14,6 + 15,0 ms =  46,3 ms
+--
+-- 2,2×, y con coste plano por ventana en vez de creciente. Los números
+-- absolutos de producción son otros —instancia pequeña, caché fría, red— y por
+-- eso el antes/después de verdad se mide allí después de desplegar.
+--
+-- ⚠️ SI ALGUIEN VUELVE A MEDIR ESTO: las columnas que salen de las laterales
+-- TIENEN que leerse. Un `select count(*) from (select * from …) x` da 3 ms para
+-- la versión vieja y parece que la nueva la empeora — porque un LEFT JOIN
+-- LATERAL de agregado devuelve siempre exactamente una fila, así que si nadie
+-- mira su salida el planificador quita el join entero y no mide nada. Hay que
+-- sumar `aired_count`, `watched_count` y contar las tres fechas. Con esa sola
+-- diferencia la comparación se da la vuelta.
+--
+-- EL PRECIO, que lo tiene: `materialized` calcula los agregados de la
+-- biblioteca ENTERA aunque solo se pida una fila. `limit 1` pasa de 0,7 ms a 14.
+-- Da igual porque nadie pide una fila —el cliente lee las tres ventanas y se las
+-- lleva todas—, pero si algún día alguien pagina de verdad esta función, esto es
+-- lo primero que hay que volver a mirar.
+--
 -- LO QUE NO CAMBIA, y es lo que hay que mirar si algo se tuerce: ni una columna
 -- del retorno, ni su orden, ni el criterio de ninguna. Es la misma respuesta
 -- calculada de otra forma — comprobado fila a fila contra la definición vieja
