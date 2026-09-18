@@ -53,6 +53,32 @@ jobs:
           fi
           echo "sin repetidos: $(ls supabase/migrations/*.sql | wc -l | tr -d ' ') migraciones"
 
+      # Las matrices de supabase/sql-checks llaman a las funciones de la base y
+      # comprueban lo que devuelven. Hasta hoy solo corrían a mano, o sea cuando
+      # alguien se acordaba: la PR #132 (migración 0098) reescribió
+      # `rpc_library_rollup` desde una versión vieja y le quitó dos columnas, y
+      # este workflow salió verde porque nada aquí llegaba a llamarla.
+      #
+      # Se levanta la base desde CERO, que de paso es la única prueba de que las
+      # migraciones aplican en orden sobre una base limpia, y se corren todas con
+      # el mismo guión que usa ./verificar.sh — el mismo y no una copia, que es
+      # como no acaban diciendo cosas distintas.
+      #
+      # El CLI va clavado por lo mismo que en e2e.yml: con `latest`, una versión
+      # nueva rompe este job sin que nadie haya tocado el repo.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.111.0
+      # Los nombres de `-x` son los que el CLI documenta —`supabase start --help`
+      # los lista— y no los de los contenedores: escribir `mailpit` o
+      # `supavisor`, que es como se llaman por fuera, no excluye nada. Fuera va
+      # lo que ninguna migración ni matriz toca; `db` y los esquemas en los que
+      # sí escriben migraciones (auth, storage, realtime) se quedan.
+      - name: Levantar la base y aplicar las migraciones
+        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,functions,vector,analytics
+      - name: Matrices SQL
+        run: supabase/sql-checks/correr.sh
+
   # The Deno edge functions aren't covered by the app's tsc or vitest — type-check
   # them here so the unattended crons + importer can't ship a type error (audit
   # D2), and run whatever *_test.ts they carry. Function logic worth testing goes
