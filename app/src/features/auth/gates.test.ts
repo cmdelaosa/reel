@@ -36,6 +36,16 @@ describe("el portero de la invitación", () => {
   test("mientras viaja y sin nota se espera: es la primera vez en este aparato", () => {
     expect(inviteVerdict(undefined, false)).toBe("wait");
   });
+
+  test("si el RPC se rinde, se rebota: sin esto la pantalla se queda en blanco PARA SIEMPRE", () => {
+    // `invited` no deja de ser undefined nunca cuando la consulta falla, así
+    // que "wait" aquí es una espera sin final. Antes lo tapaba el `!invited`.
+    expect(inviteVerdict(undefined, false, true)).toBe("bounce");
+  });
+
+  test("pero con nota, un fallo de red deja entrar: ya se sabía que esta cuenta pasó", () => {
+    expect(inviteVerdict(undefined, true, true)).toBe("enter");
+  });
 });
 
 describe("el portero del alta", () => {

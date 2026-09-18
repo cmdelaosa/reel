@@ -49,13 +49,23 @@ export type Verdict =
 /**
  * El portero de la invitación.
  *
- * `invited` es `undefined` mientras el RPC viaja. `cleared` es la nota de este
- * aparato.
+ * `invited` es `undefined` mientras el RPC viaja; `failed`, que se rindió tras
+ * los reintentos. `cleared` es la nota de este aparato.
+ *
+ * El fallo tiene que salir de "wait" o la pantalla se queda en blanco PARA
+ * SIEMPRE: sin respuesta, `invited` no deja de ser `undefined` nunca. Antes de
+ * la nota eso no pasaba porque un `!invited` mandaba a /invite; al separar "no
+ * se sabe" de "dice que no", ese camino había que volver a ponerlo.
  */
-export function inviteVerdict(invited: boolean | undefined, cleared: boolean): Verdict {
+export function inviteVerdict(
+  invited: boolean | undefined,
+  cleared: boolean,
+  failed = false,
+): Verdict {
   if (invited === true) return "enter";
-  if (invited === false) return "bounce";
-  return cleared ? "enter" : "wait";
+  if (invited === false) return "bounce"; // una respuesta clara manda siempre
+  if (cleared) return "enter"; // la nota cubre la espera Y el fallo de red
+  return failed ? "bounce" : "wait";
 }
 
 /**
