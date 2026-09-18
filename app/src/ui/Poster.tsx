@@ -79,14 +79,21 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
           }
         : {})}
     >
+      {/* Los dos atributos se escriben SIEMPRE, con su valor por defecto en el
+          caso que no los necesita (`eager` es el defecto del navegador, `auto`
+          el de fetchPriority). Escribir uno u otro según el caso deja al
+          navegador y al DOM decidiendo sobre un atributo que a veces está y a
+          veces no; así el <img> tiene la misma forma en los dos caminos y lo
+          único que cambia entre ellos son los valores, que es lo que la prueba
+          de al lado puede leer sin ambigüedad. */}
       {t.posterPath && (
         <img
           className="poster-img"
           src={t.posterPath}
           alt=""
-          {...(priority
-            ? { fetchPriority: "high" as const, decoding: "async" as const }
-            : { loading: "lazy" as const })}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          decoding="async"
         />
       )}
       <div className="poster-sheen" />
