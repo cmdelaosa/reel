@@ -5,6 +5,12 @@ import { supabase } from "@/lib/supabase";
 import { profileRowSchema, type ProfileRow } from "@/lib/schemas";
 import { getSettings } from "@/lib/settings";
 import { forgetCleared } from "@/features/auth/gates";
+import {
+  forgetUserCache,
+  isPersistableUserKey,
+  lastKnownUser,
+  rememberUser,
+} from "@/lib/queryPersistence";
 
 /* Session + profile context. Session tracks supabase-js auth state; the profile
    row is a TanStack query keyed by user id (created by the DB signup trigger,
@@ -106,10 +112,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }, [userId, profile, profileCountry, queryClient]);
 
+  /* El contrapeso de hidratar la biblioteca en el arranque (lib/queryPersistence).
+   *
+   * Allí se pinta lo que hay en disco contra la NOTA de quién entró el último,
+   * porque el id de la sesión todavía no se sabe. Aquí ya se sabe: si la sesión
+   * es de otra cuenta —o no hay sesión—, lo pintado no es suyo y se va, disco
+   * incluido. Es el mismo trato que `reel.gates.cleared`: la nota cubre la
+   * espera, nunca contradice una respuesta. */
+  useEffect(() => {
+    if (session === undefined) return; // todavía restaurando: no hay respuesta que obedecer
+    if (userId) {
+      if (lastKnownUser() !== userId) {
+        queryClient.removeQueries({ predicate: (q) => isPersistableUserKey(q.queryKey) });
+        void forgetUserCache().then(() => rememberUser(userId));
+        return;
+      }
+      rememberUser(userId);
+      return;
+    }
+    queryClient.removeQueries({ predicate: (q) => isPersistableUserKey(q.queryKey) });
+    void forgetUserCache();
+  }, [session, userId, queryClient]);
+
   const signOut = async () => {
     await supabase.auth.signOut();
     queryClient.clear(); // reset every cached query on sign-out
     forgetCleared(); // y la nota de los porteros, que va con el rastro de la cuenta
+    await forgetUserCache(); // y la instantánea en disco, que es lo que sobreviviría
   };
 
   return <Ctx.Provider value={{ session, profile, signOut }}>{children}</Ctx.Provider>;
