@@ -154,16 +154,22 @@ async function main() {
     const show = titleByImdb.get(tconst);
     if (show) {
       // Shows accumulate votes for years; only the episode floors matter.
-      const votes = Number.isFinite(n) ? n : null;
+      const showVotes = Number.isFinite(n) ? n : null;
       // Write only what moved. A show's score sits still for weeks, so rewriting
       // all of them every run was ~4.7k pointless UPDATEs — sequential ones, at
       // that (see the write loop below): they were the whole runtime, and where
       // the Gateway Timeouts that killed a run now and then came from.
-      if (!showNeedsWrite(show, score, votes)) {
+      if (!showNeedsWrite(show, score, showVotes)) {
         showsUnchanged++;
         continue;
       }
-      showRows.push({ id: show.id, imdb_rating: score, imdb_votes: votes });
+      // A malformed numVotes column is no news, not news of zero: the column is
+      // left out rather than written as null over a count we already hold.
+      showRows.push(
+        showVotes == null
+          ? { id: show.id, imdb_rating: score }
+          : { id: show.id, imdb_rating: score, imdb_votes: showVotes },
+      );
       continue;
     }
 

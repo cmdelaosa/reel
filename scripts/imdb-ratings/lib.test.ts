@@ -33,6 +33,15 @@ test("con nota pero sin votos se escribe: si no, el tooltip se queda en null par
   assert.equal(showNeedsWrite(guardado(8.7, null), 8.7, 500_000), true);
 });
 
+test("un numVotes ilegible NO abre escritura: llega igual de roto en cada pasada", () => {
+  // Si abriera, esa serie volvería al bucle de una UPDATE por pasada — justo lo
+  // que este salto existe para cerrar.
+  assert.equal(showNeedsWrite(guardado(8.7, 500_000), 8.7, null), false);
+  // Y sí se escribe si además la nota se movió, pero index.ts deja fuera la
+  // columna de votos para no borrar el recuento bueno con la ausencia de uno.
+  assert.equal(showNeedsWrite(guardado(8.7, 500_000), 8.9, null), true);
+});
+
 test("los votos se ponen al día solos cuando derivan un 5%, aunque la nota no se mueva", () => {
   // Sin esto, una serie de nota quieta no vuelve a tocarse nunca y su recuento
   // de votos envejece sin límite.

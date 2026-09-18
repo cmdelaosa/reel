@@ -25,12 +25,19 @@ const SAME_SCORE = 0.05;
 const VOTE_DRIFT = 0.05;
 
 /**
- * A show: written when its score moves, when we hold no score or no votes, or
- * when the vote count has drifted far enough to be worth saying.
+ * A show: written when its score moves, when we hold no score, or when the vote
+ * count has drifted far enough to be worth saying.
+ *
+ * `votes` null means the line's numVotes column was malformed — no news, not
+ * news of zero. It must not force a write: the same malformed line arrives every
+ * run, so it would reopen the very loop this skip exists to close. (The caller
+ * also leaves imdb_votes out of the patch in that case, so a good stored count
+ * is never overwritten by the absence of one.)
  */
 export function showNeedsWrite(stored: Stored, score: number, votes: number | null): boolean {
   if (stored.imdb_rating == null || Math.abs(stored.imdb_rating - score) >= SAME_SCORE) return true;
-  if (stored.imdb_votes == null || votes == null) return true;
+  if (votes == null) return false;
+  if (stored.imdb_votes == null) return true;
   return Math.abs(stored.imdb_votes - votes) >= stored.imdb_votes * VOTE_DRIFT;
 }
 
