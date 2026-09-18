@@ -69,11 +69,13 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.111.0
-      # Solo la base. Lo que se excluye no lo toca ninguna migración ni ninguna
-      # matriz, y arrancarlo son minutos de contenedores para nada; auth, storage
-      # y realtime se quedan porque hay migraciones que escriben en sus esquemas.
+      # Los nombres de `-x` son los que el CLI documenta —`supabase start --help`
+      # los lista— y no los de los contenedores: escribir `mailpit` o
+      # `supavisor`, que es como se llaman por fuera, no excluye nada. Fuera va
+      # lo que ninguna migración ni matriz toca; `db` y los esquemas en los que
+      # sí escriben migraciones (auth, storage, realtime) se quedan.
       - name: Levantar la base y aplicar las migraciones
-        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,postgres-meta,supavisor
+        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,functions,vector,analytics
       - name: Matrices SQL
         run: supabase/sql-checks/correr.sh
 

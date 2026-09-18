@@ -42,8 +42,14 @@ sql() { docker exec -i "$contenedor" psql -U postgres -v ON_ERROR_STOP=1 "$@"; }
 # el CI, que parte siempre de una base vacía.
 en_disco=$(ls "$supa"/migrations/*.sql 2>/dev/null | xargs -n1 basename | cut -d_ -f1 | sort)
 aplicadas=$(sql -Atc 'select version from supabase_migrations.schema_migrations' 2>/dev/null | sort)
-faltan=$(comm -23 <(printf '%s\n' "$en_disco") <(printf '%s\n' "$aplicadas") | paste -sd' ' -)
-sobran=$(comm -13 <(printf '%s\n' "$en_disco") <(printf '%s\n' "$aplicadas") | paste -sd' ' -)
+# `printf '%s\n' ""` escribe UNA línea vacía, no cero: con la tabla de
+# migraciones ilegible —o sin migraciones en disco— esa línea entra en la
+# comparación como si fuera una versión, y salía un «tiene migraciones que esta
+# rama no trae:» seguido de nada.
+faltan=$(comm -23 <(printf '%s' "${en_disco:+$en_disco$'\n'}") \
+                  <(printf '%s' "${aplicadas:+$aplicadas$'\n'}") | paste -sd' ' -)
+sobran=$(comm -13 <(printf '%s' "${en_disco:+$en_disco$'\n'}") \
+                  <(printf '%s' "${aplicadas:+$aplicadas$'\n'}") | paste -sd' ' -)
 if [ -n "$faltan" ]; then
   printf '  FALLO   la base local no tiene aplicadas: %s\n' "$faltan"
   printf '          Las matrices correrían contra el esquema de ANTES del cambio.\n'
