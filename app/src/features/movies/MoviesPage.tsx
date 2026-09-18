@@ -5,7 +5,7 @@ import { useRatedSort } from "@/lib/ratings";
 import type { MovieStatus } from "@/domain/movieStatus";
 import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { tmdbImg } from "@/lib/tmdb";
-import { Poster, TabMenu } from "@/ui";
+import { EAGER_POSTERS, Poster, TabMenu } from "@/ui";
 import { PosterGridSkeleton } from "@/ui/Skeleton";
 
 /* Tu cine — la rejilla de la biblioteca con sus cubos. Gemela de ShowsPage, y
@@ -139,9 +139,10 @@ export default function MoviesPage() {
       )}
 
       <div className="poster-grid">
-        {items.map((m) => (
+        {items.map((m, i) => (
           <Poster
             key={m.title_id}
+            priority={i < EAGER_POSTERS}
             kind="movie"
             t={{
               id: String(m.tmdb_id),

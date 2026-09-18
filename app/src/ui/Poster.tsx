@@ -7,8 +7,17 @@ import { WatchOn } from "@/ui/WatchOn";
 import { useTitleIntent } from "@/lib/useOpenTitle";
 import { locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 
+/** Cuántas carátulas de una rejilla `.poster-grid` se piden sin diferir.
+ *
+ *  Es una COTA, no una medida: la rejilla es `auto-fill`, así que el número
+ *  real depende del ancho de la ventana y calcularlo obligaría a medir antes de
+ *  pintar. Doce cubre la primera pantalla en un portátil ancho y se pasa de
+ *  unas pocas en un móvil — y pasarse es barato: una imagen de más que se pide
+ *  pronto, contra una fila visible que llega tarde. */
+export const EAGER_POSTERS = 12;
+
 /* ---- Poster tile (overlaid title, TV-Time-like) ---- */
-export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, onClick, prefetchTmdbId }: {
+export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, onClick, prefetchTmdbId, priority = false }: {
   t: TitleCard;
   subtitle?: string;
   /** Where-to-watch logos in the top-left slot. */
@@ -20,6 +29,12 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
   rank?: number;
   onClick?: () => void;
   prefetchTmdbId?: number;
+  /** Para las carátulas que ya se ven al cargar la página. `loading="lazy"` no
+   *  es gratis en ellas: el navegador no pide una imagen diferida hasta tener
+   *  el layout, así que la primera fila —la que el usuario está mirando— se
+   *  ponía a la cola detrás de todo. Quien la marca es la rejilla, que es la
+   *  única que sabe cuántas caben; esto solo obedece. */
+  priority?: boolean;
 }) {
   const progress = t.progress ?? 0;
   const showProgress = progress > 0 && progress < 100;
@@ -64,7 +79,16 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
           }
         : {})}
     >
-      {t.posterPath && <img className="poster-img" src={t.posterPath} alt="" loading="lazy" />}
+      {t.posterPath && (
+        <img
+          className="poster-img"
+          src={t.posterPath}
+          alt=""
+          {...(priority
+            ? { fetchPriority: "high" as const, decoding: "async" as const }
+            : { loading: "lazy" as const })}
+        />
+      )}
       <div className="poster-sheen" />
       {rank != null && <span className="mq-rank">{rank}</span>}
       <div className="poster-top">

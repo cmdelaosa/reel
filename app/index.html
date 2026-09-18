@@ -7,6 +7,20 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Los dos CDNs de carátulas: TMDB para series y cine, IGDB para juegos.
+         Cada póster costaba ~65-90 ms y ~45 de ellos eran el DNS y el TLS de la
+         PRIMERA conexión, que no empezaba hasta que el JS pedía la imagen. Aquí
+         empiezan con el HTML, en paralelo con el bundle.
+
+         SIN `crossorigin` a propósito, aunque el atributo se vea en casi todos
+         los ejemplos: un `<img>` normal no pide CORS, así que su conexión va en
+         el pozo de credenciales "incluidas". `crossorigin` precalienta la
+         ANÓNIMA, que es otra entrada del pozo, y el navegador abriría una
+         segunda conexión para las imágenes — el preconnect no ahorraría nada y
+         encima costaría un handshake de más. Solo llevaría `crossorigin` si de
+         aquí saliera algo pedido con CORS: fuentes, fetch() o módulos. -->
+    <link rel="preconnect" href="https://image.tmdb.org" />
+    <link rel="preconnect" href="https://images.igdb.com" />
     <meta name="theme-color" content="#0b0d12" />
     <meta
       name="description"

@@ -139,7 +139,8 @@ export default function MoviesTonightPage() {
       {hero && (
         <div className="mq-bento">
           <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} style={{ background: posterBg(hero.name) }}>
-            {art && <img className="mq-hero-still" src={art} alt="" />}
+            {/* El LCP de esta pantalla — igual que en Series (mq-hero-still). */}
+            {art && <img className="mq-hero-still" src={art} alt="" fetchPriority="high" decoding="async" />}
             <div className="mq-hero-body">
               <div className="mq-hero-eyebrow">{tr("Movie night pick")}</div>
               <h2 className="mq-hero-title">{heroName}</h2>
