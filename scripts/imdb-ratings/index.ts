@@ -34,7 +34,9 @@
  *   3. Streams title.episode.tsv.gz, keeping only episodes of our shows.
  *   4. Streams title.ratings.tsv.gz, picking up those episodes' ratings plus the
  *      show-level ones.
- *   5. Drops anything below the vote/age floors, then upserts.
+ *   5. Drops anything below the vote/age floors, drops what already matches what
+ *      we hold — for shows as well as episodes; the show side used to rewrite all
+ *      of them every run — then upserts.
  *
  * RUN
  *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx index.ts [--dry-run]
@@ -50,6 +52,7 @@ import { createGunzip } from "node:zlib";
 import { Readable } from "node:stream";
 import { createInterface } from "node:readline";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { episodeNeedsWrite, showNeedsWrite } from "./lib.ts";
 
 const RATINGS_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz";
 const EPISODES_URL = "https://datasets.imdbws.com/title.episode.tsv.gz";
@@ -103,9 +106,13 @@ async function main() {
   const started = Date.now();
 
   // ---- 1. our shows, keyed by their IMDb id -------------------------------
-  const titles = await all<{ id: string; imdb_id: string | null }>(admin, "titles", "id, imdb_id");
-  const titleByImdb = new Map<string, string>();
-  for (const t of titles) if (t.imdb_id) titleByImdb.set(t.imdb_id, t.id);
+  // The rating we already hold comes along: without it every run rewrote all
+  // ~4.7k shows, one UPDATE each, whether or not IMDb had moved them.
+  const titles = await all<{
+    id: string; imdb_id: string | null; imdb_rating: number | null; imdb_votes: number | null;
+  }>(admin, "titles", "id, imdb_id, imdb_rating, imdb_votes");
+  const titleByImdb = new Map<string, (typeof titles)[number]>();
+  for (const t of titles) if (t.imdb_id) titleByImdb.set(t.imdb_id, t);
   console.log(`titles with an imdb_id: ${titleByImdb.size}`);
   if (!titleByImdb.size) return;
 
@@ -125,11 +132,11 @@ async function main() {
   let scanned = 0;
   for await (const [tconst, parent, season, episode] of tsvLines(EPISODES_URL)) {
     scanned++;
-    const titleId = titleByImdb.get(parent);
-    if (!titleId) continue;
+    const show = titleByImdb.get(parent);
+    if (!show) continue;
     const s = Number(season), e = Number(episode);
     if (!Number.isFinite(s) || !Number.isFinite(e) || s <= 0) continue; // \N, specials
-    const ours = ourEpisodes.get(`${titleId}|${s}|${e}`);
+    const ours = ourEpisodes.get(`${show.id}|${s}|${e}`);
     if (ours) wanted.set(tconst, ours);
   }
   console.log(`title.episode rows scanned: ${scanned.toLocaleString()} → ${wanted.size} of ours matched`);
@@ -138,16 +145,25 @@ async function main() {
   const cutoff = new Date(Date.now() - MIN_AGE_DAYS * 86_400_000).toISOString();
   const epRows: Record<string, unknown>[] = [];
   const showRows: Record<string, unknown>[] = [];
-  let tooFew = 0, tooYoung = 0, unchanged = 0;
+  let tooFew = 0, tooYoung = 0, unchanged = 0, showsUnchanged = 0;
 
   for await (const [tconst, rating, votes] of tsvLines(RATINGS_URL)) {
     const score = Number(rating), n = Number(votes);
     if (!Number.isFinite(score)) continue;
 
-    const showId = titleByImdb.get(tconst);
-    if (showId) {
+    const show = titleByImdb.get(tconst);
+    if (show) {
       // Shows accumulate votes for years; only the episode floors matter.
-      showRows.push({ id: showId, imdb_rating: score, imdb_votes: Number.isFinite(n) ? n : null });
+      const votes = Number.isFinite(n) ? n : null;
+      // Write only what moved. A show's score sits still for weeks, so rewriting
+      // all of them every run was ~4.7k pointless UPDATEs — sequential ones, at
+      // that (see the write loop below): they were the whole runtime, and where
+      // the Gateway Timeouts that killed a run now and then came from.
+      if (!showNeedsWrite(show, score, votes)) {
+        showsUnchanged++;
+        continue;
+      }
+      showRows.push({ id: show.id, imdb_rating: score, imdb_votes: votes });
       continue;
     }
 
@@ -156,11 +172,7 @@ async function main() {
     if (!Number.isFinite(n) || n < MIN_VOTES) { tooFew++; continue; }
     // A rating a few days old still swings; let it settle before storing it.
     if (ours.air_datetime && ours.air_datetime > cutoff) { tooYoung++; continue; }
-    // Skip only rows that are ALREADY complete. Matching on the rating alone
-    // stranded 11258 episodes that OMDb had filled without a vote count — their
-    // score matched, so the row was never touched again and its votes stayed
-    // null forever.
-    if (ours.imdb_rating != null && ours.imdb_votes != null && Math.abs(ours.imdb_rating - score) < 0.05) {
+    if (!episodeNeedsWrite(ours, score)) {
       unchanged++;
       continue;
     }
@@ -176,7 +188,8 @@ async function main() {
 
   console.log(
     `episodes to write: ${epRows.length} | shows: ${showRows.length} | ` +
-      `skipped — under ${MIN_VOTES} votes: ${tooFew}, aired < ${MIN_AGE_DAYS}d ago: ${tooYoung}, unchanged: ${unchanged}`,
+      `skipped — under ${MIN_VOTES} votes: ${tooFew}, aired < ${MIN_AGE_DAYS}d ago: ${tooYoung}, ` +
+      `unchanged: ${unchanged} episodes / ${showsUnchanged} shows`,
   );
 
   if (DRY_RUN) {
@@ -193,7 +206,8 @@ async function main() {
       .upsert(epRows.slice(i, i + CHUNK), { onConflict: "title_id,season_number,episode_number" });
     if (error) throw new Error(`episodes upsert: ${error.message}`);
   }
-  // Shows go one UPDATE at a time, NOT an upsert. An upsert sends an INSERT …
+  // Shows go one UPDATE at a time, NOT an upsert — which is why the skip above
+  // matters: this loop costs one round trip per row. An upsert sends an INSERT …
   // ON CONFLICT, and Postgres checks the proposed row's NOT NULL constraints
   // before it ever gets to the conflict clause — so a partial row of
   // {id, imdb_rating, imdb_votes} fails on titles.tmdb_id/name every time.
@@ -217,6 +231,7 @@ async function main() {
       skippedFewVotes: tooFew,
       skippedTooYoung: tooYoung,
       unchanged,
+      showsUnchanged,
       minVotes: MIN_VOTES,
       minAgeDays: MIN_AGE_DAYS,
     },

@@ -19,6 +19,13 @@ name: imdb-ratings
 # billed. The repo is public since then and the minutes are free, which was the
 # only objection on record.
 #
+# Asking for hourly is NOT getting hourly. GitHub deprioritises scheduled runs
+# and drops most of them: measured over the week to 18-sep-2026 this fired ~5
+# times a day, at :26, :49, :32, gaps of 2 to 6 hours. So read "hourly" above as
+# "as often as GitHub feels like, a few times a day" — the wait after a show is
+# first opened is more like 4h than 1h. Do not tighten the cron to chase it; a
+# schedule GitHub already ignores is not a lever.
+#
 # SECRETS (repo → Settings → Secrets and variables → Actions):
 #   SUPABASE_URL                — https://<ref>.supabase.co
 #   SUPABASE_SERVICE_ROLE_KEY   — Dashboard → Project Settings → API
@@ -54,6 +61,11 @@ jobs:
           node-version: "22"
       - run: npm install --no-audit --no-fund
       - run: npm run typecheck
+      # The script's matrix, here and not in `check`: it is the decision that
+      # goes wrong without anything failing — which row earns a write — and this
+      # is the only place this code passes through. Three seconds, before it
+      # touches the database.
+      - run: npm test
       - name: Import IMDb ratings
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
