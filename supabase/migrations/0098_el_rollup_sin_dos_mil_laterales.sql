@@ -70,6 +70,15 @@
 -- quita uno de esos coalesce, esto deja de ser cierto: un título sin episodios
 -- pasaría de 0 a NULL.
 --
+-- DE LA SEGUNDA REVISIÓN, y es un aviso para quien repita la jugada: la primera
+-- versión de este fichero partió de la definición de 0080 y no de la vigente,
+-- que era la de 0083. Se dejó por el camino `backdrop_path` (0081) y
+-- `played_platform` (0083), y NADA lo dijo: las dos son `.optional()` en el
+-- esquema del cliente, el EXCEPT comparaba contra la misma copia vieja —dos
+-- definiciones igual de atrasadas no se diferencian en nada—, y la matriz solo
+-- miraba recuentos. La matriz mira ahora también la lista de columnas (§0), que
+-- es la única de las tres redes que habría saltado.
+--
 -- Quien la toque después: `grep -n "create function public.rpc_library_rollup"
 -- supabase/migrations/*.sql` y parte del número más alto, que es este.
 drop function if exists public.rpc_library_rollup();
@@ -80,6 +89,7 @@ returns table (
   kind text,
   name text,
   poster_path text,
+  backdrop_path text,
   first_air_date date,
   tmdb_status text,
   genres text[],
@@ -104,6 +114,7 @@ returns table (
   beat_seconds jsonb,
   owned boolean,
   minutes_source text,
+  played_platform text,
   imdb_rating numeric
 )
 language sql
@@ -158,6 +169,7 @@ as $$
     t.kind,
     t.name,
     t.poster_path,
+    t.backdrop_path,
     t.first_air_date,
     t.status,
     t.genres,
@@ -182,6 +194,7 @@ as $$
     t.beat_seconds,
     le.owned,
     le.minutes_source,
+    le.played_platform,
     t.imdb_rating
   from mine le
   join public.titles t on t.id = le.title_id

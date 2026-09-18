@@ -9,14 +9,19 @@
 --   docker exec supabase_db_tvtime psql -U postgres -f /tmp/t.sql
 --
 -- CÓMO SE COMPROBÓ EL CAMBIO DE 0098, que es distinto de lo que hay aquí: con
--- las dos definiciones vivas a la vez —la vieja copiada de 0080 bajo otro
--- nombre— y `EXCEPT ALL` en los DOS sentidos sobre estos mismos datos. Cero
+-- las dos definiciones vivas a la vez —la vieja copiada bajo otro nombre— y `EXCEPT ALL` en los DOS sentidos sobre estos mismos datos. Cero
 -- diferencias, y al romper a propósito el filtro de especiales salían 1, que es
 -- lo que demuestra que la comparación miraba. Eso no se puede dejar aquí
 -- —después de fusionar la definición vieja ya no existe—, así que lo que queda
 -- es esta matriz de comportamiento. Si algún día hay que repetir la jugada, el
 -- método está en dos líneas: copiar la definición anterior con otro nombre y
 -- restar los dos conjuntos en ambos sentidos.
+--
+-- ⚠️ Y LA ANTERIOR ES LA DEL NÚMERO MÁS ALTO, no la que uno recuerda. La primera
+-- vez se copió la de 0080 cuando la vigente era la de 0083, y el EXCEPT dio cero
+-- diferencias con toda la razón: comparaba dos definiciones igual de atrasadas.
+-- Faltaban `backdrop_path` y `played_platform` y ninguna red lo vio. Por eso
+-- existe el §0 de abajo.
 --
 -- Todo va dentro de una transacción que acaba en `rollback`, y los tmdb_id son
 -- 7000xx —marcados a propósito, que un número alto NO es un rango seguro— por
@@ -105,6 +110,43 @@ from public.episodes e join public.titles t on t.id = e.title_id where t.tmdb_id
 insert into public.watch_events (user_id, episode_id, watched_at)
 select 'ffffffff-ffff-ffff-ffff-ffffffffffff', e.id, now() - interval '1 day'
 from public.episodes e join public.titles t on t.id = e.title_id where t.tmdb_id = 700007;
+
+-- ── 0. Las columnas que devuelve, por nombre y en orden ───────────────────
+-- Es la red que faltaba. Quitar una columna del rollup NO rompe nada a la
+-- vista: las tardías son `.optional()` en el esquema del cliente, así que zod
+-- calla y la pantalla pinta el respaldo —el banner de "Esta noche" con la
+-- carátula estirada, el juego sin su plataforma—. Quien añada una columna
+-- tiene que añadirla aquí, y eso es a propósito: la lista es el contrato.
+do $$
+declare hay text; debe constant text :=
+  'title_id,tmdb_id,kind,name,poster_path,backdrop_path,first_air_date,tmdb_status,'
+  'genres,network,vote_average,favorite,notify,stopped,added_at,aired_count,'
+  'watched_count,last_watched_at,last_aired_datetime,next_air_datetime,'
+  'upcoming_season_number,upcoming_season_air_date,play_state,minutes_played,'
+  'played_at,release_precision,platforms,beat_seconds,owned,minutes_source,'
+  'played_platform,imdb_rating';
+begin
+  select string_agg(a.name, ',' order by a.ord) into hay
+  from pg_proc p,
+       unnest(p.proargnames, p.proargmodes) with ordinality as a(name, mode, ord)
+  where p.oid = 'public.rpc_library_rollup()'::regprocedure and a.mode = 't';
+  assert hay = debe, format(E'el rollup no devuelve las columnas del contrato.\n  hay:  %s\n  debe: %s', hay, debe);
+end $$;
+
+-- Y que no basta con declararlas: el valor tiene que llegar. Una columna en el
+-- `returns table` con otra expresión debajo en el `select` pasa el §0 entero.
+update public.titles set backdrop_path = '/fondo-0098.jpg' where tmdb_id = 700005;
+update public.library_entries le set played_platform = 'switch'
+  from public.titles t where t.id = le.title_id and t.tmdb_id = 700005
+  and le.user_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+do $$
+declare fondo text; plataforma text;
+begin
+  select r.backdrop_path, r.played_platform into fondo, plataforma
+  from public.rpc_library_rollup() r where r.tmdb_id = 700005;
+  assert fondo = '/fondo-0098.jpg', format('backdrop_path no viaja: llega %s', fondo);
+  assert plataforma = 'switch', format('played_platform no viaja: llega %s', plataforma);
+end $$;
 
 -- ── 1. Solo lo seguido, y solo lo tuyo ────────────────────────────────────
 do $$
@@ -205,4 +247,4 @@ end $$;
 
 rollback;
 
-\echo 'Las seis comprobaciones del rollup de la biblioteca han pasado.'
+\echo 'Las siete comprobaciones del rollup de la biblioteca han pasado.'
