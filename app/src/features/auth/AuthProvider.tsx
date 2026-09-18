@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { profileRowSchema, type ProfileRow } from "@/lib/schemas";
 import { getSettings } from "@/lib/settings";
+import { forgetCleared } from "@/features/auth/gates";
 
 /* Session + profile context. Session tracks supabase-js auth state; the profile
    row is a TanStack query keyed by user id (created by the DB signup trigger,
@@ -108,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut();
     queryClient.clear(); // reset every cached query on sign-out
+    forgetCleared(); // y la nota de los porteros, que va con el rastro de la cuenta
   };
 
   return <Ctx.Provider value={{ session, profile, signOut }}>{children}</Ctx.Provider>;
