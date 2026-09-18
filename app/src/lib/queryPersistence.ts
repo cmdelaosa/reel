@@ -275,6 +275,17 @@ export function hydrateUserSnapshot(
   return true;
 }
 
+/** ¿Hay alguna mutación en vuelo? Entonces hay, o puede haber, una fila
+ *  optimista en la caché y no se escribe nada hasta que el servidor conteste.
+ *
+ *  Mira TODAS las mutaciones y no solo las de la biblioteca a propósito: una
+ *  mutación no dice qué consultas va a tocar, así que distinguirlas sería
+ *  adivinar. El precio de esa red de más lo paga `watchUserCache`, que vuelve a
+ *  intentarlo en vez de dejar la escritura por imposible. */
+export function hasPendingMutations(client: QueryClient): boolean {
+  return client.getMutationCache().getAll().some((m) => m.state.status === "pending");
+}
+
 /** Lo que se guardaría ahora mismo, o `undefined` si no hay nada que confirmar.
  *
  *  Separado de la escritura para que la regla de "sin estado optimista" se pueda
@@ -283,11 +294,7 @@ export function buildUserSnapshot(
   client: QueryClient,
   userId: string | undefined,
 ): UserSnapshot | undefined {
-  if (!userId) return undefined;
-  // Una mutación en vuelo significa que hay, o puede haber, una fila optimista
-  // en la caché. No se escribe nada hasta que el servidor conteste.
-  const busy = client.getMutationCache().getAll().some((m) => m.state.status === "pending");
-  if (busy) return undefined;
+  if (!userId || hasPendingMutations(client)) return undefined;
 
   const state = dehydrate(client, {
     shouldDehydrateQuery: (query) =>
@@ -367,9 +374,25 @@ export function watchUserCache(client: QueryClient): () => void {
   let writing = false;
   let queued = false;
 
+  const schedule = (ms: number) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => void persist(), ms);
+  };
+
   const persist = async () => {
     if (writing) {
       queued = true;
+      return;
+    }
+    /* Una mutación en vuelo no cancela la escritura, la aplaza.
+     *
+     * Quien dispara una escritura es un suceso de la caché, y puede no haber
+     * otro en toda la sesión: si el único llega mientras viaja CUALQUIER
+     * mutación —importar Steam tarda minutos—, dejarlo correr significaba
+     * terminar la visita sin instantánea y que la siguiente volviera a esperar
+     * al rollup entero. Volver a mirar dentro de un momento no cuesta nada. */
+    if (hasPendingMutations(client)) {
+      schedule(500);
       return;
     }
     writing = true;
@@ -389,8 +412,7 @@ export function watchUserCache(client: QueryClient): () => void {
 
   const unsubscribe = client.getQueryCache().subscribe((event) => {
     if (event?.query && !isPersistableUserKey(event.query.queryKey)) return;
-    clearTimeout(timer);
-    timer = setTimeout(() => void persist(), 250);
+    schedule(250);
   });
 
   return () => {

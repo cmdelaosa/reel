@@ -147,9 +147,14 @@ test("la segunda visita pinta la biblioteca con el rollup todavía en el aire", 
   await expect(page.locator(".skeleton")).toHaveCount(0);
   expect(rollup.asked(), "la petición de verdad tiene que salir igual").toBeGreaterThan(0);
 
-  // Y cuando contesta, sustituye lo pintado sin vaciar la pantalla.
+  /* Y cuando contesta, sustituye lo pintado sin vaciar la pantalla. Se espera a
+     la respuesta ANTES de contar: sin eso la cuenta la daba por buena lo que ya
+     estaba en pantalla y esta comprobación no comprobaba nada. */
+  const respuesta = page.waitForResponse("**/rpc/rpc_library_rollup*");
   rollup.release();
+  await respuesta;
   await expect(grid(page)).toHaveCount(ROWS);
+  await expect(page.locator(".skeleton")).toHaveCount(0);
 });
 
 test("sin instantánea, la misma pantalla se queda en el esqueleto", async ({ page }) => {
