@@ -42,7 +42,13 @@ import { Shell } from "@/ui/shell/Shell";
 import { StartRedirect } from "@/ui/shell/StartRedirect";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
 import { flashQueryError } from "@/ui/shell/queryErrorStore";
-import { restoreMetadataCache, watchMetadataCache } from "@/lib/queryPersistence";
+import {
+  lastKnownUser,
+  restoreMetadataCache,
+  restoreUserCache,
+  watchMetadataCache,
+  watchUserCache,
+} from "@/lib/queryPersistence";
 import "@/styles/index.css";
 import "@/lib/settings"; // applies persisted theme/accent/density to <html> on boot
 
@@ -196,8 +202,18 @@ if (!rootElement) {
 async function start() {
   // Hydrate durable metadata before mounting so a refresh paints from cache
   // instead of briefly entering the loading state and starting duplicate I/O.
-  await restoreMetadataCache(queryClient);
+  //
+  // Y con ellos la biblioteca de la cuenta que entró la última en este aparato,
+  // que es la consulta que decide cuándo aparece la primera carátula. Se hidrata
+  // AQUÍ y no cuando la sesión está confirmada porque para entonces la pantalla
+  // ya lleva un rato en blanco: `AuthProvider` comprueba después contra la
+  // sesión de verdad y lo tira si no era esa cuenta (ver queryPersistence).
+  await Promise.all([
+    restoreMetadataCache(queryClient),
+    restoreUserCache(queryClient, lastKnownUser()),
+  ]);
   watchMetadataCache(queryClient);
+  watchUserCache(queryClient);
   createRoot(rootElement!).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
