@@ -107,6 +107,19 @@
 -- supabase/migrations/*.sql` y parte del número más alto; desde aquí también
 -- `create or replace function public.rpc_library_rollup`.
 
+-- `begin`/`commit` EXPLÍCITOS, y no es ceremonia. Contra la pila local y en el
+-- CI esto pasaba sin ellos; contra producción, `supabase db push` contestó
+--
+--     ERROR: LOCK TABLE can only be used in transaction blocks (SQLSTATE 25P01)
+--
+-- en la primera sentencia y no aplicó nada (19-sep-2026, CLI 2.109.1). El push
+-- remoto manda el fichero sin abrir un bloque de transacción, y `lock table`
+-- exige uno de verdad. Y hay una segunda razón para no fiarse de lo implícito:
+-- la comprobación del final (`raise exception` si una fila no cuadra) solo
+-- protege si TODO lo anterior se deshace con ella. Con el bloque escrito aquí,
+-- eso deja de depender de cómo mande el fichero cada versión del CLI.
+begin;
+
 lock table public.watch_events, public.episodes in share row exclusive mode;
 
 -- ============================================================
@@ -528,3 +541,5 @@ as $$
   join public.titles t on t.id = le.title_id
   left join eps a on a.title_id = t.id
 $$;
+
+commit;
