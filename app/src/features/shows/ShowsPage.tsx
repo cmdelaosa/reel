@@ -5,7 +5,7 @@ import { useRatedSort } from "@/lib/ratings";
 import type { ShowStatus } from "@/domain/status";
 import { t as tr, tv } from "@/lib/i18n";
 import { fmtAirDate } from "@/lib/region";
-import { Poster, TabMenu } from "@/ui";
+import { EAGER_POSTERS, Poster, TabMenu } from "@/ui";
 import { PosterGridSkeleton } from "@/ui/Skeleton";
 
 /* My Shows — the library grid with status buckets. Port of prototype
@@ -165,9 +165,9 @@ export default function ShowsPage() {
       )}
 
       <div className="poster-grid">
-        {items.map((s) => (
+        {items.map((s, i) => (
           <div key={s.title_id} className="flex flex-col gap-1.5">
-            <Poster t={toTitleCard(s)} prefetchTmdbId={s.tmdb_id} onClick={() => open(s.tmdb_id)} />
+            <Poster t={toTitleCard(s)} priority={i < EAGER_POSTERS} prefetchTmdbId={s.tmdb_id} onClick={() => open(s.tmdb_id)} />
             {s.status === "caughtup" && s.next_air_datetime && (
               <div className="mute" style={{ fontSize: 11.5, paddingLeft: 2 }}>
                 ⏳ {tr("Next episode")} {fmtAirDate(s.next_air_datetime)}

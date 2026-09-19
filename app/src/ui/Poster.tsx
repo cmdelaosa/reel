@@ -7,8 +7,17 @@ import { WatchOn } from "@/ui/WatchOn";
 import { useTitleIntent } from "@/lib/useOpenTitle";
 import { locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 
+/** Cuántas carátulas de una rejilla `.poster-grid` se piden sin diferir.
+ *
+ *  Es una COTA, no una medida: la rejilla es `auto-fill`, así que el número
+ *  real depende del ancho de la ventana y calcularlo obligaría a medir antes de
+ *  pintar. Doce cubre la primera pantalla en un portátil ancho y se pasa de
+ *  unas pocas en un móvil — y pasarse es barato: una imagen de más que se pide
+ *  pronto, contra una fila visible que llega tarde. */
+export const EAGER_POSTERS = 12;
+
 /* ---- Poster tile (overlaid title, TV-Time-like) ---- */
-export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, onClick, prefetchTmdbId }: {
+export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, onClick, prefetchTmdbId, priority = false }: {
   t: TitleCard;
   subtitle?: string;
   /** Where-to-watch logos in the top-left slot. */
@@ -20,6 +29,12 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
   rank?: number;
   onClick?: () => void;
   prefetchTmdbId?: number;
+  /** Para las carátulas que ya se ven al cargar la página. `loading="lazy"` no
+   *  es gratis en ellas: el navegador no pide una imagen diferida hasta tener
+   *  el layout, así que la primera fila —la que el usuario está mirando— se
+   *  ponía a la cola detrás de todo. Quien la marca es la rejilla, que es la
+   *  única que sabe cuántas caben; esto solo obedece. */
+  priority?: boolean;
 }) {
   const progress = t.progress ?? 0;
   const showProgress = progress > 0 && progress < 100;
@@ -64,7 +79,23 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
           }
         : {})}
     >
-      {t.posterPath && <img className="poster-img" src={t.posterPath} alt="" loading="lazy" />}
+      {/* Los dos atributos se escriben SIEMPRE, con su valor por defecto en el
+          caso que no los necesita (`eager` es el defecto del navegador, `auto`
+          el de fetchPriority). Escribir uno u otro según el caso deja al
+          navegador y al DOM decidiendo sobre un atributo que a veces está y a
+          veces no; así el <img> tiene la misma forma en los dos caminos y lo
+          único que cambia entre ellos son los valores, que es lo que la prueba
+          de al lado puede leer sin ambigüedad. */}
+      {t.posterPath && (
+        <img
+          className="poster-img"
+          src={t.posterPath}
+          alt=""
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          decoding="async"
+        />
+      )}
       <div className="poster-sheen" />
       {rank != null && <span className="mq-rank">{rank}</span>}
       <div className="poster-top">

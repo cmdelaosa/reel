@@ -1,9 +1,9 @@
 -- Pruebas de rpc_steam_value_series, en SQL puro y contra una base de
--- desarrollo. Se corren a mano:
+-- desarrollo. Las corre el CI y `./verificar.sh`, con `correr.sh`, que es
+-- también la forma cómoda de lanzarlas a mano:
 --
---   supabase db reset
---   docker cp supabase/sql-checks/0092_serie_reconstruida.sql supabase_db_tvtime:/tmp/t.sql
---   docker exec supabase_db_tvtime psql -U postgres -f /tmp/t.sql
+--   supabase/sql-checks/correr.sh         # todas
+--   docker exec -i supabase_db_tvtime psql -U postgres -f - < supabase/sql-checks/0092_serie_reconstruida.sql
 --
 -- Por qué aquí y no en supabase/migrations ni en supabase/tests: lo explica
 -- 0072_movie_release_alerts.sql, que es el hermano mayor de este fichero. En
