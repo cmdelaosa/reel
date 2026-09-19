@@ -99,6 +99,33 @@ function persisted(page: Page) {
 /** El rollup, contestado solo cuando el test lo suelta. Devuelve el grifo y un
  *  contador de peticiones — la de la segunda visita tiene que SALIR igual, que
  *  es la mitad "revalidate" del trato. */
+/* La respuesta del rollup simulado, como la daría PostgREST.
+ *
+ * Desde que el paginado va en paralelo (lib/paging, fetchPagedParallel) la
+ * primera ventana pide el total (`Prefer: count=exact`) y lo lee de
+ * `Content-Range`; sin total, encadena ventanas HASTA UNA VACÍA. Un simulacro
+ * que devuelve siempre las mismas filas e ignora `offset` no tiene ventana
+ * vacía: son peticiones sin fin y un test colgado, no uno rojo. Así que aquí
+ * se respeta el `offset` y se da el total, y la cabecera se EXPONE — es una
+ * petición entre orígenes y sin `access-control-expose-headers` el navegador
+ * no deja leerla, que es volver al caso sin total. */
+function fulfillRollup(route: Route) {
+  const url = new URL(route.request().url());
+  const offset = Number(url.searchParams.get("offset") ?? 0);
+  const limit = Number(url.searchParams.get("limit") ?? ROWS);
+  const rows = libraryRows().slice(offset, offset + limit);
+  const range = rows.length ? `${offset}-${offset + rows.length - 1}` : "*";
+  return route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    headers: {
+      "content-range": `${range}/${ROWS}`,
+      "access-control-expose-headers": "content-range",
+    },
+    body: JSON.stringify(rows),
+  });
+}
+
 async function gateRollup(page: Page) {
   let release!: () => void;
   const gate = new Promise<void>((r) => (release = r));
@@ -106,11 +133,7 @@ async function gateRollup(page: Page) {
   await page.route("**/rpc/rpc_library_rollup*", async (route: Route) => {
     asked += 1;
     await gate;
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(libraryRows()),
-    });
+    await fulfillRollup(route);
   });
   return { release: () => release(), asked: () => asked };
 }
@@ -125,9 +148,7 @@ test("la segunda visita pinta la biblioteca con el rollup todavía en el aire", 
   await authenticate(page);
 
   // ── primera visita: el rollup contesta y la instantánea se escribe ────────
-  await page.route("**/rpc/rpc_library_rollup*", (route: Route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(libraryRows()) }),
-  );
+  await page.route("**/rpc/rpc_library_rollup*", fulfillRollup);
   await page.goto("/shows");
   await expect(grid(page).first()).toBeVisible({ timeout: 30_000 });
 
