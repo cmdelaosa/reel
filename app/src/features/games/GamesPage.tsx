@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useGameLibrary, type LibraryGame } from "@/lib/library";
 import { useRatedSort } from "@/lib/ratings";
@@ -6,7 +6,7 @@ import type { GameStatus } from "@/domain/gameStatus";
 import { formatPlaytime } from "@/domain/gameStatus";
 import { t as tr, tv } from "@/lib/i18n";
 import { igdbImg } from "@/lib/igdb";
-import { EAGER_POSTERS, Poster, TabMenu } from "@/ui";
+import { EAGER_POSTERS, Poster, TabMenu, useGrowingList, useStableHandler } from "@/ui";
 import { PosterGridSkeleton } from "@/ui/Skeleton";
 
 /* Tu biblioteca de juegos. Gemela de ShowsPage y de MoviesPage: la misma
@@ -70,6 +70,36 @@ function subtitleOf(g: LibraryGame): string | undefined {
   return platforms.length > 2 ? `${platforms[0]} +${platforms.length - 1}` : platforms.join(" · ");
 }
 
+/* Memoizada, como la de ShowsPage: sin esto cada tanda nueva de la rejilla
+   re-renderizaba todas las carátulas ya montadas. */
+const GameCard = memo(function GameCard({ g, priority, onOpen }: {
+  g: LibraryGame;
+  priority: boolean;
+  onOpen: (igdbId: number) => void;
+}) {
+  return (
+    <Poster
+      priority={priority}
+      /* Sin proveedores: un juego no está "en Netflix". Lo que ocupa ese
+         hueco mental son las plataformas, y van en el subtítulo. */
+      showProviders={false}
+      subtitle={subtitleOf(g)}
+      t={{
+        id: String(g.tmdb_id),
+        name: g.name,
+        year: g.first_air_date?.slice(0, 4) ?? "TBA",
+        genres: g.genres.length ? g.genres : ["—"],
+        posterPath: igdbImg(g.poster_path),
+        voteAverage: g.vote_average ?? 0,
+        progress:
+          g.status === "playing" && g.progress != null ? Math.min(g.progress, 100) : undefined,
+        stopped: g.status === "dropped",
+      }}
+      onClick={() => onOpen(g.tmdb_id)}
+    />
+  );
+});
+
 export default function GamesPage() {
   const { data: games = [], isPending } = useGameLibrary();
   const [sort, setSort] = useState<SortKey>("added");
@@ -101,13 +131,17 @@ export default function GamesPage() {
   const items = games
     .filter((g) => f === "all" || g.status === f)
     .sort(sort === "rated" ? rated.cmp : COMPARATORS[sort]);
+  /* Se monta por tandas (ui/GrowingList): los contadores y el orden de arriba
+     siguen siendo de la lista entera; solo se recorta lo que se pinta. */
+  const { shown, sentinel } = useGrowingList(items, `${f}|${sort}|${sort === "rated" ? rated.arrow : ""}`);
 
-  const open = (igdbId: number) =>
+  const open = useStableHandler((igdbId: number) =>
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("game", String(igdbId));
       return next;
-    });
+    }),
+  );
 
   return (
     <div className="screen mq-page">
@@ -159,29 +193,11 @@ export default function GamesPage() {
       )}
 
       <div className="poster-grid">
-        {items.map((g, i) => (
-          <Poster
-            key={g.title_id}
-            priority={i < EAGER_POSTERS}
-            /* Sin proveedores: un juego no está "en Netflix". Lo que ocupa ese
-               hueco mental son las plataformas, y van en el subtítulo. */
-            showProviders={false}
-            subtitle={subtitleOf(g)}
-            t={{
-              id: String(g.tmdb_id),
-              name: g.name,
-              year: g.first_air_date?.slice(0, 4) ?? "TBA",
-              genres: g.genres.length ? g.genres : ["—"],
-              posterPath: igdbImg(g.poster_path),
-              voteAverage: g.vote_average ?? 0,
-              progress:
-                g.status === "playing" && g.progress != null ? Math.min(g.progress, 100) : undefined,
-              stopped: g.status === "dropped",
-            }}
-            onClick={() => open(g.tmdb_id)}
-          />
+        {shown.map((g, i) => (
+          <GameCard key={g.title_id} g={g} priority={i < EAGER_POSTERS} onOpen={open} />
         ))}
       </div>
+      {sentinel}
     </div>
   );
 }

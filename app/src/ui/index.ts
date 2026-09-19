@@ -3,6 +3,8 @@ export { LangToggle } from "@/ui/LangToggle";
 export { NetworkLogo } from "@/ui/NetworkLogo";
 export { EAGER_POSTERS, Poster } from "@/ui/Poster";
 export { useShowMore } from "@/ui/ShowMore";
+export { useGrowingList } from "@/ui/GrowingList";
+export { useStableHandler } from "@/ui/useStableHandler";
 export { Rail } from "@/ui/Rail";
 export { Stars } from "@/ui/Stars";
 export { TabMenu } from "@/ui/TabMenu";

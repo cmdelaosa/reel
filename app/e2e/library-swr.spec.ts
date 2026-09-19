@@ -144,6 +144,27 @@ async function gateRollup(page: Page) {
    abajo, que exige cero, lo cazó. Carátulas de verdad hay donde hay `.poster`. */
 const grid = (page: Page) => page.locator(".poster-grid .poster");
 
+/* La rejilla se monta por tandas (ui/GrowingList), así que contar `.poster`
+   nada más llegar ya no dice cuánta biblioteca hay: dice cuánto cabe en la
+   primera tanda. Lo que el test necesita saber —que se pinta TODA la
+   biblioteca disponible— se comprueba por los dos lados: el contador del cubo,
+   que se calcula sobre la lista entera, y recorriendo la página hasta abajo,
+   que es como la ve alguien, hasta tener montadas las ROWS. Todo esto con la
+   red todavía cerrada cuando toca: el scroll no pide nada, solo monta. */
+async function paintsWholeLibrary(page: Page) {
+  await expect(page.locator(".shows-buckets .chip-active")).toContainText(String(ROWS));
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        return grid(page).count();
+      },
+      { timeout: 20_000, message: "recorriendo la página no se llega a montar toda la biblioteca" },
+    )
+    .toBe(ROWS);
+  await page.evaluate(() => window.scrollTo(0, 0));
+}
+
 test("la segunda visita pinta la biblioteca con el rollup todavía en el aire", async ({ page }) => {
   await authenticate(page);
 
@@ -164,8 +185,9 @@ test("la segunda visita pinta la biblioteca con el rollup todavía en el aire", 
   await page.goto("/shows");
 
   // Las carátulas no pueden venir de la red: la red sigue sin contestar.
-  await expect(grid(page)).toHaveCount(ROWS, { timeout: 20_000 });
+  await expect(grid(page).first()).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".skeleton")).toHaveCount(0);
+  await paintsWholeLibrary(page);
   expect(rollup.asked(), "la petición de verdad tiene que salir igual").toBeGreaterThan(0);
 
   /* Y cuando contesta, sustituye lo pintado sin vaciar la pantalla. Se espera a
@@ -174,8 +196,8 @@ test("la segunda visita pinta la biblioteca con el rollup todavía en el aire", 
   const respuesta = page.waitForResponse("**/rpc/rpc_library_rollup*");
   rollup.release();
   await respuesta;
-  await expect(grid(page)).toHaveCount(ROWS);
   await expect(page.locator(".skeleton")).toHaveCount(0);
+  await paintsWholeLibrary(page);
 });
 
 test("sin instantánea, la misma pantalla se queda en el esqueleto", async ({ page }) => {
@@ -189,5 +211,6 @@ test("sin instantánea, la misma pantalla se queda en el esqueleto", async ({ pa
   await expect(grid(page)).toHaveCount(0);
 
   rollup.release();
-  await expect(grid(page)).toHaveCount(ROWS, { timeout: 20_000 });
+  await expect(grid(page).first()).toBeVisible({ timeout: 20_000 });
+  await paintsWholeLibrary(page);
 });
