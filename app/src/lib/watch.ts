@@ -36,9 +36,14 @@ async function ensureFollowed(
   userId: string,
   titleId: string,
 ) {
-  // Shows in the library rollup cache are already followed — skip the trip.
-  const lib = qc.getQueryData<{ title_id: string }[]>(qk.library);
-  if (lib?.some((r) => r.title_id === titleId)) return;
+  /* Shows in the library rollup cache are already followed — skip the trip.
+     `getQueriesData` y no `getQueryData` porque desde 0099 la biblioteca son
+     cuatro cachés bajo el mismo prefijo (una por medio más la de "todo"): con
+     la clave suelta, marcar un episodio desde una pantalla de series no habría
+     encontrado nunca la fila —esa clave ya no existe— y cada marcado pagaría
+     una consulta de más a `library_entries`. */
+  const cached = qc.getQueriesData<{ title_id: string }[]>({ queryKey: qk.library });
+  if (cached.some(([, rows]) => rows?.some((r) => r.title_id === titleId))) return;
 
   const { data, error } = await supabase
     .from("library_entries")

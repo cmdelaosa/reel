@@ -3,6 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { type LanguageName } from "@/lib/settings";
 import { dateLocale, isEs, lang } from "@/lib/locale";
+// La aritmética del paginado vive en lib/paging desde que la biblioteca
+// necesitó lo mismo que este mapa; su matriz está en paging.test.ts.
+import { restOffsets } from "@/lib/paging";
 import { useAuth } from "@/features/auth/AuthProvider";
 
 /* Lightweight es/en localization (settings.language).
@@ -1404,18 +1407,6 @@ export function tGenre(g: string): string {
 
 /* ---- Localized show names ---------------------------------------------- */
 
-/** Los desplazamientos que faltan por pedir, sabiendo el total y cuántas filas
- *  trajo de verdad la primera página.
- *
- *  Existe suelta y exportada para poder probarla: es aritmética pura y es donde
- *  vive el fallo caro de un paginado —pedir de menos deja huecos que nadie ve—,
- *  mientras que lo que la rodea es una llamada de red que este proyecto no
- *  simula en ninguna prueba.
- *
- *  `step` es lo que VINO, no lo que se pidió: el tope de filas por respuesta lo
- *  decide el servidor, y calcular los tramos con el tamaño pedido cuando sirve
- *  menos salta filas en silencio. Un `step` de 0 —una primera página vacía— no
- *  devuelve nada que pedir, que además evita dividir entre cero. */
 /** Las filas tal como vienen → las parejas del mapa. Los dos caminos de
  *  {@link useEsNames} —con total y sin él— acaban aquí, y tenerlo escrito una
  *  vez es lo que evita que uno de los dos se quede con la clave de antes. */
@@ -1423,11 +1414,6 @@ const entries = (rows: { tmdb_id: number; kind: string; name_es: string | null }
   rows
     .filter((r) => Boolean(r.name_es))
     .map((r): [string, string] => [`${r.kind}:${r.tmdb_id}`, r.name_es as string]);
-
-export function restOffsets(total: number, step: number): number[] {
-  if (step <= 0 || total <= step) return [];
-  return Array.from({ length: Math.ceil((total - step) / step) }, (_, i) => step + i * step);
-}
 
 /** "medio:tmdb_id" → Spanish title, for every cached title that has one.
  *  Loaded once per session (and only in Spanish); RLS: titles are
