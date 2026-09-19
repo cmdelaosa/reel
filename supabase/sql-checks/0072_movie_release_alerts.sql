@@ -1,9 +1,9 @@
 -- Pruebas de pending_movie_release_alerts (0072), en SQL puro y contra una base
--- de desarrollo. Se corren a mano:
+-- de desarrollo. Las corre el CI y `./verificar.sh`, con `correr.sh`, que es
+-- también la forma cómoda de lanzarlas a mano:
 --
---   supabase db reset
---   docker cp supabase/sql-checks/0072_movie_release_alerts.sql supabase_db_tvtime:/tmp/t.sql
---   docker exec supabase_db_tvtime psql -U postgres -f /tmp/t.sql
+--   supabase/sql-checks/correr.sh         # todas
+--   docker exec -i supabase_db_tvtime psql -U postgres -f - < supabase/sql-checks/0072_movie_release_alerts.sql
 --
 -- Ni en supabase/migrations ni en supabase/tests, y las dos exclusiones tienen
 -- su motivo. En migrations el CLI aplica en orden TODO lo que encuentra, así

@@ -97,7 +97,9 @@ export default function TonightPage() {
       {hero && (
         <div className="mq-bento">
           <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} {...heroIntent} style={{ background: posterBg(hero.name) }}>
-            {art && <img className="mq-hero-still" src={art} alt="" />}
+            {/* El banner es el LCP de esta pantalla: se pide con prioridad alta
+                para que no comparta cola con las carátulas de más abajo. */}
+            {art && <img className="mq-hero-still" src={art} alt="" fetchPriority="high" decoding="async" />}
             {heroAir && <span className="mq-hero-flag">{heroAir}</span>}
             <div className="mq-hero-body">
               <div className="mq-hero-eyebrow">{tr("Up next for you")}</div>

@@ -124,7 +124,8 @@ export default function GamesTonightPage() {
       {hero && (
         <div className="mq-bento">
           <section className="card mq-hero" onClick={() => open(hero.tmdb_id)} style={{ background: posterBg(hero.name) }}>
-            {art && <img className="mq-hero-still" src={art} alt="" />}
+            {/* El LCP de esta pantalla — igual que en Series (mq-hero-still). */}
+            {art && <img className="mq-hero-still" src={art} alt="" fetchPriority="high" decoding="async" />}
             <div className="mq-hero-body">
               <div className="mq-hero-eyebrow">
                 {tr(hero.status === "playing" ? "Pick up where you left off" : "Start something")}

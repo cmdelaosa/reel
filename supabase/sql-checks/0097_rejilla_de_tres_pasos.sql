@@ -3,9 +3,8 @@
 -- tenías tal día, el arrastre del precio, la foto que manda— y sigue valiendo
 -- entero. Se corren igual:
 --
---   supabase db reset
---   docker cp supabase/sql-checks/0097_rejilla_de_tres_pasos.sql supabase_db_tvtime:/tmp/t.sql
---   docker exec supabase_db_tvtime psql -U postgres -f /tmp/t.sql
+--   supabase/sql-checks/correr.sh         # todas
+--   docker exec -i supabase_db_tvtime psql -U postgres -f - < supabase/sql-checks/0097_rejilla_de_tres_pasos.sql
 --
 -- Nació con 0095, que hizo la rejilla mensual+quincenal, y se renombró con 0097,
 -- que le puso un tercer paso: trimestral en los años viejos. Es UNA matriz y no

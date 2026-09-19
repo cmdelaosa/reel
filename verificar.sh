@@ -12,9 +12,11 @@
 # —`--todo` las fuerza—. Un freno que cuesta minutos acaba con un
 # `--sin-verificar` en cada llamada, y entonces no frena nada.
 #
-# ⚠️ **La autoridad es `check.yml`, no esto.** Sus tres jobs y estas tres
-# secciones son la misma comprobación escrita dos veces, y el día que una cambie
-# sin la otra este guión dará un verde que la PR no confirma. Se tocan juntas.
+# ⚠️ **La autoridad es `check.yml`, no esto.** Sus jobs y estas secciones son la
+# misma comprobación escrita dos veces, y el día que una cambie sin la otra este
+# guión dará un verde que la PR no confirma. Se tocan juntas. Las matrices SQL
+# son la excepción y a propósito: allí y aquí se llama al MISMO
+# `supabase/sql-checks/correr.sh`, que es como no puede haber dos versiones.
 set -uo pipefail
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -26,9 +28,9 @@ for bandera in "$@"; do
     --todo) todo=1 ;;
     -h | --help)
       printf 'Uso: verificar.sh [--todo]\n\n'
-      printf '  Sin banderas: las migraciones siempre, y la app y las edge\n'
-      printf '  functions solo si el cambio las toca.\n'
-      printf '  --todo: las tres secciones pase lo que pase.\n'
+      printf '  Sin banderas: las migraciones siempre, y la app, las edge\n'
+      printf '  functions y las matrices SQL solo si el cambio las toca.\n'
+      printf '  --todo: todas las secciones pase lo que pase.\n'
       exit 0 ;;
     *) printf 'Opción desconocida: %s\n' "$bandera" >&2; exit 1 ;;
   esac
@@ -202,6 +204,28 @@ if toca supabase/functions; then
 else
   saltada "edge functions: deno check y deno test" \
           "supabase/functions/ no ha cambiado desde main"
+fi
+
+# ── Las matrices SQL ────────────────────────────────────────────────────────
+# `supabase/sql-checks/` prueba las funciones de la base LLAMÁNDOLAS, que es lo
+# único que ve una migración que aplica sin quejarse y devuelve otra cosa: la
+# #132 reescribió `rpc_library_rollup` desde una versión vieja, se dejó dos
+# columnas por el camino, y todo lo demás de este guión salió verde.
+#
+# Necesitan la pila local arriba y con las migraciones de ESTA rama aplicadas;
+# las dos cosas las mira `correr.sh`, el mismo guión que lanza el CI, y que falte
+# cualquiera es un rojo y no un salto — igual que con deno, lo que no se ha
+# comprobado no está bien.
+if toca supabase/migrations supabase/sql-checks; then
+  titulo "matrices SQL: supabase/sql-checks contra la base local"
+  if "$repo/supabase/sql-checks/correr.sh"; then
+    :
+  else
+    fallos=$((fallos + 1))
+  fi
+else
+  saltada "matrices SQL: supabase/sql-checks contra la base local" \
+          "ni supabase/migrations/ ni supabase/sql-checks/ han cambiado desde main"
 fi
 
 # Lo que este guión tarda es parte de lo que comprueba: el objetivo son segundos,
