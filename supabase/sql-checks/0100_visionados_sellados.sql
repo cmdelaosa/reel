@@ -262,7 +262,8 @@ do $$ declare g record; begin
   g := pg_temp.guardado('eeeeeeee-0100-0100-0100-eeeeeeeeeeee', 710002);
   assert g.n = 2 and g.ultimo = '2026-05-02', format('seguir despues de ver: (%s, %s)', g.n, g.ultimo);
 end $$;
--- Dejar de seguir y volver: `followed` es una columna, la fila no se va.
+-- Dejar de seguir (followed=false: la fila se queda y no se recalcula) y
+-- borrarla y volver a seguir: la fila nueva vuelve a contar desde watch_events.
 update public.library_entries le set followed = false
 from public.titles t where t.id = le.title_id and t.tmdb_id = 710002;
 delete from public.library_entries le using public.titles t

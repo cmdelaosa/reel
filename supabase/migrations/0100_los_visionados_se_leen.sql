@@ -174,6 +174,20 @@ begin
   -- Sumar es exacto: (user_id, episode_id) es único, así que cada fila de
   -- `nuevos` es un visionado que antes no estaba. Las que un ON CONFLICT DO
   -- NOTHING se salta no llegan a la tabla de transición.
+  --
+  -- Bloqueo previo en el MISMO orden que el recálculo: sin él, el UPDATE de
+  -- abajo toma las filas en el orden del hash join, y una importación que
+  -- toca veinte títulos a la vez que un desmarcado que recalcula dos de ellos
+  -- puede cruzarse y acabar en interbloqueo (40P01).
+  perform 1
+  from public.library_entries le
+  join (select distinct nw.user_id, e.title_id
+        from nuevos nw join public.episodes e on e.id = nw.episode_id
+        where e.season_number > 0) p
+    on le.user_id = p.user_id and le.title_id = p.title_id
+  order by le.user_id, le.title_id
+  for update of le;
+
   update public.library_entries le
   set watched_count = le.watched_count + d.n,
       last_watched_at = greatest(le.last_watched_at, d.last)
