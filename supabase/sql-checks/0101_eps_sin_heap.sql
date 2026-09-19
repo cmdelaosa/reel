@@ -1,22 +1,25 @@
--- Matriz de 0101: `eps`, el agregado de episodios del rollup, se resuelve desde
--- el índice sin ir al heap. Lo que vigila es lo que se pierde sin que nada más
--- se entere —el resultado del rollup es el mismo con el índice y sin él, así que
--- la matriz 0098 seguiría en verde—:
+-- Matriz de 0101: `eps`, el agregado de episodios del rollup, se puede resolver
+-- desde el índice sin ir al heap. Lo que vigila es lo que se pierde sin que
+-- nada más se entere —el resultado del rollup es el mismo con el índice y sin
+-- él, así que la matriz 0098 seguiría en verde—:
 --
 --   1. que `episodes_title_air_idx` sigue llevando `season_number` (una
 --      migración que lo recree con la definición de 0002 lo devuelve al heap);
---   2. que el rollup, tal como está escrito, lo usa como Index Only Scan (una
---      reescritura de `eps` que lea otra columna de `episodes` también);
+--   2. que el rollup no lee de `episodes` ninguna columna que el índice no
+--      tenga (una reescritura de `eps` que lea otra lo devuelve al heap también);
 --   3. que `episodes` conserva su umbral de autovacuum: sin él el mapa de
 --      visibilidad se queda a medias —53 % en producción el 19-sep-2026— y el
 --      Index Only Scan vuelve al heap en la mitad de las filas.
 --
--- Con cuatro filas el planificador prefiere recorrer la tabla, así que el §2 le
--- quita esa opción: lo que se pregunta es si PUEDE ir solo por el índice, no
--- cuál elige con datos de juguete. Lo que elige con datos de verdad está medido
--- en la cabecera de la migración y en su PR.
+-- El §2 mira el TEXTO de la función y no su plan, a propósito. El plan depende
+-- de las estadísticas: sobre la tabla recién creada del CI, sin un solo VACUUM,
+-- el planificador no ve ventaja en el Index Only Scan y elige otro índice, y una
+-- matriz que corre en una transacción no puede pasar un VACUUM. La primera
+-- versión de esta matriz miraba el plan, pasó en una base local vacunada y
+-- falló en otra recién vaciada. Lo que el planificador elige con datos de verdad
+-- está medido en la cabecera de la migración y en su PR.
 --
--- Transacción que acaba en rollback; tmdb_id 7101xx, marcados a propósito.
+-- Transacción que acaba en rollback.
 
 \set ON_ERROR_STOP on
 begin;
@@ -34,58 +37,24 @@ begin
   end if;
 end $$;
 
--- ── 2. El rollup puede leer `eps` solo del índice ────────────────────────
-insert into auth.users (id, email) values
-  ('71017101-7101-7101-7101-710171017101', 'eps-0101@example.com')
-on conflict (id) do nothing;
-select set_config('request.jwt.claims',
-  '{"sub":"71017101-7101-7101-7101-710171017101","role":"authenticated"}', true) \g /dev/null
-
-with t as (
-  insert into public.titles (tmdb_id, kind, name) values (710101, 'tv', 'serie 0101') returning id
-), e as (
-  insert into public.episodes (title_id, season_number, episode_number, air_datetime)
-  select t.id, s, n, now() + ((2 * n - 3) || ' days')::interval
-  from t, (values (0), (1)) s(s), generate_series(1, 2) n
-  returning 1
-)
-insert into public.library_entries (user_id, title_id, followed)
-select '71017101-7101-7101-7101-710171017101', t.id, true from t;
-
-set local enable_seqscan = off;
-set local enable_bitmapscan = off;
-set local role authenticated;
-
+-- ── 2. El rollup solo lee de `episodes` lo que el índice tiene ───────────
+-- `e` es el alias de `episodes` en `eps`, y es el único sitio de la función
+-- donde se lee la tabla. `\m` es principio de palabra: `le.` y `tk.` no cuentan.
 do $$
-declare l text; plan text := '';
+declare
+  cuerpo text := pg_get_functiondef('public.rpc_library_rollup(text)'::regprocedure);
+  sobran text;
 begin
-  -- Las columnas de `eps` SE LEEN: con un count(*) a secas el planificador
-  -- quita el join y no hay nada que mirar (la trampa de 0098).
-  for l in explain (costs off)
-    select sum(aired_count), count(last_aired_datetime), count(next_air_datetime)
-    from public.rpc_library_rollup('tv')
-  loop
-    plan := plan || l || E'\n';
-  end loop;
-  if plan not like '%Index Only Scan using episodes_title_air_idx on episodes%' then
-    raise exception E'§2: `eps` ya no sale del índice solo. Plan:\n%', plan;
+  if cuerpo !~ 'from public\.episodes e\M' then
+    raise exception '§2: `eps` ya no lee `public.episodes e`; esta matriz no sabe qué mirar';
+  end if;
+  select string_agg(distinct c[1], ', ') into sobran
+  from regexp_matches(cuerpo, '\me\.([a-z_]+)', 'g') c
+  where c[1] not in ('title_id', 'air_datetime', 'season_number');
+  if sobran is not null then
+    raise exception '§2: el rollup lee de episodes columnas que el índice no tiene: %', sobran;
   end if;
 end $$;
-
--- Y el resultado, que el índice no lo cambia: 1 emitido de temporada > 0 (el de
--- la 0 no cuenta), y hay último y próximo.
-do $$
-declare r record;
-begin
-  select aired_count, last_aired_datetime is not null as hay_ultimo,
-         next_air_datetime is not null as hay_proximo
-  into r from public.rpc_library_rollup('tv') where tmdb_id = 710101;
-  if r is null or r.aired_count <> 1 or not r.hay_ultimo or not r.hay_proximo then
-    raise exception '§2: el rollup de la serie de prueba no cuadra: %', r;
-  end if;
-end $$;
-
-reset role;
 
 -- ── 3. El umbral de autovacuum de `episodes` sigue puesto ────────────────
 do $$
@@ -98,5 +67,5 @@ begin
   end if;
 end $$;
 
-\echo '0101: eps sale del índice, y el autovacuum de episodes tiene su umbral'
+\echo '0101: eps cabe en el índice, y el autovacuum de episodes tiene su umbral'
 rollback;
