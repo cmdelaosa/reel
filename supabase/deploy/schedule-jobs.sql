@@ -184,6 +184,56 @@ select cron.schedule(
   $$
 );
 
+-- 3i. La biblioteca no se enfría: cada minuto, una lectura de lo mismo que lee
+--     `rpc_library_rollup`. Es el único de estos jobs que NO llama a una edge
+--     function ni necesita el secreto del Vault: es SQL a secas.
+--
+--     POR QUÉ, medido en producción el 19-sep-2026 con `explain (analyze,
+--     buffers)` del rollup de la biblioteca más grande, tras 45 min sin tocar la
+--     base, dos veces cada caso:
+--
+--                      1ª consulta     2ª y 3ª
+--         sin este job  1.450 / 1.180 ms   20 ms
+--         con este job     61 /    83 ms   21 ms
+--
+--     Mismo plan y `shared hit=8852` en TODAS, ni una lectura de disco: lo lento
+--     no es la consulta sino la primera que llega tras un rato a una instancia
+--     pequeña (las páginas constan como acierto de caché y aun así tardan 70×;
+--     huele a memoria que el sistema ha mandado a swap, no está comprobado). En
+--     la app eso era un rollup de ~5 s en la primera visita del día y 0,26 s un
+--     minuto después. Tocar esas páginas cada minuto las mantiene a mano.
+--
+--     Lee lo que lee el rollup y nada más: el índice cubriente de episodes
+--     (0101) y la clave primaria de titles. Medido: ~140 ms por pasada.
+--
+--     Si algún día se cambia de instancia o de hosting, esto es lo primero que
+--     hay que volver a medir: puede que sobre. El método está en la memoria del
+--     proyecto y cabe en un fichero: claim + `set local role authenticated` +
+--     explain, leyendo las columnas agregadas, tras una pausa larga.
+select cron.schedule(
+  'rollup-keep-warm',
+  '* * * * *',
+  $$
+    select count(*)
+    from (
+      select e.title_id, max(e.air_datetime)
+      from public.episodes e
+      where e.season_number > 0
+      group by 1
+    ) x
+    join public.titles t on t.id = x.title_id;
+  $$
+);
+
+-- 3j. Y su precio: un job por minuto son 1.440 filas al día en
+--     cron.job_run_details, que pg_cron no poda nunca. Se queda una semana, que
+--     es de sobra para ver si algún job ha dejado de salir bien.
+select cron.schedule(
+  'cron-history-prune-daily',
+  '10 4 * * *',
+  $$ delete from cron.job_run_details where end_time < now() - interval '7 days'; $$
+);
+
 -- 3f. One-time backfill: fire episode-refresh NOW with ?force=1 so every
 --     followed title gets its derivations (aired_count, upcoming_season_number)
 --     recomputed immediately, bypassing the staleness gate — instead of waiting
@@ -221,7 +271,7 @@ select net.http_post(
   timeout_milliseconds := 120000
 );
 
--- 4. Verify. All five scheduled jobs should be listed; after the first fire,
+-- 4. Verify. All seven scheduled jobs should be listed; after the first fire,
 --    job_run_details shows status='succeeded'.
 --   select jobname, schedule, active from cron.job;
 --   select jobname, status, return_message, start_time
