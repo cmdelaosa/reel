@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useLibrary, toTitleCard, type LibraryShow } from "@/lib/library";
 import { useRatedSort } from "@/lib/ratings";
 import type { ShowStatus } from "@/domain/status";
 import { t as tr, tv } from "@/lib/i18n";
 import { fmtAirDate } from "@/lib/region";
-import { EAGER_POSTERS, Poster, TabMenu } from "@/ui";
+import { EAGER_POSTERS, Poster, TabMenu, useGrowingList, useStableHandler } from "@/ui";
 import { PosterGridSkeleton } from "@/ui/Skeleton";
 
 /* My Shows — the library grid with status buckets. Port of prototype
@@ -45,6 +45,27 @@ const COMPARATORS: Record<Exclude<SortKey, "rated">, (a: LibraryShow, b: Library
   az: (a, b) => a.name.localeCompare(b.name),
   rating: (a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0),
 };
+
+/* Memoizada: con la rejilla por tandas, cada tanda nueva vuelve a pintar la
+   página, y sin esto re-renderizaba todas las carátulas ya montadas. La fila
+   de la biblioteca conserva su identidad mientras no lleguen datos nuevos, y
+   `onOpen` es estable (useStableHandler). */
+const ShowCard = memo(function ShowCard({ s, priority, onOpen }: {
+  s: LibraryShow;
+  priority: boolean;
+  onOpen: (tmdbId: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Poster t={toTitleCard(s)} priority={priority} prefetchTmdbId={s.tmdb_id} onClick={() => onOpen(s.tmdb_id)} />
+      {s.status === "caughtup" && s.next_air_datetime && (
+        <div className="mute" style={{ fontSize: 11.5, paddingLeft: 2 }}>
+          ⏳ {tr("Next episode")} {fmtAirDate(s.next_air_datetime)}
+        </div>
+      )}
+    </div>
+  );
+});
 
 export default function ShowsPage() {
   const { data: library = [], isPending } = useLibrary();
@@ -94,13 +115,17 @@ export default function ShowsPage() {
         ? library.filter((s) => s.stopped).length
         : library.filter((s) => !s.stopped && s.status === key).length;
   const items = library.filter(inBucket).sort(sort === "rated" ? rated.cmp : COMPARATORS[sort]);
+  /* Se monta por tandas (ui/GrowingList): los contadores y el orden de arriba
+     siguen siendo de la lista entera; solo se recorta lo que se pinta. */
+  const { shown, sentinel } = useGrowingList(items, `${f}|${sort}|${sort === "rated" ? rated.arrow : ""}`);
 
-  const open = (tmdbId: number) =>
+  const open = useStableHandler((tmdbId: number) =>
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("title", String(tmdbId));
       return next;
-    });
+    }),
+  );
 
   return (
     <div className="screen mq-page">
@@ -165,17 +190,11 @@ export default function ShowsPage() {
       )}
 
       <div className="poster-grid">
-        {items.map((s, i) => (
-          <div key={s.title_id} className="flex flex-col gap-1.5">
-            <Poster t={toTitleCard(s)} priority={i < EAGER_POSTERS} prefetchTmdbId={s.tmdb_id} onClick={() => open(s.tmdb_id)} />
-            {s.status === "caughtup" && s.next_air_datetime && (
-              <div className="mute" style={{ fontSize: 11.5, paddingLeft: 2 }}>
-                ⏳ {tr("Next episode")} {fmtAirDate(s.next_air_datetime)}
-              </div>
-            )}
-          </div>
+        {shown.map((s, i) => (
+          <ShowCard key={s.title_id} s={s} priority={i < EAGER_POSTERS} onOpen={open} />
         ))}
       </div>
+      {sentinel}
     </div>
   );
 }

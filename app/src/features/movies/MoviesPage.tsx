@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useMovieLibrary, type LibraryMovie } from "@/lib/library";
 import { useRatedSort } from "@/lib/ratings";
 import type { MovieStatus } from "@/domain/movieStatus";
 import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { tmdbImg } from "@/lib/tmdb";
-import { EAGER_POSTERS, Poster, TabMenu } from "@/ui";
+import { EAGER_POSTERS, Poster, TabMenu, useGrowingList, useStableHandler } from "@/ui";
 import { PosterGridSkeleton } from "@/ui/Skeleton";
 
 /* Tu cine — la rejilla de la biblioteca con sus cubos. Gemela de ShowsPage, y
@@ -49,11 +49,36 @@ const COMPARATORS: Record<Exclude<SortKey, "rated">, (a: LibraryMovie, b: Librar
   rating: (a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0),
 };
 
+/* Memoizada, como la de ShowsPage: sin esto cada tanda nueva de la rejilla
+   re-renderizaba todas las carátulas ya montadas. */
+const MovieCard = memo(function MovieCard({ m, priority, onOpen }: {
+  m: LibraryMovie;
+  priority: boolean;
+  onOpen: (tmdbId: number) => void;
+}) {
+  const esNames = useEsNames();
+  return (
+    <Poster
+      priority={priority}
+      kind="movie"
+      t={{
+        id: String(m.tmdb_id),
+        name: locName(esNames, m.tmdb_id, m.name, "movie"),
+        year: m.first_air_date?.slice(0, 4) ?? "TBA",
+        genres: m.genres.length ? m.genres : ["—"],
+        posterPath: tmdbImg(m.poster_path),
+        voteAverage: m.vote_average ?? 0,
+        imdbRating: m.imdb_rating,
+      }}
+      onClick={() => onOpen(m.tmdb_id)}
+    />
+  );
+});
+
 export default function MoviesPage() {
   const { data: movies = [], isPending } = useMovieLibrary();
   const [sort, setSort] = useState<SortKey>("lastreleased");
   const [searchParams, setSearchParams] = useSearchParams();
-  const esNames = useEsNames();
   const rated = useRatedSort();
   /* Pulsar «Última puntuada» estando ya activa voltea el sentido, igual que en
      las otras dos bibliotecas; la flecha de la etiqueta dice cuál está puesto. */
@@ -81,13 +106,17 @@ export default function MoviesPage() {
   const items = movies
     .filter((m) => f === "all" || m.status === f)
     .sort(sort === "rated" ? rated.cmp : COMPARATORS[sort]);
+  /* Se monta por tandas (ui/GrowingList): los contadores y el orden de arriba
+     siguen siendo de la lista entera; solo se recorta lo que se pinta. */
+  const { shown, sentinel } = useGrowingList(items, `${f}|${sort}|${sort === "rated" ? rated.arrow : ""}`);
 
-  const open = (tmdbId: number) =>
+  const open = useStableHandler((tmdbId: number) =>
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("movie", String(tmdbId));
       return next;
-    });
+    }),
+  );
 
   return (
     <div className="screen mq-page">
@@ -139,24 +168,11 @@ export default function MoviesPage() {
       )}
 
       <div className="poster-grid">
-        {items.map((m, i) => (
-          <Poster
-            key={m.title_id}
-            priority={i < EAGER_POSTERS}
-            kind="movie"
-            t={{
-              id: String(m.tmdb_id),
-              name: locName(esNames, m.tmdb_id, m.name, "movie"),
-              year: m.first_air_date?.slice(0, 4) ?? "TBA",
-              genres: m.genres.length ? m.genres : ["—"],
-              posterPath: tmdbImg(m.poster_path),
-              voteAverage: m.vote_average ?? 0,
-              imdbRating: m.imdb_rating,
-            }}
-            onClick={() => open(m.tmdb_id)}
-          />
+        {shown.map((m, i) => (
+          <MovieCard key={m.title_id} m={m} priority={i < EAGER_POSTERS} onOpen={open} />
         ))}
       </div>
+      {sentinel}
     </div>
   );
 }
