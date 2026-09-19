@@ -6,7 +6,7 @@ import type { GameStatus } from "@/domain/gameStatus";
 import { formatPlaytime } from "@/domain/gameStatus";
 import { t as tr, tv } from "@/lib/i18n";
 import { igdbImg } from "@/lib/igdb";
-import { Poster, TabMenu } from "@/ui";
+import { EAGER_POSTERS, Poster, TabMenu } from "@/ui";
 import { PosterGridSkeleton } from "@/ui/Skeleton";
 
 /* Tu biblioteca de juegos. Gemela de ShowsPage y de MoviesPage: la misma
@@ -159,9 +159,10 @@ export default function GamesPage() {
       )}
 
       <div className="poster-grid">
-        {items.map((g) => (
+        {items.map((g, i) => (
           <Poster
             key={g.title_id}
+            priority={i < EAGER_POSTERS}
             /* Sin proveedores: un juego no está "en Netflix". Lo que ocupa ese
                hueco mental son las plataformas, y van en el subtítulo. */
             showProviders={false}
