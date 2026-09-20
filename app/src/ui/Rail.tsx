@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { Children, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { t as tr } from "@/lib/i18n";
+import { useGrowingList } from "@/ui/GrowingList";
 
 /* Horizontal carousel with a header row: title/subtitle on the left and the two
    scroll arrows grouped at the top-right (opposite the title). Each arrow is
@@ -12,7 +13,27 @@ import { t as tr } from "@/lib/i18n";
    can sit beside it. action: extra header content (e.g. a "See all" link) placed
    just left of the arrows, and unlike them it survives on touch.
    scrollToStartKey: bump this (any changing number) to smooth-scroll back to the
-   start — Tonight uses it to follow a just-marked show to the front. */
+   start — Tonight uses it to follow a just-marked show to the front.
+
+   Por tandas (ui/GrowingList, eje x). "Seguir viendo" y "Tu lista" no tienen
+   tope: con una biblioteca grande montaban 319 carátulas cada una para una
+   fila que enseña nueve (medido el 19-sep-2026, CPU 4x: tarea larga de 252 ms
+   en Tonight). La fila monta RAIL_BATCH hijos y el resto entra al acercarse su
+   final por el scroll de la propia fila — a mano, con las flechas, arrastrando
+   o con el tabulador, que desplaza la fila hasta la tarjeta enfocada.
+
+   Cuando entra una tanda solo se vuelve a pintar la fila, no las tarjetas ya
+   montadas, y sin exigir `memo` en cada tarjeta de cada pantalla: los hijos
+   vienen del padre, que no ha cambiado, y `Children.toArray` les cambia la
+   clave pero conserva su objeto `props` — que es lo que React compara para
+   saltarse un componente. Envolverlos (cloneElement, props nuevas) rompería
+   eso y cada tanda repintaría todas las de antes; Rail.test.tsx lo vigila. */
+
+/** Cuántos hijos monta una fila de entrada y en cada tanda. Veinte cubre el
+ *  primer vistazo más el margen de 1.500 px en un escritorio de 1.600 px, y deja
+ *  sin tocar las filas con tope de 20 (Explorar), que caben en una. */
+export const RAIL_BATCH = 20;
+
 export function Rail({
   children,
   title,
@@ -27,6 +48,8 @@ export function Rail({
   scrollToStartKey?: number;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const all = Children.toArray(children);
+  const { shown, sentinel } = useGrowingList(all, "", RAIL_BATCH, { axis: "x", root: ref });
   const [canL, setCanL] = useState(false);
   const [canR, setCanR] = useState(false);
   const [grabbing, setGrabbing] = useState(false);
@@ -154,7 +177,8 @@ export function Rail({
         onPointerCancel={endDrag}
         onClickCapture={onClickCapture}
       >
-        {children}
+        {shown}
+        {sentinel}
       </div>
     </div>
   );
