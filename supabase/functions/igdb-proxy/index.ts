@@ -62,6 +62,7 @@ import {
   gameRow,
   gameSearchRow,
   metacritic,
+  sinMedia,
   type SteamNotas,
   steamAppid,
   steamReviews,
@@ -400,6 +401,13 @@ const STEAM_CHUNK = 40;
  *  llamadas: una sola invocación con mil appids son cincuenta peticiones a
  *  IGDB dentro de un solo `await`, y el límite es del proyecto entero. */
 const STEAM_MAX = 200;
+
+/** Relleno de capturas y vídeos: filas por lectura y tope por invocación. 200
+ *  son cinco peticiones a IGDB; 1.000 son veinticinco, unos diez segundos del
+ *  límite de la plataforma. Lo que no quepa lo recoge la siguiente llamada con
+ *  el `next` que devuelve esta. */
+const BACKFILL_PAGE = 200;
+const BACKFILL_MAX = 1000;
 
 function chunk<T>(xs: T[], n: number): T[][] {
   const out: T[][] = [];
@@ -767,6 +775,68 @@ Deno.serve(async (req) => {
       return json({ ok, summary }, ok ? 200 : 500);
     }
 
+    // POST /backfill-media — solo con la clave de servicio, y a mano.
+    //
+    // Las fichas cuyo detalle es de antes de 0086 no tienen capturas ni vídeos,
+    // y la ruta de la ficha ya se cura sola (ver `sinMedia` más abajo) — pero
+    // de una en una y haciendo esperar a quien la abre. Esto las cura todas de
+    // golpe, en tandas de 40 por petición: cuatrocientos juegos son diez
+    // peticiones a IGDB, no cuatrocientas.
+    //
+    // Solo filas que YA tuvieron un detalle (`last_refreshed_at`): las que solo
+    // han pasado por el buscador esperan a la red en su primera apertura, y
+    // `fetchGamesInto` no trae los tiempos de How Long To Beat, así que darles
+    // aquí una marca de frescura sería abrirlas 24 h sin esa tarjeta.
+    //
+    // `?dry=1` cuenta y no escribe. Con cursor (`?after=<tmdb_id>`) y no
+    // repitiendo el mismo filtro, porque un juego del que IGDB de verdad no
+    // tiene nada sigue cumpliéndolo después de preguntar: sin cursor, la
+    // segunda llamada volvería a por los mismos.
+    if (path === "/backfill-media") {
+      if (req.method !== "POST") return json({ error: "not found" }, 404);
+      if (!isCron) return json({ error: "unauthorized" }, 401);
+      const dry = url.searchParams.get("dry") === "1";
+      let after = Number(url.searchParams.get("after") ?? 0) || 0;
+      let candidatos = 0;
+      let actualizados = 0;
+      let conMedia = 0;
+      let quedan = false;
+      while (candidatos < BACKFILL_MAX) {
+        const { data: page, error } = await admin
+          .from("titles")
+          .select("tmdb_id")
+          .eq("kind", "game")
+          .not("last_refreshed_at", "is", null)
+          .is("screenshots", null)
+          .is("videos", null)
+          .gt("tmdb_id", after)
+          .order("tmdb_id")
+          .limit(BACKFILL_PAGE);
+        if (error) throw new Error(`backfill read: ${error.message}`);
+        if (!page?.length) break;
+        const ids = page.map((r: Any) => r.tmdb_id as number);
+        candidatos += ids.length;
+        after = ids[ids.length - 1];
+        if (!dry) {
+          // `fetchGamesInto` se traga la tanda que falla y sigue; por eso se
+          // cuenta lo que VUELVE y no lo que se pidió — la diferencia entre
+          // `candidatos` y `actualizados` es lo que hay que volver a lanzar.
+          const rows = await fetchGamesInto(admin, ids);
+          actualizados += rows.size;
+          for (const row of rows.values()) if (!sinMedia(row)) conMedia++;
+        }
+        quedan = page.length === BACKFILL_PAGE;
+        if (!quedan) break;
+      }
+      return json({
+        dry,
+        candidatos,
+        actualizados: dry ? null : actualizados,
+        con_media: dry ? null : conMedia,
+        next: quedan ? after : null,
+      });
+    }
+
     // GET /discover/:pool — anticipated | new | popular | top-rated.
     //
     // Una sola ruta para las cuatro y no cuatro rutas casi iguales: lo único
@@ -899,14 +969,31 @@ Deno.serve(async (req) => {
       // tiempos — un Silksong salido en 2025 con un "TBA" enorme — y solo se
       // arreglaba al volver a abrirla. Sin detalle previo se espera a la red,
       // que es lo que tmdb-proxy hace con lo nunca cacheado.
-      if (cached?.last_refreshed_at) {
+      //
+      // Y con una excepción: la rancia que no tiene ni capturas ni vídeos
+      // (`sinMedia`) también espera. Servirla era abrir la ficha sin tráiler
+      // ni capturas mientras el refresco las guardaba por detrás, y el
+      // navegador no volvía a preguntar hasta minutos después — el dato estaba
+      // en la base y la pantalla no. Si la red falla se sirve lo que hay: una
+      // ficha sin capturas es mejor que un 502.
+      const stale = { title: cached, episode_id: cached?.episodes?.[0]?.id ?? null };
+      if (cached?.last_refreshed_at && !sinMedia(cached)) {
         inBackground(refreshGame(admin, igdbId));
-        return json({ title: cached, episode_id: cached.episodes?.[0]?.id ?? null }, 200, {
-          "X-Cache": "STALE",
-        });
+        return json(stale, 200, { "X-Cache": "STALE" });
       }
 
-      const row = await refreshGame(admin, igdbId);
+      let row;
+      try {
+        row = await refreshGame(admin, igdbId);
+      } catch (e) {
+        if (!cached?.last_refreshed_at) throw e;
+        console.error("igdb-proxy game sin media", igdbId, e);
+        return json(stale, 200, { "X-Cache": "STALE" });
+      }
+      // Sin respuesta de IGDB y con fila: el juego se ha retirado o fusionado
+      // allí, pero sigue en la biblioteca de alguien. Se sirve lo que hay, que
+      // es lo que pasaba antes de que esta fila esperase a la red.
+      if (!row && cached?.last_refreshed_at) return json(stale, 200, { "X-Cache": "STALE" });
       if (!row) return json({ error: "not found" }, 404);
 
       // El episodio sintético lo acaba de crear el trigger, en la misma

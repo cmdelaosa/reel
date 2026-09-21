@@ -541,6 +541,26 @@ export function capturasRecortadas(shots: readonly Any[] | null | undefined): st
   return out.length ? out : null;
 }
 
+/** ¿Esta fila no tiene NI capturas NI vídeos guardados?
+ *
+ *  Lo pregunta la ficha antes de servir una fila rancia sin esperar a la red.
+ *  Desde 0086 `gameRow` escribe las dos columnas en cada detalle, así que las
+ *  dos a null quiere decir una de dos cosas: que IGDB no tiene nada de este
+ *  juego, o que el detalle es de ANTES de que existieran las columnas — y esas
+ *  son las 386 que entraron por el export de InfiniteBacklog dos días antes de
+ *  0086. Desde la fila no se distinguen, y no hace falta: a la segunda le va la
+ *  ficha en ello (se abría sin tráiler ni capturas y no aparecían hasta que el
+ *  navegador volvía a preguntar, minutos después), y a la primera le cuesta una
+ *  espera de un detalle, como mucho una vez cada 24 h.
+ *
+ *  Las DOS, y no una: un juego con capturas y sin vídeo es lo normal en
+ *  cualquier cosa de antes de 2005, y esperar a la red por él cada día sería
+ *  pagar por un dato que ya se sabe que no existe. */
+export function sinMedia(row: { screenshots?: unknown; videos?: unknown } | null | undefined): boolean {
+  const vacia = (v: unknown) => v == null || (Array.isArray(v) && v.length === 0);
+  return vacia(row?.screenshots) && vacia(row?.videos);
+}
+
 /* Los dos enums de clasificación por edad, LEÍDOS DE LA API (27-ago-2026) y no
    de la documentación, por lo mismo que los formatos de fecha de más arriba: la
    tabla publicada y lo que responde el servidor no siempre coinciden.
