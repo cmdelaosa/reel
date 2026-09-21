@@ -793,7 +793,8 @@ Deno.serve(async (req) => {
     // tiene nada sigue cumpliéndolo después de preguntar: sin cursor, la
     // segunda llamada volvería a por los mismos.
     if (path === "/backfill-media") {
-      if (req.method !== "POST" || !isCron) return json({ error: "unauthorized" }, 401);
+      if (req.method !== "POST") return json({ error: "not found" }, 404);
+      if (!isCron) return json({ error: "unauthorized" }, 401);
       const dry = url.searchParams.get("dry") === "1";
       let after = Number(url.searchParams.get("after") ?? 0) || 0;
       let candidatos = 0;
@@ -989,6 +990,10 @@ Deno.serve(async (req) => {
         console.error("igdb-proxy game sin media", igdbId, e);
         return json(stale, 200, { "X-Cache": "STALE" });
       }
+      // Sin respuesta de IGDB y con fila: el juego se ha retirado o fusionado
+      // allí, pero sigue en la biblioteca de alguien. Se sirve lo que hay, que
+      // es lo que pasaba antes de que esta fila esperase a la red.
+      if (!row && cached?.last_refreshed_at) return json(stale, 200, { "X-Cache": "STALE" });
       if (!row) return json({ error: "not found" }, 404);
 
       // El episodio sintético lo acaba de crear el trigger, en la misma
