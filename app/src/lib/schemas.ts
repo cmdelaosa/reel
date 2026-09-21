@@ -269,6 +269,13 @@ export const libraryRowSchema = z.object({
      que Tus pelis no diga un número distinto del que dice Explorar. Opcional
      porque una base anterior a 0080 no la devuelve. */
   imdb_rating: z.number().nullable().optional(),
+  /* Las reseñas de Steam (0102). Viaja por lo mismo que `imdb_rating`: la
+     carátula de un juego las enseña, y la biblioteca no lee `titles` sino este
+     rollup — sin la columna, Tus juegos se quedaría mudo mientras Explorar,
+     que sí lee filas enteras, enseña el porcentaje. Opcional porque una base
+     anterior a 0102 no la devuelve, y null en los juegos que no están en
+     Steam y en los otros dos medios. */
+  steam_reviews: z.object({ percent: z.number(), count: z.number().int() }).nullable().optional(),
 });
 export type LibraryRow = z.infer<typeof libraryRowSchema>;
 

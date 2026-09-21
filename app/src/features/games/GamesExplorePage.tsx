@@ -138,6 +138,7 @@ export default function GamesExplorePage() {
         genres: t.genres.length ? t.genres : ["—"],
         posterPath: igdbImg(t.poster_path),
         voteAverage: t.vote_average ?? 0,
+        steamReviews: t.steam_reviews,
       }}
       onClick={() => open(t.tmdb_id)}
     />

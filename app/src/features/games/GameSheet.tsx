@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Check, ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Library, Minus, Plus, Star, X } from "lucide-react";
 import { igdbImg, useGame, useSetGameProgress } from "@/lib/igdb";
-import { dateLocale, isEs, t as tr, tGenre, tv } from "@/lib/i18n";
+import { dateLocale, isEs, t as tr, tGenre, tSteam, tv } from "@/lib/i18n";
 import { useFollow, useGameLibrary, useUnfollow } from "@/lib/library";
 import { useIgnore, useIgnored, useUnignore } from "@/lib/ignore";
 import { useMyRating, useRateTitle } from "@/lib/ratings";
@@ -417,7 +417,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                           href={tienda.url}
                           target="_blank"
                           rel="noreferrer noopener"
-                          title={steamLabel ? tr(steamLabel) : tv("{votes} reviews", { votes: title.steam_reviews.count.toLocaleString(dateLocale()) })}
+                          title={steamLabel ? tSteam(steamLabel) : tv("{votes} reviews", { votes: title.steam_reviews.count.toLocaleString(dateLocale()) })}
                         >
                           <span className="eyebrow" style={{ fontSize: 10 }}>Steam</span>
                           <span className="detail-cellval" style={{ color: steamReviewColor(title.steam_reviews.percent) }}>
@@ -428,7 +428,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                       ) : (
                         <div
                           className="detail-cell"
-                          title={steamLabel ? tr(steamLabel) : tv("{votes} reviews", { votes: title.steam_reviews.count.toLocaleString(dateLocale()) })}
+                          title={steamLabel ? tSteam(steamLabel) : tv("{votes} reviews", { votes: title.steam_reviews.count.toLocaleString(dateLocale()) })}
                         >
                           <span className="eyebrow" style={{ fontSize: 10 }}>Steam</span>
                           <span className="detail-cellval" style={{ color: steamReviewColor(title.steam_reviews.percent) }}>

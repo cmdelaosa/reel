@@ -4,6 +4,7 @@ import { useGameLibrary, type LibraryGame } from "@/lib/library";
 import { useRatedSort } from "@/lib/ratings";
 import type { GameStatus } from "@/domain/gameStatus";
 import { formatPlaytime } from "@/domain/gameStatus";
+import { compareBySteamReviews } from "@/domain/steamReviews";
 import { t as tr, tv } from "@/lib/i18n";
 import { igdbImg } from "@/lib/igdb";
 import { EAGER_POSTERS, Poster, TabMenu, useGrowingList, useStableHandler } from "@/ui";
@@ -38,13 +39,17 @@ const FILTERS: { key: Bucket; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-type SortKey = "added" | "played" | "lastreleased" | "az" | "rating" | "rated";
+type SortKey = "added" | "played" | "lastreleased" | "az" | "rating" | "steam" | "rated";
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "added", label: "Date added" },
   { key: "played", label: "Most played" },
   { key: "lastreleased", label: "Last released" },
   { key: "az", label: "A–Z" },
   { key: "rating", label: "Top rated" },
+  /* Junto a «Mejor nota» y no en su lugar: esa es la de IGDB y esta la de quien
+     se lo ha jugado, que es la que la carátula enseña con el logotipo. Las dos
+     ordenan la misma rejilla por dos criterios que no coinciden. */
+  { key: "steam", label: "Best on Steam" },
   { key: "rated", label: "Last rated" },
 ];
 
@@ -57,6 +62,9 @@ const COMPARATORS: Record<Exclude<SortKey, "rated">, (a: LibraryGame, b: Library
   lastreleased: (a, b) => (b.first_air_date ?? "").localeCompare(a.first_air_date ?? ""),
   az: (a, b) => a.name.localeCompare(b.name),
   rating: (a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0),
+  /* Lo que no está en Steam va al final y no al fondo del porcentaje; la regla
+     entera, con sus desempates, en domain/steamReviews. */
+  steam: compareBySteamReviews,
 };
 
 /* Lo que va debajo del nombre en la tarjeta. Las horas cuando las hay, porque
@@ -80,6 +88,12 @@ const GameCard = memo(function GameCard({ g, priority, onOpen }: {
   return (
     <Poster
       priority={priority}
+      /* El medio, explícito. Es lo que deja salir el porcentaje de Steam, y de
+         paso arregla algo que estaba mal sin verse: con el defecto ('tv') el
+         nombre del juego pasaba por el mapa de títulos en español, que se
+         indexa por `kind:id` — o sea buscaba `tv:<id de IGDB>` y podía
+         ponerle a un juego el título de la serie que lleva ese número. */
+      kind="game"
       /* Sin proveedores: un juego no está "en Netflix". Lo que ocupa ese
          hueco mental son las plataformas, y van en el subtítulo. */
       showProviders={false}
@@ -91,6 +105,7 @@ const GameCard = memo(function GameCard({ g, priority, onOpen }: {
         genres: g.genres.length ? g.genres : ["—"],
         posterPath: igdbImg(g.poster_path),
         voteAverage: g.vote_average ?? 0,
+        steamReviews: g.steam_reviews,
         progress:
           g.status === "playing" && g.progress != null ? Math.min(g.progress, 100) : undefined,
         stopped: g.status === "dropped",
