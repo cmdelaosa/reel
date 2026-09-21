@@ -74,8 +74,9 @@ describe("compareBySteamReviews", () => {
   it("empatados en porcentaje manda el número de reseñas", () => {
     /* La razón por la que `count` viaja en el rollup: un 100 % de tres
        personas no es mejor que un 100 % de ocho mil, y sin esto la rejilla lo
-       pondría primero por el orden en que llegaran las filas. */
-    /* Los nombres van a contrapelo del alfabeto a propósito: con "ocho mil" y
+       pondría primero por el orden en que llegaran las filas.
+
+       Los nombres van a contrapelo del alfabeto a propósito: con "ocho mil" y
        "tres votos" el desempate por nombre daba el mismo orden que el correcto,
        y quitar el desempate por reseñas no rompía nada. */
     expect(ordenar(juego("a: tres votos", 100, 3), juego("z: ocho mil", 100, 8000)))

@@ -122,7 +122,12 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
         <span>
           {showProviders && kind !== "game" && <WatchOn tmdbId={Number(t.id) || null} kind={kind} />}
         </span>
-        <span className="flex items-center gap-1">
+        {/* `flex-wrap` por la insignia de Steam: un juego abandonado puede
+            llevar tres (pausa, IGDB y Steam) y en una carátula de móvil no
+            caben en una línea. La carátula recorta lo que se sale
+            (`overflow: hidden`), así que sin esto la tercera desaparecía a
+            medias en vez de bajar a la línea de abajo. */}
+        <span className="flex flex-wrap items-center justify-end gap-1">
           {t.stopped && (
             <span className="badge badge-glass" title={tr("Stopped watching")}>
               <Pause size={11} fill="currentColor" strokeWidth={0} />

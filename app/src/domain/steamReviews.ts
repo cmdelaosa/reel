@@ -90,9 +90,8 @@ export function steamReviewColor(percent: number): string {
  *  · LO QUE NO TIENE RESEÑAS VA AL FINAL, no al principio ni intercalado con un
  *    cero. Un juego de consola no está en Steam y eso no es un suspenso; y un
  *    0 lo mandaría al fondo por debajo de lo que de verdad está mal valorado,
- *    que es lo mismo pero mintiendo. `sinNota` los deja detrás de todos y
- *    ordenados entre ellos por nombre, para que la cola no baile en cada
- *    repintado. */
+ *    que es lo mismo pero mintiendo. La cola va ordenada por nombre entre
+ *    ella misma, para que no baile en cada repintado. */
 export function compareBySteamReviews(
   a: { steam_reviews?: SteamReviews | null; name: string },
   b: { steam_reviews?: SteamReviews | null; name: string },
