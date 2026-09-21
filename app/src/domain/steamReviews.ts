@@ -71,3 +71,35 @@ export function steamReviewColor(percent: number): string {
   if (percent >= 40) return "var(--text-dim)";
   return "#e5484d";
 }
+
+/** Comparador de "mejor valoradas en Steam", de más a menos.
+ *
+ *  Tres decisiones, y ninguna es obvia:
+ *
+ *  · ORDENA POR PORCENTAJE, no por la etiqueta. La etiqueta agrupa —todo lo que
+ *    está entre el 80 % y el 94 % con muchas reseñas es "Muy positivas"— y
+ *    ordenar por ella dejaría cien juegos empatados en un montón que la persona
+ *    tendría que volver a mirar uno a uno. El porcentaje separa.
+ *
+ *  · CON POCAS RESEÑAS EL PORCENTAJE MIENTE, y por eso el desempate es el
+ *    número de reseñas: entre dos juegos al 100 %, primero el de ocho mil y
+ *    después el de tres. No se pondera el porcentaje —eso sería inventarse una
+ *    nota que no es la de Steam, y la carátula enseña la de Steam— sino que se
+ *    usa solo para deshacer empates, que es donde la diferencia se ve.
+ *
+ *  · LO QUE NO TIENE RESEÑAS VA AL FINAL, no al principio ni intercalado con un
+ *    cero. Un juego de consola no está en Steam y eso no es un suspenso; y un
+ *    0 lo mandaría al fondo por debajo de lo que de verdad está mal valorado,
+ *    que es lo mismo pero mintiendo. La cola va ordenada por nombre entre
+ *    ella misma, para que no baile en cada repintado. */
+export function compareBySteamReviews(
+  a: { steam_reviews?: SteamReviews | null; name: string },
+  b: { steam_reviews?: SteamReviews | null; name: string },
+): number {
+  const ra = a.steam_reviews?.count ? a.steam_reviews : null;
+  const rb = b.steam_reviews?.count ? b.steam_reviews : null;
+  if (!ra && !rb) return a.name.localeCompare(b.name);
+  if (!ra) return 1;
+  if (!rb) return -1;
+  return rb.percent - ra.percent || rb.count - ra.count || a.name.localeCompare(b.name);
+}

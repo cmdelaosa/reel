@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { steamReviewColor, steamReviewLabel } from "./steamReviews";
+import { compareBySteamReviews, steamReviewColor, steamReviewLabel } from "./steamReviews";
 
 /* Lo que estas pruebas vigilan es la parte contraintuitiva de la escala de
    Steam: el número de reseñas mueve la etiqueta DENTRO del mismo porcentaje.
@@ -54,5 +54,51 @@ describe("steamReviewColor", () => {
     expect(steamReviewColor(69)).toBe("var(--text-dim)");
     expect(steamReviewColor(40)).toBe("var(--text-dim)");
     expect(steamReviewColor(39)).toBe("#e5484d");
+  });
+});
+
+describe("compareBySteamReviews", () => {
+  const juego = (name: string, percent?: number, count?: number) => ({
+    name,
+    steam_reviews: percent == null ? null : { percent, count: count ?? 1000 },
+  });
+
+  const ordenar = (...juegos: ReturnType<typeof juego>[]) =>
+    [...juegos].sort(compareBySteamReviews).map((g) => g.name);
+
+  it("de más a menos porcentaje", () => {
+    expect(ordenar(juego("medio", 72), juego("alto", 96), juego("bajo", 31)))
+      .toEqual(["alto", "medio", "bajo"]);
+  });
+
+  it("empatados en porcentaje manda el número de reseñas", () => {
+    /* La razón por la que `count` viaja en el rollup: un 100 % de tres
+       personas no es mejor que un 100 % de ocho mil, y sin esto la rejilla lo
+       pondría primero por el orden en que llegaran las filas.
+
+       Los nombres van a contrapelo del alfabeto a propósito: con "ocho mil" y
+       "tres votos" el desempate por nombre daba el mismo orden que el correcto,
+       y quitar el desempate por reseñas no rompía nada. */
+    expect(ordenar(juego("a: tres votos", 100, 3), juego("z: ocho mil", 100, 8000)))
+      .toEqual(["z: ocho mil", "a: tres votos"]);
+  });
+
+  it("lo que no está en Steam va al final, y no al fondo de la escala", () => {
+    /* Y va detrás TAMBIÉN de lo peor valorado: un juego de consola sin ficha de
+       Steam no es un suspenso, y colarlo entre los porcentajes bajos diría que
+       sí. Esto es lo que se rompería tratando el null como un 0. */
+    expect(ordenar(juego("sin steam"), juego("horrible", 12), juego("bueno", 88)))
+      .toEqual(["bueno", "horrible", "sin steam"]);
+  });
+
+  it("cero reseñas es no tener ficha, y no un porcentaje que valga", () => {
+    /* El 100 % es aposta: con `count: 0` Steam devuelve un porcentaje que no
+       significa nada, y leerlo pondría un juego que nadie ha reseñado por
+       delante de todo lo demás. */
+    expect(ordenar(juego("nadie", 100, 0), juego("flojo", 35))).toEqual(["flojo", "nadie"]);
+  });
+
+  it("la cola sin nota queda alfabética, y no en el orden en que llegó", () => {
+    expect(ordenar(juego("zelda"), juego("abzu"), juego("halo"))).toEqual(["abzu", "halo", "zelda"]);
   });
 });

@@ -1,11 +1,13 @@
 import { Pause, Star } from "lucide-react";
 import type { TitleCard } from "@/domain/types";
 import { externalScore, scoreColor, scoreLabel } from "@/domain/externalScore";
+import { steamReviewColor, steamReviewLabel } from "@/domain/steamReviews";
+import { SteamIcon } from "@/ui/icons/SteamIcon";
 import type { Medium } from "@/lib/medium";
 import { posterBg } from "@/ui/posterBg";
 import { WatchOn } from "@/ui/WatchOn";
 import { useTitleIntent } from "@/lib/useOpenTitle";
-import { locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
+import { locName, t as tr, tGenre, tSteam, tv, useEsNames } from "@/lib/i18n";
 
 /** Cuántas carátulas de una rejilla `.poster-grid` se piden sin diferir.
  *
@@ -62,6 +64,19 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
   const score = externalScore({ imdb_rating: t.imdbRating, vote_average: t.voteAverage });
   const scoreFrom = score && kind !== "game" ? scoreLabel(score.source) : undefined;
 
+  /* Y en un juego, ADEMÁS, el porcentaje de reseñas de Steam cuando la fila lo
+     trae. Va junto a la de IGDB y no en su lugar porque no dicen lo mismo: una
+     es la nota de un catálogo y la otra es lo que opina quien se lo ha jugado,
+     que es lo que la gente mira antes de comprar.
+
+     Lleva el logotipo en vez de una estrella para que las dos insignias no se
+     confundan de un vistazo — dos estrellas con dos números distintos sobre la
+     misma carátula serían un acertijo—, y el número va sin decimales porque es
+     un porcentaje, no una nota sobre diez. El color y la etiqueta salen de
+     domain/steamReviews; aquí no se decide nada. */
+  const steam = kind === "game" && t.steamReviews?.count ? t.steamReviews : null;
+  const steamLabel = steamReviewLabel(steam);
+
   return (
     <div
       className="poster"
@@ -107,7 +122,12 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
         <span>
           {showProviders && kind !== "game" && <WatchOn tmdbId={Number(t.id) || null} kind={kind} />}
         </span>
-        <span className="flex items-center gap-1">
+        {/* `flex-wrap` por la insignia de Steam: un juego abandonado puede
+            llevar tres (pausa, IGDB y Steam) y en una carátula de móvil no
+            caben en una línea. La carátula recorta lo que se sale
+            (`overflow: hidden`), así que sin esto la tercera desaparecía a
+            medias en vez de bajar a la línea de abajo. */}
+        <span className="flex flex-wrap items-center justify-end gap-1">
           {t.stopped && (
             <span className="badge badge-glass" title={tr("Stopped watching")}>
               <Pause size={11} fill="currentColor" strokeWidth={0} />
@@ -117,6 +137,16 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
             <span className="badge badge-glass" title={scoreFrom}>
               <Star size={11} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
               {score.value.toFixed(1)}
+            </span>
+          )}
+          {steam && (
+            <span
+              className="badge badge-glass"
+              data-testid="steam-badge"
+              title={steamLabel ? `Steam · ${tSteam(steamLabel)}` : "Steam"}
+            >
+              <SteamIcon size={11} style={{ color: steamReviewColor(steam.percent) }} />
+              {steam.percent}%
             </span>
           )}
         </span>

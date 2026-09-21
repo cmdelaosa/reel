@@ -126,7 +126,7 @@ declare hay text; debe constant text :=
   'watched_count,last_watched_at,last_aired_datetime,next_air_datetime,'
   'upcoming_season_number,upcoming_season_air_date,play_state,minutes_played,'
   'played_at,release_precision,platforms,beat_seconds,owned,minutes_source,'
-  'played_platform,imdb_rating';
+  'played_platform,imdb_rating,steam_reviews';
 begin
   select string_agg(a.name, ',' order by a.ord) into hay
   from pg_proc p,
@@ -160,16 +160,31 @@ end $$;
 -- Y que no basta con declararlas: el valor tiene que llegar. Una columna en el
 -- `returns table` con otra expresión debajo en el `select` pasa el §0 entero.
 update public.titles set backdrop_path = '/fondo-0098.jpg' where tmdb_id = 700005;
+-- Las reseñas de Steam (0102) van en el mismo juego: ENTERAS, con su `count`,
+-- que es lo que desempata el orden de «Mejor en Steam» y lo que decide la
+-- etiqueta que pinta el cliente. Un rollup que trajera solo el porcentaje
+-- pasaría el §0 —la columna estaría declarada— y rompería las dos cosas en
+-- silencio.
+update public.titles set steam_reviews = '{"percent": 96, "count": 8123}'::jsonb
+  where tmdb_id = 700005;
 update public.library_entries le set played_platform = 'switch'
   from public.titles t where t.id = le.title_id and t.tmdb_id = 700005
   and le.user_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 do $$
-declare fondo text; plataforma text;
+declare fondo text; plataforma text; resenas jsonb;
 begin
-  select r.backdrop_path, r.played_platform into fondo, plataforma
+  select r.backdrop_path, r.played_platform, r.steam_reviews
+    into fondo, plataforma, resenas
   from public.rpc_library_rollup() r where r.tmdb_id = 700005;
   assert fondo = '/fondo-0098.jpg', format('backdrop_path no viaja: llega %s', fondo);
   assert plataforma = 'switch', format('played_platform no viaja: llega %s', plataforma);
+  assert resenas = '{"percent": 96, "count": 8123}'::jsonb,
+    format('steam_reviews no viaja entera: llega %s', resenas);
+
+  -- Y que en una serie llega null, que es como lo lee quien pinta.
+  select r.steam_reviews into resenas
+  from public.rpc_library_rollup() r where r.tmdb_id = 700001;
+  assert resenas is null, format('una serie no tiene resenas de Steam: llega %s', resenas);
 end $$;
 
 -- ── 1. Solo lo seguido, y solo lo tuyo ────────────────────────────────────

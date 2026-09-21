@@ -201,6 +201,7 @@ export default function GamesTonightPage() {
             {rail.map((g) => (
               <div key={g.title_id} style={{ width: "var(--rail-pw)" }}>
                 <Poster
+                  kind="game"
                   showProviders={false}
                   subtitle={(g.minutes_played ?? 0) > 0 ? formatPlaytime(g.minutes_played ?? 0) : undefined}
                   t={{
@@ -210,6 +211,7 @@ export default function GamesTonightPage() {
                     genres: g.genres.length ? g.genres : ["—"],
                     posterPath: igdbImg(g.poster_path),
                     voteAverage: g.vote_average ?? 0,
+                    steamReviews: g.steam_reviews,
                     progress: g.progress != null ? Math.min(g.progress, 100) : undefined,
                   }}
                   onClick={() => open(g.tmdb_id)}

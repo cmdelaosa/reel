@@ -7,6 +7,7 @@ import { dateLocale, isEs, lang } from "@/lib/locale";
 // necesitó lo mismo que este mapa; su matriz está en paging.test.ts.
 import { restOffsets } from "@/lib/paging";
 import { useAuth } from "@/features/auth/AuthProvider";
+import type { SteamReviewLabel } from "@/domain/steamReviews";
 
 /* Lightweight es/en localization (settings.language).
    - t("English text") looks the string up in the DICT below; unknown strings
@@ -602,6 +603,11 @@ const ES: Record<string, string> = {
   "Last released": "Último emitido",
   "A–Z": "A–Z",
   "Top rated": "Mejor nota",
+  /* El orden por las reseñas de Steam, solo en juegos. "Mejor en Steam" y no
+     "Mejor valoradas": lo que ordena es el porcentaje de reseñas positivas de
+     una tienda concreta, y decirlo evita leerlo como la nota de IGDB de al
+     lado. */
+  "Best on Steam": "Mejor en Steam",
   /* El orden por la fecha de TU nota, en las tres bibliotecas. La flecha (↓ más
      reciente primero, ↑ al revés) la pone la página fuera de la cadena: es
      estado, no idioma. */
@@ -1350,6 +1356,18 @@ const DICTS: Partial<Record<LanguageName, Record<string, string>>> = { en: EN, e
  *  has no dictionary or no entry, so unknown/untranslated strings stay readable. */
 export function t(s: string): string {
   return DICTS[lang()]?.[s] ?? s;
+}
+
+/** La etiqueta de reseñas de Steam, ya traducida y sin su prefijo.
+ *
+ *  Las claves van prefijadas ("steam: Positive") porque "Positive" a secas
+ *  colisionaría con cualquier otro uso de la palabra en el diccionario. El
+ *  prefijo es de la CLAVE, no del texto — y en inglés, que no tiene diccionario
+ *  y cae a la clave, se colaba entero a la pantalla: el title de la ficha de un
+ *  juego decía "steam: Overwhelmingly Positive". Aquí se quita una vez, y lo
+ *  usan la ficha y la insignia de la carátula. */
+export function tSteam(label: SteamReviewLabel): string {
+  return t(label).replace(/^steam: /, "");
 }
 
 /** Translate a string carrying {placeholders}, then fill them.

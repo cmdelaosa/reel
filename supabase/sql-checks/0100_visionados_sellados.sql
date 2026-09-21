@@ -392,12 +392,34 @@ begin
     perform set_config('request.jwt.claims',
       format('{"sub":"%s","role":"authenticated"}', u), true);
     foreach k in array array[null, 'tv', 'movie', 'game'] loop
+      -- Las 32 columnas de 0099, NOMBRADAS, y no `select *`. Desde 0102 el
+      -- rollup devuelve una 33ª (`steam_reviews`) que la copia congelada de
+      -- aquí no tiene, y un EXCEPT con distinto número de columnas no es una
+      -- comparación que falle: es un error de sintaxis que tumba la matriz
+      -- entera. Lo que este § compara sigue siendo lo mismo —que el conteo
+      -- sellado dice lo que contaba el de 0099—, y lo que trae la columna
+      -- nueva lo vigila el §0 de 0098_rollup_sin_laterales.sql, que es su
+      -- sitio.
       select count(*) into nuevo_sobra from (
-        select * from public.rpc_library_rollup(k)
+        select title_id, tmdb_id, kind, name, poster_path, backdrop_path, first_air_date,
+         tmdb_status, genres, network, vote_average, favorite, notify, stopped,
+         added_at, aired_count, watched_count, last_watched_at,
+         last_aired_datetime, next_air_datetime, upcoming_season_number,
+         upcoming_season_air_date, play_state, minutes_played, played_at,
+         release_precision, platforms, beat_seconds, owned, minutes_source,
+         played_platform, imdb_rating
+        from public.rpc_library_rollup(k)
         except all select * from pg_temp.rollup_0099(k)) x;
       select count(*) into viejo_sobra from (
         select * from pg_temp.rollup_0099(k)
-        except all select * from public.rpc_library_rollup(k)) x;
+        except all select title_id, tmdb_id, kind, name, poster_path, backdrop_path, first_air_date,
+         tmdb_status, genres, network, vote_average, favorite, notify, stopped,
+         added_at, aired_count, watched_count, last_watched_at,
+         last_aired_datetime, next_air_datetime, upcoming_season_number,
+         upcoming_season_air_date, play_state, minutes_played, played_at,
+         release_precision, platforms, beat_seconds, owned, minutes_source,
+         played_platform, imdb_rating
+        from public.rpc_library_rollup(k)) x;
       select count(*) into filas from public.rpc_library_rollup(k);
       raise notice 'EXCEPT ALL % p_kind=%: filas=%, nuevo-viejo=%, viejo-nuevo=%',
         u, coalesce(k, 'null'), filas, nuevo_sobra, viejo_sobra;

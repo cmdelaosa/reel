@@ -81,3 +81,51 @@ describe("Poster", () => {
     expect(img().getAttribute("fetchpriority")).toBe("high");
   });
 });
+
+/* La insignia de Steam: cuándo sale y cuándo no.
+ *
+ * Es de los juegos y solo de los juegos —`kind` lo decide—, y lo que la apaga
+ * no es "no hay porcentaje" sino "no hay reseñas": una ficha con `count: 0`
+ * trae un percent que no significa nada. Sin estas dos, un cambio que se deje
+ * el `kind` por el camino pinta un porcentaje de Steam sobre la carátula de una
+ * serie y nadie se entera hasta verlo. */
+function pintar(t: TitleCard, kind?: "tv" | "movie" | "game") {
+  const { container } = render(
+    <MemoryRouter>
+      <QueryClientProvider client={cliente}>
+        <Poster t={t} kind={kind} showProviders={false} />
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+  return container.querySelector('[data-testid="steam-badge"]');
+}
+
+const juego: TitleCard = {
+  id: "1020",
+  name: "Hollow Knight",
+  year: "2017",
+  genres: ["Metroidvania"],
+  voteAverage: 9.1,
+  steamReviews: { percent: 96, count: 8123 },
+};
+
+describe("Poster · insignia de Steam", () => {
+  it("un juego con reseñas la enseña, con el porcentaje", () => {
+    expect(pintar(juego, "game")?.textContent).toContain("96%");
+  });
+
+  it("la etiqueta de Steam va en el title, en el idioma de quien mira", () => {
+    /* "Extremadamente positivas" con 96 % y 8.123 reseñas: es el tramo que
+       necesita el `count`, así que esto también vigila que llegue. */
+    expect(pintar(juego, "game")?.getAttribute("title")).toBe("Steam · Overwhelmingly Positive");
+  });
+
+  it("sin reseñas no hay insignia, aunque venga un porcentaje", () => {
+    expect(pintar({ ...juego, steamReviews: { percent: 100, count: 0 } }, "game")).toBeNull();
+    expect(pintar({ ...juego, steamReviews: null }, "game")).toBeNull();
+  });
+
+  it("una serie no enseña reseñas de Steam ni trayéndolas", () => {
+    expect(pintar({ ...juego, name: "Serie" }, "tv")).toBeNull();
+  });
+});
