@@ -14,6 +14,7 @@ import {
   gameSearchRow,
   metacritic,
   steamReviews,
+  sinMedia,
   videosRecortados,
   webOficial,
   beatSeconds,
@@ -531,4 +532,23 @@ Deno.test("Metacritic: solo 0-100", () => {
   assertEquals(metacritic({ metacritic: { score: 120 } }), null);
   assertEquals(metacritic({ metacritic: { score: "96" } }), null);
   assertEquals(metacritic({}), null);
+});
+
+/* ── sinMedia: cuándo una ficha rancia espera a la red ──────────────────── */
+
+Deno.test("sinMedia: las dos a null es una fila de antes de 0086 (o un juego sin nada)", () => {
+  assertEquals(sinMedia({ screenshots: null, videos: null }), true);
+  assertEquals(sinMedia({}), true);
+  assertEquals(sinMedia(null), true);
+});
+
+Deno.test("sinMedia: con una de las dos ya hubo un detalle que preguntó", () => {
+  // Capturas sin vídeo es lo normal en un juego viejo: no se espera a la red
+  // cada día por un tráiler que IGDB no tiene.
+  assertEquals(sinMedia({ screenshots: ["abc"], videos: null }), false);
+  assertEquals(sinMedia({ screenshots: null, videos: [{ name: "Trailer", video_id: "x" }] }), false);
+});
+
+Deno.test("sinMedia: una lista vacía cuenta como no tener", () => {
+  assertEquals(sinMedia({ screenshots: [], videos: [] }), true);
 });

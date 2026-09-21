@@ -2255,7 +2255,10 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
 .game-shot {
   display: block; aspect-ratio: 16 / 9; border-radius: var(--r-sm);
   overflow: hidden; border: 1px solid var(--border);
-  padding: 0; background: none; transition: border-color .16s ease;
+  /* El fondo es el hueco mientras llega la imagen: sin él, las cinco capturas
+     eran cinco marcos vacíos sobre el color de la hoja, que se leía como «no
+     hay capturas» y no como «están viniendo». */
+  padding: 0; background: var(--surface-2); transition: border-color .16s ease;
 }
 .game-shot:hover { border-color: var(--accent); }
 .game-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }

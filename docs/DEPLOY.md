@@ -156,6 +156,22 @@ entre todos los usuarios de la app — no por usuario, como en TMDB. Por eso
 `igdb-proxy` sirve siempre de la caché de `titles` y solo va a la red cuando no
 hay fila o tiene más de 24 h.
 
+**Rellenar capturas y vídeos (`/backfill-media`).** Una ficha cuyo detalle es de
+antes de 0086 no tiene ni capturas ni tráiler. Se cura sola al abrirla — una
+fila rancia sin ninguna de las dos espera a la red en vez de servirse tal cual —
+pero de una en una. Para curarlas todas, con la clave de servicio (la
+`sb_secret_…`), primero contando y luego de verdad:
+
+```bash
+curl -X POST "https://<ref>.supabase.co/functions/v1/igdb-proxy/backfill-media?dry=1" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"
+```
+
+Sin `?dry=1` escribe, en tandas de 40 juegos por petición a IGDB y hasta 1.000
+por llamada. Si `next` no es null, se repite con `?after=<next>`. `candidatos`
+menos `actualizados` es lo que falló y hay que relanzar; `con_media` por debajo
+de `actualizados` es normal — son juegos de los que IGDB no tiene nada.
+
 **Steam (importar horas, 0076).** Steam va al revés que IGDB en las dos mitades,
 y confundirlas es el error que cuesta una tarde:
 
