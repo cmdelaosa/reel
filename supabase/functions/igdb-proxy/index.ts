@@ -373,19 +373,53 @@ async function notasDeSteam(appid: number | null | undefined): Promise<SteamNota
   };
 }
 
+/** Los appids que verificó la tienda (0103), por id de IGDB.
+ *
+ *  Solo devuelve los de `steam_appid_source = 'steam'`: lo demás es lo que dijo
+ *  IGDB, que este refresco sí puede mejorar. Un mapa vacío —la respuesta normal
+ *  hoy, que son cuatro filas en toda la base— deja el comportamiento de antes. */
+async function appidsVerificados(
+  admin: SupabaseClient,
+  igdbIds: number[],
+): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (!igdbIds.length) return out;
+  const { data } = await admin
+    .from("titles")
+    .select("tmdb_id, steam_appid")
+    .eq("kind", "game")
+    .eq("steam_appid_source", "steam")
+    .in("tmdb_id", igdbIds);
+  for (const row of data ?? []) {
+    if (typeof row.steam_appid === "number") out.set(row.tmdb_id, row.steam_appid);
+  }
+  return out;
+}
+
 /** Trae la ficha de IGDB y la escribe. Devuelve la fila guardada. */
 async function refreshGame(admin: SupabaseClient, igdbId: number) {
   const [detail] = await igdb("games", `fields ${DETAIL_FIELDS}; where id = ${igdbId};`);
   if (!detail) return null;
+  /* El appid que ya hay, si lo verificó la tienda (0103). IGDB cuelga de una
+     ficha varias apps de Steam y `steamAppid()` se queda con la primera, que en
+     tres juegos de la biblioteca era un playtest o una entrada secundaria; el
+     cron de notas lo corrige contra la tienda y marca la fila. Sin esta lectura
+     el refresco lo devolvía al appid malo —y encima preguntaba las notas por
+     él, borrando con un null las reseñas buenas recién verificadas.
+
+     Una lectura por refresco, por clave: no se nota al lado de las dos
+     peticiones de red que vienen justo detrás. */
+  const verificado = (await appidsVerificados(admin, [igdbId])).get(igdbId) ?? null;
+
   // Las dos de fuera van en paralelo con los tiempos de IGDB: son de servicios
   // distintos y ninguna depende de la otra, así que encadenarlas solo sumaría
   // esperas a la petición que abre la ficha.
-  const appid = steamAppid(detail.external_games);
+  const appid = verificado ?? steamAppid(detail.external_games);
   const [ttb, steam] = await Promise.all([
     timeToBeat(igdbId),
     notasDeSteam(appid),
   ]);
-  const [row] = await upsertReturning(admin, gameRow(detail, ttb, steam), "kind,tmdb_id");
+  const [row] = await upsertReturning(admin, gameRow(detail, ttb, steam, verificado), "kind,tmdb_id");
   return row ?? null;
 }
 
@@ -485,7 +519,16 @@ async function fetchGamesInto(admin: SupabaseClient, igdbIds: number[]): Promise
       continue;
     }
     if (!details.length) continue;
-    const saved = await upsertReturning(admin, details.map((d: Any) => gameRow(d, null)), "kind,tmdb_id");
+    /* Los appids que ya verificó la tienda (0103), de una sola consulta por
+       tanda. Aquí importa igual que en `refreshGame`, y por lo mismo: volver a
+       importar el inventario de Steam no puede devolver un appid corregido al
+       playtest del que salió. */
+    const verificados = await appidsVerificados(admin, details.map((d: Any) => d.id));
+    const saved = await upsertReturning(
+      admin,
+      details.map((d: Any) => gameRow(d, null, null, verificados.get(d.id) ?? null)),
+      "kind,tmdb_id",
+    );
     for (const row of saved) byIgdbId.set(row.tmdb_id, row);
   }
   return byIgdbId;

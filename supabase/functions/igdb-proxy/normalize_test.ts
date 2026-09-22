@@ -552,3 +552,18 @@ Deno.test("sinMedia: con una de las dos ya hubo un detalle que preguntó", () =>
 Deno.test("sinMedia: una lista vacía cuenta como no tener", () => {
   assertEquals(sinMedia({ screenshots: [], videos: [] }), true);
 });
+
+/* El appid verificado por la tienda (0103). IGDB cuelga de una ficha varias
+   apps de Steam —el juego, su playtest, la banda sonora— y `steamAppid()` se
+   queda con la primera, que en tres juegos de la biblioteca no era el juego.
+   Cuando el cron de notas lo ha corregido contra Steam, este refresco no puede
+   devolverlo al malo: era lo que hacía que el arreglo durase hasta que alguien
+   abriera la ficha. */
+Deno.test("gameRow respeta el appid que verificó la tienda", () => {
+  assertEquals(gameRow(DETAIL, null, null, 588_650).steam_appid, 588_650);
+});
+
+Deno.test("sin appid verificado manda IGDB, como siempre", () => {
+  assertEquals(gameRow(DETAIL, null, null, null).steam_appid, 1_030_300);
+  assertEquals(gameRow(DETAIL).steam_appid, 1_030_300);
+});

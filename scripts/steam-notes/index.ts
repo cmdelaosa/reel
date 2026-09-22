@@ -36,7 +36,15 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { metacriticOf, queueFor, reviewsOf, type Game } from "./lib.ts";
+import {
+  appidDeLaBusqueda,
+  esSatelite,
+  fichaDeTienda,
+  metacriticOf,
+  queueFor,
+  reviewsOf,
+  type Game,
+} from "./lib.ts";
 
 const URL_ = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -106,8 +114,44 @@ async function tienda(url: string): Promise<unknown | null> {
   return await res.json();
 }
 
+const urlDeReseñas = (appid: number) =>
+  `https://store.steampowered.com/appreviews/${appid}` +
+  `?json=1&language=all&purchase_type=all&num_per_page=0`;
+
+/** El appid bueno de un juego cuyas reseñas salen a cero, o null cuando el que
+ *  hay ya es el correcto —o cuando no se puede saber, que se trata igual—.
+ *
+ *  Una petición más, o dos en el caso del playtest. Se pagan solo por los
+ *  sospechosos: en la biblioteca de producción, cuatro juegos de 297. Las dos
+ *  averías y por qué hacen falta dos respuestas distintas, en lib.ts.
+ *
+ *  `filters=basic` y no la respuesta entera: son 22 kB por juego contra los 130
+ *  bytes de `filters=metacritic`, y de ellos solo se leen dos campos. Se pide
+ *  `basic` porque es el filtro más pequeño que trae `steam_appid` y `name`. */
+async function appidBueno(appid: number, nombre: string): Promise<number | null> {
+  const ficha = fichaDeTienda(
+    await tienda(`https://store.steampowered.com/api/appdetails?appids=${appid}&filters=basic`),
+    appid,
+  );
+  // Sin ficha no hay nada que deducir: un `success: false` es un juego retirado
+  // o que no se sirve a esta región, no una prueba de que el appid esté mal.
+  if (!ficha) return null;
+  // La tienda nos corrige: este appid es una entrada secundaria del juego.
+  if (ficha.appid !== appid) return ficha.appid;
+  // Ni redirige ni es un satélite: el juego no tiene reseñas y punto.
+  if (!esSatelite(ficha.name, nombre)) return null;
+  await sleep(GAP_MS / 2);
+  return appidDeLaBusqueda(
+    await tienda(
+      `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(nombre)}&l=english&cc=us`,
+    ),
+    nombre,
+  );
+}
+
 const startedAt = new Date().toISOString();
 let escritos = 0;
+let reparados = 0;
 let sinNota = 0;
 let fallidos = 0;
 let seguidos = 0;
@@ -140,19 +184,35 @@ if (cola.length > MAX_ITEMS) {
 }
 
 for (const juego of cola.slice(0, MAX_ITEMS)) {
-  const { appid } = juego;
+  /* `let` y no destructuring: la reparación de abajo puede cambiarlo, y todo lo
+     que viene después —la segunda pregunta, la nota, lo que se escribe— tiene
+     que ir al appid bueno y no al que trajo la fila. */
+  let appid = juego.appid;
+  let reparado: number | null = null;
   let reseñas, nota;
   try {
     /* En serie y no en paralelo, a propósito: son dos peticiones a la MISMA IP
        con el mismo límite, y dispararlas juntas es pegarle un pico de dos a un
        contador que se mide por minutos. El hueco de abajo separa juegos; este
        `await` separa las dos mitades de uno. */
-    reseñas = reviewsOf(
-      await tienda(
-        `https://store.steampowered.com/appreviews/${appid}` +
-          `?json=1&language=all&purchase_type=all&num_per_page=0`,
-      ),
-    );
+    reseñas = reviewsOf(await tienda(urlDeReseñas(appid)));
+
+    /* Cero reseñas es sospechoso, no concluyente: puede ser un juego recién
+       salido o puede ser que el appid apunte a otra cosa (ver lib.ts). Se
+       comprueba SOLO aquí, que es lo que deja la pasada normal en dos
+       peticiones por juego. */
+    if (reseñas.touch && reseñas.value === null) {
+      await sleep(GAP_MS / 2);
+      const bueno = await appidBueno(appid, juego.name);
+      if (bueno && bueno !== appid) {
+        console.log(`  appid corregido: ${juego.name} ${appid} → ${bueno}`);
+        appid = bueno;
+        reparado = bueno;
+        await sleep(GAP_MS / 2);
+        reseñas = reviewsOf(await tienda(urlDeReseñas(appid)));
+      }
+    }
+
     await sleep(GAP_MS / 2);
     nota = metacriticOf(
       await tienda(`https://store.steampowered.com/api/appdetails?appids=${appid}&filters=metacritic`),
@@ -203,6 +263,12 @@ for (const juego of cola.slice(0, MAX_ITEMS)) {
     .from("titles")
     .update({
       ...(reseñas.touch ? { steam_reviews: reseñas.value } : {}),
+      /* El appid corregido, con la marca de quién lo dice. `steam_appid_source`
+         (0103) es lo que impide que el siguiente refresco de IGDB lo devuelva
+         al playtest: igdb-proxy solo pisa el appid cuando no lo ha verificado
+         la tienda. Sin la marca esto sería un arreglo que dura hasta que
+         alguien abra la ficha. */
+      ...(reparado ? { steam_appid: reparado, steam_appid_source: "steam" } : {}),
       /* La nota de la crítica la escriben DOS crones desde 0090 —este y
          rawg-metacritic, que cubre lo que no se vende en Steam— y por eso aquí
          hay una condición que antes no hacía falta.
@@ -221,13 +287,15 @@ for (const juego of cola.slice(0, MAX_ITEMS)) {
   if (error) throw new Error(`escribiendo ${juego.name}: ${error.message}`);
 
   escritos += 1;
+  if (reparado) reparados += 1;
   if (reseñas.value == null && nota.value == null) sinNota += 1;
   if (escritos % 50 === 0) console.log(`  ${escritos}/${Math.min(cola.length, MAX_ITEMS)}…`);
   await sleep(GAP_MS / 2);
 }
 
 console.log(
-  `Escritos ${escritos} (${sinNota} sin ninguna de las dos notas), ` +
+  `Escritos ${escritos} (${sinNota} sin ninguna de las dos notas, ` +
+    `${reparados} con el appid corregido), ` +
     `fallidos ${fallidos}${bloqueado ? ", cortado por Steam" : ""}.`,
 );
 
