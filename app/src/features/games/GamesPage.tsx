@@ -1,10 +1,12 @@
 import { memo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useGameLibrary, type LibraryGame } from "@/lib/library";
-import { useRatedSort } from "@/lib/ratings";
+import { useRatedAt } from "@/lib/ratings";
 import type { GameStatus } from "@/domain/gameStatus";
 import { formatPlaytime } from "@/domain/gameStatus";
-import { compareBySteamReviews } from "@/domain/steamReviews";
+import { byRatedAt, type SortDir } from "@/domain/ratedSort";
+import { byValue, flipDir } from "@/domain/librarySort";
+import { bySteamReviews } from "@/domain/steamReviews";
 import { t as tr, tv } from "@/lib/i18n";
 import { igdbImg } from "@/lib/igdb";
 import { EAGER_POSTERS, Poster, TabMenu, useGrowingList, useStableHandler } from "@/ui";
@@ -39,32 +41,50 @@ const FILTERS: { key: Bucket; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-type SortKey = "added" | "played" | "lastreleased" | "az" | "rating" | "steam" | "rated";
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: "added", label: "Date added" },
-  { key: "played", label: "Most played" },
-  { key: "lastreleased", label: "Last released" },
-  { key: "az", label: "A–Z" },
-  { key: "rating", label: "Top rated" },
-  /* Junto a «Mejor nota» y no en su lugar: esa es la de IGDB y esta la de quien
-     se lo ha jugado, que es la que la carátula enseña con el logotipo. Las dos
+type SortKey = "added" | "hours" | "released" | "az" | "rating" | "steam" | "rated";
+
+/* Las etiquetas son de UNA palabra, y esa es la mitad del arreglo de 0102:
+   con «Date added», «Most played» y «Best on Steam» la fila entera pedía 1.402
+   px y la columna da 1.224, así que los cubos —que llevan `flex: 1`— se comían
+   el déficit entero y perdían tres por el borde, sin barra que arrastrar. La
+   otra media son los contadores, que ahora solo salen en el cubo puesto.
+
+   `first` es el sentido en el que empieza cada orden, y es lenguaje de la
+   etiqueta más que de los datos: «A–Z» promete de la A a la Z y los otros seis
+   prometen «lo más» primero. La flecha dice si estás en ese sentido (↓) o en el
+   contrario (↑), no si el valor sube o baja — ver `natural` y `dir` más abajo. */
+const SORTS: { key: SortKey; label: string; first: SortDir }[] = [
+  { key: "added", label: "games: Added", first: "desc" },
+  { key: "hours", label: "Hours", first: "desc" },
+  { key: "released", label: "Released", first: "desc" },
+  { key: "az", label: "A–Z", first: "asc" },
+  { key: "rating", label: "Rating", first: "desc" },
+  /* Junto a «Nota» y no en su lugar: esa es la de IGDB y esta la de quien se lo
+     ha jugado, que es la que la carátula enseña con el logotipo. Las dos
      ordenan la misma rejilla por dos criterios que no coinciden. */
-  { key: "steam", label: "Best on Steam" },
-  { key: "rated", label: "Last rated" },
+  { key: "steam", label: "Steam", first: "desc" },
+  { key: "rated", label: "games: Rated", first: "desc" },
 ];
 
 const ms = (s: string | null) => (s ? new Date(s).getTime() : 0);
-/* «Última puntuada» no está aquí: es el único orden que no se lee de la fila de
-   la biblioteca sino de tus notas, que son otra tabla — ver domain/ratedSort. */
-const COMPARATORS: Record<Exclude<SortKey, "rated">, (a: LibraryGame, b: LibraryGame) => number> = {
-  added: (a, b) => ms(b.added_at) - ms(a.added_at),
-  played: (a, b) => (b.minutes_played ?? 0) - (a.minutes_played ?? 0),
-  lastreleased: (a, b) => (b.first_air_date ?? "").localeCompare(a.first_air_date ?? ""),
-  az: (a, b) => a.name.localeCompare(b.name),
-  rating: (a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0),
-  /* Lo que no está en Steam va al final y no al fondo del porcentaje; la regla
-     entera, con sus desempates, en domain/steamReviews. */
-  steam: compareBySteamReviews,
+/* «Puntuado» no está aquí: es el único orden que no se lee de la fila de la
+   biblioteca sino de tus notas, que son otra tabla — ver domain/ratedSort.
+
+   Los otros seis son `byValue` y no una resta suelta, y el `|| null` de tres de
+   ellos es el motivo: desde que los órdenes se voltean, un juego sin nota de
+   IGDB o sin fecha de salida NO puede ordenarse como un 0, o encabezaría «de
+   menos a más» con doscientos juegos de los que no se sabe nada. `null` los
+   manda al final en los dos sentidos (domain/librarySort). Los minutos van sin
+   `|| null` a propósito: ahí el 0 es el dato, «no lo he tocado». */
+const COMPARATORS: Record<Exclude<SortKey, "rated">, (dir: SortDir) => (a: LibraryGame, b: LibraryGame) => number> = {
+  added: (dir) => byValue((g) => ms(g.added_at) || null, dir),
+  hours: (dir) => byValue((g) => g.minutes_played ?? 0, dir),
+  released: (dir) => byValue((g) => g.first_air_date || null, dir),
+  az: (dir) => byValue((g) => g.name, dir),
+  rating: (dir) => byValue((g) => g.vote_average || null, dir),
+  /* Lo que no está en Steam va al final y no al fondo del porcentaje, tampoco
+     volteado; la regla entera, con sus desempates, en domain/steamReviews. */
+  steam: (dir) => bySteamReviews(dir),
 };
 
 /* Lo que va debajo del nombre en la tarjeta. Las horas cuando las hay, porque
@@ -117,14 +137,27 @@ const GameCard = memo(function GameCard({ g, priority, onOpen }: {
 
 export default function GamesPage() {
   const { data: games = [], isPending } = useGameLibrary();
-  const [sort, setSort] = useState<SortKey>("added");
+  /* Pulsar el orden que YA está puesto lo voltea, y eso vale para los siete —en
+     Series y Cine solo lo hace «Última puntuada» (lib/ratings, useRatedSort).
+     Por eso esta página no usa aquel gancho: el sentido es uno solo y vive
+     aquí, y tenerlo además dentro de useRatedSort daría dos estados que se
+     contradicen en cuanto cambias de orden y vuelves.
+
+     Cambiar de orden reinicia el sentido al natural de la etiqueta en vez de
+     arrastrar el anterior: llegar a «A–Z» y encontrarlo de la Z a la A porque
+     antes volteaste «Horas» no lo espera nadie. */
+  const [sort, setSort] = useState<{ key: SortKey; flipped: boolean }>({ key: "added", flipped: false });
   const [searchParams, setSearchParams] = useSearchParams();
-  const rated = useRatedSort();
-  /* Pulsar «Última puntuada» estando ya activa voltea el sentido, igual que en
-     las otras dos bibliotecas; la flecha de la etiqueta dice cuál está puesto. */
-  const pickSort = (key: SortKey) => (key === "rated" && sort === "rated" ? rated.flip() : setSort(key));
+  const ratedAt = useRatedAt();
+  const pickSort = (key: SortKey) =>
+    setSort((prev) => (prev.key === key ? { key, flipped: !prev.flipped } : { key, flipped: false }));
+  const natural = (key: SortKey) => SORTS.find((s) => s.key === key)?.first ?? "desc";
+  const dir: SortDir = sort.flipped ? flipDir(natural(sort.key)) : natural(sort.key);
+  /* La flecha solo en el orden puesto: en los otros seis no diría nada —no hay
+     un sentido que enseñar de algo que no está ordenando— y costaba seis veces
+     su ancho en la fila que justamente no cabía. */
   const sortLabel = (s: { key: SortKey; label: string }) =>
-    s.key === "rated" ? `${tr(s.label)} ${rated.arrow}` : tr(s.label);
+    s.key === sort.key ? `${tr(s.label)} ${sort.flipped ? "↑" : "↓"}` : tr(s.label);
 
   /* El cubo vive en la URL, igual que en las otras dos bibliotecas: la pestaña
      de la barra enlaza a un cubo concreto, y desde la propia página eso es una
@@ -145,10 +178,12 @@ export default function GamesPage() {
     key === "all" ? games.length : games.filter((g) => g.status === key).length;
   const items = games
     .filter((g) => f === "all" || g.status === f)
-    .sort(sort === "rated" ? rated.cmp : COMPARATORS[sort]);
+    .sort(sort.key === "rated" ? byRatedAt(ratedAt, dir) : COMPARATORS[sort.key](dir));
   /* Se monta por tandas (ui/GrowingList): los contadores y el orden de arriba
-     siguen siendo de la lista entera; solo se recorta lo que se pinta. */
-  const { shown, sentinel } = useGrowingList(items, `${f}|${sort}|${sort === "rated" ? rated.arrow : ""}`);
+     siguen siendo de la lista entera; solo se recorta lo que se pinta. El
+     sentido va en la clave porque voltear reordena la rejilla entera y la tanda
+     ya montada dejaría arriba lo que acaba de irse al fondo. */
+  const { shown, sentinel } = useGrowingList(items, `${f}|${sort.key}|${dir}`);
 
   const open = useStableHandler((igdbId: number) =>
     setSearchParams((prev) => {
@@ -163,11 +198,15 @@ export default function GamesPage() {
       <h1 className="sr-only">{tr("My Games")}</h1>
 
       <div className="mq-toolbar">
+        {/* El contador, solo en el cubo puesto. Siete contadores son ~90 px de
+            los que faltaban, y de los siete solo uno responde a algo que estés
+            mirando: los otros seis son cifras de listas que no tienes delante.
+            En el menú del móvil siguen los siete, que ahí sobra sitio. */}
         <div className="shows-buckets flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ flex: 1 }}>
           {FILTERS.map((x) => (
             <button key={x.key} className={`chip ${f === x.key ? "chip-active" : ""}`} onClick={() => setF(x.key)}>
               {tr(x.label)}
-              <span className="mute" style={{ fontWeight: 700 }}>{count(x.key)}</span>
+              {f === x.key && <span className="mute" style={{ fontWeight: 700 }}>{count(x.key)}</span>}
             </button>
           ))}
         </div>
@@ -179,13 +218,13 @@ export default function GamesPage() {
         />
         <div className="segmented scroll no-scrollbar">
           {SORTS.map((s) => (
-            <div key={s.key} className={`seg ${sort === s.key ? "seg-active" : ""}`} onClick={() => pickSort(s.key)}>
+            <div key={s.key} className={`seg ${sort.key === s.key ? "seg-active" : ""}`} onClick={() => pickSort(s.key)}>
               {sortLabel(s)}
             </div>
           ))}
         </div>
         <TabMenu
-          value={sort}
+          value={sort.key}
           options={SORTS.map((s) => ({ key: s.key, label: sortLabel(s) }))}
           onPick={pickSort}
           menuLabel={tr("Sort")}

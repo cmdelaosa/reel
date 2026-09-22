@@ -22,6 +22,8 @@
  * Devuelve CLAVES del diccionario, no texto: traducir es de la capa que pinta,
  * como en el resto de domain/. */
 
+import type { SortDir } from "@/domain/ratedSort";
+
 export type SteamReviewLabel =
   | "steam: Overwhelmingly Positive"
   | "steam: Very Positive"
@@ -72,7 +74,12 @@ export function steamReviewColor(percent: number): string {
   return "#e5484d";
 }
 
-/** Comparador de "mejor valoradas en Steam", de más a menos.
+/** Comparador de "mejor valoradas en Steam". `desc` = de más a menos.
+ *
+ *  Se voltea desde 0102, con la barra de Juegos: el sentido lo pone quien
+ *  ordena y no esta función. Lo que NO se voltea es la cola —ver la tercera
+ *  decisión—, que es justo lo que se habría roto si la página hubiera negado el
+ *  resultado por su cuenta.
  *
  *  Tres decisiones, y ninguna es obvia:
  *
@@ -91,15 +98,19 @@ export function steamReviewColor(percent: number): string {
  *    cero. Un juego de consola no está en Steam y eso no es un suspenso; y un
  *    0 lo mandaría al fondo por debajo de lo que de verdad está mal valorado,
  *    que es lo mismo pero mintiendo. La cola va ordenada por nombre entre
- *    ella misma, para que no baile en cada repintado. */
-export function compareBySteamReviews(
-  a: { steam_reviews?: SteamReviews | null; name: string },
-  b: { steam_reviews?: SteamReviews | null; name: string },
-): number {
-  const ra = a.steam_reviews?.count ? a.steam_reviews : null;
-  const rb = b.steam_reviews?.count ? b.steam_reviews : null;
-  if (!ra && !rb) return a.name.localeCompare(b.name);
-  if (!ra) return 1;
-  if (!rb) return -1;
-  return rb.percent - ra.percent || rb.count - ra.count || a.name.localeCompare(b.name);
+ *    ella misma, para que no baile en cada repintado — y se queda al final
+ *    también en "asc", porque "no está en Steam" tampoco es un 0 % ahí. */
+export function bySteamReviews(
+  dir: SortDir = "desc",
+): (a: { steam_reviews?: SteamReviews | null; name: string }, b: { steam_reviews?: SteamReviews | null; name: string }) => number {
+  return (a, b) => {
+    const ra = a.steam_reviews?.count ? a.steam_reviews : null;
+    const rb = b.steam_reviews?.count ? b.steam_reviews : null;
+    if (!ra && !rb) return a.name.localeCompare(b.name);
+    if (!ra) return 1;
+    if (!rb) return -1;
+    const d = rb.percent - ra.percent || rb.count - ra.count;
+    if (d !== 0) return dir === "desc" ? d : -d;
+    return a.name.localeCompare(b.name);
+  };
 }

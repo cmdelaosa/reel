@@ -606,8 +606,26 @@ const ES: Record<string, string> = {
   /* El orden por las reseñas de Steam, solo en juegos. "Mejor en Steam" y no
      "Mejor valoradas": lo que ordena es el porcentaje de reseñas positivas de
      una tienda concreta, y decirlo evita leerlo como la nota de IGDB de al
-     lado. */
+     lado. Series y Cine no lo tienen. */
   "Best on Steam": "Mejor en Steam",
+
+  /* ---- El strip de orden de Juegos, en una palabra (0102) ----
+     Siete etiquetas cortas porque la fila de Juegos es la única de las tres que
+     no cabía: «Date added», «Most played» y «Best on Steam» pedían 1.402 px de
+     los 1.224 que da la columna. Las cuatro largas siguen vivas arriba porque
+     Series y Cine las usan tal cual.
+
+     "Añadido" y "Puntuado" van prefijadas: "Added" y "Rated" a secas ya están
+     en el diccionario en femenino —son de series y películas— y un juego no es
+     «Añadida». Es el mismo apaño de "games: Finished", con su entrada en EN
+     para que el prefijo no se cuele a la pantalla. */
+  "games: Added": "Añadido",
+  "Hours": "Horas",
+  "Released": "Estreno",
+  /* "Nota" a secas es la de IGDB, la que la ficha enseña como nota del juego.
+     La de al lado dice "Steam" y no necesita traducción. */
+  "Rating": "Nota",
+  "games: Rated": "Puntuado",
   /* El orden por la fecha de TU nota, en las tres bibliotecas. La flecha (↓ más
      reciente primero, ↑ al revés) la pone la página fuera de la cadena: es
      estado, no idioma. */
@@ -1313,6 +1331,8 @@ const EN: Record<string, string> = {
   "games: Announced": "Announced",
   "games: Tonight": "Play",
   "games: Finished": "Finished",
+  "games: Added": "Added",
+  "games: Rated": "Rated",
   "self: watched {eps} of {name}": "watched {eps} of {name}",
   "self: finished {name}": "finished {name}",
   "self: added {name} to their backlog": "added {name} to your backlog",
