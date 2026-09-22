@@ -215,3 +215,19 @@ test("appidDeLaBusqueda: sin nombre exacto no se escribe nada", () => {
   assert.equal(appidDeLaBusqueda(null, "Chants of Sennaar"), null);
   assert.equal(appidDeLaBusqueda({ items: [{ id: 1, name: "X" }] }, ""), null);
 });
+
+test("appidDeLaBusqueda: dos fichas con el mismo nombre no se resuelven a cara o cruz", () => {
+  /* El Prey de 2006 y el de 2017 son juegos distintos con el mismo nombre y su
+     ficha cada uno en la tienda. Quedarse con el primero escribiría en la base
+     —marcado como «lo dice la tienda», o sea a prueba de correcciones de IGDB—
+     un appid elegido al azar. */
+  const payload = { items: [{ id: 3970, name: "Prey" }, { id: 480490, name: "Prey" }] };
+  assert.equal(appidDeLaBusqueda(payload, "Prey"), null);
+});
+
+test("appidDeLaBusqueda: el mismo id repetido sigue siendo uno", () => {
+  const payload = {
+    items: [{ id: 588650, name: "Dead Cells" }, { id: 588650, name: "Dead  Cells" }],
+  };
+  assert.equal(appidDeLaBusqueda(payload, "Dead Cells"), 588650);
+});

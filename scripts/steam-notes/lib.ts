@@ -234,17 +234,25 @@ export function fichaDeTienda(
  *  casa con «Dead Cells» y no con «Dead Cells: Return to Castlevania», que es
  *  el siguiente de los seis resultados que la tienda devuelve. Casar «por
  *  aproximación» es como acaba en una biblioteca el juego que no era — ver la
- *  cabecera de app/src/domain/steamMatch.ts, que cuenta esa noche. */
+ *  cabecera de app/src/domain/steamMatch.ts, que cuenta esa noche.
+ *
+ *  Y DOS EXACTOS TAMPOCO VALEN. Hay juegos distintos que se llaman igual: el
+ *  Prey de 2006 y el de 2017, con su ficha cada uno en la tienda. Quedarse con
+ *  el primero sería elegir a cara o cruz, y lo que se elige aquí se escribe en
+ *  la base marcado como «lo dice la tienda» — o sea que el appid equivocado se
+ *  queda, y encima protegido de que IGDB lo corrija. Con más de uno: null, la
+ *  fila se queda como está y la nota sigue sin salir, que es lo que ya pasaba. */
 export function appidDeLaBusqueda(payload: unknown, gameName: string): number | null {
   const items = (payload as { items?: unknown } | null)?.items;
   if (!Array.isArray(items)) return null;
   const quiero = nameKey(gameName);
   if (!quiero) return null;
+  const exactos: number[] = [];
   for (const it of items) {
     const id = (it as { id?: unknown })?.id;
     const name = (it as { name?: unknown })?.name;
     if (typeof id !== "number" || id <= 0 || typeof name !== "string") continue;
-    if (nameKey(name) === quiero) return id;
+    if (nameKey(name) === quiero && !exactos.includes(id)) exactos.push(id);
   }
-  return null;
+  return exactos.length === 1 ? exactos[0] : null;
 }

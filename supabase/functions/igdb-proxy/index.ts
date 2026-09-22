@@ -373,7 +373,6 @@ async function notasDeSteam(appid: number | null | undefined): Promise<SteamNota
   };
 }
 
-/** Trae la ficha de IGDB y la escribe. Devuelve la fila guardada. */
 /** Los appids que verificó la tienda (0103), por id de IGDB.
  *
  *  Solo devuelve los de `steam_appid_source = 'steam'`: lo demás es lo que dijo
@@ -397,6 +396,7 @@ async function appidsVerificados(
   return out;
 }
 
+/** Trae la ficha de IGDB y la escribe. Devuelve la fila guardada. */
 async function refreshGame(admin: SupabaseClient, igdbId: number) {
   const [detail] = await igdb("games", `fields ${DETAIL_FIELDS}; where id = ${igdbId};`);
   if (!detail) return null;
