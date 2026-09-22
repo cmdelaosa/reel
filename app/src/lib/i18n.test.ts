@@ -54,7 +54,9 @@ describe("el convenio del prefijo", () => {
     expect(ES.length).toBeGreaterThan(500);
     expect(EN.length).toBeGreaterThan(20);
     expect(ES).toContain("Playing");
-    expect(EN.every((k) => PREFIJO.test(k))).toBe(true);
+    /* La lista y no un `every`: suspender con "expected false to be true" deja
+       a quien lo rompa buscando a mano entre cuarenta claves. */
+    expect(EN.filter((k) => !PREFIJO.test(k))).toEqual([]);
   });
 
   it("toda clave prefijada de ES tiene su entrada en EN", () => {
@@ -95,8 +97,14 @@ describe("los cubos de Juegos", () => {
     };
     for (const cubo of CUBOS) {
       const juegos = valor(`games bucket: ${cubo}`);
+      const compartida = valor(cubo);
+      /* Las DOS comprobadas antes de compararlas. Sin la segunda, un fallo del
+         regex —una comilla escapada en el valor, una línea que se parte— deja
+         `compartida` en undefined y entonces `not.toBe` se cumple sola: la
+         prueba seguiría verde para siempre sin mirar nada. */
       expect(juegos, `sin traducción para games bucket: ${cubo}`).toBeTruthy();
-      expect(juegos).not.toBe(valor(cubo));
+      expect(compartida, `sin traducción para la clave compartida ${cubo}`).toBeTruthy();
+      expect(juegos).not.toBe(compartida);
     }
   });
 });
