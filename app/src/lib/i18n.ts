@@ -130,6 +130,24 @@ const ES: Record<string, string> = {
      el mismo apaño que "Finished it" de 0078, con el prefijo "games:" que ya
      usan las pestañas porque aquí la traducción es la palabra sola. */
   "games: Finished": "Terminado",
+
+  /* ---- Los cubos de la biblioteca de Juegos ----
+     Tres de los siete llevaban las claves compartidas con Series, y en español
+     eso los dejaba hablando de un juego en femenino: «Terminadas», «Próximas»,
+     «Todas». Las otras cuatro no lo notaban —«Jugando», «Pendientes», «Sin
+     final» y «Abandonados» ya son de aquí y ya están en masculino—, que es
+     justo por lo que llevaba tanto sin verse.
+
+     Prefijo largo y no "games: " a secas porque "games: Finished" ya está
+     cogida ahí arriba: esa es el ESTADO de un juego en su ficha —«Terminado»,
+     en singular— y esta es el nombre de un montón, que va en plural como sus
+     seis vecinas. Dos palabras distintas para dos sitios distintos.
+
+     Series y Cine se quedan con las claves sin prefijar: una serie SÍ es
+     «Terminada» y una película «Próxima». Aquí no hay nada que arreglarles. */
+  "games bucket: Finished": "Terminados",
+  "games bucket: Upcoming": "Próximos",
+  "games bucket: All": "Todos",
   "Tap to clear": "Toca para quitarlo",
   "Platforms": "Plataformas",
   /* El selector de 0083. "En cuál lo juegas" y no "Plataforma": la fila de
@@ -1326,6 +1344,9 @@ const EN: Record<string, string> = {
   "games: Finished": "Finished",
   "games: Added": "Added",
   "games: Rated": "Rated",
+  "games bucket: Finished": "Finished",
+  "games bucket: Upcoming": "Upcoming",
+  "games bucket: All": "All",
   "self: watched {eps} of {name}": "watched {eps} of {name}",
   "self: finished {name}": "finished {name}",
   "self: added {name} to their backlog": "added {name} to your backlog",
