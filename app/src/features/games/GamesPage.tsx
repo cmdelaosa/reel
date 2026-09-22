@@ -31,14 +31,18 @@ import { PosterGridSkeleton } from "@/ui/Skeleton";
 
 type Bucket = GameStatus | "all";
 
+/* Tres de los siete llevan clave propia y no la compartida con Series: en
+   español «Finished», «Upcoming» y «All» dicen «Terminadas», «Próximas» y
+   «Todas», que hablan de un juego en femenino. Las otras cuatro ya son de
+   aquí. El porqué entero, y por qué el prefijo es tan largo, en lib/i18n. */
 const FILTERS: { key: Bucket; label: string }[] = [
   { key: "playing", label: "Playing" },
   { key: "backlog", label: "Backlog" },
   { key: "ongoing", label: "Ongoing" },
-  { key: "finished", label: "Finished" },
+  { key: "finished", label: "games bucket: Finished" },
   { key: "dropped", label: "Dropped" },
-  { key: "upcoming", label: "Upcoming" },
-  { key: "all", label: "All" },
+  { key: "upcoming", label: "games bucket: Upcoming" },
+  { key: "all", label: "games bucket: All" },
 ];
 
 type SortKey = "added" | "hours" | "released" | "az" | "rating" | "steam" | "rated";
