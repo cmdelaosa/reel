@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { qk } from "@/lib/queryKeys";
 import { fetchPaged } from "@/lib/paging";
 import { byRatedAt, type RatedAt, type SortDir } from "@/domain/ratedSort";
+import { flipDir } from "@/domain/librarySort";
 import { useAuth } from "@/features/auth/AuthProvider";
 
 /* Show-level ratings (episode ratings stay schema-only until post-Phase 5). */
@@ -121,12 +122,19 @@ export function useRatedAt(): RatedAt {
 /** El orden «última puntuada» de una rejilla de biblioteca: el comparador ya
  *  montado, el sentido y el gesto que lo voltea.
  *
- *  Vive aquí y no en cada página porque las tres bibliotecas —series, cine y
- *  juegos— son gemelas a propósito, y este orden tiene una regla de interacción
- *  propia: volver a pulsar la opción ya activa cambia el sentido en vez de no
- *  hacer nada. Tres copias de esa regla es como se acaba con tres gestos
- *  ligeramente distintos. `arrow` es lo que la etiqueta enseña para que el
- *  sentido se vea sin pulsar. */
+ *  Vive aquí y no en cada página porque las bibliotecas son gemelas a propósito,
+ *  y este orden tiene una regla de interacción propia: volver a pulsar la opción
+ *  ya activa cambia el sentido en vez de no hacer nada. Dos copias de esa regla
+ *  es como se acaba con dos gestos ligeramente distintos. `arrow` es lo que la
+ *  etiqueta enseña para que el sentido se vea sin pulsar.
+ *
+ *  **Lo usan Series y Cine, ya no Juegos.** Desde 0102 la barra de Juegos
+ *  voltea los SIETE órdenes y no solo este, así que su sentido es un estado
+ *  suyo que vale para todos (features/games/GamesPage) y tira de `useRatedAt`
+ *  directamente. Tener además el `dir` de aquí sería un segundo sentido que se
+ *  contradice con el primero en cuanto cambias de orden y vuelves. Cuando el
+ *  gesto pase a las otras dos bibliotecas, este gancho se queda sin quien lo
+ *  llame. */
 export function useRatedSort() {
   const ratedAt = useRatedAt();
   const [dir, setDir] = useState<SortDir>("desc");
@@ -135,7 +143,7 @@ export function useRatedSort() {
     dir,
     cmp,
     arrow: dir === "desc" ? "↓" : "↑",
-    flip: () => setDir((d) => (d === "desc" ? "asc" : "desc")),
+    flip: () => setDir(flipDir),
   };
 }
 

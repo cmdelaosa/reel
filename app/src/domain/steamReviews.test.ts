@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareBySteamReviews, steamReviewColor, steamReviewLabel } from "./steamReviews";
+import { bySteamReviews, steamReviewColor, steamReviewLabel } from "./steamReviews";
 
 /* Lo que estas pruebas vigilan es la parte contraintuitiva de la escala de
    Steam: el número de reseñas mueve la etiqueta DENTRO del mismo porcentaje.
@@ -57,14 +57,16 @@ describe("steamReviewColor", () => {
   });
 });
 
-describe("compareBySteamReviews", () => {
+describe("bySteamReviews", () => {
   const juego = (name: string, percent?: number, count?: number) => ({
     name,
     steam_reviews: percent == null ? null : { percent, count: count ?? 1000 },
   });
 
   const ordenar = (...juegos: ReturnType<typeof juego>[]) =>
-    [...juegos].sort(compareBySteamReviews).map((g) => g.name);
+    [...juegos].sort(bySteamReviews()).map((g) => g.name);
+  const ordenarAsc = (...juegos: ReturnType<typeof juego>[]) =>
+    [...juegos].sort(bySteamReviews("asc")).map((g) => g.name);
 
   it("de más a menos porcentaje", () => {
     expect(ordenar(juego("medio", 72), juego("alto", 96), juego("bajo", 31)))
@@ -100,5 +102,24 @@ describe("compareBySteamReviews", () => {
 
   it("la cola sin nota queda alfabética, y no en el orden en que llegó", () => {
     expect(ordenar(juego("zelda"), juego("abzu"), juego("halo"))).toEqual(["abzu", "halo", "zelda"]);
+  });
+
+  it("asc: de menos a más porcentaje", () => {
+    expect(ordenarAsc(juego("medio", 72), juego("alto", 96), juego("bajo", 31)))
+      .toEqual(["bajo", "medio", "alto"]);
+  });
+
+  /* Lo que separa voltear el comparador de negar su resultado, que es lo que
+     habría hecho la página si esto no tuviera sentido propio: negando, los
+     juegos sin ficha de Steam encabezarían «de menos a más» y taparían al único
+     que de verdad está mal valorado. */
+  it("asc: lo que no está en Steam sigue al final", () => {
+    expect(ordenarAsc(juego("sin steam"), juego("horrible", 12), juego("bueno", 88)))
+      .toEqual(["horrible", "bueno", "sin steam"]);
+  });
+
+  it("asc: empatados sigue mandando el número de reseñas, y luego el nombre", () => {
+    expect(ordenarAsc(juego("a: tres votos", 100, 3), juego("z: ocho mil", 100, 8000)))
+      .toEqual(["a: tres votos", "z: ocho mil"]);
   });
 });
