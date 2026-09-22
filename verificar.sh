@@ -206,6 +206,61 @@ else
           "supabase/functions/ no ha cambiado desde main"
 fi
 
+# ── Las matrices de los crones ──────────────────────────────────────────────
+# Seis paquetes de `scripts/` tienen `lib.test.ts` y hasta hoy no los corría
+# nadie: ni este guión ni el CI. Es el mismo agujero que tapó `correr.sh` con
+# las matrices SQL, y lo destapó 0103, que mete en steam-notes la lógica de
+# corregir un appid — código que decide qué se escribe en `titles`.
+#
+# Solo los paquetes que el cambio TOCA, y no los seis: `npm ci` por paquete son
+# segundos que este guión no tiene. El CI los corre todos (job `scripts`), que
+# es donde vive lo lento.
+if toca scripts; then
+  titulo "crones de scripts/: matrices y tipos"
+  tocados=""
+  for dir in "$repo"/scripts/*/; do
+    [ -f "${dir}package.json" ] || continue
+    rel="scripts/$(basename "$dir")"
+    toca "$rel" || continue
+    tocados="$tocados $rel"
+    if [ ! -d "${dir}node_modules" ] || [ "${dir}package-lock.json" -nt "${dir}node_modules" ]; then
+      if ! salida=$( { cd "$dir" && npm ci --no-audit --fund=false; } 2>&1 ); then
+        printf '  FALLO   %s: npm ci\n' "$rel"
+        printf '%s\n' "$salida" | tail -10 | sed 's/^/          /'
+        fallos=$((fallos + 1))
+        continue
+      fi
+    fi
+    # Un paquete sin matriz no suspende —tvtime-import no la tiene— pero el
+    # typecheck se le pide a todos.
+    if grep -q '"test"' "${dir}package.json"; then
+      if salida=$( { cd "$dir" && npm test; } 2>&1 ); then
+        printf '  ok      %s: npm test\n' "$rel"
+      else
+        printf '  FALLO   %s: npm test\n' "$rel"
+        printf '%s\n' "$salida" | grep -E '^not ok|# fail|Error' | head -10 | sed 's/^/          /'
+        fallos=$((fallos + 1))
+      fi
+    fi
+    if salida=$( { cd "$dir" && npm run typecheck; } 2>&1 ); then
+      printf '  ok      %s: typecheck\n' "$rel"
+    else
+      printf '  FALLO   %s: typecheck\n' "$rel"
+      printf '%s\n' "$salida" | tail -15 | sed 's/^/          /'
+      fallos=$((fallos + 1))
+    fi
+  done
+  # Cero paquetes mirados con `scripts/` tocado no es un aprobado: significa que
+  # lo que cambió no tiene package.json (un README, un .sql suelto) o que este
+  # bucle ha dejado de encontrarlos. Se dice, y no se suma un ok que nadie ha
+  # ganado.
+  if [ -z "$tocados" ]; then
+    printf '  ----    ningún paquete de scripts/ con package.json ha cambiado\n'
+  fi
+else
+  saltada "crones de scripts/: matrices y tipos" "scripts/ no ha cambiado desde main"
+fi
+
 # ── Las matrices SQL ────────────────────────────────────────────────────────
 # `supabase/sql-checks/` prueba las funciones de la base LLAMÁNDOLAS, que es lo
 # único que ve una migración que aplica sin quejarse y devuelve otra cosa: la

@@ -378,7 +378,12 @@ export function platformIndex(platforms: readonly Any[] | null | undefined): Map
  *  Cuando es null las dos columnas NO viajan en el upsert: la ficha conserva lo
  *  que se guardó la última vez que la tienda sí contestó, en vez de quedarse
  *  sin notas por un fallo pasajero. */
-export function gameRow(d: Any, ttb: Any = null, steam: SteamNotas | null = null) {
+export function gameRow(
+  d: Any,
+  ttb: Any = null,
+  steam: SteamNotas | null = null,
+  appidVerificado: number | null = null,
+) {
   const platformNames = platformIndex(d?.platforms);
   const byPlatform = platformReleases(d?.release_dates, platformNames);
   const canonical = canonicalRelease(byPlatform);
@@ -418,8 +423,16 @@ export function gameRow(d: Any, ttb: Any = null, steam: SteamNotas | null = null
        borraba el appid a los clásicos reeditados —justo los que más cuesta
        volver a casar— para atrapar un vínculo roto que, encima, no se
        distingue de este por ningún dato que tengamos. Ver `couldBeOnSteam`,
-       que sigue existiendo para lo único que sí sabe hacer: desempatar. */
-    steam_appid: steamAppid(d.external_games),
+       que sigue existiendo para lo único que sí sabe hacer: desempatar.
+
+       Y con una excepción desde 0103: `appidVerificado`. IGDB cuelga de una
+       ficha varias apps de Steam —el juego, su playtest, la banda sonora— y
+       `steamAppid()` se queda con la primera, que en tres juegos de la
+       biblioteca no era el juego. Cuando el cron de notas lo ha corregido
+       contra la tienda (`steam_appid_source = 'steam'`), quien manda es la
+       tienda: este refresco NO lo pisa. El resto sigue exactamente como
+       estaba — la corrección es de cuatro filas, no de las trescientas. */
+    steam_appid: appidVerificado ?? steamAppid(d.external_games),
     /* La ficha ampliada (0086). Las cuatro van siempre, con su null cuando el
        juego no las tiene: son de este payload y solo las escribe el detalle,
        así que un null aquí significa "IGDB no tiene", no "no preguntamos".

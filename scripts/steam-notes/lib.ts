@@ -133,3 +133,118 @@ export function metacriticOf(payload: unknown, appid: number): Read<number> {
   if (typeof score !== "number") return { touch: true, value: null };
   return score >= 0 && score <= 100 ? { touch: true, value: score } : { touch: true, value: null };
 }
+
+/* ── Cuando el appid no es el del juego ───────────────────────────────────
+ *
+ * El appid lo saca igdb-proxy de `external_games` de IGDB, que cuelga de una
+ * misma ficha VARIAS apps de Steam: la del juego, la de su playtest, la de la
+ * banda sonora y ediciones sueltas. `steamAppid()` se queda con la primera que
+ * venga, y la primera no siempre es el juego. Medido en producción el
+ * 21-sep-2026, sobre 297 juegos con appid:
+ *
+ *   Chants of Sennaar   1515190 → «Chants Of Sennaar Playtest», 0 reseñas
+ *   Dead Cells          1087210 → redirige a 588650, 0 reseñas en la de entrada
+ *   Borderlands 2        379880 → redirige a 49520,  0 reseñas
+ *
+ * Los tres se veían igual desde aquí: la tienda contesta bien y dice que no hay
+ * reseñas, así que este cron guardaba `null` y la carátula se quedaba muda
+ * mientras Steam tenía 183.000 reseñas de ese mismo juego.
+ *
+ * LO QUE LOS DISTINGUE de un juego recién salido —que SÍ tiene cero reseñas de
+ * verdad— es que hay que preguntarle a la tienda una segunda cosa. Por eso la
+ * reparación solo se intenta cuando las reseñas salen a cero: es el único caso
+ * sospechoso, son cuatro juegos de trescientos, y así la pasada normal sigue
+ * costando dos peticiones por juego.
+ *
+ * Las dos averías necesitan respuestas distintas, y de ahí las dos funciones:
+ * la redirección la resuelve la propia tienda (`appdetails` devuelve el appid
+ * canónico dentro de `data`), y el playtest no —es OTRO producto, con su propia
+ * ficha— así que hay que buscar el juego por su nombre. */
+
+/** El nombre reducido a lo que dos catálogos comparten.
+ *
+ *  ESPEJO de `nameKey` en app/src/domain/steamMatch.ts, no un import: aquello
+ *  es del bundle del navegador y esto un guión de Node fuera de `app/`. Mismo
+ *  trato que `reviewsOf` con normalize.ts. Si una cambia, la otra también. */
+export function nameKey(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** Las palabras con las que Steam nombra lo que NO es el juego.
+ *
+ *  Se buscan al FINAL del nombre («Chants Of Sennaar Playtest», «… Demo», «…
+ *  Soundtrack»), que es como la tienda las escribe, y buscarlas solo ahí es lo
+ *  que deja en paz a los juegos que las llevan dentro: «Beta Squad», «The Test
+ *  Drive», «Demolition Company». */
+const SATELITES = [
+  "playtest",
+  "play test",
+  "demo",
+  "beta",
+  "soundtrack",
+  "original soundtrack",
+  "ost",
+  "artbook",
+  "art book",
+];
+
+/** ¿La ficha que la tienda enseña con este appid es otra cosa que el juego?
+ *
+ *  Las dos condiciones, y las dos hacen falta:
+ *    · el nombre de la app acaba en una de las palabras satélite, y
+ *    · no es el nombre del juego — porque un juego puede LLAMARSE «Beta», y
+ *      entonces esa palabra no lo convierte en el satélite de nadie. */
+export function esSatelite(appName: string, gameName: string): boolean {
+  const app = nameKey(appName);
+  if (!app || app === nameKey(gameName)) return false;
+  return SATELITES.some((s) => app === s || app.endsWith(` ${s}`));
+}
+
+/** La ficha que la tienda sirve para un appid: su nombre y su appid CANÓNICO.
+ *
+ *  `data.steam_appid` no siempre es el que se pidió: las entradas secundarias
+ *  de un juego —ediciones, regiones, paquetes— responden con el appid del juego
+ *  de verdad. Eso es la tienda corrigiéndonos, y es gratis creerle.
+ *
+ *  Null es «no ha contestado por este appid»: un `success: false` es un juego
+ *  retirado o que no se sirve a esta región, y de ahí no se deduce nada. */
+export function fichaDeTienda(
+  payload: unknown,
+  pedido: number,
+): { appid: number; name: string } | null {
+  const entry = (payload as Record<string, { success?: unknown; data?: unknown }> | null)
+    ?.[String(pedido)];
+  if (!entry || entry.success !== true) return null;
+  const data = entry.data as { steam_appid?: unknown; name?: unknown } | null;
+  const appid = typeof data?.steam_appid === "number" && data.steam_appid > 0
+    ? data.steam_appid
+    : pedido;
+  return { appid, name: typeof data?.name === "string" ? data.name : "" };
+}
+
+/** El appid del juego en una respuesta de `storesearch`, o null.
+ *
+ *  SOLO acepta la igualdad exacta de nombres normalizados, y eso es lo que hace
+ *  que esto pueda escribir en la base sin una persona delante: «Dead Cells»
+ *  casa con «Dead Cells» y no con «Dead Cells: Return to Castlevania», que es
+ *  el siguiente de los seis resultados que la tienda devuelve. Casar «por
+ *  aproximación» es como acaba en una biblioteca el juego que no era — ver la
+ *  cabecera de app/src/domain/steamMatch.ts, que cuenta esa noche. */
+export function appidDeLaBusqueda(payload: unknown, gameName: string): number | null {
+  const items = (payload as { items?: unknown } | null)?.items;
+  if (!Array.isArray(items)) return null;
+  const quiero = nameKey(gameName);
+  if (!quiero) return null;
+  for (const it of items) {
+    const id = (it as { id?: unknown })?.id;
+    const name = (it as { name?: unknown })?.name;
+    if (typeof id !== "number" || id <= 0 || typeof name !== "string") continue;
+    if (nameKey(name) === quiero) return id;
+  }
+  return null;
+}

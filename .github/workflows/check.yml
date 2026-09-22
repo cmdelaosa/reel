@@ -108,3 +108,37 @@ jobs:
       - name: Test edge functions
         # No test files is a pass, not a failure — most functions have none yet.
         run: deno test --permit-no-files supabase/functions/
+
+  # Las matrices de los crones de scripts/, que hasta hoy no corría NADIE.
+  #
+  # Seis paquetes tienen `lib.test.ts` —las decisiones de cada cron, separadas
+  # de la red para poder probarlas— y ninguno pasaba por el CI: se ejecutaban a
+  # mano, o sea cuando alguien se acordaba. Es el mismo agujero que tapó
+  # `sql-checks/correr.sh` para las matrices SQL, y la misma frase vale aquí:
+  # una prueba que no corre sola no es una red. Lo que lo destapó fue 0103, que
+  # mete en steam-notes la lógica de corregir un appid — código que decide qué
+  # se escribe en `titles` y que nadie habría vuelto a ejecutar.
+  #
+  # Un paquete sin `test` en su package.json no suspende: tvtime-import no
+  # tiene matriz todavía, y exigirla aquí sería mezclar dos cosas. Lo que sí se
+  # le pide a todos es el `typecheck`.
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Matrices y tipos de los crones
+        run: |
+          rojo=0
+          for dir in scripts/*/; do
+            [ -f "${dir}package.json" ] || continue
+            echo "── $dir"
+            ( cd "$dir" && npm ci --silent ) || { rojo=1; continue; }
+            if grep -q '"test"' "${dir}package.json"; then
+              ( cd "$dir" && npm test ) || rojo=1
+            fi
+            ( cd "$dir" && npm run typecheck ) || rojo=1
+          done
+          exit $rojo
