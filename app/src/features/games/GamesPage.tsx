@@ -75,7 +75,11 @@ const ms = (s: string | null) => (s ? new Date(s).getTime() : 0);
    IGDB o sin fecha de salida NO puede ordenarse como un 0, o encabezaría «de
    menos a más» con doscientos juegos de los que no se sabe nada. `null` los
    manda al final en los dos sentidos (domain/librarySort). Los minutos van sin
-   `|| null` a propósito: ahí el 0 es el dato, «no lo he tocado». */
+   `|| null` a propósito: ahí el 0 es el dato, «no lo he tocado».
+
+   El de `added` además atrapa el NaN de una fecha ilegible, que es lo que
+   devuelve `ms`; la cara de que trate el epoch como un hueco no llega a pasar
+   —`added_at` lo escribe la propia app con un `new Date()`—. */
 const COMPARATORS: Record<Exclude<SortKey, "rated">, (dir: SortDir) => (a: LibraryGame, b: LibraryGame) => number> = {
   added: (dir) => byValue((g) => ms(g.added_at) || null, dir),
   hours: (dir) => byValue((g) => g.minutes_played ?? 0, dir),
@@ -201,12 +205,18 @@ export default function GamesPage() {
         {/* El contador, solo en el cubo puesto. Siete contadores son ~90 px de
             los que faltaban, y de los siete solo uno responde a algo que estés
             mirando: los otros seis son cifras de listas que no tienes delante.
-            En el menú del móvil siguen los siete, que ahí sobra sitio. */}
+            En el menú del móvil siguen los siete, que ahí sobra sitio.
+
+            Y `dim` en vez de `mute`, que es lo que llevaba: el gris apagado da
+            2,71:1 sobre el fondo teñido de .chip-active —suspende de sobra— y
+            antes se le perdonaba a medias porque había otros seis contadores
+            sobre el fondo neutro. Ahora el único que se pinta es justo ese.
+            `dim` sube a 5,61:1 sin cambiar de familia de grises. */}
         <div className="shows-buckets flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ flex: 1 }}>
           {FILTERS.map((x) => (
             <button key={x.key} className={`chip ${f === x.key ? "chip-active" : ""}`} onClick={() => setF(x.key)}>
               {tr(x.label)}
-              {f === x.key && <span className="mute" style={{ fontWeight: 700 }}>{count(x.key)}</span>}
+              {f === x.key && <span className="dim" style={{ fontWeight: 700 }}>{count(x.key)}</span>}
             </button>
           ))}
         </div>

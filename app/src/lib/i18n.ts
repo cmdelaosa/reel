@@ -217,7 +217,6 @@ const ES: Record<string, string> = {
   "Nothing announced in the games you follow.": "Nada anunciado en los juegos que sigues.",
   "Nothing on the go — hit {key} and add a game.":
     "No tienes nada entre manos — pulsa {key} y añade un juego.",
-  "Most played": "Más jugados",
   /* Steam (0076). "Lo tengo" y no "En propiedad": lo que responde es la
      pregunta que uno se hace en la tienda con el móvil en la mano, y esa
      pregunta se hace con esas tres palabras. */
@@ -603,12 +602,6 @@ const ES: Record<string, string> = {
   "Last released": "Último emitido",
   "A–Z": "A–Z",
   "Top rated": "Mejor nota",
-  /* El orden por las reseñas de Steam, solo en juegos. "Mejor en Steam" y no
-     "Mejor valoradas": lo que ordena es el porcentaje de reseñas positivas de
-     una tienda concreta, y decirlo evita leerlo como la nota de IGDB de al
-     lado. Series y Cine no lo tienen. */
-  "Best on Steam": "Mejor en Steam",
-
   /* ---- El strip de orden de Juegos, en una palabra (0102) ----
      Siete etiquetas cortas porque la fila de Juegos es la única de las tres que
      no cabía: «Date added», «Most played» y «Best on Steam» pedían 1.402 px de

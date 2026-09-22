@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { qk } from "@/lib/queryKeys";
 import { fetchPaged } from "@/lib/paging";
 import { byRatedAt, type RatedAt, type SortDir } from "@/domain/ratedSort";
+import { flipDir } from "@/domain/librarySort";
 import { useAuth } from "@/features/auth/AuthProvider";
 
 /* Show-level ratings (episode ratings stay schema-only until post-Phase 5). */
@@ -142,7 +143,7 @@ export function useRatedSort() {
     dir,
     cmp,
     arrow: dir === "desc" ? "↓" : "↑",
-    flip: () => setDir((d) => (d === "desc" ? "asc" : "desc")),
+    flip: () => setDir(flipDir),
   };
 }
 
