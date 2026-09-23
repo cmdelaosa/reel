@@ -179,6 +179,50 @@ async function titlesByName(
   return byName;
 }
 
+/** Nombre → juego del catálogo, sabiendo lo que esta persona ya importó.
+ *
+ *  `titlesByName` solo casa el nombre tal cual, y /by-name —al confirmar— casa
+ *  normalizado. Así que un juego que Nintendo escribe "Pokemon" y el catálogo
+ *  "Pokémon" entra bien la primera vez, por /by-name, y a partir de ahí el
+ *  nombre exacto NO lo vuelve a encontrar: "Actualizar mis horas" no lo
+ *  actualizaría nunca, y cada nuevo escaneo lo enseñaría como si hubiera que
+ *  buscarlo otra vez.
+ *
+ *  Lo resuelto en las importaciones anteriores de esta persona es la respuesta,
+ *  y ya está guardada: las filas aplicadas de su borrador llevan nombre y
+ *  `title_id`. Se miran esas primero y el nombre exacto rellena el resto. */
+async function knownTitles(
+  admin: SupabaseClient,
+  userId: string,
+  names: string[],
+): Promise<Map<string, string>> {
+  const byName = await titlesByName(admin, names);
+
+  const { data: runs, error } = await admin
+    .from("game_imports")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("provider", "nintendo");
+  if (error) throw new Error(`game_imports: ${error.message}`);
+  const runIds = (runs ?? []).map((r) => r.id as string);
+
+  const wanted = new Set(names);
+  for (const part of chunk(runIds, ID_PAGE)) {
+    const { data, error: e } = await admin
+      .from("game_import_items")
+      .select("name, title_id")
+      .eq("user_id", userId)
+      .eq("state", "applied")
+      .not("title_id", "is", null)
+      .in("import_id", part);
+    if (e) throw new Error(`game_import_items: ${e.message}`);
+    for (const row of data ?? []) {
+      if (wanted.has(row.name)) byName.set(row.name, row.title_id as string);
+    }
+  }
+  return byName;
+}
+
 /** Lo que la biblioteca de esa persona dice hoy de esos juegos.
  *
  *  `followed` viaja también, y no es decoración: quitar un juego de la
@@ -290,7 +334,7 @@ async function scanned(
   const games = parsePlayLog(await playLog(session, nsaId));
   if (!games.length) return [];
 
-  const byName = await titlesByName(admin, games.map((g) => g.name));
+  const byName = await knownTitles(admin, userId, games.map((g) => g.name));
   const entries = await entriesOf(admin, userId, [...byName.values()]);
 
   return games.map((g) => {
@@ -609,7 +653,7 @@ Deno.serve(async (req) => {
       }
       if (!games.length) return json({ updated: 0, seen: 0 });
 
-      const byName = await titlesByName(admin, games.map((g) => g.name));
+      const byName = await knownTitles(admin, userId, games.map((g) => g.name));
       const entries = await entriesOf(admin, userId, [...byName.values()]);
 
       const rows = games
@@ -696,24 +740,37 @@ async function resolvePending(
         if (error) throw new Error(`items resolved: ${error.message}`);
       }
 
-      /* Estos juegos acaban de entrar en el catálogo, así que nadie tenía una
-         fila de biblioteca para ellos: las horas se escriben tal cual las da
-         Nintendo, y la fecha se deja en null DETRÁS del disparador, que la
-         acaba de poner a hoy. No se sabe cuándo se jugaron, y no se inventa. */
+      /* NO se da por hecho que estos juegos sean nuevos para esta persona. El
+         escaneo solo casaba el nombre TAL CUAL; /by-name compara normalizado,
+         así que puede aterrizar en un juego que ya sigues escrito de otra
+         manera ("Pokémon" en el catálogo, "Pokemon" en la Switch). Tratarlo
+         como nuevo pisaría las horas que escribiste a mano y borraría tu última
+         partida. Así que se mira la biblioteca y se aplican las mismas dos
+         reglas que en /apply: una cifra manual no se pisa (y aquí no hubo
+         casilla de "usar las de Nintendo", porque el escaneo no vio el
+         conflicto), y la fecha es la aprendida o la que había — null en lo que
+         sí es nuevo, detrás del disparador que la acaba de poner a hoy. */
+      const current = await entriesOf(admin, userId, found.map((i) => byName.get(i.name)!));
       resolved = await writeEntries(
         admin,
         userId,
-        found.map((i) => ({
-          titleId: byName.get(i.name)!,
-          minutes: i.minutes,
-          playState: pickFor(i).playState,
-        })),
+        found.map((i) => {
+          const titleId = byName.get(i.name)!;
+          return {
+            titleId,
+            minutes: minutesToWrite(current.get(titleId), i.minutes, false),
+            playState: pickFor(i).playState,
+          };
+        }),
         "nintendo",
       );
       await writePlayedAt(
         admin,
         userId,
-        found.map((i) => ({ titleId: byName.get(i.name)!, at: null })),
+        found.map((i) => {
+          const titleId = byName.get(i.name)!;
+          return { titleId, at: learnedOrKept(current.get(titleId), i.minutes) };
+        }),
       );
       rated = await writeRatings(
         admin,
