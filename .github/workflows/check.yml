@@ -34,6 +34,12 @@ jobs:
   # tocar nada aplicado.
   migrations:
     runs-on: ubuntu-latest
+    # `packages: read` es para el login en ghcr.io de más abajo. Declarar
+    # `permissions` en un job deja a cero todo lo que no se nombra, así que
+    # `contents: read` va explícito o `checkout` se queda sin poder leer el repo.
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
       - name: Un número de migración, un fichero
@@ -69,6 +75,26 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.111.0
+      # `supabase start` baja unas nueve imágenes de ghcr.io, y sin identificarse
+      # las baja del cupo ANÓNIMO, que comparten todos los runners de GitHub. El
+      # 23-sep-2026 ese cupo estuvo saturado toda la tarde y este job cayó tres
+      # veces seguidas antes de aplicar una sola migración —
+      # «toomanyrequests: … allowed: 44000/minute» en cada imagen—, con las
+      # mismas imágenes y el mismo CLI que el día anterior salieron en verde.
+      # Identificado con el token del propio workflow, la descarga va por el
+      # cupo de la cuenta y no por el compartido. Las imágenes son públicas: el
+      # login no da acceso a nada, solo cambia de qué cupo se descuenta.
+      #
+      # Por eso tampoco puede tumbar el job: si el login falla, la descarga
+      # anónima sigue siendo posible y es mejor intentarla que parar aquí. El
+      # token va por `env` y no escrito en el script, que es como GitHub pide
+      # pasar un secreto a un `run`.
+      - name: Identificarse en ghcr.io
+        continue-on-error: true
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
       # Los nombres de `-x` son los que el CLI documenta —`supabase start --help`
       # los lista— y no los de los contenedores: escribir `mailpit` o
       # `supavisor`, que es como se llaman por fuera, no excluye nada. Fuera va
