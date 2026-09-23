@@ -109,10 +109,17 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
   const playState = entry?.play_state ?? null;
   const owned = Boolean(entry?.owned);
   const playedPlatform = entry?.played_platform ?? null;
-  /* De dónde salen las horas (0076). Se dice cuando las trajo Steam, y no
-     cuando las escribiste tú: lo tuyo no necesita explicación, y ver "de Steam"
-     es lo que explica por qué esa cifra cambió sola. */
-  const fromSteam = entry?.minutes_source === "steam";
+  /* De dónde salen las horas (0076, y Nintendo desde 0104). Se dice cuando las
+     trajo una sincronización, y no cuando las escribiste tú: lo tuyo no
+     necesita explicación, y ver "de Steam" es lo que explica por qué esa cifra
+     cambió sola. Con dos proveedores hay que decir CUÁL: "de Steam" en unas
+     horas que vinieron de la Switch sería una explicación falsa, que es peor
+     que ninguna. */
+  const minutesFrom = entry?.minutes_source === "steam"
+    ? tr("from Steam")
+    : entry?.minutes_source === "nintendo"
+    ? tr("from Nintendo")
+    : null;
   /* "¿Ha salido?" se pregunta al TÍTULO y no a la fila de biblioteca. El
      `aired_count` del rollup solo existe si sigues el juego, así que leerlo de
      ahí ponía en "próximo" —con su insignia de fecha futura— cualquier juego
@@ -583,7 +590,7 @@ export function GameSheet({ igdbId, onClose }: { igdbId: number; onClose: () => 
                                 +{formatPlaytime(m)}
                               </button>
                             ))}
-                            {fromSteam && <span className="mute" style={{ fontSize: 11.5 }}>{tr("from Steam")}</span>}
+                            {minutesFrom && <span className="mute" style={{ fontSize: 11.5 }}>{minutesFrom}</span>}
                           </>
                         ) : (
                           <span className="mute" style={{ fontSize: 12.5 }}>{tr("Add it to your library first")}</span>
