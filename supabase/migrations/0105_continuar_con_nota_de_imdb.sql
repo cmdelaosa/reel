@@ -10,8 +10,8 @@
 -- mismo que arreglaron 0080 y 0102 en el rollup.
 --
 -- LA COLUMNA VA AL FINAL de la lista de retorno, por lo mismo que allí: el
--- cliente valida por nombre (upNextRowSchema) y la lleva como opcional, así que
--- una caché persistida de antes de esta columna sigue pasando.
+-- cliente valida por nombre (upNextRowSchema). La lleva como opcional para que
+-- un cliente desplegado antes que esta migración no rompa.
 --
 -- Y HAY QUE HACER `drop function`: cambiar el tipo de retorno de una función
 -- que devuelve tabla no se puede con `create or replace`. El drop se lleva la

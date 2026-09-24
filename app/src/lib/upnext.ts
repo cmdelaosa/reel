@@ -11,8 +11,9 @@ export const upNextRowSchema = z.object({
   backdrop_path: z.string().nullable(),
   network: z.string().nullable(),
   vote_average: z.number().nullable(),
-  /* La nota de IMDb, que manda en la carátula (0105). Opcional para que la
-     caché persistida de antes de la columna siga pasando la validación. */
+  /* La nota de IMDb, que manda en la carátula (0105). Opcional porque una base
+     anterior a 0105 no la devuelve. La caché persistida se descarta sola: la
+     huella de lib/queryPersistence cambia con la columna. */
   imdb_rating: z.number().nullable().optional(),
   episode_id: z.string().uuid(),
   season_number: z.number().int(),

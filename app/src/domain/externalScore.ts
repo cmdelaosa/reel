@@ -17,8 +17,8 @@
  * su biblioteca y en Continuar. La ficha de una serie sigue enseñando las dos
  * notas, con la de IMDb primero: allí la nota del conjunto pesa menos que la
  * del episodio, que es la que la gráfica de temporada ya cuenta con su propio
- * detalle. Explorar de series no la usa: «Mejor valoradas» ordena por la de
- * TMDB, y enseñar otra encima de ese orden lo haría parecer desordenado.
+ * detalle. En Explorar de series solo «Mejor valoradas» enseña nota, y es esta,
+ * igual que en el cine, aunque la lista la ordene TMDB.
  */
 
 export type ScoreSource = "imdb" | "tmdb";

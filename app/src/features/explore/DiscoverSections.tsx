@@ -13,6 +13,7 @@ import { PosterGridSkeleton, RailCardsSkeleton, RowsSkeleton } from "@/ui/Skelet
 import { FriendStack, type FriendLike } from "@/ui/FriendAvatar";
 import { posterBg } from "@/ui/posterBg";
 import { FilterPanel, HiddenTitles, TitlePoster } from "@/features/explore/DiscoverPieces";
+import { externalScore, scoreColor, scoreLabel } from "@/domain/externalScore";
 import { useTitleIntent } from "@/lib/useOpenTitle";
 
 /* Trending rail (ranked) + a single tabbed discover section: Popular now,
@@ -75,8 +76,10 @@ const loadView = (): ViewMode => {
 };
 
 /* List-view row: same data as TitlePoster, in the app's mq-row shape. Shows the
-   friend stack when this is a friend-tab card, otherwise the TMDB score. */
-function TitleListRow({ t, score, friends, friendCount, onOpen, onIgnore }: { t: TitleRow; score?: number | null; friends?: FriendLike[] | null; friendCount?: number; onOpen: () => void; onIgnore: () => void }) {
+   friend stack when this is a friend-tab card, otherwise the catalog score
+   (IMDb, TMDB as fallback) where the tab asks for one. */
+function TitleListRow({ t, catalog, friends, friendCount, onOpen, onIgnore }: { t: TitleRow; catalog?: boolean; friends?: FriendLike[] | null; friendCount?: number; onOpen: () => void; onIgnore: () => void }) {
+  const score = catalog ? externalScore(t) : null;
   const art = tmdbImg(t.poster_path, "w92");
   const intent = useTitleIntent(t.tmdb_id);
   const esNames = useEsNames();
@@ -100,9 +103,9 @@ function TitleListRow({ t, score, friends, friendCount, onOpen, onIgnore }: { t:
           </div>
         )}
       </div>
-      {score != null && score > 0 && (
-        <span className="mq-score" style={{ fontSize: 15, flex: "0 0 auto" }}>
-          <Star size={12} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)", verticalAlign: "-1px" }} /> {score.toFixed(1)}
+      {score && (
+        <span className="mq-score" style={{ fontSize: 15, flex: "0 0 auto" }} title={scoreLabel(score.source)}>
+          <Star size={12} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source), verticalAlign: "-1px" }} /> {score.value.toFixed(1)}
         </span>
       )}
       <div style={{ flex: "0 0 auto", width: 96 }} onClick={(e) => e.stopPropagation()}>
@@ -143,9 +146,10 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "friends", label: "Popular with friends" },
 ]; // labels run through tr() at render
 
-/* Normalised discover card: a title plus the per-tab extras (TMDB score on the
-   Top-rated tab, the friend stack on the With-friends tab). */
-type DiscoverItem = { t: TitleRow; score: number | null; friends: FriendLike[] | null; friendCount: number };
+/* Normalised discover card: a title plus the per-tab extras (the catalog score
+   —IMDb, TMDB as fallback— on the Top-rated tab, the friend stack on the
+   With-friends tab). The other series tabs carry no score. */
+type DiscoverItem = { t: TitleRow; catalog: boolean; friends: FriendLike[] | null; friendCount: number };
 
 export function DiscoverSections() {
   const { data: trendingRaw = [], isLoading: trendingLoading } = useTrending();
@@ -246,12 +250,15 @@ export function DiscoverSections() {
   if (tab === "popular") {
     items = (catalogMode ? catalogRaw : popularNowRaw)
       .filter((t) => !isIgnored(t.tmdb_id, "tv") && !followed.has(t.tmdb_id) && passesGenre(t.genres))
-      .map((t) => ({ t, score: null, friends: null, friendCount: 0 }));
+      .map((t) => ({ t, catalog: false, friends: null, friendCount: 0 }));
   } else if (tab === "rated") {
     // Year + genre already applied server-side.
     items = ratedRaw
       .filter((t) => !isIgnored(t.tmdb_id, "tv") && !followed.has(t.tmdb_id))
-      .map((t) => ({ t, score: t.vote_average, friends: null, friendCount: 0 }));
+      /* La lista la ordena TMDB en el servidor, pero la nota que se pinta es la
+         de IMDb, como en el cine: es la principal en toda la app, y la de TMDB
+         solo sale cuando IMDb no puntúa. */
+      .map((t) => ({ t, catalog: true, friends: null, friendCount: 0 }));
   } else {
     items = friendsRaw
       // Need the title id to add/hide the card; skip pre-0035 rows that lack it.
@@ -263,7 +270,7 @@ export function DiscoverSections() {
           status: null, genres: p.genres, network: p.network, episode_run_time: null,
           vote_average: p.vote_average, popularity: null,
         },
-        score: null,
+        catalog: false,
         friends: p.friends.map((f) => ({ id: f.id, name: f.name, avatarUrl: f.avatar_url })),
         friendCount: p.count,
       }));
@@ -395,7 +402,7 @@ export function DiscoverSections() {
               <TitleListRow
                 key={it.t.tmdb_id}
                 t={it.t}
-                score={it.score}
+                catalog={it.catalog}
                 friends={it.friends}
                 friendCount={it.friendCount}
                 onOpen={() => open(it.t.tmdb_id)}
@@ -407,7 +414,7 @@ export function DiscoverSections() {
           <div className="poster-grid">
             {visible.map((it) => (
               <div key={it.t.tmdb_id} className="flex flex-col gap-1.5">
-                <TitlePoster t={it.t} score={it.score} onOpen={() => open(it.t.tmdb_id)} onIgnore={() => ignore.mutate(it.t.id)} />
+                <TitlePoster t={it.t} catalogScore={it.catalog} onOpen={() => open(it.t.tmdb_id)} onIgnore={() => ignore.mutate(it.t.id)} />
                 {it.friends && it.friends.length > 0 && <FriendRow friends={it.friends} count={it.friendCount} />}
                 <AddButton t={it.t} />
               </div>
