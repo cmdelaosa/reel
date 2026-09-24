@@ -1525,7 +1525,8 @@ async function resolvePopular(
   return ids;
 }
 
-/** Top-rated TV (TMDB /discover/tv sorted by rating; genre ids are OR-ed).
+/** Top-rated TV (TMDB /discover/tv sorted by rating, then re-ranked by IMDb
+ *  with TMDB as fallback — rank.ts, byImdbFirst; genre ids are OR-ed).
  *
  *  The vote_count floor is the honesty knob — fan-niche titles rate 8.6+ on few
  *  votes — but a fixed high floor starves filtered charts (the 1970s have two
@@ -1540,7 +1541,9 @@ async function resolveTopRated(
   admin: SupabaseClient, apiKey: string, from: string | null, to: string | null,
   genres: string[], force = false,
 ): Promise<number[]> {
-  const key = `top-rated:${from ?? ""}:${to ?? ""}:${genres.join(",")}`;
+  /* `imdb:` en la clave desde que el orden es por IMDb: invalida de golpe los
+     órdenes viejos, también los filtrados, que el recalentado no rehace. */
+  const key = `top-rated:imdb:${from ?? ""}:${to ?? ""}:${genres.join(",")}`;
   if (!force) {
     const hit = await readDiscoverCache(admin, key);
     if (hit) return hit;
@@ -1796,7 +1799,8 @@ async function resolveMovieTopRated(
   admin: SupabaseClient, apiKey: string, from: string | null, to: string | null,
   genres: string[], force = false,
 ): Promise<number[]> {
-  const key = `movie-top-rated:${from ?? ""}:${to ?? ""}:${genres.join(",")}`;
+  // `imdb:` en la clave: ver resolveTopRated.
+  const key = `movie-top-rated:imdb:${from ?? ""}:${to ?? ""}:${genres.join(",")}`;
   if (!force) {
     const hit = await readDiscoverCache(admin, key);
     if (hit) return hit;

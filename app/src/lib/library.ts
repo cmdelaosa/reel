@@ -269,6 +269,7 @@ function optimisticRow(t: TitleRow): LibraryRow {
     genres: t.genres,
     network: t.network,
     vote_average: t.vote_average,
+    imdb_rating: t.imdb_rating,
     favorite: false,
     notify: false,
     stopped: false,

@@ -1,10 +1,10 @@
-// Discovery re-rankers for tmdb-proxy: the two rules that decide what order the
+// Discovery re-rankers for tmdb-proxy: the rules that decide what order the
 // Explore grids come back in. They live here rather than in index.ts because
 // index.ts calls Deno.serve at import time — anything defined in there can't be
 // imported by a test without starting a server. Pure and dependency-free, so
 // rank_test.ts can exercise them directly (`deno test`, run in CI).
 //
-// Both take and return the same rows: they only re-order. A re-ranker that
+// All of them take and return the same rows: they only re-order. A re-ranker that
 // drops rows empties grids for narrow filters, which is exactly the bug both of
 // these shipped with — see the drain loops below and their tests.
 

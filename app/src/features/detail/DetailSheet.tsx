@@ -443,64 +443,66 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
             {/* Cuerpo, en una sola columna */}
             <div className="detail-body">
               {/* Las notas, sobre el fondo y no en una tarjeta. La tuya manda:
-                  se pone, no se lee, y por eso lleva las estrellas grandes. Las
-                  de fuera van juntas a la derecha, con la de tus amigos a su
-                  izquierda — puede no haber ninguno, y así lo que falta encoge
-                  por dentro de la caja en vez de dejar un hueco. */}
+                  se pone, no se lee, y por eso lleva las estrellas grandes. La
+                  de fuera va a la derecha, con la de tus amigos a su izquierda
+                  — puede no haber ninguna de las dos, y entonces la caja no se
+                  pinta en vez de quedarse vacía. */}
               <div className="detail-scores">
                 <div className="detail-mine">
                   <span className="eyebrow" style={{ fontSize: 10.5 }}>{tr("My rating")}</span>
                   <RatingStars value={rating} size={28} onRate={(v) => rateTitle.mutate(v)} />
                 </div>
-                <div className="detail-others">
-                  {friendsAvg != null && (
-                    <>
-                      <button
-                        className="detail-cell detail-friends"
-                        aria-expanded={friendsOpen}
-                        onClick={() => setFriendsOpen((v) => !v)}
-                      >
-                        <span className="eyebrow" style={{ fontSize: 10 }}>{tr("Friends")}</span>
-                        <span className="detail-cellval">
-                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                          {friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 })}
-                          {friendsOpen ? <ChevronUp size={14} style={{ color: "var(--text-mute)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-mute)" }} />}
-                        </span>
-                      </button>
-                      {score && <span className="detail-others-sep" />}
-                    </>
-                  )}
-                  {/* De fuera, UNA nota: la de IMDb, con la de TMDB de reserva
-                      (domain/externalScore), como en la ficha de una película y
-                      en la carátula. La celda de IMDb ES el enlace, con su
-                      flecha; sin tconst, o con la de TMDB, se queda en número. */}
-                  {score && (
-                    title.imdb_id && score.source === "imdb" ? (
-                      <a
-                        className="detail-cell detail-out"
-                        href={`https://www.imdb.com/title/${title.imdb_id}/`}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        title={title.imdb_votes ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : tr("View on IMDb")}
-                      >
-                        <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
-                        <span className="detail-cellval">
-                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
-                          {score.value.toFixed(1)}
-                          <ExternalLink size={12} />
-                        </span>
-                      </a>
-                    ) : (
-                      <div className="detail-cell">
-                        <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
-                        <span className="detail-cellval">
-                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
-                          {score.value.toFixed(1)}
-                        </span>
-                      </div>
-                    )
-                  )}
-                </div>
+                {(friendsAvg != null || score) && (
+                  <div className="detail-others">
+                    {friendsAvg != null && (
+                      <>
+                        <button
+                          className="detail-cell detail-friends"
+                          aria-expanded={friendsOpen}
+                          onClick={() => setFriendsOpen((v) => !v)}
+                        >
+                          <span className="eyebrow" style={{ fontSize: 10 }}>{tr("Friends")}</span>
+                          <span className="detail-cellval">
+                            <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                            {friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 })}
+                            {friendsOpen ? <ChevronUp size={14} style={{ color: "var(--text-mute)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-mute)" }} />}
+                          </span>
+                        </button>
+                        {score && <span className="detail-others-sep" />}
+                      </>
+                    )}
+                    {/* De fuera, UNA nota: la de IMDb, con la de TMDB de reserva
+                        (domain/externalScore), como en la ficha de una película y
+                        en la carátula. La celda de IMDb ES el enlace, con su
+                        flecha; sin tconst, o con la de TMDB, se queda en número. */}
+                    {score && (
+                      title.imdb_id && score.source === "imdb" ? (
+                        <a
+                          className="detail-cell detail-out"
+                          href={`https://www.imdb.com/title/${title.imdb_id}/`}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          title={title.imdb_votes ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : tr("View on IMDb")}
+                        >
+                          <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
+                          <span className="detail-cellval">
+                            <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
+                            {score.value.toFixed(1)}
+                            <ExternalLink size={12} />
+                          </span>
+                        </a>
+                      ) : (
+                        <div className="detail-cell">
+                          <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
+                          <span className="detail-cellval">
+                            <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
+                            {score.value.toFixed(1)}
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Quién de los tuyos la ha puntuado, al desplegar su celda. */}

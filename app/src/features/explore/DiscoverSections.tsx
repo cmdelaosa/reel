@@ -255,9 +255,8 @@ export function DiscoverSections() {
     // Year + genre already applied server-side.
     items = ratedRaw
       .filter((t) => !isIgnored(t.tmdb_id, "tv") && !followed.has(t.tmdb_id))
-      /* La lista la ordena TMDB en el servidor, pero la nota que se pinta es la
-         de IMDb, como en el cine: es la principal en toda la app, y la de TMDB
-         solo sale cuando IMDb no puntúa. */
+      /* La nota que se pinta es la de IMDb, con TMDB de reserva, y el proxy
+         ordena la lista con la misma regla (tmdb-proxy/rank.ts, byImdbFirst). */
       .map((t) => ({ t, catalog: true, friends: null, friendCount: 0 }));
   } else {
     items = friendsRaw
