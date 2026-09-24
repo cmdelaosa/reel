@@ -620,8 +620,8 @@ const ES: Record<string, string> = {
   "A–Z": "A–Z",
   "Top rated": "Mejor nota",
   /* ---- El strip de orden de Juegos, en una palabra (0102) ----
-     Siete etiquetas cortas porque la fila de Juegos es la única de las tres que
-     no cabía: «Date added», «Most played» y «Best on Steam» pedían 1.402 px de
+     Siete etiquetas cortas porque la fila de Juegos no cabía (y luego la de
+     Series, ver abajo): «Date added», «Most played» y «Best on Steam» pedían 1.402 px de
      los 1.224 que da la columna. Las largas siguen vivas arriba porque Cine las
      usa tal cual.
 
@@ -637,12 +637,14 @@ const ES: Record<string, string> = {
   "Rating": "Nota",
   "games: Rated": "Puntuado",
   /* ---- El strip de orden de Series, en una palabra (como el de Juegos) ----
-     "Watched" ya está arriba («Visto»), igual que "Rating" y "A–Z". "Puntuada"
+     "Watched" ya existe («Visto», en el bloque del historial), y "Rating" y
+     "A–Z" están arriba. "Puntuada"
      va prefijada por lo mismo que "games: Rated": "Rated" a secas es
      «Puntuadas», la cifra del perfil. */
   "Aired": "Emitido",
   "shows: Rated": "Puntuada",
-  /* El orden por la fecha de TU nota, en las tres bibliotecas. La flecha (↓ más
+  /* El orden por la fecha de TU nota. Esta etiqueta larga queda solo para Cine;
+     Juegos y Series usan "games: Rated" y "shows: Rated". La flecha (↓ más
      reciente primero, ↑ al revés) la pone la página fuera de la cadena: es
      estado, no idioma. */
   "Last rated": "Última puntuada",

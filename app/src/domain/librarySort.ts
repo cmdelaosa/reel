@@ -53,7 +53,8 @@ export function byValue<T extends Sortable>(
 }
 
 /** El sentido contrario. Vive aquí y no en la página porque las tres
- *  bibliotecas tendrán el mismo gesto en cuanto esto salga de Juegos. */
+ *  bibliotecas comparten el gesto: Juegos y Series ya lo usan, y Cine lo hará
+ *  cuando deje useRatedSort. */
 export function flipDir(dir: SortDir): SortDir {
   return dir === "desc" ? "asc" : "desc";
 }

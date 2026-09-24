@@ -172,8 +172,8 @@ export default function ShowsPage() {
           ))}
         </div>
         {/* Same options on a phone, as a menu — the chip row scrolled seven wide
-            and showed two. Counts ride along as hints so the menu says as much
-            as the row does. */}
+            and showed two. Counts ride along as hints: the menu still shows all
+            seven, while the row only shows the active one. */}
         <TabMenu
           value={f}
           options={FILTERS.map((x) => ({ key: x.key, label: tr(x.label), hint: String(count(x.key)) }))}
