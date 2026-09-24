@@ -1,8 +1,10 @@
 import { memo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useLibrary, toTitleCard, type LibraryShow } from "@/lib/library";
-import { useRatedSort } from "@/lib/ratings";
+import { useRatedAt } from "@/lib/ratings";
 import type { ShowStatus } from "@/domain/status";
+import { byRatedAt, type SortDir } from "@/domain/ratedSort";
+import { byValue, flipDir } from "@/domain/librarySort";
 import { t as tr, tv } from "@/lib/i18n";
 import { fmtAirDate } from "@/lib/region";
 import { EAGER_POSTERS, Poster, TabMenu, useGrowingList, useStableHandler } from "@/ui";
@@ -23,27 +25,43 @@ const FILTERS: { key: Bucket; label: string }[] = [
 ];
 
 type SortKey = "lastwatched" | "lastreleased" | "az" | "rating" | "rated";
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: "lastwatched", label: "Last watched" },
-  { key: "lastreleased", label: "Last released" },
-  { key: "az", label: "A–Z" },
-  { key: "rating", label: "Top rated" },
-  { key: "rated", label: "Last rated" },
+
+/* Las etiquetas son de UNA palabra, como en Juegos (0102) y por lo mismo: con
+   «Último emitido» y «Última puntuada ↓» la fila no cabía y los cubos —que
+   llevan `flex: 1`— se comían el déficit entero, así que «Abandonadas» y
+   «Todas» se quedaban fuera sin barra que arrastrar. La otra mitad son los
+   contadores, que ahora solo salen en el cubo puesto.
+
+   `first` es el sentido en el que empieza cada orden: «A–Z» promete de la A a
+   la Z y los otros cuatro «lo más reciente» o «lo mejor» primero. La flecha
+   dice si estás en ese sentido (↓) o en el contrario (↑). */
+const SORTS: { key: SortKey; label: string; first: SortDir }[] = [
+  { key: "lastwatched", label: "Watched", first: "desc" },
+  { key: "lastreleased", label: "Aired", first: "desc" },
+  { key: "az", label: "A–Z", first: "asc" },
+  { key: "rating", label: "Rating", first: "desc" },
+  { key: "rated", label: "shows: Rated", first: "desc" },
 ];
-/* "Last watched" is the page's default everywhere except Not started, where by
+/* "Watched" is the page's default everywhere except Not started, where by
    definition nothing has been watched: every row's key is null, so the order was
    whatever the rollup happened to return. What you want from a pile of shows you
-   haven't begun is the newest one, so that bucket opens on Last released. Only a
+   haven't begun is the newest one, so that bucket opens on Aired. Only a
    default — pick a sort and it holds while you move between buckets. */
 const DEFAULT_SORT: Partial<Record<Bucket, SortKey>> = { watchlist: "lastreleased" };
 const ms = (s: string | null) => (s ? new Date(s).getTime() : 0);
-/* «Última puntuada» no está aquí: es el único orden que no se lee de la fila de
-   la biblioteca sino de tus notas, que son otra tabla — ver domain/ratedSort. */
-const COMPARATORS: Record<Exclude<SortKey, "rated">, (a: LibraryShow, b: LibraryShow) => number> = {
-  lastwatched: (a, b) => ms(b.last_watched_at) - ms(a.last_watched_at),
-  lastreleased: (a, b) => ms(b.last_aired_datetime) - ms(a.last_aired_datetime),
-  az: (a, b) => a.name.localeCompare(b.name),
-  rating: (a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0),
+/* «Puntuada» no está aquí: es el único orden que no se lee de la fila de la
+   biblioteca sino de tus notas, que son otra tabla — ver domain/ratedSort.
+
+   Los otros cuatro son `byValue` y no una resta suelta, y el `|| null` es el
+   motivo: desde que los órdenes se voltean, una serie sin empezar o sin nota
+   de TMDB NO puede ordenarse como un 0, o encabezaría «de menos a más» con
+   todo lo que la biblioteca no sabe. `null` la manda al final en los dos
+   sentidos (domain/librarySort). */
+const COMPARATORS: Record<Exclude<SortKey, "rated">, (dir: SortDir) => (a: LibraryShow, b: LibraryShow) => number> = {
+  lastwatched: (dir) => byValue((s) => ms(s.last_watched_at) || null, dir),
+  lastreleased: (dir) => byValue((s) => ms(s.last_aired_datetime) || null, dir),
+  az: (dir) => byValue((s) => s.name, dir),
+  rating: (dir) => byValue((s) => s.vote_average || null, dir),
 };
 
 /* Memoizada: con la rejilla por tandas, cada tanda nueva vuelve a pintar la
@@ -69,9 +87,13 @@ const ShowCard = memo(function ShowCard({ s, priority, onOpen }: {
 
 export default function ShowsPage() {
   const { data: library = [], isPending } = useLibrary();
-  // Null until you touch the sort strip; until then the bucket chooses.
-  const [sortPick, setSortPick] = useState<SortKey | null>(null);
-  const rated = useRatedSort();
+  /* Null until you touch the sort strip; until then the bucket chooses.
+     Pulsar el orden que YA está puesto lo voltea, y eso vale para los cinco,
+     igual que en Juegos. Cambiar de orden reinicia el sentido al natural de la
+     etiqueta: llegar a «A–Z» y encontrarlo de la Z a la A porque antes
+     volteaste «Visto» no lo espera nadie. */
+  const [sortPick, setSortPick] = useState<{ key: SortKey; flipped: boolean } | null>(null);
+  const ratedAt = useRatedAt();
   const [searchParams, setSearchParams] = useSearchParams();
 
   /* The bucket lives in the URL, not in state: the Watchlist tab links straight
@@ -92,13 +114,17 @@ export default function ShowsPage() {
       },
       { replace: true },
     );
-  const sort: SortKey = sortPick ?? DEFAULT_SORT[f] ?? "lastwatched";
-  /* Pulsar «Última puntuada» estando ya activa voltea el sentido en vez de no
-     hacer nada, que es lo que hacía volver a elegir el orden que ya tenías. La
-     flecha de la etiqueta dice cuál de los dos está puesto. */
-  const pickSort = (key: SortKey) => (key === "rated" && sort === "rated" ? rated.flip() : setSortPick(key));
+  const sort: SortKey = sortPick?.key ?? DEFAULT_SORT[f] ?? "lastwatched";
+  const flipped = sortPick?.flipped ?? false;
+  /* Voltear el orden por omisión del cubo también cuenta como elegirlo: desde
+     ahí se queda puesto al pasar de un cubo a otro, como cualquier otro. */
+  const pickSort = (key: SortKey) => setSortPick({ key, flipped: key === sort ? !flipped : false });
+  const natural = SORTS.find((s) => s.key === sort)?.first ?? "desc";
+  const dir: SortDir = flipped ? flipDir(natural) : natural;
+  /* La flecha solo en el orden puesto: en los otros no diría nada y costaba su
+     ancho en la fila que justamente no cabía. */
   const sortLabel = (s: { key: SortKey; label: string }) =>
-    s.key === "rated" ? `${tr(s.label)} ${rated.arrow}` : tr(s.label);
+    s.key === sort ? `${tr(s.label)} ${flipped ? "↑" : "↓"}` : tr(s.label);
 
   // All includes every follow (stopped too); the status buckets show active
   // follows only, and Stopped collects the stopped ones.
@@ -114,10 +140,11 @@ export default function ShowsPage() {
       : key === "stopped"
         ? library.filter((s) => s.stopped).length
         : library.filter((s) => !s.stopped && s.status === key).length;
-  const items = library.filter(inBucket).sort(sort === "rated" ? rated.cmp : COMPARATORS[sort]);
+  const items = library.filter(inBucket).sort(sort === "rated" ? byRatedAt(ratedAt, dir) : COMPARATORS[sort](dir));
   /* Se monta por tandas (ui/GrowingList): los contadores y el orden de arriba
-     siguen siendo de la lista entera; solo se recorta lo que se pinta. */
-  const { shown, sentinel } = useGrowingList(items, `${f}|${sort}|${sort === "rated" ? rated.arrow : ""}`);
+     siguen siendo de la lista entera; solo se recorta lo que se pinta. El
+     sentido va en la clave porque voltear reordena la rejilla entera. */
+  const { shown, sentinel } = useGrowingList(items, `${f}|${sort}|${dir}`);
 
   const open = useStableHandler((tmdbId: number) =>
     setSearchParams((prev) => {
@@ -132,11 +159,15 @@ export default function ShowsPage() {
       <h1 className="sr-only">{tr("My Shows")}</h1>
 
       <div className="mq-toolbar">
+        {/* El contador, solo en el cubo puesto, como en Juegos: los otros seis
+            son cifras de listas que no tienes delante. En el menú del móvil
+            siguen los siete, que ahí sobra sitio. Y en `dim`, no `mute`: el
+            gris apagado da 2,71:1 sobre el fondo de .chip-active. */}
         <div className="shows-buckets flex items-center gap-2 overflow-x-auto no-scrollbar" style={{ flex: 1 }}>
           {FILTERS.map((x) => (
             <button key={x.key} className={`chip ${f === x.key ? "chip-active" : ""}`} onClick={() => setF(x.key)}>
               {tr(x.label)}
-              <span className="mute" style={{ fontWeight: 700 }}>{count(x.key)}</span>
+              {f === x.key && <span className="dim" style={{ fontWeight: 700 }}>{count(x.key)}</span>}
             </button>
           ))}
         </div>
