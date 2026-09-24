@@ -5,6 +5,7 @@ import { useRatedAt } from "@/lib/ratings";
 import type { ShowStatus } from "@/domain/status";
 import { byRatedAt, type SortDir } from "@/domain/ratedSort";
 import { byValue, flipDir } from "@/domain/librarySort";
+import { externalScore } from "@/domain/externalScore";
 import { t as tr, tv } from "@/lib/i18n";
 import { fmtAirDate } from "@/lib/region";
 import { EAGER_POSTERS, Poster, TabMenu, useGrowingList, useStableHandler } from "@/ui";
@@ -52,16 +53,19 @@ const ms = (s: string | null) => (s ? new Date(s).getTime() : 0);
 /* «Puntuada» no está aquí: es el único orden que no se lee de la fila de la
    biblioteca sino de tus notas, que son otra tabla — ver domain/ratedSort.
 
-   Los otros cuatro son `byValue` y no una resta suelta, y el `|| null` es el
+   Los otros cuatro son `byValue` y no una resta suelta, y el `null` es el
    motivo: desde que los órdenes se voltean, una serie sin empezar o sin nota
-   de TMDB NO puede ordenarse como un 0, o encabezaría «de menos a más» con
-   todo lo que la biblioteca no sabe. `null` la manda al final en los dos
-   sentidos (domain/librarySort). */
+   NO puede ordenarse como un 0, o encabezaría «de menos a más» con todo lo
+   que la biblioteca no sabe. `null` la manda al final en los dos sentidos
+   (domain/librarySort); `externalScore` ya lo devuelve para una nota a 0. */
 const COMPARATORS: Record<Exclude<SortKey, "rated">, (dir: SortDir) => (a: LibraryShow, b: LibraryShow) => number> = {
   lastwatched: (dir) => byValue((s) => ms(s.last_watched_at) || null, dir),
   lastreleased: (dir) => byValue((s) => ms(s.last_aired_datetime) || null, dir),
   az: (dir) => byValue((s) => s.name, dir),
-  rating: (dir) => byValue((s) => s.vote_average || null, dir),
+  /* Por la nota que la carátula enseña —IMDb, o TMDB de reserva— y no por la
+     de TMDB a secas: ordenar por un número y pintar otro haría que la rejilla
+     pareciera desordenada. */
+  rating: (dir) => byValue((s) => externalScore(s)?.value ?? null, dir),
 };
 
 /* Memoizada: con la rejilla por tandas, cada tanda nueva vuelve a pintar la

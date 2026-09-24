@@ -467,14 +467,6 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       <span className="detail-others-sep" />
                     </>
                   )}
-                  <div className="detail-cell">
-                    <span className="eyebrow" style={{ fontSize: 10 }}>TMDB</span>
-                    <span className="detail-cellval">
-                      <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                      {title.vote_average ? title.vote_average.toFixed(1) : "—"}
-                    </span>
-                  </div>
-                  <span className="detail-others-sep" />
                   {/* La celda de IMDb ES el enlace, con su flecha: un botón
                       aparte para lo mismo era una cosa más que leer. Sin tconst
                       no hay a dónde ir y se queda en número. */}
@@ -502,6 +494,16 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                       </span>
                     </div>
                   )}
+                  {/* IMDb delante: es la nota principal, la misma que enseña la
+                      carátula. La de TMDB queda al lado como segunda opinión. */}
+                  <span className="detail-others-sep" />
+                  <div className="detail-cell">
+                    <span className="eyebrow" style={{ fontSize: 10 }}>TMDB</span>
+                    <span className="detail-cellval">
+                      <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                      {title.vote_average ? title.vote_average.toFixed(1) : "—"}
+                    </span>
+                  </div>
                 </div>
               </div>
 

@@ -13,10 +13,12 @@
  * quien lee la carátula no tiene forma de saber de dónde salió. El color y la
  * etiqueta salen de aquí, no del sitio que pinta.
  *
- * De momento la usa el cine (carátulas, rejillas de Explorar y la ficha). Las
- * series siguen enseñando la de TMDB en la carátula y las dos en la ficha: allí
- * la nota del conjunto pesa menos que la del episodio, que es la que la gráfica
- * de temporada ya cuenta con su propio detalle.
+ * La usan el cine (carátulas, rejillas de Explorar y la ficha) y las series en
+ * su biblioteca y en Continuar. La ficha de una serie sigue enseñando las dos
+ * notas, con la de IMDb primero: allí la nota del conjunto pesa menos que la
+ * del episodio, que es la que la gráfica de temporada ya cuenta con su propio
+ * detalle. Explorar de series no la usa: «Mejor valoradas» ordena por la de
+ * TMDB, y enseñar otra encima de ese orden lo haría parecer desordenado.
  */
 
 export type ScoreSource = "imdb" | "tmdb";

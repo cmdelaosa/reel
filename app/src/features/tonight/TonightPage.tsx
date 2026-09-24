@@ -248,6 +248,7 @@ function ContinueCard({ r, onOpen, onMarked }: { r: UpNextRow; onOpen: () => voi
           genres: [seLabel(r)],
           posterPath: tmdbImg(r.poster_path),
           voteAverage: r.vote_average ?? 0,
+          imdbRating: r.imdb_rating,
           progress: r.aired_count > 0 ? Math.round((r.watched_count / r.aired_count) * 100) : undefined,
         }}
         subtitle={seLabel(r)}
