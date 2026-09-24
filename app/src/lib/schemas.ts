@@ -242,7 +242,7 @@ export const libraryRowSchema = z.object({
      domain/gameStatus.ts. `minutes_source` es lo que deja a la ficha decir de
      dónde salen las horas sin una consulta más. */
   owned: z.boolean().nullable().optional(),
-  minutes_source: z.enum(["manual", "steam"]).nullable().optional(),
+  minutes_source: z.enum(["manual", "steam", "nintendo"]).nullable().optional(),
   /* En cuál lo juegas TÚ (0083), por su nombre de IGDB — el mismo de
      `platforms`, que es la lista que la ficha ofrece a elegir. Una sola y no
      varias: la pregunta es "¿dónde lo juego?", y esa respuesta cambia cuando

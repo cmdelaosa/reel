@@ -98,6 +98,19 @@ const GAME_TABS = [
   // decir "enlace" en abstracto pudiendo decir de QUÉ enlace se trata, que es
   // lo único que la marca hace mejor que cualquier pictograma.
   { path: "/games/steam", label: "Steam", icon: SteamIcon },
+  /* Y una SÉPTIMA desde 0104, que es la misma pestaña con otro proveedor:
+     Nintendo. Rompe la simetría igual que Steam y por el mismo motivo —es una
+     pantalla de tres pasos a la que se vuelve, y es del modo Juegos—.
+
+     Dos pestañas y no una de "Importar" con las dos dentro porque cada
+     proveedor es una pantalla entera con su propio estado (una cuenta
+     conectada, un borrador a medio confirmar), y meterlas en una sola obligaría
+     a elegir cuál de los dos borradores se enseña. Si la fila no cabe, el
+     TabMenu recoge lo que sobre, que es exactamente el caso para el que existe.
+
+     El mando y no un logotipo: Nintendo no publica uno que se pueda usar así, y
+     el mando ya es lo que la barra entiende por "juegos". */
+  { path: "/games/nintendo", label: "Nintendo", icon: Gamepad2 },
   { path: "/friends", label: "Friends", icon: Users },
 ] as const;
 

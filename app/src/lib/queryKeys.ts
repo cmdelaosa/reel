@@ -36,6 +36,8 @@ export const qk = {
   /* El histórico de UN objeto, que solo se pide cuando abres su ficha. Con el
      nombre dentro de la clave para que abrir dos fichas seguidas no se pisen. */
   steamItemHistory: (appid: number, name: string) => ["steamItemHistory", appid, name] as const,
+  nintendoLink: ["nintendoLink"] as const,
+  nintendoImport: ["nintendoImport"] as const,
   title: (tmdbId: number) => ["title", tmdbId] as const,
   season: (tmdbId: number, n: number) => ["season", tmdbId, n] as const,
   detailProgress: (titleId: string) => ["detailProgress", titleId] as const,
