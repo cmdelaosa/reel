@@ -13,12 +13,12 @@
  * quien lee la carátula no tiene forma de saber de dónde salió. El color y la
  * etiqueta salen de aquí, no del sitio que pinta.
  *
- * La usan el cine (carátulas, rejillas de Explorar y la ficha) y las series en
- * su biblioteca y en Continuar. La ficha de una serie sigue enseñando las dos
- * notas, con la de IMDb primero: allí la nota del conjunto pesa menos que la
- * del episodio, que es la que la gráfica de temporada ya cuenta con su propio
- * detalle. En Explorar de series solo «Mejor valoradas» enseña nota, y es esta,
- * igual que en el cine, aunque la lista la ordene TMDB.
+ * Es la regla de toda la app, para lo que se enseña y para lo que se ordena:
+ * carátulas, fichas de series y de películas, «Nota» en las bibliotecas, la
+ * «Nota de la crítica» del perfil de un amigo. «Mejor valoradas» y las
+ * colecciones de Explorar llegan ya reordenadas por el proxy con la misma
+ * regla (tmdb-proxy/rank.ts, byImdbFirst), porque TMDB las da por la suya.
+ * Solo los episodios siguen enseñando las dos, con IMDb delante.
  */
 
 export type ScoreSource = "imdb" | "tmdb";

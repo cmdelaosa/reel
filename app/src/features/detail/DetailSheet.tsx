@@ -30,6 +30,7 @@ import {
 import { EpisodeSheet } from "@/features/detail/EpisodeSheet";
 import { SeasonChart } from "@/features/detail/SeasonChart";
 import { hasChartableRatings } from "@/domain/episodeRatings";
+import { externalScore, scoreColor, scoreLabel } from "@/domain/externalScore";
 
 /* Show detail sheet — port of prototype screens.tsx DetailSheet on live data.
    Opened globally via ?title=<tmdbId>; episode marking is wired in P2-C4 and
@@ -113,6 +114,8 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
   const [season, setSeason] = useState<number | null>(null);
 
   const title = data?.title;
+  /* La nota de fuera de esta serie: IMDb, o TMDB de reserva. */
+  const score = externalScore(title);
   const regularSeasons = (data?.seasons ?? []).filter((s: SeasonRow) => s.number > 0);
   const { data: watched } = useWatched(title?.id ?? null);
   const { data: progress, isPending: progressPending } = useDetailProgress(title?.id ?? null);
@@ -464,46 +467,39 @@ export function DetailSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =
                           {friendsOpen ? <ChevronUp size={14} style={{ color: "var(--text-mute)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-mute)" }} />}
                         </span>
                       </button>
-                      <span className="detail-others-sep" />
+                      {score && <span className="detail-others-sep" />}
                     </>
                   )}
-                  {/* La celda de IMDb ES el enlace, con su flecha: un botón
-                      aparte para lo mismo era una cosa más que leer. Sin tconst
-                      no hay a dónde ir y se queda en número. */}
-                  {title.imdb_id ? (
-                    <a
-                      className="detail-cell detail-out"
-                      href={`https://www.imdb.com/title/${title.imdb_id}/`}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      title={title.imdb_votes ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : tr("View on IMDb")}
-                    >
-                      <span className="eyebrow" style={{ fontSize: 10 }}>IMDb</span>
-                      <span className="detail-cellval">
-                        <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--imdb)" }} />
-                        {title.imdb_rating != null ? title.imdb_rating.toFixed(1) : "—"}
-                        <ExternalLink size={12} />
-                      </span>
-                    </a>
-                  ) : (
-                    <div className="detail-cell">
-                      <span className="eyebrow" style={{ fontSize: 10 }}>IMDb</span>
-                      <span className="detail-cellval">
-                        <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--imdb)" }} />
-                        {title.imdb_rating != null ? title.imdb_rating.toFixed(1) : "—"}
-                      </span>
-                    </div>
+                  {/* De fuera, UNA nota: la de IMDb, con la de TMDB de reserva
+                      (domain/externalScore), como en la ficha de una película y
+                      en la carátula. La celda de IMDb ES el enlace, con su
+                      flecha; sin tconst, o con la de TMDB, se queda en número. */}
+                  {score && (
+                    title.imdb_id && score.source === "imdb" ? (
+                      <a
+                        className="detail-cell detail-out"
+                        href={`https://www.imdb.com/title/${title.imdb_id}/`}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        title={title.imdb_votes ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : tr("View on IMDb")}
+                      >
+                        <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
+                        <span className="detail-cellval">
+                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
+                          {score.value.toFixed(1)}
+                          <ExternalLink size={12} />
+                        </span>
+                      </a>
+                    ) : (
+                      <div className="detail-cell">
+                        <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
+                        <span className="detail-cellval">
+                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
+                          {score.value.toFixed(1)}
+                        </span>
+                      </div>
+                    )
                   )}
-                  {/* IMDb delante: es la nota principal, la misma que enseña la
-                      carátula. La de TMDB queda al lado como segunda opinión. */}
-                  <span className="detail-others-sep" />
-                  <div className="detail-cell">
-                    <span className="eyebrow" style={{ fontSize: 10 }}>TMDB</span>
-                    <span className="detail-cellval">
-                      <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                      {title.vote_average ? title.vote_average.toFixed(1) : "—"}
-                    </span>
-                  </div>
                 </div>
               </div>
 

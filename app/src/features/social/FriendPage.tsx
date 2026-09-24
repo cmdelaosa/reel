@@ -35,6 +35,7 @@ import { TasteBlocks } from "@/features/social/TasteBlocks";
 import { WatchHeatmap } from "@/features/you/WatchHeatmap";
 import { dateLocale, locName, t as tr, tGenre, tv, useEsNames } from "@/lib/i18n";
 import type { TitleRow } from "@/lib/schemas";
+import { externalScore } from "@/domain/externalScore";
 
 /* Friend profile page (route /friend/:id). rpc_friend_snapshot supplies the
    profile, episode counts and "watching now" (recent-first, ≤2 months since
@@ -128,7 +129,7 @@ function toTitleRow(f: FriendFollow): TitleRow {
     id: f.id, tmdb_id: f.tmdb_id, kind: f.kind, name: f.name, overview: null,
     poster_path: f.poster_path, backdrop_path: null, first_air_date: f.first_air_date,
     status: f.status, genres: f.genres, network: f.network, episode_run_time: f.episode_run_time,
-    vote_average: f.vote_average, popularity: null,
+    vote_average: f.vote_average, imdb_rating: f.imdb_rating, popularity: null,
   };
 }
 
@@ -351,7 +352,9 @@ export default function FriendPage() {
     // become timestamps rather than a second, string-shaped comparison.
     const rank: Record<ShowSort, (f: FriendFollow) => number | null> = {
       their: (f) => theirScoreByKey.get(keyOf(f.kind, f.tmdb_id)) ?? null,
-      critic: (f) => f.vote_average ?? null,
+      /* IMDb, con TMDB de reserva, como en el resto de la app. En un juego no
+         hay IMDb y queda la de IGDB, que es lo que ya era. */
+      critic: (f) => externalScore(f)?.value ?? null,
       air: (f) => {
         const t = f.first_air_date ? Date.parse(f.first_air_date) : NaN;
         return Number.isNaN(t) ? null : t;
