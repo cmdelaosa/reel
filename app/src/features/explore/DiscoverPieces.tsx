@@ -42,7 +42,7 @@ function YearField({ value, onChange, label }: { value: number | null; onChange:
   );
 }
 
-export function TitlePoster({ t, rank, score, kind = "tv", onOpen, onIgnore }: {
+export function TitlePoster({ t, rank, score, kind = "tv", catalogScore = false, onOpen, onIgnore }: {
   t: TitleRow;
   rank?: number;
   /** Una nota que MANDA sobre la del catálogo, para el carril que enseña otra
@@ -54,6 +54,10 @@ export function TitlePoster({ t, rank, score, kind = "tv", onOpen, onIgnore }: {
    *  tiene sentido precargar (la precarga trae temporadas y episodios, que en
    *  una película no existen) y si la carátula saca nota por su cuenta. */
   kind?: "tv" | "movie";
+  /** Que una carátula de series saque también su nota (IMDb, o TMDB de
+   *  reserva). Solo lo pide «Mejor valoradas», que es el único carril de series
+   *  donde una nota dice algo; en el cine va siempre. */
+  catalogScore?: boolean;
   onOpen: () => void;
   onIgnore?: () => void;
 }) {
@@ -61,11 +65,11 @@ export function TitlePoster({ t, rank, score, kind = "tv", onOpen, onIgnore }: {
   const intent = useTitleIntent(kind === "tv" ? t.tmdb_id : undefined);
   const esNames = useEsNames();
   const name = (isEs() && t.name_es) || locName(esNames, t.tmdb_id, t.name, kind);
-  /* La nota del propio catálogo, solo en cine: IMDb manda y TMDB queda de
-     reserva (domain/externalScore). La de fuera gana cuando la hay porque
+  /* La nota del propio catálogo, en cine siempre y en series cuando se pide:
+     IMDb manda y TMDB queda de reserva (domain/externalScore). La de fuera gana cuando la hay porque
      significa otra cosa —lo que puntuaron tus amigos— y se pinta con el acento
      de la app, no con el amarillo de IMDb. */
-  const own = score == null && kind === "movie" ? externalScore(t) : null;
+  const own = score == null && (kind === "movie" || catalogScore) ? externalScore(t) : null;
   return (
     <div className="poster" style={{ background: posterBg(name) }} onClick={onOpen} {...intent}>
       {art && <img className="poster-img" src={art} alt="" loading="lazy" />}

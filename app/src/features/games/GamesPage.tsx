@@ -146,7 +146,8 @@ const GameCard = memo(function GameCard({ g, priority, onOpen }: {
 export default function GamesPage() {
   const { data: games = [], isPending } = useGameLibrary();
   /* Pulsar el orden que YA está puesto lo voltea, y eso vale para los siete —en
-     Series y Cine solo lo hace «Última puntuada» (lib/ratings, useRatedSort).
+     Cine solo lo hace «Última puntuada» (lib/ratings, useRatedSort); Series ya
+     hace lo mismo que aquí.
      Por eso esta página no usa aquel gancho: el sentido es uno solo y vive
      aquí, y tenerlo además dentro de useRatedSort daría dos estados que se
      contradicen en cuanto cambias de orden y vuelves.

@@ -128,13 +128,14 @@ export function useRatedAt(): RatedAt {
  *  es como se acaba con dos gestos ligeramente distintos. `arrow` es lo que la
  *  etiqueta enseña para que el sentido se vea sin pulsar.
  *
- *  **Lo usan Series y Cine, ya no Juegos.** Desde 0102 la barra de Juegos
- *  voltea los SIETE órdenes y no solo este, así que su sentido es un estado
- *  suyo que vale para todos (features/games/GamesPage) y tira de `useRatedAt`
- *  directamente. Tener además el `dir` de aquí sería un segundo sentido que se
- *  contradice con el primero en cuanto cambias de orden y vuelves. Cuando el
- *  gesto pase a las otras dos bibliotecas, este gancho se queda sin quien lo
- *  llame. */
+ *  **Solo lo usa Cine.** Desde 0102 la barra de Juegos voltea los SIETE
+ *  órdenes y no solo este, y ahora también la de Series los cinco suyos, así
+ *  que su sentido es un estado de la página que vale para todos
+ *  (features/games/GamesPage, features/shows/ShowsPage) y tiran de
+ *  `useRatedAt` directamente. Tener además el `dir` de aquí sería un segundo
+ *  sentido que se contradice con el primero en cuanto cambias de orden y
+ *  vuelves. Cuando el gesto pase a Cine, este gancho se queda sin quien lo
+ *  llame y puede borrarse. */
 export function useRatedSort() {
   const ratedAt = useRatedAt();
   const [dir, setDir] = useState<SortDir>("desc");

@@ -660,15 +660,14 @@ const ES: Record<string, string> = {
   "Stopped": "Abandonadas",
   "All": "Todas",
   "Sort": "Ordenar", // aria-label on the phone dropdown that replaces the sort strip
-  "Last watched": "Último visto",
   "Last released": "Último emitido",
   "A–Z": "A–Z",
   "Top rated": "Mejor nota",
   /* ---- El strip de orden de Juegos, en una palabra (0102) ----
-     Siete etiquetas cortas porque la fila de Juegos es la única de las tres que
-     no cabía: «Date added», «Most played» y «Best on Steam» pedían 1.402 px de
-     los 1.224 que da la columna. Las cuatro largas siguen vivas arriba porque
-     Series y Cine las usan tal cual.
+     Siete etiquetas cortas porque la fila de Juegos no cabía (y luego la de
+     Series, ver abajo): «Date added», «Most played» y «Best on Steam» pedían 1.402 px de
+     los 1.224 que da la columna. Las largas siguen vivas arriba porque Cine las
+     usa tal cual.
 
      "Añadido" y "Puntuado" van prefijadas: "Added" y "Rated" a secas ya están
      en el diccionario en femenino —son de series y películas— y un juego no es
@@ -681,7 +680,15 @@ const ES: Record<string, string> = {
      La de al lado dice "Steam" y no necesita traducción. */
   "Rating": "Nota",
   "games: Rated": "Puntuado",
-  /* El orden por la fecha de TU nota, en las tres bibliotecas. La flecha (↓ más
+  /* ---- El strip de orden de Series, en una palabra (como el de Juegos) ----
+     "Watched" ya existe («Visto», en el bloque del historial), y "Rating" y
+     "A–Z" están arriba. "Puntuada"
+     va prefijada por lo mismo que "games: Rated": "Rated" a secas es
+     «Puntuadas», la cifra del perfil. */
+  "Aired": "Emitido",
+  "shows: Rated": "Puntuada",
+  /* El orden por la fecha de TU nota. Esta etiqueta larga queda solo para Cine;
+     Juegos y Series usan "games: Rated" y "shows: Rated". La flecha (↓ más
      reciente primero, ↑ al revés) la pone la página fuera de la cadena: es
      estado, no idioma. */
   "Last rated": "Última puntuada",
@@ -1388,6 +1395,7 @@ const EN: Record<string, string> = {
   "games: Finished": "Finished",
   "games: Added": "Added",
   "games: Rated": "Rated",
+  "shows: Rated": "Rated",
   "games bucket: Finished": "Finished",
   "games bucket: Upcoming": "Upcoming",
   "games bucket: All": "All",

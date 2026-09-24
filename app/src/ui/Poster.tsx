@@ -55,8 +55,8 @@ export function Poster({ t, subtitle, showProviders = true, kind = "tv", rank, o
 
   /* La insignia: la nota de IMDb si la fila la trae, la de TMDB si no. La regla
      y el color viven en domain/externalScore — aquí no se decide nada, solo se
-     pinta. Una carátula sin `imdbRating` (series y juegos) sale igual que
-     siempre, porque sin nota de IMDb la reserva ES la de TMDB.
+     pinta. Una carátula sin `imdbRating` (los juegos, o una serie o película
+     que IMDb no puntúa) sale con la de TMDB, que es la reserva.
 
      La etiqueta se calla en los juegos: ahí `voteAverage` no es de TMDB sino de
      IGDB, y decir "TMDB" sobre la nota de otro catálogo sería mentir en el

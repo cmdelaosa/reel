@@ -244,6 +244,9 @@ export function toTitleCard(s: LibraryShow): TitleCard {
     genres: s.genres.length ? s.genres : ["—"],
     posterPath: tmdbImg(s.poster_path),
     voteAverage: s.vote_average ?? 0,
+    /* La de IMDb manda en la carátula también en series, con la de TMDB de
+       reserva (domain/externalScore). El rollup la trae desde 0080. */
+    imdbRating: s.imdb_rating,
     progress: s.status === "watching" ? s.progress : undefined,
     stopped: s.stopped,
   };
@@ -266,6 +269,7 @@ function optimisticRow(t: TitleRow): LibraryRow {
     genres: t.genres,
     network: t.network,
     vote_average: t.vote_average,
+    imdb_rating: t.imdb_rating,
     favorite: false,
     notify: false,
     stopped: false,

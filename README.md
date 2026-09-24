@@ -55,6 +55,7 @@ The process is part of the repo, on purpose:
 5. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — stack, schema, RLS model and conventions;
    [docs/DEPLOY.md](docs/DEPLOY.md) and [docs/MIGRATION-CLOUDFLARE.md](docs/MIGRATION-CLOUDFLARE.md)
    are the operational runbooks.
+6. [docs/TODO.md](docs/TODO.md) — what's known to need fixing and isn't fixed yet.
 
 ## Running it locally
 

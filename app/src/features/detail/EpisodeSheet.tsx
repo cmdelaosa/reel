@@ -232,11 +232,10 @@ export function EpisodeSheet({
             {meta && <div className="mute" style={{ fontSize: 13, marginTop: 4 }}>{meta}</div>}
           </div>
 
-          {/* Las dos notas. La de IMDb enlaza a la ficha del episodio: su tconst
-              propio está guardado desde 0057, así que el enlace no cuesta nada. */}
+          {/* Las dos notas, IMDb delante: es la principal en toda la app. La de
+              IMDb enlaza a la ficha del episodio: su tconst propio está
+              guardado desde 0057, así que el enlace no cuesta nada. */}
           <div className="ep-sheet-scores">
-            <Score label="TMDB" value={episode.tmdb_vote_average} color="var(--accent)" votes={episode.tmdb_vote_count} />
-            <div className="ratings-divider" />
             <Score
               label="IMDb"
               value={episode.imdb_rating}
@@ -244,6 +243,8 @@ export function EpisodeSheet({
               votes={episode.imdb_votes}
               href={episode.imdb_id ? `https://www.imdb.com/title/${episode.imdb_id}/` : null}
             />
+            <div className="ratings-divider" />
+            <Score label="TMDB" value={episode.tmdb_vote_average} color="var(--accent)" votes={episode.tmdb_vote_count} />
           </div>
 
           {overview

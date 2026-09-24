@@ -57,7 +57,7 @@
 // day and may never move the episode off it (see the air-time pairing block).
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { boostSpanish, capNonWestern } from "./rank.ts";
+import { boostSpanish, byImdbFirst, capNonWestern, imdbByTmdbId } from "./rank.ts";
 import { videosDeTmdb } from "./videos.ts";
 import { crewRecortado, invitadosRecortados, textoEs } from "../_shared/episodio.ts";
 import { redactCredential, tmdbFetch as callTmdb } from "../_shared/tmdb.ts";
@@ -1525,7 +1525,8 @@ async function resolvePopular(
   return ids;
 }
 
-/** Top-rated TV (TMDB /discover/tv sorted by rating; genre ids are OR-ed).
+/** Top-rated TV (TMDB /discover/tv sorted by rating, then re-ranked by IMDb
+ *  with TMDB as fallback — rank.ts, byImdbFirst; genre ids are OR-ed).
  *
  *  The vote_count floor is the honesty knob — fan-niche titles rate 8.6+ on few
  *  votes — but a fixed high floor starves filtered charts (the 1970s have two
@@ -1540,7 +1541,9 @@ async function resolveTopRated(
   admin: SupabaseClient, apiKey: string, from: string | null, to: string | null,
   genres: string[], force = false,
 ): Promise<number[]> {
-  const key = `top-rated:${from ?? ""}:${to ?? ""}:${genres.join(",")}`;
+  /* `imdb:` en la clave desde que el orden es por IMDb: invalida de golpe los
+     órdenes viejos, también los filtrados, que el recalentado no rehace. */
+  const key = `top-rated:imdb:${from ?? ""}:${to ?? ""}:${genres.join(",")}`;
   if (!force) {
     const hit = await readDiscoverCache(admin, key);
     if (hit) return hit;
@@ -1565,9 +1568,13 @@ async function resolveTopRated(
     Array.from({ length: PAGES }, (_, i) =>
       fetchTmdb(apiKey, `/discover/tv?include_adult=false${params}&page=${i + 1}`)),
   );
-  const uniq = capNonWestern(dedupeVisible(pages));
-  if (uniq.length === 0) return [];
-  await upsertReturning(admin, "titles", uniq.map(searchRow), "kind,tmdb_id");
+  const visible = dedupeVisible(pages);
+  if (visible.length === 0) return [];
+  /* TMDB los da por su nota y la app enseña la de IMDb: se reordena por esa
+     (rank.ts, byImdbFirst) antes del tope, que reparte sobre este orden. El
+     upsert va primero porque la nota de IMDb está en la base, no en TMDB. */
+  const saved = await upsertReturning(admin, "titles", visible.map(searchRow), "kind,tmdb_id");
+  const uniq = capNonWestern(byImdbFirst(visible, imdbByTmdbId(saved)));
   const ids = uniq.map((r) => r.id as number);
   await writeDiscoverCache(admin, key, ids);
   return ids;
@@ -1792,7 +1799,8 @@ async function resolveMovieTopRated(
   admin: SupabaseClient, apiKey: string, from: string | null, to: string | null,
   genres: string[], force = false,
 ): Promise<number[]> {
-  const key = `movie-top-rated:${from ?? ""}:${to ?? ""}:${genres.join(",")}`;
+  // `imdb:` en la clave: ver resolveTopRated.
+  const key = `movie-top-rated:imdb:${from ?? ""}:${to ?? ""}:${genres.join(",")}`;
   if (!force) {
     const hit = await readDiscoverCache(admin, key);
     if (hit) return hit;
@@ -1816,9 +1824,11 @@ async function resolveMovieTopRated(
   const { pages, esTitle } = await fetchMoviePages(
     apiKey, (page) => `/discover/movie?include_adult=false${params}&page=${page}`, PAGES,
   );
-  const uniq = capNonWestern(dedupeVisible(pages));
-  if (uniq.length === 0) return [];
-  await upsertReturning(admin, "titles", uniq.map((r) => movieSearchRow(r, esTitle.get(r.id))), "kind,tmdb_id");
+  const visible = dedupeVisible(pages);
+  if (visible.length === 0) return [];
+  // Reordenado por IMDb antes del tope, como el /top-rated de series.
+  const saved = await upsertReturning(admin, "titles", visible.map((r) => movieSearchRow(r, esTitle.get(r.id))), "kind,tmdb_id");
+  const uniq = capNonWestern(byImdbFirst(visible, imdbByTmdbId(saved)));
   const ids = uniq.map((r) => r.id as number);
   await writeDiscoverCache(admin, key, ids);
   return ids;
@@ -2093,9 +2103,11 @@ Deno.serve(async (req) => {
       for (const r of pages.flatMap((d) => d.results ?? [])) {
         if (r?.id != null && !seen.has(r.id) && !isHidden(r)) { seen.add(r.id); deduped.push(r); }
       }
-      const uniq = capNonWestern(deduped);
-      if (uniq.length === 0) return json({ results: [] });
-      const saved = await upsertReturning(admin, "titles", uniq.map(searchRow), "kind,tmdb_id");
+      if (deduped.length === 0) return json({ results: [] });
+      /* Las cuatro colecciones piden `sort_by=vote_average.desc` a TMDB; se
+         reordenan por IMDb, que es la nota que la app enseña (rank.ts). */
+      const saved = await upsertReturning(admin, "titles", deduped.map(searchRow), "kind,tmdb_id");
+      const uniq = capNonWestern(byImdbFirst(deduped, imdbByTmdbId(saved)));
       const byTmdb = new Map(saved.map((r: Any) => [r.tmdb_id, r]));
       return json({ results: uniq.map((r) => byTmdb.get(r.id)).filter(Boolean) });
     }

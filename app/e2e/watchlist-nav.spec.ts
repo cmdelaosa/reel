@@ -123,24 +123,24 @@ test("the Watchlist tab opens My Shows on Not started, newest first", async ({ p
   await page.locator(".mq-tabs").getByRole("link", { name: "Watchlist" }).click();
   await expect(page).toHaveURL(/\/shows\?filter=watchlist/);
   await expect(activeBucket(page)).toHaveText(/Not started/);
-  // Nothing in this bucket has ever been watched, so "Last watched" would be
+  // Nothing in this bucket has ever been watched, so "Watched" would be
   // ordering by a column that is null for every row.
-  await expect(activeSort(page)).toHaveText(/Last released/);
+  await expect(activeSort(page)).toHaveText(/^Aired/);
 
   // And it still gets you there from inside My Shows, where the route doesn't
   // change — the regression that made the bucket URL-driven in the first place.
   await page.locator(".shows-buckets .chip", { hasText: "All" }).click();
   await expect(activeBucket(page)).toHaveText(/All/);
-  await expect(activeSort(page)).toHaveText(/Last watched/);
+  await expect(activeSort(page)).toHaveText(/^Watched/);
   await page.locator(".mq-tabs").getByRole("link", { name: "Watchlist" }).click();
   await expect(activeBucket(page)).toHaveText(/Not started/);
-  await expect(activeSort(page)).toHaveText(/Last released/);
+  await expect(activeSort(page)).toHaveText(/^Aired/);
 });
 
 test("a sort you picked yourself outlives the bucket you picked it in", async ({ page }) => {
   await authenticate(page);
   await page.goto("/shows?filter=watchlist");
-  await expect(activeSort(page)).toHaveText(/Last released/);
+  await expect(activeSort(page)).toHaveText(/^Aired/);
 
   await page.locator(".segmented .seg", { hasText: "A–Z" }).click();
   await expect(activeSort(page)).toHaveText(/A–Z/);

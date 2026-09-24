@@ -11,9 +11,9 @@ export interface TitleCard {
   voteAverage: number;
   /** Nota de IMDb, 0–10, cuando la fila la tiene. Manda sobre `voteAverage` en
    *  la insignia de la carátula (domain/externalScore): en cine es LA nota, y
-   *  la de TMDB queda de reserva para lo que IMDb no puntúa. Ausente en las
-   *  carátulas que no la traen —series y juegos hoy—, que se pintan con la de
-   *  TMDB exactamente como antes. */
+   *  la de TMDB queda de reserva para lo que IMDb no puntúa. Las series la
+   *  llevan igual desde que la biblioteca y Continuar la traen. Ausente en los
+   *  juegos, que se pintan con su nota de IGDB. */
   imdbRating?: number | null;
   /** Las reseñas de Steam de un juego (0086), cuando la fila las trae. Es LA
    *  nota de un juego —la que se mira antes de comprarlo— y por eso la carátula

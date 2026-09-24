@@ -6,7 +6,7 @@
 // properties (≤1-in-10 non-Western, ≥1-in-6 Spanish) are the point of the rules;
 // the conservation property is what keeps a narrow filter from emptying a grid.
 import { assertEquals } from "jsr:@std/assert@1";
-import { boostSpanish, capNonWestern } from "./rank.ts";
+import { boostSpanish, byImdbFirst, capNonWestern, imdbByTmdbId } from "./rank.ts";
 
 const tv = (id: number, original_language: string) => ({ id, original_language });
 const es = (id: number) => ({ id, origin_country: ["ES"] });
@@ -104,4 +104,40 @@ Deno.test("boost-then-cap conserves rows and keeps the cap's guarantee", () => {
     const nonWestern = out.slice(0, k).filter((r) => r.original_language === "ko").length;
     assertEquals(nonWestern <= Math.ceil(k * 0.1), true, `prefix of ${k} holds ${nonWestern}`);
   }
+});
+
+// ── byImdbFirst ───────────────────────────────────────────────────────────
+const scored = (id: number, vote_average: number | null) => ({ id, vote_average });
+
+Deno.test("byImdbFirst: IMDb manda sobre el orden de TMDB", () => {
+  // TMDB los da 1, 2, 3 por su nota; IMDb dice otra cosa.
+  const rows = [scored(1, 8.9), scored(2, 8.7), scored(3, 8.5)];
+  const imdb = new Map([[1, 8.1], [2, 9.0], [3, 8.6]]);
+  assertEquals(ids(byImdbFirst(rows, imdb)), [2, 3, 1]);
+});
+
+Deno.test("byImdbFirst: sin IMDb, la de TMDB hace de reserva en la misma escala", () => {
+  const rows = [scored(1, 8.9), scored(2, 8.7), scored(3, 8.5)];
+  const imdb = new Map<number, number | null>([[1, 8.0], [2, null]]);
+  // 2 → 8.7 (TMDB), 3 → 8.5 (TMDB, sin entrada), 1 → 8.0 (IMDb)
+  assertEquals(ids(byImdbFirst(rows, imdb)), [2, 3, 1]);
+});
+
+Deno.test("byImdbFirst: un 0 no es nota, y lo que no tiene ninguna va al final", () => {
+  const rows = [scored(1, null), scored(2, 0), scored(3, 6.0), scored(4, null)];
+  const imdb = new Map([[2, 0], [4, 7.0]]);
+  // 4 → 7.0, 3 → 6.0; 1 y 2 sin nota, en el orden de TMDB.
+  assertEquals(ids(byImdbFirst(rows, imdb)), [4, 3, 1, 2]);
+});
+
+Deno.test("byImdbFirst: los empates conservan el orden de TMDB, y no se pierde ninguna fila", () => {
+  const rows = [scored(5, 8.0), scored(6, 8.0), scored(7, 8.0)];
+  const out = byImdbFirst(rows, new Map());
+  assertEquals(ids(out), [5, 6, 7]);
+  assertEquals(out.length, rows.length);
+});
+
+Deno.test("imdbByTmdbId: lee la nota de las filas de la base", () => {
+  const m = imdbByTmdbId([{ tmdb_id: 1, imdb_rating: 8.2 }, { tmdb_id: 2, imdb_rating: null }, { tmdb_id: 3 }]);
+  assertEquals([m.get(1), m.get(2), m.get(3)], [8.2, null, null]);
 });

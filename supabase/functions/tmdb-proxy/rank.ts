@@ -1,10 +1,10 @@
-// Discovery re-rankers for tmdb-proxy: the two rules that decide what order the
+// Discovery re-rankers for tmdb-proxy: the rules that decide what order the
 // Explore grids come back in. They live here rather than in index.ts because
 // index.ts calls Deno.serve at import time — anything defined in there can't be
 // imported by a test without starting a server. Pure and dependency-free, so
 // rank_test.ts can exercise them directly (`deno test`, run in CI).
 //
-// Both take and return the same rows: they only re-order. A re-ranker that
+// All of them take and return the same rows: they only re-order. A re-ranker that
 // drops rows empties grids for narrow filters, which is exactly the bug both of
 // these shipped with — see the drain loops below and their tests.
 
@@ -80,3 +80,48 @@ export const boostSpanish = <T extends OriginRow>(rows: T[]): T[] => {
   while (s < spanish.length) out.push(spanish[s++]);
   return out;
 };
+
+// ── La nota de IMDb manda en los órdenes por nota ──────────────────────────
+// TMDB ordena /discover por SU nota (`sort_by=vote_average.desc`), y la app
+// enseña la de IMDb, con la de TMDB solo de reserva (app/src/domain/
+// externalScore.ts). Sin esto, «Mejor valoradas» y las colecciones pintaban un
+// número y ordenaban por otro: un 8,4 de IMDb debajo de un 8,1.
+//
+// La nota de IMDb no viene en el payload de TMDB: vive en nuestra tabla
+// `titles` (scripts/imdb-ratings), así que quien llama pasa el mapa
+// tmdb_id → imdb_rating que devuelve el upsert. Va ANTES de capNonWestern:
+// ese tope reparte huecos sobre el orden que recibe, y reordenar después lo
+// desharía.
+//
+// La regla es la de externalScore: IMDb si es un número > 0, TMDB si no, y lo
+// que no tiene ninguna al final. Ordenación estable: los empates, y todo lo que
+// no tiene nota, conservan el orden en que TMDB los dio.
+type ScoredRow = { id: number; vote_average?: number | null };
+
+export const byImdbFirst = <T extends ScoredRow>(
+  rows: T[],
+  imdb: ReadonlyMap<number, number | null | undefined>,
+): T[] => {
+  const rated = (n: number | null | undefined): n is number =>
+    typeof n === "number" && Number.isFinite(n) && n > 0;
+  const score = (r: T): number | null => {
+    const i = imdb.get(r.id);
+    if (rated(i)) return i;
+    return rated(r.vote_average) ? r.vote_average : null;
+  };
+  return rows
+    .map((r, pos) => ({ r, pos, s: score(r) }))
+    .sort((a, b) => {
+      if (a.s === null || b.s === null) {
+        if (a.s === b.s) return a.pos - b.pos;
+        return a.s === null ? 1 : -1;
+      }
+      return b.s - a.s || a.pos - b.pos;
+    })
+    .map((x) => x.r);
+};
+
+/** El mapa tmdb_id → imdb_rating a partir de las filas que devuelve el upsert
+ *  de `titles`. Las filas son las de la base, que es donde está la nota. */
+export const imdbByTmdbId = (saved: { tmdb_id: number; imdb_rating?: number | null }[]) =>
+  new Map(saved.map((r) => [r.tmdb_id, r.imdb_rating ?? null]));

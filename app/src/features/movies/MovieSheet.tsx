@@ -271,51 +271,53 @@ export function MovieSheet({ tmdbId, onClose }: { tmdbId: number; onClose: () =>
                   </button>
                 )}
 
-                <div className="detail-others">
-                  {amigos.length > 0 && (
-                    <>
-                      <button
-                        className="detail-cell detail-friends"
-                        aria-expanded={friendsOpen}
-                        onClick={() => setFriendsOpen((v) => !v)}
-                      >
-                        <span className="eyebrow" style={{ fontSize: 10 }}>{tr("Friends")}</span>
-                        <span className="detail-cellval">
-                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
-                          {friendsAvg != null ? friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 }) : "—"}
-                          {friendsOpen ? <ChevronUp size={14} style={{ color: "var(--text-mute)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-mute)" }} />}
-                        </span>
-                      </button>
-                      <span className="detail-others-sep" />
-                    </>
-                  )}
-                  {score && (
-                    title.imdb_id && score.source === "imdb" ? (
-                      <a
-                        className="detail-cell detail-out"
-                        href={`https://www.imdb.com/title/${title.imdb_id}/`}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        title={title.imdb_votes != null ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : tr("View on IMDb")}
-                      >
-                        <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
-                        <span className="detail-cellval">
-                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
-                          {score.value.toFixed(1)}
-                          <ExternalLink size={12} />
-                        </span>
-                      </a>
-                    ) : (
-                      <div className="detail-cell">
-                        <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
-                        <span className="detail-cellval">
-                          <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
-                          {score.value.toFixed(1)}
-                        </span>
-                      </div>
-                    )
-                  )}
-                </div>
+                {(amigos.length > 0 || score) && (
+                  <div className="detail-others">
+                    {amigos.length > 0 && (
+                      <>
+                        <button
+                          className="detail-cell detail-friends"
+                          aria-expanded={friendsOpen}
+                          onClick={() => setFriendsOpen((v) => !v)}
+                        >
+                          <span className="eyebrow" style={{ fontSize: 10 }}>{tr("Friends")}</span>
+                          <span className="detail-cellval">
+                            <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: "var(--accent)" }} />
+                            {friendsAvg != null ? friendsAvg.toLocaleString(dateLocale(), { maximumFractionDigits: 1 }) : "—"}
+                            {friendsOpen ? <ChevronUp size={14} style={{ color: "var(--text-mute)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-mute)" }} />}
+                          </span>
+                        </button>
+                        {score && <span className="detail-others-sep" />}
+                      </>
+                    )}
+                    {score && (
+                      title.imdb_id && score.source === "imdb" ? (
+                        <a
+                          className="detail-cell detail-out"
+                          href={`https://www.imdb.com/title/${title.imdb_id}/`}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          title={title.imdb_votes != null ? tv("{votes} votes on IMDb", { votes: title.imdb_votes.toLocaleString(dateLocale()) }) : tr("View on IMDb")}
+                        >
+                          <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
+                          <span className="detail-cellval">
+                            <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
+                            {score.value.toFixed(1)}
+                            <ExternalLink size={12} />
+                          </span>
+                        </a>
+                      ) : (
+                        <div className="detail-cell">
+                          <span className="eyebrow" style={{ fontSize: 10 }}>{scoreLabel(score.source)}</span>
+                          <span className="detail-cellval">
+                            <Star size={15} fill="currentColor" strokeWidth={0} style={{ color: scoreColor(score.source) }} />
+                            {score.value.toFixed(1)}
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Quién de los tuyos anda con ella, al desplegar su celda. */}

@@ -49,6 +49,9 @@ const followRowSchema = z.object({
        que es lo que hace domain/gameStatus con un null aquí. */
     beat_seconds: z.object({ normally: z.number().nullable().optional() }).nullable().optional(),
     vote_average: z.number().nullable(),
+    /* La nota de IMDb, que manda en «Nota de la crítica» con la de TMDB de
+       reserva (domain/externalScore). Opcional por si la fila no la trae. */
+    imdb_rating: z.number().nullable().optional(),
     episode_run_time: z.number().int().nullable(),
     status: z.string().nullable(),
   }),
@@ -83,6 +86,7 @@ export interface FriendFollow {
   platforms?: string[] | null;
   beat_seconds?: { normally?: number | null } | null;
   vote_average: number | null;
+  imdb_rating?: number | null;
   episode_run_time: number | null;
   status: string | null;
   added_at: string;
@@ -249,7 +253,7 @@ export function useFriendProfile(friendId: string) {
         fetchPaged((from, to) =>
           supabase
             .from("library_entries")
-            .select("added_at, owned, play_state, minutes_played, played_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres, network, platforms, beat_seconds, vote_average, episode_run_time, status)")
+            .select("added_at, owned, play_state, minutes_played, played_at, titles(id, tmdb_id, kind, name, poster_path, first_air_date, genres, network, platforms, beat_seconds, vote_average, imdb_rating, episode_run_time, status)")
             .eq("user_id", friendId)
             .eq("followed", true)
             .order("title_id")

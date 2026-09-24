@@ -230,7 +230,8 @@ export async function getPopular(from?: number | null, to?: number | null): Prom
   return searchResponseSchema.parse(json).results;
 }
 
-/** Top-rated TV shows (by TMDB score, with a server-side vote-count floor),
+/** Top-rated TV shows: TMDB's top-rated pool (with a server-side vote-count
+ *  floor), re-ranked server-side by IMDb with TMDB as fallback,
  *  optionally restricted to a first-air-year range and/or TMDB genre ids
  *  (OR across ids). */
 export async function getTopRated(from?: number | null, to?: number | null, genreIds: number[] = []): Promise<TitleRow[]> {
