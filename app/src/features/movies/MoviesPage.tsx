@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router";
 import { useMovieLibrary, type LibraryMovie } from "@/lib/library";
 import { useRatedSort } from "@/lib/ratings";
 import type { MovieStatus } from "@/domain/movieStatus";
+import { externalScore } from "@/domain/externalScore";
+import { byValue } from "@/domain/librarySort";
 import { locName, t as tr, tv, useEsNames } from "@/lib/i18n";
 import { tmdbImg } from "@/lib/tmdb";
 import { EAGER_POSTERS, Poster, TabMenu, useGrowingList, useStableHandler } from "@/ui";
@@ -46,7 +48,11 @@ const COMPARATORS: Record<Exclude<SortKey, "rated">, (a: LibraryMovie, b: Librar
   lastreleased: (a, b) => (b.first_air_date ?? "").localeCompare(a.first_air_date ?? ""),
   added: (a, b) => ms(b.added_at) - ms(a.added_at),
   az: (a, b) => a.name.localeCompare(b.name),
-  rating: (a, b) => (b.vote_average ?? 0) - (a.vote_average ?? 0),
+  /* Por la nota que la carátula enseña —IMDb, o TMDB de reserva— y no por la
+     de TMDB a secas: ordenar por un número y pintar otro hacía que la rejilla
+     pareciera desordenada. Lo que no tiene ninguna va al final, y los empates
+     se deshacen por nombre (domain/librarySort). */
+  rating: byValue((m) => externalScore(m)?.value ?? null, "desc"),
 };
 
 /* Memoizada, como la de ShowsPage: sin esto cada tanda nueva de la rejilla
