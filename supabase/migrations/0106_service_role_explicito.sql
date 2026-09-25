@@ -2,7 +2,7 @@
 -- `service_role` recibe permisos explícitos en las cuatro tablas de public que
 -- no se los daban.
 --
--- POR QUÉ. Desde el 2026-10-30 Supabase deja de conceder solo el acceso de la
+-- POR QUÉ. Desde el 2026-10-30 Supabase deja de conceder por sí solo el acceso de la
 -- Data API a las tablas nuevas de public. Eso incluye las que se crean al
 -- aplicar migraciones desde cero: `supabase db reset` en local, ramas de
 -- preview o un proyecto nuevo. Casi todas las migraciones ya hacían «revoke
@@ -18,8 +18,8 @@
 --   activity_reactions
 --
 -- En producción no cambia nada: estas tablas ya tienen el permiso heredado, así
--- que el grant no hace nada. anon sigue sin acceso, igual que en el resto del
--- esquema.
+-- que el grant no hace nada. A anon no se le da nada: estas cuatro tablas ya
+-- se lo quitan con su revoke.
 
 grant all on public.profiles           to service_role;
 grant all on public.invites            to service_role;
