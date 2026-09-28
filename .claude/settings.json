@@ -1,0 +1,6 @@
+{
+  "enabledMcpjsonServers": ["supabase-local"],
+  "permissions": {
+    "allow": ["mcp__supabase-local__*"]
+  }
+}
