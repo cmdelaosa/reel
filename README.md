@@ -83,6 +83,12 @@ type-check and tests for the edge functions, and the guard against two migration
 the same number — in about ten seconds, before you push. It only runs the sections your
 change touches; `--todo` forces all three.
 
+Claude Code talks to the local stack over MCP: `.mcp.json` registers `supabase-local`
+(`http://localhost:54321/mcp`, the `[api]` port in `supabase/config.toml`) and
+`.claude/settings.json` enables it — the local database is disposable, `supabase db reset`
+regenerates it. The hosted project is configured outside the repo, in local scope and
+read-only: `claude mcp add --scope local --transport http supabase "https://mcp.supabase.com/mcp?read_only=true"`.
+
 The production instance is invite-only and its API keys are not in this repo — see
 [docs/DEPLOY.md](docs/DEPLOY.md) for what a real deployment needs.
 
