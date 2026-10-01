@@ -44,15 +44,6 @@ las de abajo, limpieza.
 - **Arreglo:** si hay `imdb_id`, que la celda enlace siempre, aunque enseñe la
   de TMDB. O un enlace «IMDb ↗» aparte.
 
-### La migración 0104 de Nintendo va a llegar fuera de orden
-- **Dónde:** rama `importar-nintendo-por-codigo-de-amigo`,
-  `supabase/migrations/0104_nintendo.sql`.
-- **Qué pasa:** la 0105 (Continuar con nota de IMDb) llega antes a producción.
-  El `supabase db push` de la 0104 parará con «Found local migration files to be
-  inserted before the last migration on remote database».
-- **Arreglo:** al fusionar esa rama, `supabase db push --include-all`. O
-  renumerarla a la siguiente libre antes de fusionar.
-
 ## Tardan
 
 ### Cambiar un esquema persistido tira la caché de toda la biblioteca
@@ -149,14 +140,12 @@ las de abajo, limpieza.
 
 ## Herramientas
 
-### El entorno en la nube no puede correr las pruebas del proxy ni desplegar
+### El entorno en la nube no puede correr las pruebas del proxy
 - `deno.land` y `esm.sh` están bloqueados en la red del entorno en la nube. Las
   pruebas de `supabase/functions` que importan de `deno.land` no corren ahí:
   solo en el job `edge` del CI. Lo que importa de `jsr.io` (`rank_test.ts`) sí
   corre.
-- Para que una sesión en la nube pueda desplegar hacen falta
-  `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF` y `SUPABASE_DB_PASSWORD` en la
-  configuración del entorno.
+- Desplegar sí puede, con el conector de Supabase de claude.ai.
 
 ### Un aviso de lint que ya estaba
 - `app/src/ui/shell/TopTabs.tsx:116`: `react-hooks/exhaustive-deps`, falta
