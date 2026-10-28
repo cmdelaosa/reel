@@ -595,10 +595,10 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
    de las estrellas. */
 .detail-hero-foot { position: relative; flex: 1 1 auto; min-width: 0;
   display: flex; align-items: flex-end; gap: 16px; }
-/* La columna del texto comparte franja con los botones de la esquina (14 + 40
-   de alto + aire); la carátula no, está a la izquierda, así que solo el texto
+/* La columna del texto comparte franja con los botones de la esquina (su
+   `top`, su alto y aire); la carátula no, está a la izquierda, así que solo el texto
    guarda la distancia y un héroe corriente no gana ni un píxel. */
-.detail-hero-foot > :not(.detail-poster) { padding-top: 62px; }
+.detail-hero-foot > :not(.detail-poster) { padding-top: calc(14px + var(--ctl-h) + 8px); }
 .detail-poster { width: 104px; height: 156px; flex: 0 0 auto; aspect-ratio: auto; }
 .detail-title { font-size: 27px; font-weight: 850; letter-spacing: -0.02em; line-height: 1.1;
   text-shadow: 0 2px 12px rgba(0, 0, 0, .55); color: #fff; margin: 0; }
@@ -714,7 +714,7 @@ button.detail-friends { border: 0; background: none; font: inherit; color: inher
   /* Sin rótulo, el botón se queda en un óvalo aplastado entre dos redondos. */
   .detail-hero-actions .btn-sm { width: var(--ctl-h-sm); padding: 0; justify-content: center; }
   .detail-hero-foot { gap: 12px; }
-  .detail-hero-foot > :not(.detail-poster) { padding-top: 56px; }
+  .detail-hero-foot > :not(.detail-poster) { padding-top: calc(10px + var(--ctl-h) + 6px); }
   .detail-poster { width: 78px; height: 117px; }
   .detail-title { font-size: 20px; line-height: 1.15; }
   /* Dos renglones y corta. Con la lista entera de géneros, la de un juego se
