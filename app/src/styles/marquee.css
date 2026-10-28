@@ -581,15 +581,24 @@ button.filter-opt { width: 100%; border: 0; background: none; font: inherit; tex
    llevaba lo tuyo —seguir por, progreso, amigos— lejos de donde miras, y a
    1180 la lista de episodios y la sinopsis salían en renglones que no se leen.
    Una columna y menos ancho: lo importante primero y nada al lado. */
-.detail-hero { height: 216px; flex: 0 0 auto; }
+/* Alto MÍNIMO y el pie en flujo, no un alto fijo con el pie anclado abajo en
+   absoluto: así el pie crecía hacia arriba, por debajo de los botones de la
+   esquina, en cuanto no cabía — el «Lo tengo» y los logos del nuevo Castlevania
+   quedaban tapados en un teléfono. Ahora, si no cabe, crece el héroe. */
+.detail-hero { min-height: 216px; flex: 0 0 auto; display: flex; align-items: flex-end;
+  padding: 0 20px 14px; }
 .detail-hero-actions { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 8px; }
 /* El pie del héroe. En clases y no en estilos en línea, que es como nació: un
    estilo en línea gana a cualquier consulta de medios, y con las medidas metidas
    en el atributo `style` el móvil seguía pintando un cartel de 152x228 dentro de
    una hoja de 367 — el héroe desbordaba 442px de ancho, con los botones encima
    de las estrellas. */
-.detail-hero-foot { position: absolute; left: 20px; right: 20px; bottom: 14px;
+.detail-hero-foot { position: relative; flex: 1 1 auto; min-width: 0;
   display: flex; align-items: flex-end; gap: 16px; }
+/* La columna del texto comparte franja con los botones de la esquina (14 + 40
+   de alto + aire); la carátula no, está a la izquierda, así que solo el texto
+   guarda la distancia y un héroe corriente no gana ni un píxel. */
+.detail-hero-foot > :not(.detail-poster) { padding-top: 62px; }
 .detail-poster { width: 104px; height: 156px; flex: 0 0 auto; aspect-ratio: auto; }
 .detail-title { font-size: 27px; font-weight: 850; letter-spacing: -0.02em; line-height: 1.1;
   text-shadow: 0 2px 12px rgba(0, 0, 0, .55); color: #fff; margin: 0; }
@@ -699,12 +708,13 @@ button.detail-friends { border: 0; background: none; font: inherit; color: inher
      Se decía que los rótulos de los botones cabían «de sobra en la hoja incluso
      a 320». No caben: medido a 390, el héroe de la ficha de un juego pedía
      508px dentro de una caja de 365. Quedan solo los iconos. */
-  .detail-hero { height: 168px; }
+  .detail-hero { min-height: 168px; padding: 0 14px 12px; }
   .detail-hero-actions { top: 10px; right: 10px; gap: 5px; }
   .detail-hero-actions .btn-label { display: none; }
   /* Sin rótulo, el botón se queda en un óvalo aplastado entre dos redondos. */
   .detail-hero-actions .btn-sm { width: var(--ctl-h-sm); padding: 0; justify-content: center; }
-  .detail-hero-foot { left: 14px; right: 14px; bottom: 12px; gap: 12px; }
+  .detail-hero-foot { gap: 12px; }
+  .detail-hero-foot > :not(.detail-poster) { padding-top: 56px; }
   .detail-poster { width: 78px; height: 117px; }
   .detail-title { font-size: 20px; line-height: 1.15; }
   /* Dos renglones y corta. Con la lista entera de géneros, la de un juego se
@@ -2352,7 +2362,9 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
   .game-badges .plat-logo:hover { background: rgba(10, 12, 18, .78); border-color: rgba(255, 255, 255, .38); }
 }
 @media (max-width: 560px) {
-  .game-badges { flex-direction: row; align-items: center; gap: 8px; margin-bottom: 4px; }
+  /* Y envuelve la fila entera, no solo los logos: con el chip al lado, los logos
+     se quedaban en una columna de 119px y cuatro plataformas hacían tres pisos. */
+  .game-badges { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 4px; }
 }
 
 /* Tus horas mandan y las de fuera se arriman: una tarjeta, lo tuyo grande a la
