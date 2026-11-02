@@ -137,6 +137,14 @@ test("abrir y cerrar una ficha deja la página donde estaba", async ({ page }) =
   await page.locator(`.poster-grid .poster[aria-label="${label}"]`).click();
   await expect(page).toHaveURL(/[?&]title=\d+/);
 
+  /* La URL cambia antes de que la ficha se monte, y quien escucha Escape es la
+     propia ficha: con 300 carátulas que repintar y un runner lento, la tecla
+     llegaba cuando aún no había nadie (traza de la noche del 29-10-2026) y la
+     ficha se quedaba abierta para siempre. Una noche de cada nueve, más o menos.
+     El foco dentro es la señal de que ya está: lo mete un efecto de la ficha, y
+     los efectos de un mismo montaje corren de una tacada, Escape incluido. */
+  await expect(page.locator('[role="dialog"]:focus-within')).toBeVisible();
+
   await page.keyboard.press("Escape");
   await expect(page).not.toHaveURL(/[?&]title=/);
 
