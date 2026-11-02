@@ -107,6 +107,8 @@ const GAME_TABS = [
      conectada, un borrador a medio confirmar), y meterlas en una sola obligaría
      a elegir cuál de los dos borradores se enseña. Si la fila no cabe, el
      TabMenu recoge lo que sobre, que es exactamente el caso para el que existe.
+     Eso en la barra: el dock no tiene menú, y las siete tienen que caberle
+     (ver .mq-dock en marquee.css).
 
      El mando y no un logotipo: Nintendo no publica uno que se pueda usar así, y
      el mando ya es lo que la barra entiende por "juegos". */

@@ -1830,12 +1830,27 @@ button.check { width: 44px; height: 44px; margin-block: -6px; }
    rellena ya dice cuál está encendida. A 400px y no a 359: con seis pestañas la
    cuenta no sale tampoco a 375, que es el teléfono más común.
 
-   Con la etiqueta fuera todas las pestañas miden lo mismo, así que el dock cabe
-   con cualquier número de ellas — que es lo que le faltaba al arreglo anterior
-   para sobrevivir a la sexta. */
+   Con la etiqueta fuera todas las pestañas miden lo mismo, que es lo que le
+   faltaba al arreglo anterior para sobrevivir a la sexta. */
 @media (max-width: 400px) {
   .mq-dockbtn.on .mq-docklabel { display: none; }
   .mq-dockbtn.on { padding: 11px; }
+}
+/* Medir lo mismo no era caber con cualquier número, como decía aquí: con la
+   séptima (Nintendo, 24-09-2026) el dock pedía 326px para un carril de 294 a
+   320px, y "Amigos" se salía de la píldora y de la pantalla. Siete botones de
+   44 son 308px, más lo que el dock se pone alrededor son 334, más sus márgenes
+   son 358: por debajo de eso solo queda de donde sacar el aire que los rodea,
+   porque el mínimo táctil no se toca.
+
+   :has() para que los modos de cinco pestañas, a los que les sobra sitio,
+   conserven su aire. Y esto es el final del camino: a 320px caben siete y ni una
+   más, así que una octava tiene que llevar al dock un menú como el de la barra. */
+@media (max-width: 357px) {
+  .mq-dock:has(> :nth-child(7)) {
+    gap: 0; padding: 2px;
+    max-width: calc(100vw - 6px);
+  }
 }
 
 /* ---- Notification panel ---- */
