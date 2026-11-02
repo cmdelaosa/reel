@@ -103,7 +103,7 @@ const TOPE = 1440;
 const ROTULOS: Record<string, readonly string[]> = {
   tv: ["Esta noche", "Calendario", "Sin empezar", "Explorar", "Amigos"],
   movie: ["Esta noche", "Estrenos", "Sin empezar", "Explorar", "Amigos"],
-  game: ["A jugar", "Lanzamientos", "Pendientes", "Explorar", "Steam", "Amigos"],
+  game: ["A jugar", "Lanzamientos", "Pendientes", "Explorar", "Steam", "Nintendo", "Amigos"],
 };
 
 for (const ancho of ANCHOS) {
