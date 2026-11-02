@@ -110,8 +110,12 @@ jobs:
 
       # The `list` reporter writes no playwright-report/, so the old path
       # uploaded nothing. Traces (retain-on-failure) land in test-results/.
+      # Seven days, not the default 90: a trace gets read the morning after, and
+      # at 90 days the failed nights piled up ~50 MB of the account's 500 MB of
+      # Actions storage.
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-traces
           path: app/test-results/
+          retention-days: 7
