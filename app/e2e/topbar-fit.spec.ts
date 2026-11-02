@@ -78,9 +78,11 @@ const MODOS = [
    medidas que este fichero tomaba. Una prueba de que la barra cabe que solo
    mira los anchos donde la barra no lleva el nav no prueba gran cosa. */
 /* Y 1440, que es el otro lado de la misma pregunta: a 1280 el carril no da para
-   las seis de Juegos y el menú «···» se lleva dos, mientras que a 1440 caben
-   todas y el menú no tiene que existir. Las dos ramas del reparto tienen que
-   estar medidas, porque la que se rompe sola es siempre la que no se mira. */
+   todas y el menú «···» se lleva la cola, mientras que a 1440 las cinco de series
+   y cine caben y el menú no tiene que existir. Las dos ramas del reparto tienen
+   que estar medidas, porque la que se rompe sola es siempre la que no se mira.
+   Juegos, con siete, lleva menú también a 1440, y cuántas se lleva depende de la
+   fuente de la máquina: una en el runner, dos en un Mac. */
 /* Y 2560, el ultrapanorámico, que es donde la barra se rompió por el otro lado:
    sin tope de ancho la marca se iba a un extremo de la pantalla, las acciones al
    otro, y en medio quedaba un vacío más ancho que todo lo que la barra tiene
