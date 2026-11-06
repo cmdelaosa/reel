@@ -149,6 +149,16 @@ do $$ declare msg text; r record; begin
   assert r.episode_group_id is null and r.t1 = 11, format('ha tocado algo: grupo %s, T1 con %s', r.episode_group_id, r.t1);
 end $$;
 
+-- ── 8b. Una serie que no está (un tmdb_id equivocado da null): se niega ────
+do $$ declare msg text; begin
+  begin
+    perform public.aplicar_grupo_de_episodios(
+      (select id from public.titles where tmdb_id = -1), 'grupo-0107', pg_temp.temporadas(), pg_temp.episodios());
+  exception when others then msg := sqlerrm;
+  end;
+  assert msg like '%ninguna serie%', format('tenía que negarse por la serie y dice: %s', msg);
+end $$;
+
 -- ── 9. Solo service_role ──────────────────────────────────────────────────
 do $$ begin
   assert not has_function_privilege('authenticated', 'public.aplicar_grupo_de_episodios(uuid, text, jsonb, jsonb)', 'execute'),

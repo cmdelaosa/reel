@@ -1077,8 +1077,11 @@ function inBackground(work: Promise<unknown>) {
  *  lectura de la fila por cada escritura de temporadas; la petición a TMDB, solo
  *  para las series que tienen grupo. */
 async function grupoDeSerie(admin: SupabaseClient, apiKey: string, tmdbId: number): Promise<Grupo | null> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("titles").select("episode_group_id").eq("kind", "tv").eq("tmdb_id", tmdbId).maybeSingle();
+  // Un fallo NO es «sin grupo»: la escritura que sigue pisaría las filas de la
+  // serie con la numeración de TMDB, y sus visionados acabarían en otros episodios.
+  if (error) throw new Error(`episode_group_id: ${error.message}`);
   const id = data?.episode_group_id as string | null | undefined;
   return id ? pedirGrupo((p) => fetchTmdb(apiKey, p), id) : null;
 }

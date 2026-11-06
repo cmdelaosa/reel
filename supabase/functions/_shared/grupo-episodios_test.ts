@@ -1,7 +1,7 @@
 // La traducción de la numeración de TMDB a la de un grupo de episodios. El caso
 // es Lupin tal cual lo da TMDB (grupo «Parts», 6074e65418864b00439afa4f): tres
 // temporadas en TMDB —10, 7 y 8 episodios— y cuatro partes en el grupo.
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { detalleAgrupado, fuentesDe, leerGrupo, renumerar, temporadaAgrupada, temporadaParaGuardar } from "./grupo-episodios.ts";
 
 const ep = (s: number, e: number, order: number) => ({ season_number: s, episode_number: e, order, air_date: `202${s}-01-0${(e % 9) + 1}` });
@@ -92,6 +92,13 @@ Deno.test("sin grupo se piden las dos de siempre y pasan tal cual", async () => 
   assertEquals(pedidas, ["/tv/96677/season/2", "/tv/96677/season/2?language=es-ES"]);
   assertEquals(canonica, { path: "/tv/96677/season/2" });
   assertEquals(espanola, { path: "/tv/96677/season/2?language=es-ES" });
+});
+
+Deno.test("una temporada que el grupo no tiene es un error, no una temporada vacía", async () => {
+  // Con un grupo de partes 1, 2 y 4, la 3 no la alimenta nada.
+  const conHueco = leerGrupo({ groups: [LUPIN.groups[0], LUPIN.groups[1], LUPIN.groups[3]] });
+  const pedir = () => Promise.resolve({ episodes: [] });
+  await assertRejects(() => temporadaParaGuardar(pedir, 96677, conHueco, 3), Error, "no está en el grupo");
 });
 
 Deno.test("con grupo, si la española falla, la temporada sale igual sin ella", async () => {

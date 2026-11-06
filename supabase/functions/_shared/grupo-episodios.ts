@@ -144,6 +144,9 @@ export async function temporadaParaGuardar(
   n: number,
 ): Promise<[Any, Any | null]> {
   const fuentes = g ? fuentesDe(g, n) : [n];
+  // Sin grupo, TMDB contesta 404 a una temporada que no existe; con grupo hay que
+  // decirlo aquí, o se guardaría como temporada vacía y la ficha la enseñaría.
+  if (!fuentes.length) throw new Error(`la temporada ${n} no está en el grupo de episodios`);
   const [canonicas, espanolas] = await Promise.all([
     Promise.all(fuentes.map((k) => pedir(`/tv/${tmdbId}/season/${k}`))),
     Promise.all(fuentes.map((k) => pedir(`/tv/${tmdbId}/season/${k}?language=es-ES`))).catch(() => null),

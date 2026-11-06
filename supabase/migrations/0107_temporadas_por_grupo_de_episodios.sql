@@ -52,6 +52,9 @@ declare
   v_sin_sitio text;
   v_movidas integer;
 begin
+  if p_title is null or not exists (select 1 from titles where id = p_title and kind = 'tv') then
+    raise exception 'no hay ninguna serie con id %', p_title;
+  end if;
   if (select episode_group_id from titles where id = p_title) is not null then
     raise exception 'la serie % ya tiene grupo de episodios', p_title;
   end if;
