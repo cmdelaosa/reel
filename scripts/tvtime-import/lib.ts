@@ -444,7 +444,9 @@ export async function importShow(
   // Genuinely-finished shows (caught up on an ended/canceled series) stay
   // un-stopped so they read "finished" rather than "stopped". Mirrors the smart
   // split used to backfill the 2026-07 import.
-  const watchedCount = watches?.length ?? show.seen;
+  // Regular seasons only: aired excludes specials, and a show the user only
+  // saw a special of shouldn't enter the library.
+  const watchedCount = watches ? watches.filter((w) => w.season > 0).length : show.seen;
   const aired = airedCount(detail.seasons as Json[] | undefined, detail.last_episode_to_air as Json | null) ?? 0;
   const ended = detail.status === "Ended" || detail.status === "Canceled";
   const finished = watchedCount >= aired && ended;
