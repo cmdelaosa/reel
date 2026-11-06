@@ -508,6 +508,14 @@ documented in [DETAIL-PERFORMANCE.md](DETAIL-PERFORMANCE.md).
   (resolve `titles.imdb_id` for tv + movie, in rounds until `remaining` is 0),
   que ya no es solo manual: tiene su propio cron horario (`imdb-id-backfill-hourly`)
   porque la cola del cine se rellena sola cada día y a mano no se vaciaba nunca.
+- Grupos de episodios (0107): una serie con `titles.episode_group_id` se guarda con la
+  numeración de ese grupo de TMDB, no con sus temporadas (Lupin: cuatro partes en vez
+  de tres temporadas). Los tres escritores —`tmdb-proxy`, `episode-refresh` y el
+  importador de TV Time— traducen cada respuesta con
+  `supabase/functions/_shared/grupo-episodios.ts` antes de guardarla. Se pone a mano
+  con `scripts/grupo-episodios/aplicar.ts`, que imprime la llamada a
+  `aplicar_grupo_de_episodios`: esa función mueve las filas que ya existen a su número
+  nuevo, con sus visionados, antes de que ningún refresco escriba encima.
 - Network logos: static SVGs in `app/public/logos/` (already sourced in the prototype —
   Netflix/Apple/Disney official vectors, styled wordmark tiles for the rest).
 

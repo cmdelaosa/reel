@@ -10,6 +10,7 @@ import { unzipSync, strFromU8 } from "fflate";
 // Relative, extension-ful, dependency-free — the one import shape both runtimes
 // this file serves (Node via tsx, Deno via the importer function) agree on.
 import { tmdbFetch as callTmdb } from "../../supabase/functions/_shared/tmdb.ts";
+import { detalleAgrupado, fuentesDe, pedirGrupo, temporadaAgrupada, type Grupo } from "../../supabase/functions/_shared/grupo-episodios.ts";
 
 // Minimal shapes for the injected Supabase client (avoids a hard dep on the
 // exact supabase-js version across runtimes).
@@ -283,7 +284,7 @@ function airedCount(seasons: Json[] | undefined, last: Json | null | undefined):
   return aired;
 }
 
-async function upsertTitle(admin: DbClient, d: Json): Promise<string> {
+async function upsertTitle(admin: DbClient, d: Json): Promise<{ id: string; episodeGroupId: string | null }> {
   const { data, error } = await admin
     .from("titles")
     .upsert(
@@ -314,11 +315,11 @@ async function upsertTitle(admin: DbClient, d: Json): Promise<string> {
       // importador de TV Time, que no se lanza todos los días.
       { onConflict: "kind,tmdb_id" },
     )
-    .select("id")
+    .select("id, episode_group_id")
     .single();
   if (error || !data) throw new Error(`title upsert: ${error?.message}`);
   await cacheNetworkLogos(admin, d.networks as Json[] | undefined);
-  return data.id as string;
+  return { id: data.id as string, episodeGroupId: (data.episode_group_id as string | null) ?? null };
 }
 
 // Cache each network's official TMDB logo_path by display name (best-effort) so
@@ -333,13 +334,17 @@ async function cacheNetworkLogos(admin: DbClient, networks: Json[] | undefined) 
 }
 
 /** Upsert one season + its episodes; returns the saved episode rows keyed for
- *  both ordered-id (legacy fallback) and (season:episode) → id (exact) use. */
+ *  both ordered-id (legacy fallback) and (season:episode) → id (exact) use.
+ *  With an episode group (0107) `s` is the group's season and its episodes are
+ *  assembled from the TMDB seasons it spans; byPair stays keyed by TMDB's
+ *  numbering, which is the one TV Time's watches come in. */
 async function importSeason(
   admin: DbClient,
   tmdbKey: string,
   tmdbId: number,
   titleId: string,
   s: Json,
+  grupo: Grupo | null,
 ): Promise<{ episodeIds: string[]; byPair: Map<string, string> }> {
   const { data: season, error: se } = await admin
     .from("seasons")
@@ -357,9 +362,14 @@ async function importSeason(
     .select("id")
     .single();
   if (se || !season) throw new Error(`season upsert: ${se?.message}`);
-  const sd = await tmdbFetch(tmdbKey, `/tv/${tmdbId}/season/${s.season_number}`);
-  const eps = ((sd.episodes as Json[] | undefined) ?? [])
-    .sort((a, b) => (a.episode_number as number) - (b.episode_number as number))
+  const n = s.season_number as number;
+  const sd = grupo
+    ? temporadaAgrupada(grupo, n, await Promise.all(fuentesDe(grupo, n).map((k) => tmdbFetch(tmdbKey, `/tv/${tmdbId}/season/${k}`))))
+    : await tmdbFetch(tmdbKey, `/tv/${tmdbId}/season/${n}`);
+  const fetched = ((sd.episodes as Json[] | undefined) ?? [])
+    .sort((a, b) => (a.episode_number as number) - (b.episode_number as number));
+  const tmdbPair = new Map(fetched.map((e) => [e.episode_number as number, (e.par_tmdb as string) ?? `${e.season_number}:${e.episode_number}`]));
+  const eps = fetched
     .map((e) => ({
       title_id: titleId,
       season_id: season.id as string,
@@ -384,7 +394,7 @@ async function importSeason(
       const id = byNum.get(e.episode_number);
       if (id) {
         episodeIds.push(id as string);
-        byPair.set(`${e.season_number}:${e.episode_number}`, id as string);
+        byPair.set(tmdbPair.get(e.episode_number)!, id as string);
       }
     }
   }
@@ -409,8 +419,12 @@ export async function importShow(
   const tmdbId = (await tvdbToTmdb(tmdbKey, show.tvdbId)) ?? (await tmdbByName(tmdbKey, show.name));
   if (!tmdbId) return { matched: false, watchEvents: 0, unmatchedEpisodes: 0 };
 
-  const detail = await tmdbFetch(tmdbKey, `/tv/${tmdbId}`);
-  const titleId = await upsertTitle(admin, detail);
+  const tmdbDetail = await tmdbFetch(tmdbKey, `/tv/${tmdbId}`);
+  const { id: titleId, episodeGroupId } = await upsertTitle(admin, tmdbDetail);
+  // A show numbered by an episode group (0107) is stored in the group's seasons;
+  // writing TMDB's on top would overwrite other episodes' rows.
+  const grupo = episodeGroupId ? await pedirGrupo((p) => tmdbFetch(tmdbKey, p), episodeGroupId) : null;
+  const detail = grupo ? detalleAgrupado(tmdbDetail, grupo) : tmdbDetail;
 
   // Backdate the library "added" date to a real historical moment so friend
   // activity (rpc_friend_activity reads library_entries.added_at for the
@@ -457,7 +471,7 @@ export async function importShow(
       // legacy mode stops once enough episodes are cached; exact mode caches
       // every season so aired counts (and thus progress) are right.
       if (!exact && episodeIds.length >= show.seen) break;
-      const saved = await importSeason(admin, tmdbKey, tmdbId, titleId, s);
+      const saved = await importSeason(admin, tmdbKey, tmdbId, titleId, s, grupo);
       episodeIds.push(...saved.episodeIds);
       for (const [k, v] of saved.byPair) byPair.set(k, v);
     }
