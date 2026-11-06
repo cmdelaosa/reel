@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   anticipatedQuery,
+  NEW_MIN_HYPES,
   NEW_MIN_VOTES,
   NEW_WINDOW_DAYS,
   newReleasesQuery,
@@ -37,6 +38,20 @@ Deno.test("la ventana de novedades está acotada por los dos lados", () => {
   const where = q.slice(0, q.indexOf("sort"));
   assertEquals(where.match(/first_release_date/g)?.length, 2);
   assertStringIncludes(q, "sort first_release_date desc");
+});
+
+Deno.test("una novedad entra por votos O por expectación, sin romper la ventana", () => {
+  // Un exclusivo de Nintendo sale con expectación y sin votos: con solo el
+  // suelo de votos no entraba en ninguna rejilla. Y el `|` tiene que ir entre
+  // paréntesis — suelto, cualquier juego con expectación se saltaría la
+  // ventana de fechas, incluidos los que aún no han salido.
+  const q = newReleasesQuery(FIELDS, NOW_MS);
+  assertStringIncludes(
+    q,
+    `& (total_rating_count >= ${NEW_MIN_VOTES} | hypes >= ${NEW_MIN_HYPES}) &`,
+  );
+  const where = q.slice(0, q.indexOf("sort"));
+  assertEquals(where.match(/\|/g)?.length, 2, "un | en la alternativa y otro en el filtro de tipos");
 });
 
 Deno.test("mejor valorados lleva suelo de votos, y ordena por nota", () => {
