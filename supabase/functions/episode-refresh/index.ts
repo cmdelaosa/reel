@@ -45,6 +45,7 @@ import { redactCredential, tmdbFetch } from "../_shared/tmdb.ts";
 // misma fila de `episodes`. Recortar el equipo de dos maneras distintas sería
 // que un episodio cambiara de reparto según quién lo hubiera refrescado.
 import { crewRecortado, invitadosRecortados, textoEs } from "../_shared/episodio.ts";
+import { detalleAgrupado, pedirGrupo, temporadaParaGuardar } from "../_shared/grupo-episodios.ts";
 
 const TVMAZE = "https://api.tvmaze.com";
 const LIMIT = 40;
@@ -683,10 +684,14 @@ function providerMap(d: Any): Record<string, { name: string; logo_path: string |
 async function refreshTitle(
   admin: SupabaseClient,
   key: string,
-  row: { id: string; tmdb_id: number },
+  row: { id: string; tmdb_id: number; episode_group_id?: string | null },
   allSeasons = false,
 ) {
-  const d = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations,external_ids,watch/providers`);
+  const detalle = await tmdb(key, `/tv/${row.tmdb_id}?append_to_response=translations,external_ids,watch/providers`);
+  // Con grupo de episodios (0107), todo lo de abajo trabaja en SU numeración:
+  // temporadas, emitidos, la que se estrena y las dos últimas que se refrescan.
+  const grupo = row.episode_group_id ? await pedirGrupo((p) => tmdb(key, p), row.episode_group_id) : null;
+  const d = grupo ? detalleAgrupado(detalle, grupo) : detalle;
   const es = esTranslation(d);
   const providers = providerMap(d);
   const { error: te } = await admin
@@ -766,11 +771,9 @@ async function refreshTitle(
        tmdb-proxy — y hace falta AQUÍ tanto como allí: este cron es quien sella
        `episodes_refreshed_at`, así que una serie que él refresca deja de pasar
        por el proxy y sin esto sus episodios se quedarían para siempre sin
-       fotograma, sin equipo y sin traducción. */
-    const [sd, sdEs] = await Promise.all([
-      tmdb(key, `/tv/${row.tmdb_id}/season/${s.season_number}`),
-      tmdb(key, `/tv/${row.tmdb_id}/season/${s.season_number}?language=es-ES`).catch(() => null),
-    ]);
+       fotograma, sin equipo y sin traducción. Con grupo, las dos salen ya
+       montadas desde las temporadas de TMDB que forman esta. */
+    const [sd, sdEs] = await temporadaParaGuardar((p) => tmdb(key, p), row.tmdb_id, grupo, s.season_number);
     const esByNumber = new Map<number, Any>();
     for (const e of ((sdEs as Any)?.episodes ?? []) as Any[]) {
       if (typeof e?.episode_number === "number") esByNumber.set(e.episode_number, e);
@@ -1058,7 +1061,7 @@ Deno.serve(async (req) => {
   for (let from = 0; ; from += PAGE) {
     const { data, error: te } = await admin
       .from("titles")
-      .select("id, tmdb_id, status, episodes_refreshed_at, library_entries!inner(followed)")
+      .select("id, tmdb_id, episode_group_id, status, episodes_refreshed_at, library_entries!inner(followed)")
       // Solo series: este cron refresca por /tv/:id y mantiene temporadas y
       // episodios. Una película no tiene ninguna de las dos cosas, y su fila de
       // episodio la mantiene el trigger de 0067 desde el propio título.
