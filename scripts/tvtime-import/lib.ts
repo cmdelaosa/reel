@@ -10,6 +10,7 @@ import { unzipSync, strFromU8 } from "fflate";
 // Relative, extension-ful, dependency-free — the one import shape both runtimes
 // this file serves (Node via tsx, Deno via the importer function) agree on.
 import { tmdbFetch as callTmdb } from "../../supabase/functions/_shared/tmdb.ts";
+import { matchWatches, type EpisodeWatch } from "./match.ts";
 
 // Minimal shapes for the injected Supabase client (avoids a hard dep on the
 // exact supabase-js version across runtimes).
@@ -42,6 +43,7 @@ const TRACKING = {
   season: "season_number",
   episode: "episode_number",
   watchedAt: "created_at", // "YYYY-MM-DD HH:MM:SS" (UTC, no zone suffix)
+  episodeId: "episode_id", // TheTVDB episode id; optional — the bridge when numbering drifts
 } as const;
 
 export interface Show {
@@ -52,11 +54,7 @@ export interface Show {
   seen: number;
 }
 
-export interface EpisodeWatch {
-  season: number;
-  episode: number;
-  watchedAt: string; // ISO
-}
+export type { EpisodeWatch } from "./match.ts";
 
 export interface ImportReport {
   shows: number;
@@ -184,8 +182,11 @@ export function parseFollowedAt(files: Record<string, string>): Map<string, stri
 }
 
 /** Parse the exact per-episode watch history: TheTVDB show id → deduped
- *  (season, episode, first-watched-at) list. Specials (season 0) excluded, like
- *  everywhere else. Returns an empty map when the tracking file is absent or
+ *  (season, episode, first-watched-at) list. Specials (season 0) are kept only
+ *  when the row carries its TheTVDB episode id: TheTVDB files some episodes as
+ *  specials that TMDB numbers inside a regular season (Black Mirror's "White
+ *  Christmas" is S00E01 there, S02E04 on TMDB), and the id is the only way to
+ *  find them. Returns an empty map when the tracking file is absent or
  *  has an unexpected shape (older exports) — callers then fall back to the
  *  per-show counter. */
 export function parseWatches(files: Record<string, string>): Map<string, EpisodeWatch[]> {
@@ -201,13 +202,15 @@ export function parseWatches(files: Record<string, string>): Map<string, Episode
     const tvdbId = r[TRACKING.tvdbId];
     const season = Number(r[TRACKING.season]);
     const episode = Number(r[TRACKING.episode]);
-    if (!tvdbId || !Number.isInteger(season) || !Number.isInteger(episode) || season <= 0 || episode <= 0) continue;
+    const tvdbEpisodeId = r[TRACKING.episodeId] || undefined;
+    if (!tvdbId || !Number.isInteger(season) || !Number.isInteger(episode) || season < 0 || episode <= 0) continue;
+    if (season === 0 && !tvdbEpisodeId) continue;
     const stamp = r[TRACKING.watchedAt];
     const watchedAt = stamp ? `${stamp.replace(" ", "T")}Z` : new Date().toISOString();
     const per = byShow.get(tvdbId) ?? new Map<string, EpisodeWatch>();
     const key = `${season}:${episode}`;
     const prev = per.get(key);
-    if (!prev || watchedAt < prev.watchedAt) per.set(key, { season, episode, watchedAt }); // keep first watch; rewatches collapse
+    if (!prev || watchedAt < prev.watchedAt) per.set(key, { season, episode, watchedAt, tvdbEpisodeId }); // keep first watch; rewatches collapse
     byShow.set(tvdbId, per);
   }
   return new Map([...byShow].map(([id, per]) => [id, [...per.values()]]));
@@ -263,6 +266,15 @@ export async function tmdbByName(key: string, rawName: string): Promise<number |
     (r) => norm((r.name as string) ?? "") === want || norm((r.original_name as string) ?? "") === want,
   );
   return hit ? (hit.id as number) : null;
+}
+
+/** Where TMDB files one TheTVDB episode, as a "season:episode" key in TMDB's
+ *  numbering — or null when TMDB doesn't know the id, or files it under another
+ *  show (a TheTVDB special that TMDB keeps as a movie, like Bandersnatch). */
+export async function tvdbEpisodeToPair(key: string, tvdbEpisodeId: string, tmdbId: number): Promise<string | null> {
+  const data = await tmdbFetch(key, `/find/${tvdbEpisodeId}?external_source=tvdb_id`);
+  const hit = ((data.tv_episode_results as Json[] | undefined) ?? []).find((e) => e.show_id === tmdbId);
+  return hit ? `${hit.season_number}:${hit.episode_number}` : null;
 }
 
 const airDatetime = (d?: string | null) => (d ? `${d}${AIR_TIME}` : null);
@@ -464,12 +476,14 @@ export async function importShow(
 
     let rows: { user_id: string; episode_id: string; watched_at?: string; source: string }[];
     if (exact) {
-      rows = [];
-      for (const w of watches!) {
-        const id = byPair.get(`${w.season}:${w.episode}`);
-        if (id) rows.push({ user_id: userId, episode_id: id, watched_at: w.watchedAt, source: "tvtime_import" });
-        else unmatchedEpisodes++; // TVDB↔TMDB numbering drift; skipped, reported
-      }
+      const matched = await matchWatches(watches!, byPair, (id) => tvdbEpisodeToPair(tmdbKey, id, tmdbId));
+      unmatchedEpisodes = matched.unmatched;
+      rows = [...matched.watchedAt].map(([episode_id, watched_at]) => ({
+        user_id: userId,
+        episode_id,
+        watched_at,
+        source: "tvtime_import",
+      }));
     } else {
       rows = episodeIds
         .slice(0, show.seen)
