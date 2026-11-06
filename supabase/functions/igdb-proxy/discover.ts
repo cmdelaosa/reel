@@ -60,6 +60,16 @@ export const POPULAR_MIN_VOTES = 50;
  *  de lo que sale cada semana. */
 export const NEW_MIN_VOTES = 5;
 
+/** O, en su lugar, esta expectación. Los votos de IGDB los pone sobre todo
+ *  gente de PC, y un exclusivo de Nintendo tarda semanas en reunir cinco, si
+ *  llega: el remake de Ocarina of Time para Switch 2 salió con 85 de `hypes` y
+ *  cero votos, y Fire Emblem: Fortune's Weave seguía con dos a las siete
+ *  semanas. Sin esto, un juego así sale de "Más esperados" el día del estreno y
+ *  no entra en ninguna otra rejilla. Veinte es la expectación de un estreno que
+ *  sigue alguien de verdad; medido el 6-nov-2026, metía quince juegos en las
+ *  sesenta filas, entre ellos esos dos. */
+export const NEW_MIN_HYPES = 20;
+
 /** Cuántas filas trae cada rejilla. */
 export const DISCOVER_LIMIT = 60;
 
@@ -85,11 +95,16 @@ export function anticipatedQuery(fields: string, nowMs: number): string {
  *
  *  La ventana se acota por ARRIBA además de por abajo, y no es redundante: sin
  *  el tope, un juego con fecha de 2031 metida por error en el catálogo —los
- *  hay— encabeza "Novedades" para siempre. */
+ *  hay— encabeza "Novedades" para siempre.
+ *
+ *  Los votos y la expectación van entre paréntesis: el `|` suelto se llevaría
+ *  por delante la ventana de fechas, y entraría cualquier juego con
+ *  expectación, salido o no. */
 export function newReleasesQuery(fields: string, nowMs: number): string {
   const since = secs(nowMs - NEW_WINDOW_DAYS * 24 * 3600 * 1000);
   return `fields ${fields}; where first_release_date >= ${since} & ` +
-    `first_release_date <= ${secs(nowMs)} & total_rating_count >= ${NEW_MIN_VOTES} & ${BASE}; ` +
+    `first_release_date <= ${secs(nowMs)} & ` +
+    `(total_rating_count >= ${NEW_MIN_VOTES} | hypes >= ${NEW_MIN_HYPES}) & ${BASE}; ` +
     `sort first_release_date desc; limit ${DISCOVER_LIMIT};`;
 }
 
