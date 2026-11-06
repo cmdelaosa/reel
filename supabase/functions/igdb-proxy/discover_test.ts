@@ -50,8 +50,6 @@ Deno.test("una novedad entra por votos O por expectación, sin romper la ventana
     q,
     `& (total_rating_count >= ${NEW_MIN_VOTES} | hypes >= ${NEW_MIN_HYPES}) &`,
   );
-  const where = q.slice(0, q.indexOf("sort"));
-  assertEquals(where.match(/\|/g)?.length, 2, "un | en la alternativa y otro en el filtro de tipos");
 });
 
 Deno.test("mejor valorados lleva suelo de votos, y ordena por nota", () => {

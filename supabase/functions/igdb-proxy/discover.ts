@@ -66,8 +66,8 @@ export const NEW_MIN_VOTES = 5;
  *  cero votos, y Fire Emblem: Fortune's Weave seguía con dos a las siete
  *  semanas. Sin esto, un juego así sale de "Más esperados" el día del estreno y
  *  no entra en ninguna otra rejilla. Veinte es la expectación de un estreno que
- *  sigue alguien de verdad; medido el 6-nov-2026, metía quince juegos en una
- *  ventana de sesenta y ninguno era relleno. */
+ *  sigue alguien de verdad; medido el 6-nov-2026, metía quince juegos en las
+ *  sesenta filas, entre ellos esos dos. */
 export const NEW_MIN_HYPES = 20;
 
 /** Cuántas filas trae cada rejilla. */
