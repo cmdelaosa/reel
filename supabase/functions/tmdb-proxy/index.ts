@@ -60,6 +60,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { boostSpanish, byImdbFirst, capNonWestern, imdbByTmdbId } from "./rank.ts";
 import { videosDeTmdb } from "./videos.ts";
 import { crewRecortado, invitadosRecortados, textoEs } from "../_shared/episodio.ts";
+import { detalleAgrupado, pedirGrupo, temporadaParaGuardar, type Grupo } from "../_shared/grupo-episodios.ts";
 import { redactCredential, tmdbFetch as callTmdb } from "../_shared/tmdb.ts";
 
 const TVMAZE = "https://api.tvmaze.com";
@@ -1072,10 +1073,28 @@ function inBackground(work: Promise<unknown>) {
 
 /** TMDB → cache refresh of a title and its season list; returns the
  *  GET /title/:id response shape. Network logos are cached off the hot path. */
+/** El grupo de episodios que numera esta serie (0107), o null — lo normal. Una
+ *  lectura de la fila por cada escritura de temporadas; la petición a TMDB, solo
+ *  para las series que tienen grupo. */
+async function grupoDeSerie(admin: SupabaseClient, apiKey: string, tmdbId: number): Promise<Grupo | null> {
+  const { data, error } = await admin
+    .from("titles").select("episode_group_id").eq("kind", "tv").eq("tmdb_id", tmdbId).maybeSingle();
+  // Un fallo NO es «sin grupo»: la escritura que sigue pisaría las filas de la
+  // serie con la numeración de TMDB, y sus visionados acabarían en otros episodios.
+  if (error) throw new Error(`episode_group_id: ${error.message}`);
+  const id = data?.episode_group_id as string | null | undefined;
+  return id ? pedirGrupo((p) => fetchTmdb(apiKey, p), id) : null;
+}
+
 async function refreshTitle(admin: SupabaseClient, apiKey: string, tmdbId: number) {
   // watch/providers rides the append: no extra request, and TMDB hands back
   // every country at once, so switching country never refetches anything.
-  const d = await fetchTmdb(apiKey, `/tv/${tmdbId}?append_to_response=translations,external_ids,watch/providers`);
+  const [tmdb, grupo] = await Promise.all([
+    fetchTmdb(apiKey, `/tv/${tmdbId}?append_to_response=translations,external_ids,watch/providers`),
+    grupoDeSerie(admin, apiKey, tmdbId),
+  ]);
+  // Con grupo, temporadas, emitidos y temporada que se estrena en SU numeración.
+  const d = grupo ? detalleAgrupado(tmdb, grupo) : tmdb;
   const [title] = await upsertReturning(admin, "titles", titleRow(d), "kind,tmdb_id");
   inBackground(cacheNetworkLogos(admin, d.networks));
   const seasons = (d.seasons ?? []).length
@@ -1140,11 +1159,12 @@ async function refreshSeason(
 
      La española va tolerante a fallo, como la mitad en español de
      fetchMoviePages: si TMDB tiene un mal minuto, la temporada sale en el
-     idioma canónico en vez de no salir. */
-  const [s, es] = await Promise.all([
-    fetchTmdb(apiKey, `/tv/${tmdbId}/season/${n}`),
-    fetchTmdb(apiKey, `/tv/${tmdbId}/season/${n}?language=es-ES`).catch(() => null),
-  ]);
+     idioma canónico en vez de no salir.
+
+     Con grupo de episodios, `n` es la temporada del grupo y las dos salen ya
+     montadas desde las de TMDB que la forman (_shared/grupo-episodios.ts). */
+  const grupo = await grupoDeSerie(admin, apiKey, tmdbId);
+  const [s, es] = await temporadaParaGuardar((p) => fetchTmdb(apiKey, p), tmdbId, grupo, n);
   const esByNumber = new Map<number, Any>();
   for (const e of ((es as Any)?.episodes ?? []) as Any[]) {
     if (typeof e?.episode_number === "number") esByNumber.set(e.episode_number, e);
